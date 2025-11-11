@@ -19,10 +19,10 @@ declare(strict_types=1);
  * Configuración por defecto
  * ========================= */
 const DB_DEFAULT = [
-  'host' => '207.244.246.166',
+  'host' => 'localhost',
   'name' => 'assistpro_etl_fc', // ← ajusta si aplica
-  'user' => 'admin_databases',
-  'pass' => 'AdvLogMysql21#',
+  'user' => 'root',
+  'pass' => '',
   'port' => 3306,
   'charset' => 'utf8mb4',
   'timezone' => '-06:00', // CDMX
