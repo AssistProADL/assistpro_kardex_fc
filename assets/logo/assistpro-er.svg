@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="36" viewBox="0 0 180 36">
+  <rect rx="6" width="36" height="36" fill="#0a2a6b"></rect>
+  <path d="M11 24l5-12h4l5 12h-3.8l-.9-2.4h-5.2L13.3 24H11zm6.1-5h3.2L19.7 14h-.1l-2.5 5z" fill="#fff"></path>
+  <text x="44" y="24" font-family="Inter,Segoe UI,Arial" font-size="18" font-weight="700" fill="#0a2a6b">AssistPro ER</text>
+  <text x="153" y="16" font-family="Inter,Segoe UI,Arial" font-size="10" fill="#0a2a6b">®</text>
+</svg>

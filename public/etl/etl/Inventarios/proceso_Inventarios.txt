@@ -1,0 +1,214 @@
+================================================================================
+ASSISTPRO ETL  |  DOCUMENTO DE PROCESO
+================================================================================
+
+1. INFORMACIÓN GENERAL
+--------------------------------------------------------------------------------
+ID Proceso   : 4
+Nombre       : Inventarios
+Grupo        : (sin grupo)
+Descripción  : Reportes Inventarios
+Creado       : 2025-11-10 10:24:30
+
+2. TABLAS / VISTAS ASOCIADAS
+--------------------------------------------------------------------------------
+
+2.1) _th_entalmacen
+................................................................................
+  Origen     : _th_entalmacen [alias=assistpr_wmsdev · db=aproadl_devfc]
+  Comentario : (sin comentario)
+  Procesos   : Inventarios
+  Última ETL : 2025-11-09 17:00:48 (FULL · filas=0)
+  Estructura (local):
+    Columna                       Tipo                     Null  Key   Default     Extra
+    ------------------------------------------------------------------------------
+    Fol_Folio                     int(11)                  NO                      
+    Cve_Almac                     int(11)                  NO                      
+    Fec_Entrada                   datetime                 YES         NULL        
+    fol_oep                       varchar(20)              YES         NULL        
+    Cve_Usuario                   varchar(10)              YES         NULL        
+    Cve_Proveedor                 int(11)                  YES         NULL        
+    STATUS                        char(1)                  YES         NULL        
+    Cve_Autorizado                char(10)                 YES         NULL        
+    TieneOE                       char(1)                  YES         NULL        
+    statusaurora                  int(11)                  YES         NULL        
+    id_ocompra                    int(11)                  YES         NULL        
+    placas                        varchar(20)              YES         NULL        
+    entarimado                    char(1)                  YES         NULL        
+    bufer                         varchar(20)              YES         NULL        
+    HoraInicio                    datetime                 YES         NULL        
+    ID_Protocolo                  varchar(10)              YES         NULL        
+    Consec_protocolo              int(11)                  YES         NULL        
+    cve_ubicacion                 varchar(20)              YES         NULL        
+    Activo                        int(11)                  YES         NULL        
+
+2.2) c_almacen
+................................................................................
+  Origen     : c_almacen [alias=assistpr_wmsdev · db=aproadl_devfc]
+  Comentario : (sin comentario)
+  Procesos   : Clase para cabecero general, Control de Bls, Inventarios
+  Última ETL : 2025-11-10 08:33:40 (FULL · filas=22)
+  Estructura (local):
+    Columna                       Tipo                     Null  Key   Default     Extra
+    ------------------------------------------------------------------------------
+    cve_almac                     int(11)                  NO                      
+    clave_almacen                 varchar(20)              YES         NULL        
+    cve_almacenp                  int(11)                  NO                      
+    des_almac                     varchar(150)             YES         NULL        
+    des_direcc                    varchar(255)             YES         NULL        
+    Activo                        int(11)                  YES         NULL        
+    Cve_TipoZona                  varchar(50)              YES         NULL        
+    clasif_abc                    char(1)                  YES         NULL        
+    ID_Proveedor                  int(11)                  YES         NULL        
+
+2.3) c_almacenp
+................................................................................
+  Origen     : c_almacenp [alias=assistpr_wmsdev · db=aproadl_devfc]
+  Comentario : (sin comentario)
+  Procesos   : Clase para cabecero general, Control de Bls, Inventarios
+  Última ETL : 2025-11-10 08:33:40 (FULL · filas=9)
+  Estructura (local):
+    Columna                       Tipo                     Null  Key   Default     Extra
+    ------------------------------------------------------------------------------
+    id                            int(11)                  NO                      
+    clave                         varchar(20)              YES         NULL        
+    nombre                        varchar(255)             YES         NULL        
+    rut                           varchar(255)             YES         NULL        
+    codigopostal                  int(11)                  YES         NULL        
+    direccion                     varchar(255)             YES         NULL        
+    telefono                      varchar(20)              YES         NULL        
+    contacto                      varchar(255)             YES         NULL        
+    correo                        varchar(255)             YES         NULL        
+    comentarios                   varchar(255)             YES         NULL        
+    Activo                        int(11)                  YES         NULL        
+    distrito                      varchar(255)             YES         NULL        
+    cve_talmacen                  int(11)                  NO                      
+    No_Licencias                  int(11)                  YES         NULL        
+    cve_cia                       int(11)                  YES         NULL        
+    BL                            varchar(50)              YES         NULL        
+    BL_Pasillo                    tinyint(4)               YES         NULL        
+    BL_Rack                       tinyint(4)               YES         NULL        
+    BL_Nivel                      tinyint(4)               YES         NULL        
+    BL_Seccion                    tinyint(4)               YES         NULL        
+    BL_Posicion                   tinyint(4)               YES         NULL        
+    longitud                      decimal(18,10)           YES         NULL        
+    latitud                       decimal(18,10)           YES         NULL        
+    interno                       int(11)                  YES         NULL        
+    tipolp_traslado               varchar(20)              YES         NULL        
+
+2.4) cab_planifica_inventario
+................................................................................
+  Origen     : cab_planifica_inventario [alias=assistpr_wmsdev · db=aproadl_devfc]
+  Comentario : (sin comentario)
+  Procesos   : Inventarios
+  Última ETL : 2025-11-10 10:39:10 (FULL · filas=6)
+  Estructura (local):
+    Columna                       Tipo                     Null  Key   Default     Extra
+    ------------------------------------------------------------------------------
+    ID_PLAN                       int(11)                  NO                      
+    cve_articulo                  varchar(50)              NO                      
+    ID_PERIODO                    int(11)                  YES         NULL        
+    DESCRIPCION                   varchar(250)             YES         NULL        
+    FECHA_INI                     datetime                 YES         NULL        
+    FECHA_FIN                     datetime                 YES         NULL        
+    INTERVALO                     int(11)                  YES         NULL        
+    ID_EXCALAR                    int(11)                  YES         NULL        
+    DIA_MES                       int(11)                  YES         NULL        
+    MES_YEAR                      int(11)                  YES         NULL        
+    DIAS_LABORABLES               char(1)                  YES         NULL        
+    id_almacen                    int(11)                  YES         NULL        
+    Activo                        int(11)                  YES         NULL        
+
+2.5) det_planifica_inventario
+................................................................................
+  Origen     : det_planifica_inventario [alias=assistpr_wmsdev · db=aproadl_devfc]
+  Comentario : (sin comentario)
+  Procesos   : Inventarios
+  Última ETL : 2025-11-10 10:39:10 (FULL · filas=6)
+  Estructura (local):
+    Columna                       Tipo                     Null  Key   Default     Extra
+    ------------------------------------------------------------------------------
+    ID_PLAN                       int(11)                  NO                      
+    FECHA_APLICA                  datetime                 NO                      
+    cve_articulo                  varchar(50)              NO                      
+    status                        char(1)                  YES         NULL        
+    Cve_Usuario                   varchar(50)              YES         NULL        
+    Activo                        int(11)                  YES         NULL        
+
+2.6) inventariociclico
+................................................................................
+  Origen     : inventariociclico [alias=assistpr_wmsdev · db=aproadl_devfc]
+  Comentario : (sin comentario)
+  Procesos   : Inventarios
+  Última ETL : 2025-11-10 19:34:54 (FULL · filas=0)
+  Estructura (local):
+    Columna                       Tipo                     Null  Key   Default     Extra
+    ------------------------------------------------------------------------------
+    ID_PLAN                       int(11)                  NO                      
+    FECHA_APLICA                  datetime                 NO                      
+    cve_articulo                  varchar(50)              NO                      
+    almacen                       int(11)                  NO                      
+    cantidad                      int(11)                  YES         NULL        
+    status                        char(1)                  YES         NULL        
+    Activo                        int(11)                  YES         NULL        
+
+2.7) Rel_almacen_SAP
+................................................................................
+  Origen     : Rel_almacen_SAP [alias=assistpr_wmsdev · db=aproadl_devfc]
+  Comentario : (sin comentario)
+  Procesos   : Inventarios
+  Última ETL : 2025-11-10 19:31:46 (FULL · filas=0)
+  Estructura (local):
+    Columna                       Tipo                     Null  Key   Default     Extra
+    ------------------------------------------------------------------------------
+    Id                            int(11)                  NO                      
+    Cve_Almac                     varchar(50)              NO                      
+    Cve_SAP                       varchar(50)              NO                      
+    Activo                        int(11)                  YES         NULL        
+    Alm_Traslado                  int(11)                  YES         NULL        
+
+2.8) rel_cliente_almacen
+................................................................................
+  Origen     : rel_cliente_almacen [alias=assistpr_wmsdev · db=aproadl_devfc]
+  Comentario : (sin comentario)
+  Procesos   : Inventarios
+  Última ETL : 2025-11-10 19:37:34 (FULL · filas=0)
+  Estructura (local):
+    Columna                       Tipo                     Null  Key   Default     Extra
+    ------------------------------------------------------------------------------
+    Id                            int(11)                  NO                      
+    Cve_Clte                      varchar(50)              YES         NULL        
+    Cve_Almac                     int(11)                  YES         NULL        
+
+2.9) t_entalmacentransporte
+................................................................................
+  Origen     : t_entalmacentransporte [alias=assistpr_wmsdev · db=aproadl_devfc]
+  Comentario : (sin comentario)
+  Procesos   : Inventarios
+  Última ETL : 2025-11-10 19:39:21 (FULL · filas=1)
+  Estructura (local):
+    Columna                       Tipo                     Null  Key   Default     Extra
+    ------------------------------------------------------------------------------
+    Id                            int(11)                  NO                      
+    Fol_Folio                     int(11)                  NO                      
+    Operador                      varchar(255)             YES         NULL        
+    No_Unidad                     varchar(100)             YES         NULL        
+    Placas                        varchar(50)              YES         NULL        
+    Linea_Transportista           varchar(100)             YES         NULL        
+    Observaciones                 varchar(255)             YES         NULL        
+    Sello                         varchar(100)             YES         NULL        
+    Fec_Ingreso                   datetime                 YES         NULL        
+    Fec_Salida                    datetime                 YES         NULL        
+    Id_Operador                   varchar(100)             YES         NULL        
+
+3. DOCUMENTOS ADICIONALES
+--------------------------------------------------------------------------------
+
+3.1) Reportes Inventarios (2025-11-10 20:24:37)
+   Archivo  : 16HB7R-TICKETS.pdf  [etl/Inventarios/16HB7R_TICKETS_20251111_032437.pdf] (38.2 KB)  MIME=application/pdf
+
+3.2) Reportes Inventarios (2025-11-10 20:24:47)
+   Archivo  : MicrosoftADVL.pdf  [etl/Inventarios/MicrosoftADVL_20251111_032447.pdf] (200.1 KB)  MIME=application/pdf
+
+3.3) Reportes Inventarios (2025-11-10 20:25:05)
+
