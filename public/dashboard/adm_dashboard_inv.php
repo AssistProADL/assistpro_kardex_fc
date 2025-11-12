@@ -1,161 +1,131 @@
 <?php
-// adm_dashboard_inv.php
-// Dashboard de estatus de inventarios físicos y cíclicos (planeados / en ejecución / cerrados)
+// public/dashboard/adm_dashboard_inv.php
+// Dashboard gráfico de Inventarios (Físico / Cíclico) – AssistPro
 
-require_once __DIR__ . '/../../app/db.php';
+require_once __DIR__ . '/../app/db.php';
 
 if (!function_exists('db_all')) {
-    function db_all($sql, $params = [])
-    {
-        global $pdo; // ajusta si tu conexión se llama diferente
+    function db_all($sql, $params = []) {
+        global $pdo; // ajusta si tu conexión usa otro nombre
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
 
-// ---------------------------------------------------------------------
+// -------------------------
 // Filtros
-// ---------------------------------------------------------------------
-$tipo      = isset($_GET['tipo']) ? strtoupper($_GET['tipo']) : 'A'; // A = ambos, F = físico, C = cíclico
-$almacen   = isset($_GET['almacen']) ? trim($_GET['almacen']) : '';
-$estado    = isset($_GET['estado']) ? trim($_GET['estado']) : '';    // Planeado / En ejecución / Completado / Cerrado
-$f_ini     = isset($_GET['f_ini']) ? trim($_GET['f_ini']) : '';
-$f_fin     = isset($_GET['f_fin']) ? trim($_GET['f_fin']) : '';
+// -------------------------
+$tipo     = isset($_GET['tipo']) ? strtoupper($_GET['tipo']) : 'F'; // F | C | A
+$almacen  = isset($_GET['almacen']) ? trim($_GET['almacen']) : '';
+$f_ini    = isset($_GET['f_ini']) ? trim($_GET['f_ini']) : '';
+$f_fin    = isset($_GET['f_fin']) ? trim($_GET['f_fin']) : '';
 
-// Si manejas almacén en sesión, lo puedes usar como default:
-if ($almacen === '' && !empty($_SESSION['cve_almacen'])) {
-    $almacen = $_SESSION['cve_almacen'];
-}
-
-// Catálogo de almacenes (de ambas vistas)
+// Catálogo de almacenes desde ambas vistas (únicos, no vacíos)
 $almacenes = db_all("
-    SELECT DISTINCT cve_almacen, almacen
-    FROM (
-        SELECT cve_almacen, almacen
-        FROM v_dashboard_inv_fisico_ao
-        UNION
-        SELECT cve_almacen, des_almacen AS almacen
-        FROM v_dashboard_inv_ciclico_ao
-    ) x
+    SELECT DISTINCT cve_almacen AS clave, almacen AS nombre
+    FROM v_dashboard_inv_fisico_ao
     WHERE cve_almacen IS NOT NULL AND cve_almacen <> ''
-    ORDER BY almacen
+    UNION
+    SELECT DISTINCT cve_almacen AS clave, des_almacen AS nombre
+    FROM v_dashboard_inv_ciclico_ao
+    WHERE cve_almacen IS NOT NULL AND cve_almacen <> ''
+    ORDER BY nombre
 ");
 
-// ---------------------------------------------------------------------
-// Datos inventario FÍSICO
-// ---------------------------------------------------------------------
-$fisicos = [];
-if ($tipo === 'A' || $tipo === 'F') {
-    $whereFis  = [];
-    $paramsFis = [];
+// -------------------------
+// Query builder
+// -------------------------
+function load_fisico($almacen, $f_ini, $f_fin) {
+    $where = [];
+    $par = [];
 
-    if ($almacen !== '') {
-        $whereFis[]  = "cve_almacen = ?";
-        $paramsFis[] = $almacen;
-    }
-    if ($estado !== '') {
-        $whereFis[]  = "estado_proceso = ?";
-        $paramsFis[] = $estado;
-    }
-    if ($f_ini !== '' && $f_fin !== '') {
-        $whereFis[]  = "DATE(fecha_creacion) BETWEEN ? AND ?";
-        $paramsFis[] = $f_ini;
-        $paramsFis[] = $f_fin;
-    }
+    if ($almacen !== '') { $where[] = "cve_almacen = ?"; $par[] = $almacen; }
+    if ($f_ini !== '' && $f_fin !== '') { $where[] = "fecha_creacion BETWEEN ? AND ?"; $par[] = $f_ini." 00:00:00"; $par[] = $f_fin." 23:59:59"; }
 
-    $sqlFis = "SELECT * FROM v_dashboard_inv_fisico_ao";
-    if ($whereFis) {
-        $sqlFis .= " WHERE " . implode(" AND ", $whereFis);
-    }
-    $sqlFis .= " ORDER BY fecha_creacion DESC, folio_inventario DESC";
-
-    $fisicos = db_all($sqlFis, $paramsFis);
+    $sql = "SELECT folio_inventario, fecha_creacion, nombre_inventario, status_inventario,
+                   cve_almacen, almacen, avance_porcentual, estado_proceso,
+                   ubicaciones_planeadas, ubicaciones_contadas,
+                   piezas_contadas, piezas_teoricas, diferencia_piezas
+            FROM v_dashboard_inv_fisico_ao";
+    if ($where) $sql .= " WHERE ".implode(" AND ", $where);
+    $sql .= " ORDER BY fecha_creacion DESC LIMIT 500";
+    return db_all($sql, $par);
 }
 
-// KPIs físicos
-$fis_planeados = $fis_ejec = $fis_comp = $fis_cerrados = 0;
-$fis_ub_plan = $fis_ub_cont = $fis_pzas = $fis_dif_pzas = 0;
-$fis_avance_prom = 0;
+function load_ciclico($almacen, $f_ini, $f_fin) {
+    $where = [];
+    $par = [];
 
-if ($fisicos) {
-    foreach ($fisicos as $r) {
-        $estado_p = $r['estado_proceso'];
-        if ($estado_p === 'Planeado')     $fis_planeados++;
-        elseif ($estado_p === 'En ejecución') $fis_ejec++;
-        elseif ($estado_p === 'Completado')   $fis_comp++;
-        elseif ($estado_p === 'Cerrado')      $fis_cerrados++;
+    if ($almacen !== '') { $where[] = "cve_almacen = ?"; $par[] = $almacen; }
+    if ($f_ini !== '' && $f_fin !== '') { $where[] = "fecha_inicio BETWEEN ? AND ?"; $par[] = $f_ini." 00:00:00"; $par[] = $f_fin." 23:59:59"; }
 
-        $fis_ub_plan   += (int)($r['ubicaciones_planeadas'] ?? 0);
-        $fis_ub_cont   += (int)($r['ubicaciones_contadas'] ?? 0);
-        $fis_pzas      += (float)($r['piezas_contadas'] ?? 0);
-        $fis_dif_pzas  += (float)($r['diferencia_piezas'] ?? 0);
-        $fis_avance_prom += (float)($r['avance_porcentual'] ?? 0);
-    }
-    $fis_avance_prom = $fis_avance_prom / max(count($fisicos), 1);
+    $sql = "SELECT folio_plan, fecha_inicio, fecha_fin, cve_almacen, des_almacen AS almacen,
+                   avance_porcentual, estado_proceso,
+                   ubicaciones_planeadas, ubicaciones_contadas,
+                   piezas_contadas, piezas_teoricas, diferencia_piezas
+            FROM v_dashboard_inv_ciclico_ao";
+    if ($where) $sql .= " WHERE ".implode(" AND ", $where);
+    $sql .= " ORDER BY fecha_inicio DESC LIMIT 500";
+    return db_all($sql, $par);
 }
 
-// ---------------------------------------------------------------------
-// Datos inventario CÍCLICO
-// ---------------------------------------------------------------------
-$ciclicos = [];
-if ($tipo === 'A' || $tipo === 'C') {
-    $whereC  = [];
-    $paramsC = [];
+// -------------------------
+// Carga de datos según tipo
+// -------------------------
+$fisico  = [];
+$ciclico = [];
 
-    if ($almacen !== '') {
-        // en la vista cíclica el campo nombre del almacén es des_almacen y la clave es cve_almacen
-        $whereC[]  = "cve_almacen = ?";
-        $paramsC[] = $almacen;
-    }
-    if ($estado !== '') {
-        $whereC[]  = "estado_proceso = ?";
-        $paramsC[] = $estado;
-    }
-    if ($f_ini !== '' && $f_fin !== '') {
-        $whereC[]  = "DATE(fecha_inicio) BETWEEN ? AND ?";
-        $paramsC[] = $f_ini;
-        $paramsC[] = $f_fin;
-    }
+if ($tipo === 'F' || $tipo === 'A') $fisico  = load_fisico($almacen, $f_ini, $f_fin);
+if ($tipo === 'C' || $tipo === 'A') $ciclico = load_ciclico($almacen, $f_ini, $f_fin);
 
-    $sqlC = "SELECT * FROM v_dashboard_inv_ciclico_ao";
-    if ($whereC) {
-        $sqlC .= " WHERE " . implode(" AND ", $whereC);
+// -------------------------
+// KPIs + datasets para Chart.js
+// -------------------------
+function agg_estado($rows) {
+    $est = ['Planeado'=>0,'En ejecución'=>0,'Completado'=>0,'Cerrado'=>0];
+    foreach ($rows as $r) {
+        $e = $r['estado_proceso'] ?? '';
+        if (!isset($est[$e])) $est[$e] = 0;
+        $est[$e]++;
     }
-    $sqlC .= " ORDER BY fecha_inicio DESC, folio_plan DESC";
-
-    $ciclicos = db_all($sqlC, $paramsC);
+    return $est;
+}
+function labels_values_avance($rows, $folioCampo) {
+    $labels=[]; $values=[];
+    foreach ($rows as $r) {
+        $labels[] = (string)$r[$folioCampo];
+        $values[] = (float)($r['avance_porcentual'] ?? 0);
+    }
+    return [$labels, $values];
 }
 
-// KPIs cíclicos
-$cic_planeados = $cic_ejec = $cic_comp = $cic_cerrados = 0;
-$cic_ub_plan = $cic_ub_cont = $cic_pzas = $cic_dif_pzas = 0;
-$cic_avance_prom = 0;
+$estFis = agg_estado($fisico);
+$estCic = agg_estado($ciclico);
 
-if ($ciclicos) {
-    foreach ($ciclicos as $r) {
-        $estado_p = $r['estado_proceso'];
-        if ($estado_p === 'Planeado')     $cic_planeados++;
-        elseif ($estado_p === 'En ejecución') $cic_ejec++;
-        elseif ($estado_p === 'Completado')   $cic_comp++;
-        elseif ($estado_p === 'Cerrado')      $cic_cerrados++;
+list($labFis, $valFis) = labels_values_avance($fisico, 'folio_inventario');
+list($labCic, $valCic) = labels_values_avance($ciclico, 'folio_plan');
 
-        $cic_ub_plan   += (int)($r['ubicaciones_planeadas'] ?? 0);
-        $cic_ub_cont   += (int)($r['ubicaciones_contadas'] ?? 0);
-        $cic_pzas      += (float)($r['piezas_contadas'] ?? 0);
-        $cic_dif_pzas  += (float)($r['diferencia_piezas'] ?? 0);
-        $cic_avance_prom += (float)($r['avance_porcentual'] ?? 0);
-    }
-    $cic_avance_prom = $cic_avance_prom / max(count($ciclicos), 1);
-}
+// Totales tarjetas
+$tot_fis = count($fisico);
+$tot_cic = count($ciclico);
 
+// Suma de piezas / diferencias (visuales generales)
+$sum_pzas_f = array_sum(array_map(fn($r)=> (float)($r['piezas_contadas'] ?? 0), $fisico));
+$sum_difp_f = array_sum(array_map(fn($r)=> (float)($r['diferencia_piezas'] ?? 0), $fisico));
+$sum_pzas_c = array_sum(array_map(fn($r)=> (float)($r['piezas_contadas'] ?? 0), $ciclico));
+$sum_difp_c = array_sum(array_map(fn($r)=> (float)($r['diferencia_piezas'] ?? 0), $ciclico));
+
+// -------------------------
+// Render
+// -------------------------
 require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
 <div class="container-fluid py-3" style="font-size:10px;">
     <div class="row mb-2">
         <div class="col">
-            <h5 class="mb-0">Estatus de Inventarios</h5>
-            <small class="text-muted">Inventarios físicos y cíclicos planeados, en ejecución y cerrados</small>
+            <h5 class="mb-0">Dashboard de Inventarios (Gráfico)</h5>
+            <small class="text-muted">Planeados vs En ejecución vs Completados / Cerrados</small>
         </div>
     </div>
 
@@ -166,9 +136,9 @@ require_once __DIR__ . '/../bi/_menu_global.php';
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1">Tipo</label>
                     <select name="tipo" class="form-select form-select-sm">
-                        <option value="A" <?= $tipo === 'A' ? 'selected' : '' ?>>Ambos</option>
-                        <option value="F" <?= $tipo === 'F' ? 'selected' : '' ?>>Físico</option>
-                        <option value="C" <?= $tipo === 'C' ? 'selected' : '' ?>>Cíclico</option>
+                        <option value="F" <?= $tipo==='F'?'selected':''; ?>>Físico</option>
+                        <option value="C" <?= $tipo==='C'?'selected':''; ?>>Cíclico</option>
+                        <option value="A" <?= $tipo==='A'?'selected':''; ?>>Ambos</option>
                     </select>
                 </div>
                 <div class="col-6 col-md-3">
@@ -176,278 +146,237 @@ require_once __DIR__ . '/../bi/_menu_global.php';
                     <select name="almacen" class="form-select form-select-sm">
                         <option value="">[Todos]</option>
                         <?php foreach ($almacenes as $a): ?>
-                            <option value="<?= htmlspecialchars($a['cve_almacen']) ?>"
-                                <?= $almacen === $a['cve_almacen'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($a['cve_almacen'] . ' - ' . $a['almacen']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label mb-1">Estado</label>
-                    <select name="estado" class="form-select form-select-sm">
-                        <option value="">[Todos]</option>
-                        <?php
-                        $estados = ['Planeado','En ejecución','Completado','Cerrado'];
-                        foreach ($estados as $e): ?>
-                            <option value="<?= $e ?>" <?= $estado === $e ? 'selected' : '' ?>>
-                                <?= $e ?>
+                            <option value="<?= htmlspecialchars($a['clave']) ?>"
+                                <?= $almacen===$a['clave']?'selected':''; ?>>
+                                <?= htmlspecialchars($a['nombre']) ?> (<?= htmlspecialchars($a['clave']) ?>)
                             </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1">Fecha inicio</label>
-                    <input type="date" name="f_ini" class="form-control form-control-sm"
-                           value="<?= htmlspecialchars($f_ini) ?>">
+                    <input type="date" name="f_ini" class="form-control form-control-sm" value="<?= htmlspecialchars($f_ini) ?>">
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1">Fecha fin</label>
-                    <input type="date" name="f_fin" class="form-control form-control-sm"
-                           value="<?= htmlspecialchars($f_fin) ?>">
+                    <input type="date" name="f_fin" class="form-control form-control-sm" value="<?= htmlspecialchars($f_fin) ?>">
                 </div>
                 <div class="col-6 col-md-1 text-end">
-                    <button type="submit" class="btn btn-sm btn-primary px-3">
-                        Buscar
-                    </button>
+                    <button class="btn btn-sm btn-primary px-3">Aplicar</button>
                 </div>
             </div>
         </div>
     </form>
 
-    <!-- KPIs -->
+    <!-- Cards -->
     <div class="row g-2 mb-3">
-        <?php if ($tipo === 'A' || $tipo === 'F'): ?>
-        <div class="col-12 col-md-6">
-            <div class="card shadow-sm border-0 h-100">
-                <div class="card-body p-2">
-                    <div class="fw-bold mb-1">Inventarios físicos</div>
-                    <div class="row g-2">
-                        <div class="col-6 col-lg-3">
-                            <div class="small text-muted">Planeados</div>
-                            <div class="h6 mb-0"><?= number_format($fis_planeados) ?></div>
-                        </div>
-                        <div class="col-6 col-lg-3">
-                            <div class="small text-muted">En ejecución</div>
-                            <div class="h6 mb-0"><?= number_format($fis_ejec) ?></div>
-                        </div>
-                        <div class="col-6 col-lg-3">
-                            <div class="small text-muted">Completados</div>
-                            <div class="h6 mb-0"><?= number_format($fis_comp) ?></div>
-                        </div>
-                        <div class="col-6 col-lg-3">
-                            <div class="small text-muted">Cerrados</div>
-                            <div class="h6 mb-0"><?= number_format($fis_cerrados) ?></div>
-                        </div>
-                    </div>
-                    <hr class="my-2">
-                    <div class="row g-2">
-                        <div class="col-4">
-                            <div class="small text-muted">Ubic. plan.</div>
-                            <div class="h6 mb-0"><?= number_format($fis_ub_plan) ?></div>
-                        </div>
-                        <div class="col-4">
-                            <div class="small text-muted">Ubic. contadas</div>
-                            <div class="h6 mb-0"><?= number_format($fis_ub_cont) ?></div>
-                        </div>
-                        <div class="col-4">
-                            <div class="small text-muted">% avance prom.</div>
-                            <div class="h6 mb-0"><?= number_format($fis_avance_prom, 1) ?>%</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm"><div class="card-body p-2">
+                <div class="fw-bold">Inventarios físicos</div>
+                <div class="h5 mb-0"><?= number_format($tot_fis) ?></div>
+                <small class="text-muted">Pzas: <?= number_format($sum_pzas_f) ?> · Dif: <?= number_format($sum_difp_f) ?></small>
+            </div></div>
         </div>
-        <?php endif; ?>
-
-        <?php if ($tipo === 'A' || $tipo === 'C'): ?>
-        <div class="col-12 col-md-6">
-            <div class="card shadow-sm border-0 h-100">
-                <div class="card-body p-2">
-                    <div class="fw-bold mb-1">Inventarios cíclicos</div>
-                    <div class="row g-2">
-                        <div class="col-6 col-lg-3">
-                            <div class="small text-muted">Planeados</div>
-                            <div class="h6 mb-0"><?= number_format($cic_planeados) ?></div>
-                        </div>
-                        <div class="col-6 col-lg-3">
-                            <div class="small text-muted">En ejecución</div>
-                            <div class="h6 mb-0"><?= number_format($cic_ejec) ?></div>
-                        </div>
-                        <div class="col-6 col-lg-3">
-                            <div class="small text-muted">Completados</div>
-                            <div class="h6 mb-0"><?= number_format($cic_comp) ?></div>
-                        </div>
-                        <div class="col-6 col-lg-3">
-                            <div class="small text-muted">Cerrados</div>
-                            <div class="h6 mb-0"><?= number_format($cic_cerrados) ?></div>
-                        </div>
-                    </div>
-                    <hr class="my-2">
-                    <div class="row g-2">
-                        <div class="col-4">
-                            <div class="small text-muted">Ubic. plan.</div>
-                            <div class="h6 mb-0"><?= number_format($cic_ub_plan) ?></div>
-                        </div>
-                        <div class="col-4">
-                            <div class="small text-muted">Ubic. contadas</div>
-                            <div class="h6 mb-0"><?= number_format($cic_ub_cont) ?></div>
-                        </div>
-                        <div class="col-4">
-                            <div class="small text-muted">% avance prom.</div>
-                            <div class="h6 mb-0"><?= number_format($cic_avance_prom, 1) ?>%</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm"><div class="card-body p-2">
+                <div class="fw-bold">Inventarios cíclicos</div>
+                <div class="h5 mb-0"><?= number_format($tot_cic) ?></div>
+                <small class="text-muted">Pzas: <?= number_format($sum_pzas_c) ?> · Dif: <?= number_format($sum_difp_c) ?></small>
+            </div></div>
         </div>
-        <?php endif; ?>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm"><div class="card-body p-2">
+                <div class="fw-bold">Físico · En ejecución</div>
+                <div class="h6 mb-0"><?= number_format($estFis['En ejecución'] ?? 0) ?></div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm"><div class="card-body p-2">
+                <div class="fw-bold">Cíclico · En ejecución</div>
+                <div class="h6 mb-0"><?= number_format($estCic['En ejecución'] ?? 0) ?></div>
+            </div></div>
+        </div>
     </div>
 
-    <!-- Tabs tablas detalle -->
-    <ul class="nav nav-tabs mb-2" role="tablist" style="font-size:10px;">
-        <?php if ($tipo === 'A' || $tipo === 'F'): ?>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link <?= $tipo !== 'C' ? 'active' : '' ?>" id="tab-fis" data-bs-toggle="tab"
-                    data-bs-target="#pane-fis" type="button" role="tab">
-                Inventarios físicos
-            </button>
-        </li>
-        <?php endif; ?>
-        <?php if ($tipo === 'A' || $tipo === 'C'): ?>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link <?= $tipo === 'C' ? 'active' : '' ?>" id="tab-cic" data-bs-toggle="tab"
-                    data-bs-target="#pane-cic" type="button" role="tab">
-                Inventarios cíclicos
-            </button>
-        </li>
-        <?php endif; ?>
-    </ul>
-
-    <div class="tab-content">
-        <?php if ($tipo === 'A' || $tipo === 'F'): ?>
-        <div class="tab-pane fade <?= $tipo !== 'C' ? 'show active' : '' ?>" id="pane-fis" role="tabpanel">
-            <div class="card shadow-sm border-0">
+    <!-- Gráficas -->
+    <div class="row g-2 mb-3">
+        <div class="col-12 col-md-6">
+            <div class="card border-0 shadow-sm">
                 <div class="card-body p-2">
-                    <div class="table-responsive">
-                        <table id="tblFisDash" class="table table-sm table-striped table-bordered w-100" style="font-size:10px;">
-                            <thead class="table-light">
+                    <div class="fw-bold mb-2">Distribución por estado (<?= $tipo==='C'?'Cíclico':($tipo==='F'?'Físico':'Ambos') ?>)</div>
+                    <canvas id="chartEstados" height="160"></canvas>
+                    <small class="text-muted">Planeado / En ejecución / Completado / Cerrado</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-2">
+                    <div class="fw-bold mb-2">Avance por folio</div>
+                    <canvas id="chartAvance" height="160"></canvas>
+                    <small class="text-muted">% de ubicaciones contadas respecto a planeadas</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla resumen -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-2">
+            <div class="table-responsive">
+                <table id="tblResumen" class="table table-sm table-striped table-bordered w-100" style="font-size:10px;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Folio</th>
+                            <th>Almacén</th>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th>% Avance</th>
+                            <th>Ubic. Plan</th>
+                            <th>Ubic. Cont</th>
+                            <th>Pzas Cont</th>
+                            <th>Dif Pzas</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if ($tipo==='F' || $tipo==='A'): ?>
+                            <?php foreach ($fisico as $r): ?>
                                 <tr>
-                                    <th>Folio</th>
-                                    <th>Almacén</th>
-                                    <th>Nombre</th>
-                                    <th>Fecha</th>
-                                    <th>Status inv.</th>
-                                    <th>Estado proceso</th>
-                                    <th>Ubic. plan.</th>
-                                    <th>Ubic. cont.</th>
-                                    <th>% avance</th>
-                                    <th>Pzas cont.</th>
-                                    <th>Dif. pzs</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            <?php foreach ($fisicos as $r): ?>
-                                <tr>
+                                    <td>Físico</td>
                                     <td><?= htmlspecialchars($r['folio_inventario']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_almacen'] . ' - ' . $r['almacen']) ?></td>
-                                    <td><?= htmlspecialchars($r['nombre_inventario']) ?></td>
+                                    <td><?= htmlspecialchars($r['almacen']) ?> (<?= htmlspecialchars($r['cve_almacen']) ?>)</td>
                                     <td><?= htmlspecialchars($r['fecha_creacion']) ?></td>
-                                    <td><?= htmlspecialchars($r['status_inventario']) ?></td>
                                     <td><?= htmlspecialchars($r['estado_proceso']) ?></td>
-                                    <td class="text-end"><?= number_format($r['ubicaciones_planeadas'] ?? 0, 0) ?></td>
-                                    <td class="text-end"><?= number_format($r['ubicaciones_contadas'] ?? 0, 0) ?></td>
-                                    <td class="text-end"><?= number_format($r['avance_porcentual'] ?? 0, 1) ?>%</td>
-                                    <td class="text-end"><?= number_format($r['piezas_contadas'] ?? 0, 0) ?></td>
-                                    <td class="text-end"><?= number_format($r['diferencia_piezas'] ?? 0, 0) ?></td>
+                                    <td class="text-end"><?= number_format($r['avance_porcentual'] ?? 0, 2) ?>%</td>
+                                    <td class="text-end"><?= number_format($r['ubicaciones_planeadas'] ?? 0) ?></td>
+                                    <td class="text-end"><?= number_format($r['ubicaciones_contadas'] ?? 0) ?></td>
+                                    <td class="text-end"><?= number_format($r['piezas_contadas'] ?? 0) ?></td>
+                                    <td class="text-end"><?= number_format($r['diferencia_piezas'] ?? 0) ?></td>
+                                    <td>
+                                        <a class="btn btn-xs btn-outline-primary"
+                                           href="adm_inventarios_det.php?tipo=F&view=det&folio=<?= urlencode($r['folio_inventario']) ?>">
+                                           Detalle
+                                        </a>
+                                        <a class="btn btn-xs btn-outline-danger"
+                                           href="adm_inventarios_det.php?tipo=F&view=dif&folio=<?= urlencode($r['folio_inventario']) ?>">
+                                           Diferencias
+                                        </a>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
-                            <?php if (empty($fisicos)): ?>
-                                <tr><td colspan="11" class="text-center">Sin inventarios físicos para los filtros seleccionados</td></tr>
-                            <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php endif; ?>
+                        <?php endif; ?>
 
-        <?php if ($tipo === 'A' || $tipo === 'C'): ?>
-        <div class="tab-pane fade <?= $tipo === 'C' ? 'show active' : '' ?>" id="pane-cic" role="tabpanel">
-            <div class="card shadow-sm border-0">
-                <div class="card-body p-2">
-                    <div class="table-responsive">
-                        <table id="tblCicDash" class="table table-sm table-striped table-bordered w-100" style="font-size:10px;">
-                            <thead class="table-light">
+                        <?php if ($tipo==='C' || $tipo==='A'): ?>
+                            <?php foreach ($ciclico as $r): ?>
                                 <tr>
-                                    <th>Plan</th>
-                                    <th>Almacén</th>
-                                    <th>F. inicio</th>
-                                    <th>F. fin</th>
-                                    <th>Estado proceso</th>
-                                    <th>Ubic. plan.</th>
-                                    <th>Ubic. cont.</th>
-                                    <th>% avance</th>
-                                    <th>Pzas cont.</th>
-                                    <th>Dif. pzs</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            <?php foreach ($ciclicos as $r): ?>
-                                <tr>
+                                    <td>Cíclico</td>
                                     <td><?= htmlspecialchars($r['folio_plan']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_almacen'] . ' - ' . $r['des_almacen']) ?></td>
+                                    <td><?= htmlspecialchars($r['almacen']) ?> (<?= htmlspecialchars($r['cve_almacen']) ?>)</td>
                                     <td><?= htmlspecialchars($r['fecha_inicio']) ?></td>
-                                    <td><?= htmlspecialchars($r['fecha_fin']) ?></td>
                                     <td><?= htmlspecialchars($r['estado_proceso']) ?></td>
-                                    <td class="text-end"><?= number_format($r['ubicaciones_planeadas'] ?? 0, 0) ?></td>
-                                    <td class="text-end"><?= number_format($r['ubicaciones_contadas'] ?? 0, 0) ?></td>
-                                    <td class="text-end"><?= number_format($r['avance_porcentual'] ?? 0, 1) ?>%</td>
-                                    <td class="text-end"><?= number_format($r['piezas_contadas'] ?? 0, 0) ?></td>
-                                    <td class="text-end"><?= number_format($r['diferencia_piezas'] ?? 0, 0) ?></td>
+                                    <td class="text-end"><?= number_format($r['avance_porcentual'] ?? 0, 2) ?>%</td>
+                                    <td class="text-end"><?= number_format($r['ubicaciones_planeadas'] ?? 0) ?></td>
+                                    <td class="text-end"><?= number_format($r['ubicaciones_contadas'] ?? 0) ?></td>
+                                    <td class="text-end"><?= number_format($r['piezas_contadas'] ?? 0) ?></td>
+                                    <td class="text-end"><?= number_format($r['diferencia_piezas'] ?? 0) ?></td>
+                                    <td>
+                                        <a class="btn btn-xs btn-outline-primary"
+                                           href="adm_inventarios_det.php?tipo=C&view=det&folio=<?= urlencode($r['folio_plan']) ?>">
+                                           Detalle
+                                        </a>
+                                        <a class="btn btn-xs btn-outline-danger"
+                                           href="adm_inventarios_det.php?tipo=C&view=dif&folio=<?= urlencode($r['folio_plan']) ?>">
+                                           Diferencias
+                                        </a>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
-                            <?php if (empty($ciclicos)): ?>
-                                <tr><td colspan="10" class="text-center">Sin inventarios cíclicos para los filtros seleccionados</td></tr>
-                            <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
-        <?php endif; ?>
     </div>
 </div>
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
 
+<!-- Chart.js CDN (simple) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (window.jQuery && $.fn.DataTable) {
-        if (document.getElementById('tblFisDash')) {
-            $('#tblFisDash').DataTable({
-                pageLength: 20,
-                scrollX: true,
-                lengthChange: false,
-                ordering: true,
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json'
-                }
-            });
-        }
-        if (document.getElementById('tblCicDash')) {
-            $('#tblCicDash').DataTable({
-                pageLength: 20,
-                scrollX: true,
-                lengthChange: false,
-                ordering: true,
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json'
-                }
-            });
-        }
+(function(){
+    // Datos para chart de estados
+    const tipo = <?= json_encode($tipo) ?>;
+    const estFis = <?= json_encode($estFis) ?>;
+    const estCic = <?= json_encode($estCic) ?>;
+
+    // Mezcla si es "Ambos"
+    const labels = ['Planeado','En ejecución','Completado','Cerrado'];
+    let dataEstados = [0,0,0,0];
+    if (tipo === 'F') {
+        dataEstados = labels.map(l => (estFis[l]||0));
+    } else if (tipo === 'C') {
+        dataEstados = labels.map(l => (estCic[l]||0));
+    } else {
+        dataEstados = labels.map(l => (estFis[l]||0)+(estCic[l]||0));
     }
-});
+
+    // Datos para chart de avance por folio
+    const labFis = <?= json_encode($labFis) ?>;
+    const valFis = <?= json_encode($valFis) ?>;
+    const labCic = <?= json_encode($labCic) ?>;
+    const valCic = <?= json_encode($valCic) ?>;
+
+    let labelsAv = [], valuesAv = [];
+    if (tipo === 'F') { labelsAv = labFis; valuesAv = valFis; }
+    else if (tipo === 'C') { labelsAv = labCic; valuesAv = valCic; }
+    else {
+        labelsAv = labFis.concat(labCic.map(v => 'P'+v)); // prefijo P para no chocar con folios físicos
+        valuesAv = valFis.concat(valCic);
+    }
+
+    // Render charts
+    const ctx1 = document.getElementById('chartEstados');
+    if (ctx1) {
+        new Chart(ctx1, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{ data: dataEstados }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
+    const ctx2 = document.getElementById('chartAvance');
+    if (ctx2) {
+        new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: labelsAv,
+                datasets: [{ label: '% Avance', data: valuesAv }]
+            },
+            options: {
+                responsive: true,
+                scales: { y: { beginAtZero: true, max: 100 } },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    // DataTable
+    if (window.jQuery && $.fn.DataTable) {
+        $('#tblResumen').DataTable({
+            pageLength: 25,
+            scrollX: true,
+            lengthChange: false,
+            ordering: true,
+            language: { url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json' }
+        });
+    }
+})();
 </script>
