@@ -1,198 +1,253 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) session_start();
-
-$fullName = trim(
-  $_SESSION['nombre_completo']
-  ?? $_SESSION['full_name']
-  ?? $_SESSION['username']
-  ?? ''
-);
-$perfil   = trim($_SESSION['perfil'] ?? '');
-
-$alm      = $_SESSION['cve_almac'] ?? '';
-$allEmp   = $_SESSION['empresas_all'] ?? false;
-$empN     = is_array($_SESSION['empresas'] ?? null) ? count($_SESSION['empresas']) : 0;
+// _menu_global.php
+// Menú lateral corporativo Adventech Logística (2 niveles, colapsable por sección)
 ?>
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <title>Business Intelligence Suite</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+<style>
     :root{
-      --ap-blue:#0a2a6b;
-      --ap-blue-2:#123a90;
-      --sidebar-w:260px;
-      --sidebar-w-mini:72px;
-      --topbar-h:58px;
+        --sidebar-width: 230px;
+        --sidebar-bg: #0F5AAD;
+        --sidebar-text: #dbe3f4;
+        --sidebar-text-muted: #a9c3ec;
     }
 
-    /* Layout base */
-    body{ background:#fff; }
-    .ap-shell{ position:relative; z-index:1; }
-    .ap-main{ margin-left:var(--sidebar-w); min-height:100vh; background:#fff; transition:margin-left .2s ease; }
-    .ap-overlay{ display:none !important; } /* nunca oscurecer */
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 10px;
+        background-color: #f5f6fa;
+        margin: 0;
+        padding-left: var(--sidebar-width); /* reserva espacio para el menú */
+    }
 
-    /* Sidebar azul */
-    .ap-sidebar{
-      position:fixed; inset:0 auto 0 0; width:var(--sidebar-w);
-      background:linear-gradient(180deg,var(--ap-blue),var(--ap-blue-2));
-      color:#fff; padding:14px 12px; box-shadow:0 10px 30px rgba(0,0,0,.18);
-      transition:width .2s ease;
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: var(--sidebar-width);
+        height: 100vh;
+        background-color: var(--sidebar-bg);
+        color: #fff;
+        overflow-y: auto;
+        box-shadow: 2px 0 6px rgba(0,0,0,0.2);
+        z-index: 1000;
     }
-    /* Placa del logo en blanco */
-    .brand-plate{
-      background:#fff; border-radius:14px; padding:8px 10px; margin-bottom:12px;
-      display:flex; align-items:center; justify-content:center;
-      box-shadow:0 6px 18px rgba(0,0,0,.12);
-    }
-    .brand-plate img{ height:28px; display:block; }
 
-    .sec-title{letter-spacing:.08em; opacity:.78; font-size:.78rem; margin:14px 8px 8px;}
-    .ap-sidebar .nav-link{
-      color:#e9eef5; border-radius:12px; padding:.55rem .8rem; display:flex; align-items:center; gap:.5rem;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    .sidebar .logo {
+        text-align: center;
+        padding: 14px 10px;
+        border-bottom: 1px solid rgba(255,255,255,0.12);
+        font-size: 11px;
+        letter-spacing: 0.5px;
+        font-weight: 600;
     }
-    .ap-sidebar .nav-link:hover{background:rgba(255,255,255,.12); color:#fff}
 
-    /* Topbar blanco con título centrado y sesión a la derecha */
-    .ap-topbar{
-      position:sticky; top:0; z-index:5; height:var(--topbar-h);
-      display:flex; align-items:center; justify-content:center;
-      background:#fff; border-bottom:1px solid #eef2f6;
+    .sidebar .logo img{
+        max-width: 150px;
+        display:block;
+        margin:0 auto 4px auto;
     }
-    .ap-topbar .hamburger{ position:absolute; left:10px; }
-    .ap-topbar .title{ font-weight:700; color:#0a2a6b; }
-    .ap-topbar .right{
-      position:absolute; right:12px; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
-    }
-    .pill{background:#eef3ff; color:#0a2a6b; padding:.25rem .6rem; border-radius:999px; font-size:.82rem;}
-    .container-fluid{ background:#fff; }
 
-    /* Estado colapsado */
-    body.sidebar-collapsed .ap-sidebar{ width:var(--sidebar-w-mini); }
-    body.sidebar-collapsed .ap-main{ margin-left:var(--sidebar-w-mini); }
-    body.sidebar-collapsed .sec-title{ display:none; }
-    body.sidebar-collapsed .ap-sidebar .nav-link span.label{ display:none; }
-  </style>
+    .sidebar .menu-header {
+        padding: 8px 14px;
+        font-weight: 600;
+        font-size: 10px;
+        text-transform: uppercase;
+        color: var(--sidebar-text-muted);
+        border-top: 1px solid rgba(255,255,255,0.12);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .sidebar .menu-header .left {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .sidebar .menu-header i.fa-folder-open {
+        font-size: 11px;
+    }
+
+    .sidebar .menu-header .chevron {
+        font-size: 10px;
+        transition: transform 0.2s ease;
+    }
+
+    .sidebar .menu-header.collapsed .chevron {
+        transform: rotate(-90deg);
+    }
+
+    .sidebar a {
+        text-decoration: none;
+        color: var(--sidebar-text);
+        display: block;
+        padding: 7px 14px;
+        transition: all 0.15s ease;
+        font-size: 10px;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden;
+    }
+
+    .sidebar a i {
+        width: 14px;
+        margin-right: 6px;
+        font-size: 10px;
+    }
+
+    .sidebar a:hover {
+        background-color: rgba(255,255,255,0.14);
+        color: #fff;
+    }
+
+    .submenu.collapsed {
+        display: none;
+    }
+
+    .submenu a {
+        padding-left: 26px;
+        border-left: 2px solid transparent;
+    }
+
+    .submenu a:hover {
+        border-left-color: rgba(255,255,255,0.5);
+    }
+
+    @media (max-width: 991.98px) {
+        body {
+            padding-left: 0;
+        }
+        .sidebar {
+            transform: translateX(-100%);
+            transition: transform 0.25s ease;
+        }
+        .sidebar.sidebar-show {
+            transform: translateX(0);
+        }
+    }
+</style>
 </head>
 <body>
-<div class="ap-shell">
 
-  <!-- SIDEBAR (azul) con placa blanca del logo -->
-  <aside class="ap-sidebar">
-    <div class="brand-plate">
-      <img src="/assistpro_kardex_fc/assets/logo/assistpro-er.svg" alt="AssistPro ER">
+<div class="sidebar">
+    <div class="logo">
+        <img src="/public/img/logo_adventech_white.png" alt="Logo">
+        AssistPro WMS
     </div>
 
-    <div class="sec-title">NAVEGACIÓN</div>
-    <nav class="nav flex-column">
-      
-      <a class="nav-link" href="/assistpro_kardex_fc/public/bi/index.php">
-        <i class="bi bi-grid-1x2-fill"></i><span class="label">Dashboard</span>
-      </a>
-      
-      <a class="nav-link" href="/assistpro_kardex_fc/public/bi/resumen_basico.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Análisis Inicial</span>
-      </a>
+    <?php
+    // Menús principales (sin Utilería, sólo 5 secciones)
+    $menus = [
 
-<a class="nav-link" href="/assistpro_kardex_fc/public/catalogos/generador.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Generador de Catálogos</span>
-      </a>      
+        // DASHBOARD
+        'Dashboard' => [
+            ['titulo' => 'Online Tracking',      'url' => 'dashboard/onlinetracking.php',   'icono' => 'fa-location-dot'],
+            ['titulo' => 'Resumen Ejecutivo',    'url' => 'dashboard/resumen.php',          'icono' => 'fa-chart-line'],
+            ['titulo' => 'Inventario',           'url' => 'dashboard/inventario.php',       'icono' => 'fa-boxes-stacked'],
+            ['titulo' => 'Monitoreo Entregas',   'url' => 'dashboard/monitoreo.php',        'icono' => 'fa-truck-fast'],
+            ['titulo' => 'Monitoreo Pedidos',    'url' => 'dashboard/monitoreopedidos.php', 'icono' => 'fa-receipt'],
+        ],
 
-<a class="nav-link" href="/assistpro_kardex_fc/public/catalogos/cat_c_usuario.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Catálogo de Usuarios</span>
-      </a>
+        // ADMINISTRACIÓN
+        'Administración' => [
+            ['titulo' => 'Compañías',            'url' => 'admin/companias.php',            'icono' => 'fa-building'],
+            ['titulo' => 'Usuarios',             'url' => 'admin/usuarios.php',             'icono' => 'fa-user'],
+            ['titulo' => 'Perfiles',             'url' => 'admin/perfiles.php',             'icono' => 'fa-id-badge'],
+            ['titulo' => 'Zonas',                'url' => 'admin/zonas.php',                'icono' => 'fa-map'],
+        ],
 
-<a class="nav-link" href="/assistpro_kardex_fc/public/catalogos/cat_c_proveedores.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Proveedores</span>
-      </a>
+        // CATÁLOGOS
+        'Catálogos' => [
+           
+            ['titulo' => 'Ajustes | Incidencias',        'url' => 'catalogos/catalogos/cat_c_motivoajuste.php',       'icono' => 'fa-circle'],
+            ['titulo' => 'License Plate',                'url' => 'catalogos/catalogos/cat_c_licenseplate.php',       'icono' => 'fa-circle'],
+            ['titulo' => 'Motivo No Ventas',             'url' => 'catalogos/catalogos/cat_c_motivosnoventas.php',    'icono' => 'fa-circle'],
+            ['titulo' => 'Motivo de Devolución',         'url' => 'catalogos/catalogos/cat_c_motivodevolucion.php',   'icono' => 'fa-circle'],
+            ['titulo' => 'Pallet y Contenedores',        'url' => 'catalogos/catalogos/cat_c_contenedores.php',       'icono' => 'fa-box-open'],
+            ['titulo' => 'Rutas / Destinatarios',        'url' => 'catalogos/catalogos/cat_c_destinatarios.php',      'icono' => 'fa-route'],
+            ['titulo' => 'Protocolos de Entrada',        'url' => 'catalogos/catalogos/cat_c_protocolos.php',         'icono' => 'fa-clipboard-check'],
+            ['titulo' => 'Proveedores',                  'url' => 'catalogos/catalogos/cat_c_proveedores.php',        'icono' => 'fa-truck-field'],
+            ['titulo' => 'Proyectos | CC',               'url' => 'catalogos/catalogos/cat_c_proyectos.php',          'icono' => 'fa-diagram-project'],
+            ['titulo' => 'QA | Cuarentena',              'url' => 'catalogos/catalogos/cat_c_motivocuarentena.php',   'icono' => 'fa-triangle-exclamation'],
+            ['titulo' => 'Rutas',                        'url' => 'catalogos/catalogos/cat_c_ruta.php',               'icono' => 'fa-road'],
+            ['titulo' => 'Tipo de Prioridad',            'url' => 'catalogos/catalogos/cat_c_tipodeprioridad.php',    'icono' => 'fa-layer-group'],
+        ],
 
+        // PROCESOS
+        'Procesos' => [
+            ['titulo' => 'Pallets y Contenedores',       'url' => 'procesos/paletsycontenedores.php',                 'icono' => 'fa-boxes-packing'],
+            ['titulo' => 'Control de Incidencias (PQRS)','url' => 'procesos/incidencias.php',                         'icono' => 'fa-flag'],
+        ],
 
-<a class="nav-link" href="/assistpro_kardex_fc/public/catalogos/cat_c_clientes.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Clientes</span>
-      </a>
-
-
-
-
-      <a class="nav-link" href="/assistpro_kardex_fc/public/catalogos/cat_c_articulo.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Catálogo de productos</span>
-      </a>
-
-      <a class="nav-link" href="/assistpro_kardex_fc/public/catalogos/cat_c_charolas.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Pallets y Contenedores</span>
-      </a>
-
-      
-      <a class="nav-link" href="/assistpro_kardex_fc/public/catalogos/cat_c_articulo.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Catálogo de productos</span>
-      </a>
-
-      <a class="nav-link" href="/assistpro_kardex_fc/public/dashboard/configuracion_almacen.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Configuración del Almacén</span>
-      </a>
-      
-	  <a class="nav-link" href="/assistpro_kardex_fc/public/procesos/recepcion_materiales.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Recepción de Materiales</span>
-      </a>
-	  
-      <a class="nav-link" href="/assistpro_kardex_fc/public/bi/kardex_productividad.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Kardex Productividad</span>
-      </a>
-
-      <a class="nav-link" href="/assistpro_kardex_fc/public/bi/kardex.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Kardex </span>
-      </a>
-      
+        // REPORTES
+        'Reportes' => [
+            ['titulo' => 'Log de Operaciones',           'url' => 'reportes/operaciones.php',                         'icono' => 'fa-timeline'],
+            ['titulo' => 'Salidas',                      'url' => 'reportes/salidas.php',                             'icono' => 'fa-arrow-right-arrow-left'],
+            ['titulo' => 'Kardex | Trazabilidad',        'url' => 'reportes/kardex.php',                              'icono' => 'fa-clipboard-list'],
+            ['titulo' => 'Kardex | Movimientos',         'url' => 'reportes/kardexw.php',                             'icono' => 'fa-right-left'],
+        ],
     
+       // UTILERIAS
+       
+        'Utilerias' => [
+            ['titulo' => 'Log de Operaciones',  'url' => 'utilerias/log_operaciones.php',   'icono' => 'fa-timeline'],
+            ['titulo' => 'Log webServices',     'url' => 'utilerias/log_ws.php',            'icono' => 'fa-arrow-right-arrow-left'],
+            ['titulo' => 'Generador de Catálogos', 'url' => 'utilerias/generador.php',      'icono' => 'fa-clipboard-list'],
+            
+ ],
 
-      <a class="nav-link" href="/assistpro_kardex_fc/public/bi/log_operaciones.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Log Operaciones</span>
-      </a>
+];
+    ?>
 
-      <a class="nav-link" href="/assistpro_kardex_fc/public/bi/log_ws.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Log WS </span>
-      </a>
-      
- 
-        <a class="nav-link" href="/assistpro_kardex_fc/public/manufactura/bom.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Kits | Manufactura</span>
-        </a> 
-        
-        <a class="nav-link" href="/assistpro_kardex_fc/public/manufactura/orden_produccion.php">
-        <i class="bi bi-speedometer2"></i><span class="label">Generación OTs</span>
-        </a>
+    <?php foreach ($menus as $menu => $submenus): 
+        $menuId = 'menu_' . preg_replace('/[^a-z0-9]+/i', '_', strtolower($menu));
+        $collapsed = true; // Todos colapsados por defecto
+    ?>
+        <div class="menu-header menu-toggle <?= $collapsed ? 'collapsed' : '' ?>" data-target="#<?= $menuId ?>">
+            <div class="left">
+                <i class="fa fa-folder-open"></i> <?= htmlspecialchars($menu) ?>
+            </div>
+            <i class="fa fa-chevron-down chevron"></i>
+        </div>
+        <div class="submenu <?= $collapsed ? 'collapsed' : '' ?>" id="<?= $menuId ?>">
+            <?php foreach ($submenus as $item):
+                $icono = !empty($item['icono']) ? $item['icono'] : 'fa-circle';
+            ?>
+                <a href="/public/<?= htmlspecialchars($item['url']) ?>">
+                    <i class="fa <?= htmlspecialchars($icono) ?>"></i>
+                    <?= htmlspecialchars($item['titulo']) ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    <?php endforeach; ?>
 
-      <a class="nav-link" href="#"><i class="bi bi-cash-coin"></i><span class="label">Financiero</span></a>
-      <a class="nav-link" href="#"><i class="bi bi-people"></i><span class="label">Clientes/Proyectos</span></a>
-      <a class="nav-link" href="#"><i class="bi bi-gear"></i><span class="label">Administración</span></a>
-      <hr class="border-white opacity-25">
-      <a class="nav-link" href="/assistpro_kardex_fc/public/logout.php"><i class="bi bi-box-arrow-right"></i><span class="label">Salir</span></a>
-    </nav>
-  </aside>
+</div>
 
-  <!-- MAIN -->
-  <main class="ap-main">
-    <div class="ap-topbar">
-      <div class="hamburger">
-        <button id="btn-toggle-sidebar" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-list"></i>
-        </button>
-      </div>
-      <div class="title">Business Intelligence Suite</div>
-      <div class="right">
-        <span class="pill">
-          <i class="bi bi-person-circle me-1"></i>
-          <?= htmlspecialchars($fullName ?: '—') ?>
-          <?= $perfil ? ' · <b>'.htmlspecialchars($perfil).'</b>' : '' ?>
-        </span>
-        <span class="pill"><i class="bi bi-house-door me-1"></i><?= htmlspecialchars($alm ?: '—') ?></span>
-        <span class="pill"><i class="bi bi-building me-1"></i><?= $allEmp ? "Todas las empresas" : ($empN>0 ? "$empN empresa(s)" : "Sin empresas") ?></span>
-      </div>
-    </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.menu-toggle').forEach(function(header) {
+        header.addEventListener('click', function() {
+            var targetSelector = this.getAttribute('data-target');
+            if (!targetSelector) return;
+            var target = document.querySelector(targetSelector);
+            if (!target) return;
 
-    <div class="container-fluid py-3">
+            target.classList.toggle('collapsed');
+            this.classList.toggle('collapsed');
+        });
+    });
+});
+</script>
+
+<!-- el resto de cada página se cierra/complementa en _menu_global_end.php -->

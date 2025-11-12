@@ -11,7 +11,7 @@ function nice_label(string $c): string {
 }
 
 function col_meta(PDO $pdo, string $tabla): array {
-    $st = $pdo->prepare("SELECT column_name,data_type,column_type,is_nullable
+    $st = $pdo->prepare("SELECT column_name,data_type,column_type,is_nullable,column_key
                          FROM information_schema.columns
                          WHERE table_schema=DATABASE() AND table_name=?");
     $st->execute([$tabla]);
@@ -28,7 +28,6 @@ function table_exists(PDO $pdo, string $t): bool {
 }
 
 function guess_fk_table(PDO $pdo, string $col): ?string {
-    // Reglas rápidas por nombre
     $map = [
         'empresa_id'       => 'c_empresa',
         'almacen_id'       => 'c_almacen',
@@ -41,7 +40,7 @@ function guess_fk_table(PDO $pdo, string $col): ?string {
     if (isset($map[$col]) && table_exists($pdo,$map[$col])) return $map[$col];
 
     if (substr($col, -3) === '_id') {
-        $base   = substr($col, 0, -3); // ej: almacen_tipo
+        $base   = substr($col, 0, -3);
         $cands  = ["c_{$base}", "c_{$base}_cat", "{$base}", "{$base}_cat"];
         foreach($cands as $t){
             if (table_exists($pdo,$t)) return $t;
@@ -94,81 +93,108 @@ function friendly_error(Throwable $e, string $ctx): string {
     return $ctx.': '.$msg;
 }
 
+function get_pk(PDO $pdo, string $tabla, array $cols): string {
+    $st = $pdo->prepare("SELECT column_name
+                         FROM information_schema.columns
+                         WHERE table_schema=DATABASE()
+                           AND table_name=?
+                           AND column_key='PRI'
+                         ORDER BY ordinal_position
+                         LIMIT 1");
+    $st->execute([$tabla]);
+    $pk = $st->fetchColumn();
+    if (!$pk) {
+        $pk = $cols[0] ?? 'id';
+    }
+    return $pk;
+}
+
+/* Boolean helpers */
+
+function is_bool_like_col(string $name, array $metaCol): bool {
+    $ln = strtolower($name);
+    $dt = strtolower($metaCol['data_type'] ?? '');
+    $ct = strtolower($metaCol['column_type'] ?? '');
+    if (strpos($dt,'tinyint') !== false || $dt === 'bit') return true;
+    if (($dt === 'char' || $dt === 'varchar') && strpos($ct,'(1)') !== false) return true;
+    if (preg_match('/^(es_|ind_|sn_)/',$ln)) return true;
+    if (in_array($ln,['activo','status','estatus','baja','cancelado'],true)) return true;
+    return false;
+}
+
+function bool_style(array $metaCol): string {
+    $dt = strtolower($metaCol['data_type'] ?? '');
+    $ct = strtolower($metaCol['column_type'] ?? '');
+    if (strpos($dt,'int') !== false || $dt === 'bit') return '01';
+    if (($dt === 'char' || $dt === 'varchar') && strpos($ct,'(1)') !== false) return 'SN';
+    return '01';
+}
+
+/**
+ * Detecta columna de soft-delete:
+ * cualquier columna cuyo nombre contenga activo / status / estatus.
+ */
+function detect_softdelete_column(array $meta): ?string {
+    foreach($meta as $name=>$m){
+        $ln = strtolower($name);
+        if (preg_match('/(activo|status|estatus)/', $ln)) {
+            return $name;
+        }
+    }
+    return null;
+}
+
 $pdo      = db_pdo();
-$tabla    = 'c_almacenp';
-$titulo   = 'Almacenp';
+$tabla    = 'cat_estados';
+$titulo   = 'Cat Estados';
 $cols     = array (
-  0 => 'clave',
-  1 => 'nombre',
-  2 => 'rut',
-  3 => 'codigopostal',
-  4 => 'direccion',
-  5 => 'telefono',
-  6 => 'contacto',
-  7 => 'correo',
-  8 => 'comentarios',
-  9 => 'Activo',
-  10 => 'distrito',
-  11 => 'cve_talmacen',
-  12 => 'No_Licencias',
-  13 => 'cve_cia',
-  14 => 'BL',
-  15 => 'BL_Pasillo',
-  16 => 'BL_Rack',
-  17 => 'BL_Nivel',
-  18 => 'BL_Seccion',
-  19 => 'BL_Posicion',
-  20 => 'longitud',
-  21 => 'latitud',
-  22 => 'interno',
-  23 => 'tipolp_traslado',
+  0 => 'ESTADO',
+  1 => 'DESCRIPCION',
+  2 => 'DURACION',
+  3 => 'ORDEN',
+  4 => 'COLORR',
+  5 => 'COLORG',
+  6 => 'COLORB',
+  7 => 'STATUS',
+  8 => 'Activo',
 );
 $friendly = array (
-  'id' => 'Id',
-  'clave' => 'Clave',
-  'nombre' => 'Nombre',
-  'rut' => 'Rut',
-  'codigopostal' => 'Codigopostal',
-  'direccion' => 'Direccion',
-  'telefono' => 'Telefono',
-  'contacto' => 'Contacto',
-  'correo' => 'Correo',
-  'comentarios' => 'Comentarios',
+  'ESTADO' => 'Estado',
+  'DESCRIPCION' => 'Descripcion',
+  'DURACION' => 'Duracion',
+  'ORDEN' => 'Orden',
+  'COLORR' => 'Color R',
+  'COLORG' => 'Color G',
+  'COLORB' => 'Colorb',
+  'STATUS' => 'Status',
   'Activo' => 'Activo',
-  'distrito' => 'Distrito',
-  'cve_talmacen' => 'Cve Talmacen',
-  'No_Licencias' => 'No Licencias',
-  'cve_cia' => 'Cve Cia',
-  'BL' => 'Bl',
-  'BL_Pasillo' => 'Bl Pasillo',
-  'BL_Rack' => 'Bl Rack',
-  'BL_Nivel' => 'Bl Nivel',
-  'BL_Seccion' => 'Bl Seccion',
-  'BL_Posicion' => 'Bl Posicion',
-  'longitud' => 'Longitud',
-  'latitud' => 'Latitud',
-  'interno' => 'Interno',
-  'tipolp_traslado' => 'Tipolp Traslado',
 );
-$pk       = 'id';
 $meta     = col_meta($pdo,$tabla);
 
-// columnas visibles (sin id, created_at, updated_at)
+// PK real
+$pk = get_pk($pdo,$tabla,$cols);
+
+// columnas visibles (no ocultamos PK, sólo timestamps)
 $viewCols = array_values(array_filter(
     $cols,
-    fn($c)=>!in_array($c,['id','created_at','updated_at'],true)
+    fn($c)=>!in_array($c,['created_at','updated_at'],true)
 ));
 
 // columnas especiales
 $hasCreated = in_array('created_at',$cols,true);
 $hasUpdated = in_array('updated_at',$cols,true);
 
-// columna para soft delete (activo) – case insensitive
-$hasActivo  = false;
-foreach($meta as $cn => $m){
-    if (strtolower($cn)==='activo'){ $hasActivo=true; break; }
+// columna para soft delete
+$activoCol = detect_softdelete_column($meta);
+$hasActivo = $activoCol !== null;
+$activoStyle = $hasActivo && isset($meta[$activoCol]) ? bool_style($meta[$activoCol]) : '01';
+if ($activoStyle === 'SN') {
+    $activeVal   = 'S';
+    $inactiveVal = 'N';
+} else {
+    $activeVal   = '1';
+    $inactiveVal = '0';
 }
-$activoCol = $hasActivo ? 'activo' : null;
 
 // columnas de fecha-alta automáticas (por nombre)
 $autoDateCols = [];
@@ -186,10 +212,10 @@ $msgImport    = '';
 /* ========== Acciones básicas (delete / recover / save / export / layout / import) ========== */
 
 if (isset($_GET['del'])) {
-    $id = (int)$_GET['del'];
+    $id = $_GET['del'];
     try {
         if ($hasActivo) {
-            $pdo->prepare("UPDATE $tabla SET $activoCol=0 WHERE $pk=?")->execute([$id]);
+            $pdo->prepare("UPDATE $tabla SET $activoCol=? WHERE $pk=?")->execute([$inactiveVal,$id]);
         } else {
             $pdo->prepare("DELETE FROM $tabla WHERE $pk=?")->execute([$id]);
         }
@@ -201,10 +227,10 @@ if (isset($_GET['del'])) {
 }
 
 if (isset($_GET['rec'])) {
-    $id = (int)$_GET['rec'];
+    $id = $_GET['rec'];
     if ($hasActivo) {
         try {
-            $pdo->prepare("UPDATE $tabla SET $activoCol=1 WHERE $pk=?")->execute([$id]);
+            $pdo->prepare("UPDATE $tabla SET $activoCol=? WHERE $pk=?")->execute([$activeVal,$id]);
             header("Location: cat_$tabla.php?show_inactivos=1");
             exit;
         } catch (Throwable $e) {
@@ -214,39 +240,43 @@ if (isset($_GET['rec'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['op']??'')==='save') {
-    $id   = (int)($_POST['__id']??0);
-    $data = [];
+    $id    = $_POST['__id'] ?? '';
+    $isNew = ($id === '' || $id === '0');
+    $data  = [];
 
     foreach($cols as $c){
-        if (in_array($c,['id','created_at','updated_at'],true)) continue;
-        if ($c==='clave' && $id>0) continue; // clave no editable
+        // sólo columnas que existen en metadata
+        if (!isset($meta[$c])) continue;
+
+        if (in_array($c,['created_at','updated_at'],true)) continue;
+        if ($c === $pk && !$isNew) continue; // PK no editable en edición
 
         $val = $_POST[$c] ?? null;
 
         // fecha alta automática si viene vacía y es nuevo
-        if ($id===0 && in_array($c,$autoDateCols,true) && ($val==='' || $val===null)) {
+        if ($isNew && in_array($c,$autoDateCols,true) && ($val==='' || $val===null)) {
             $val = date('Y-m-d');
         }
 
-        $data[$c] = normalize_value($val, $meta[$c] ?? []);
+        $data[$c] = normalize_value($val, $meta[$c]);
     }
 
     try {
-        if ($id>0){
+        if (!$isNew){
             if ($hasUpdated) { $data['updated_at'] = date('Y-m-d H:i:s'); }
             if ($data){
                 $set=[]; $par=[];
                 foreach($data as $k=>$v){ $set[]="$k=?"; $par[]=$v; }
                 $par[]=$id;
-                $pdo->prepare("UPDATE $tabla SET ".implode(',',$set)." WHERE $pk=?")->execute($par);
+                $sqlUp = "UPDATE $tabla SET ".implode(',',$set)." WHERE $pk=?";
+                $pdo->prepare($sqlUp)->execute($par);
             }
         } else {
             if ($hasCreated) $data['created_at'] = date('Y-m-d H:i:s');
             if ($hasUpdated) $data['updated_at'] = date('Y-m-d H:i:s');
             if ($data){
-                $pdo->prepare(
-                    "INSERT INTO $tabla (".implode(',',array_keys($data)).") VALUES (".implode(',',array_fill(0,count($data),'?')).")"
-                )->execute(array_values($data));
+                $sqlIns = "INSERT INTO $tabla (".implode(',',array_keys($data)).") VALUES (".implode(',',array_fill(0,count($data),'?')).")";
+                $pdo->prepare($sqlIns)->execute(array_values($data));
             }
         }
         header("Location: cat_$tabla.php".($showInact?'?show_inactivos=1':''));
@@ -256,7 +286,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['op']??'')==='save') {
     }
 }
 
-/* EXPORT CSV (datos) */
+/* EXPORT CSV (datos completos) */
 if (isset($_GET['export']) && $_GET['export']==='csv'){
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename='.$tabla.'_'.date('Ymd_His').'.csv');
@@ -264,11 +294,20 @@ if (isset($_GET['export']) && $_GET['export']==='csv'){
     fputcsv($out,$cols);
 
     $where = '';
+    $pars  = [];
     if ($hasActivo){
-        $where = $showInact ? "WHERE $activoCol=0" : "WHERE ($activoCol IS NULL OR $activoCol=1)";
+        if ($showInact) {
+            $where = "WHERE $activoCol <> ?";
+            $pars[] = $activeVal;
+        } else {
+            $where = "WHERE ($activoCol IS NULL OR $activoCol=?)";
+            $pars[] = $activeVal;
+        }
     }
-    $rs=$pdo->query("SELECT ".implode(',', $cols)." FROM $tabla $where");
-    foreach($rs as $r){
+    $sql = "SELECT ".implode(',', $cols)." FROM $tabla $where";
+    $st  = $pdo->prepare($sql);
+    $st->execute($pars);
+    while($r = $st->fetch(PDO::FETCH_ASSOC)){
         fputcsv($out, array_map(fn($k)=>$r[$k]??'', $cols));
     }
     fclose($out);
@@ -301,6 +340,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['op']??'')==='import' && isse
                     while(($row=fgetcsv($fh))!==false){
                         $vals=[];
                         foreach($valid as $c){
+                            if (!isset($meta[$c])) { $vals[] = null; continue; }
+
                             if ($c==='created_at' || $c==='updated_at'){
                                 $vals[] = date('Y-m-d H:i:s');
                                 continue;
@@ -308,12 +349,11 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['op']??'')==='import' && isse
                             $pos = array_search($c,$hdr);
                             $val = $pos===false? null : $row[$pos];
 
-                            // fecha alta automática también en import si viene vacía
                             if (in_array($c,$autoDateCols,true) && ($val==='' || $val===null)) {
                                 $val = date('Y-m-d');
                             }
 
-                            $vals[] = normalize_value($val, $meta[$c] ?? []);
+                            $vals[] = normalize_value($val, $meta[$c]);
                         }
                         $st->execute($vals);
                     }
@@ -333,24 +373,34 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['op']??'')==='import' && isse
     }
 }
 
-/* ========== Datos para FK selects ========== */
+/* ========== Datos para FK selects / bool ========= */
 
 $fkCache=[];
+$boolCols=[];
 foreach($viewCols as $c){
     if (substr($c,-3)==='_id'){
         $t = guess_fk_table($pdo,$c);
         if ($t){ $fkCache[$c] = fk_options($pdo,$t); }
     }
+    if (isset($meta[$c]) && is_bool_like_col($c,$meta[$c])) {
+        $boolCols[$c] = bool_style($meta[$c]);
+    }
 }
 
-/* ========== Listado ========== */
+/* ========== Listado con paginación (25) ========== */
 
 $q      = trim((string)($_GET['q']??''));
 $where  = [];
 $pars   = [];
 
 if ($hasActivo){
-    $where[] = $showInact ? "$activoCol=0" : "($activoCol IS NULL OR $activoCol=1)";
+    if ($showInact) {
+        $where[] = "$activoCol <> ?";
+        $pars[]  = $activeVal;
+    } else {
+        $where[] = "($activoCol IS NULL OR $activoCol=?)";
+        $pars[]  = $activeVal;
+    }
 }
 if ($q!==''){
     $likes=[];
@@ -362,12 +412,36 @@ if ($q!==''){
         $where[]='('.implode(' OR ',$likes).')';
     }
 }
-$sql = "SELECT ".implode(',', array_merge([$pk],$viewCols))." FROM $tabla ".
-       (empty($where)?'':'WHERE '.implode(' AND ',$where)).
-       " ORDER BY $pk DESC LIMIT 500";
+$whereSql = empty($where)? '' : 'WHERE '.implode(' AND ',$where);
+
+// total filtrado
+$stCnt = $pdo->prepare("SELECT COUNT(*) FROM $tabla $whereSql");
+$stCnt->execute($pars);
+$totalFiltered = (int)$stCnt->fetchColumn();
+
+$perPage = 25;
+$page    = max(1, (int)($_GET['p'] ?? 1));
+$maxPage = max(1, (int)ceil($totalFiltered / $perPage));
+if ($page > $maxPage) $page = $maxPage;
+$offset  = ($page - 1) * $perPage;
+
+$sql = "SELECT ".implode(',', array_unique(array_merge([$pk], $viewCols))).
+       " FROM $tabla $whereSql ORDER BY $pk DESC LIMIT $perPage OFFSET $offset";
 $st  = $pdo->prepare($sql);
 $st->execute($pars);
 $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+/* ========== Carga previa para edición (para modal) ========== */
+
+$hasEdit = false;
+$E       = [];
+if (isset($_GET['edit'])) {
+    $hasEdit = true;
+    $idEdit  = $_GET['edit'];
+    $stE = $pdo->prepare("SELECT ".implode(',', array_unique(array_merge([$pk], $viewCols)))." FROM $tabla WHERE $pk=?");
+    $stE->execute([$idEdit]);
+    $E = $stE->fetch(PDO::FETCH_ASSOC) ?: [];
+}
 
 /* ========== UI ========== */
 
@@ -482,8 +556,28 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       padding:4px 6px;
       font-size:10px;
     }
-    /* MODAL NUEVO REGISTRO */
-    #modal-new{
+    .pager{
+      margin-top:4px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      font-size:10px;
+      color:#6d757d;
+    }
+    .pager-links a{
+      margin-right:4px;
+      text-decoration:none;
+      padding:2px 6px;
+      border-radius:6px;
+      border:1px solid var(--muted);
+    }
+    .pager-links .current{
+      background:var(--primary);
+      color:#fff;
+      border-color:var(--primary);
+    }
+    #modal-new,
+    #modal-edit{
       display:none;
       position:fixed;
       inset:0;
@@ -492,7 +586,8 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       justify-content:center;
       z-index:1050;
     }
-    #modal-new .card-new{
+    #modal-new .card-new,
+    #modal-edit .card-new{
       background:#fff;
       border:1px solid var(--muted);
       border-radius:10px;
@@ -503,14 +598,16 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       display:flex;
       flex-direction:column;
     }
-    #modal-new .card-header-new{
+    #modal-new .card-header-new,
+    #modal-edit .card-header-new{
       display:flex;
       justify-content:space-between;
       align-items:center;
       gap:8px;
       margin-bottom:6px;
     }
-    #modal-new .grid3{
+    #modal-new .grid3,
+    #modal-edit .grid3{
       display:grid;
       grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
       gap:8px;
@@ -518,38 +615,14 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       overflow-y:auto;
       padding-right:2px;
     }
-    #modal-new .cell{
+    #modal-new .cell,
+    #modal-edit .cell{
       display:flex;
       flex-direction:column;
       gap:3px;
     }
-    #modal-new .cell label{
-      font-size:10px;
-      color:#6d757d;
-    }
-    .edit-block{
-      border:1px solid var(--muted);
-      border-radius:8px;
-      padding:8px;
-      margin-top:6px;
-    }
-    .edit-block .title-edit{
-      font-weight:700;
-      margin-bottom:6px;
-      font-size:10px;
-    }
-    .edit-block .grid3{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-      gap:8px;
-      margin-top:4px;
-    }
-    .edit-block .cell{
-      display:flex;
-      flex-direction:column;
-      gap:3px;
-    }
-    .edit-block label{
+    #modal-new .cell label,
+    #modal-edit .cell label{
       font-size:10px;
       color:#6d757d;
     }
@@ -564,7 +637,25 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       var m = document.getElementById('modal-new');
       if (m){ m.style.display='none'; }
     }
+    function closeEdit(){
+      var m = document.getElementById('modal-edit');
+      if (m){ m.style.display='none'; }
+      if (history && history.replaceState) {
+        var url = new URL(window.location.href);
+        url.searchParams.delete('edit');
+        history.replaceState({}, '', url);
+      }
+    }
   </script>
+
+  <?php if($hasEdit): ?>
+  <script>
+    window.addEventListener('DOMContentLoaded', function(){
+      var m = document.getElementById('modal-edit');
+      if (m){ m.style.display='flex'; }
+    });
+  </script>
+  <?php endif; ?>
 
   <div class="wrap-cat">
     <div class="cat-card">
@@ -613,11 +704,16 @@ require_once __DIR__ . '/../bi/_menu_global.php';
           <?php foreach($rows as $r): ?>
             <tr>
               <td class="act">
-                <a title="Editar" href="?edit=<?=(int)$r[$pk]?><?=$showInact?'&show_inactivos=1':'';?>">✏️</a>
-                <?php if($hasActivo && isset($r[$activoCol]) && (string)$r[$activoCol]!=='1'): ?>
-                  <a title="Recuperar" href="?rec=<?=(int)$r[$pk]?>&show_inactivos=1">♻️</a>
+                <a title="Editar" href="?edit=<?=urlencode((string)$r[$pk])?><?=$showInact?'&show_inactivos=1':'';?>&p=<?=$page?>">✏️</a>
+                <?php if($hasActivo):
+                    $valAct = isset($r[$activoCol]) ? (string)$r[$activoCol] : ''; ?>
+                  <?php if($valAct !== $activeVal): ?>
+                    <a title="Recuperar" href="?rec=<?=urlencode((string)$r[$pk])?>&show_inactivos=1&p=<?=$page?>">♻️</a>
+                  <?php else: ?>
+                    <a title="Borrar" href="?del=<?=urlencode((string)$r[$pk])?><?=$showInact?'&show_inactivos=1':'';?>&p=<?=$page?>" onclick="return confirm('¿Borrar?')">🗑️</a>
+                  <?php endif; ?>
                 <?php else: ?>
-                  <a title="Borrar" href="?del=<?=(int)$r[$pk]?><?=$showInact?'&show_inactivos=1':'';?>" onclick="return confirm('¿Borrar?')">🗑️</a>
+                  <a title="Borrar" href="?del=<?=urlencode((string)$r[$pk])?><?=$showInact?'&show_inactivos=1':'';?>&p=<?=$page?>" onclick="return confirm('¿Borrar?')">🗑️</a>
                 <?php endif; ?>
               </td>
               <?php foreach($viewCols as $c): ?>
@@ -629,57 +725,26 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         </table>
       </div>
 
-      <?php if(isset($_GET['edit'])):
-        $id=(int)$_GET['edit'];
-        $st=$pdo->prepare("SELECT ".implode(',',array_merge([$pk],$viewCols))." FROM $tabla WHERE $pk=?");
-        $st->execute([$id]); $E=$st->fetch(PDO::FETCH_ASSOC) ?: [];
-      ?>
-        <div class="edit-block">
-          <div class="title-edit">Editar #<?= (int)$id ?></div>
-          <form method="post" class="grid3">
-            <input type="hidden" name="op" value="save">
-            <input type="hidden" name="__id" value="<?= (int)$id ?>">
-            <?php foreach($viewCols as $c): $m=$meta[$c]??[]; ?>
-              <div class="cell">
-                <label><?=h($friendly[$c] ?? nice_label($c))?></label>
-                <?php if($c==='clave'): ?>
-                  <input name="clave" value="<?=h((string)($E['clave']??''))?>" disabled>
-                <?php elseif(substr($c,-3)==='_id' && !empty($fkCache[$c])):
-                      $val=(string)($E[$c]??''); ?>
-                  <select name="<?=h($c)?>">
-                    <option value="">(nulo)</option>
-                    <?php foreach($fkCache[$c] as $k=>$txt): ?>
-                      <option value="<?=h((string)$k)?>" <?=$val===(string)$k?'selected':''?>><?=h($txt)?></option>
-                    <?php endforeach; ?>
-                  </select>
-                <?php elseif(strpos(strtolower($m['data_type']??''),'int')!==false): ?>
-                  <input type="number" name="<?=h($c)?>" value="<?=h((string)($E[$c]??''))?>">
-                <?php elseif(in_array(strtolower($m['data_type']??''),['decimal','double','float'])): ?>
-                  <input type="number" step="0.01" name="<?=h($c)?>" value="<?=h((string)($E[$c]??''))?>">
-                <?php elseif(in_array(strtolower($m['data_type']??''),['date'])): ?>
-                  <input type="date" name="<?=h($c)?>" value="<?=h((string)($E[$c]??''))?>">
-                <?php elseif(in_array(strtolower($m['data_type']??''),['datetime','timestamp'])): ?>
-                  <input type="datetime-local" name="<?=h($c)?>" value="<?=h((string)($E[$c]??''))?>">
-                <?php elseif($c==='email'||$c==='correo'): ?>
-                  <input type="email" name="<?=h($c)?>" value="<?=h((string)($E[$c]??''))?>">
-                <?php elseif(in_array($c,['activo','email_ok','requiere_factura','credito_bloqueado'],true)):
-                      $val=(string)($E[$c]??''); ?>
-                  <select name="<?=h($c)?>">
-                    <option value="" <?=$val===''?'selected':''?>>(nulo)</option>
-                    <option value="0" <?=$val==='0'?'selected':''?>>0</option>
-                    <option value="1" <?=$val==='1'?'selected':''?>>1</option>
-                  </select>
-                <?php else: ?>
-                  <input name="<?=h($c)?>" value="<?=h((string)($E[$c]??''))?>">
-                <?php endif; ?>
-              </div>
-            <?php endforeach; ?>
-            <div class="cell" style="grid-column:1/-1;margin-top:4px">
-              <button class="btn-adv secondary">Guardar cambios</button>
-            </div>
-          </form>
+      <div class="pager">
+        <div>
+          Página <?= $page ?> de <?= $maxPage ?> (<?= $totalFiltered ?> registros)
         </div>
-      <?php endif; ?>
+        <div class="pager-links">
+          <?php
+            $qs = $_GET;
+            unset($qs['p']);
+            $base = '?'.http_build_query($qs);
+            if ($base === '?') $base = '';
+          ?>
+          <?php if($page > 1): ?>
+            <a href="<?=$base.($base===''?'?':'&')?>p=<?=($page-1)?>">&laquo; Anterior</a>
+          <?php endif; ?>
+          <span class="current"><?=$page?></span>
+          <?php if($page < $maxPage): ?>
+            <a href="<?=$base.($base===''?'?':'&')?>p=<?=($page+1)?>">Siguiente &raquo;</a>
+          <?php endif; ?>
+        </div>
+      </div>
 
       <!-- Modal nuevo -->
       <div id="modal-new" onclick="if(event.target===this)closeNew();">
@@ -694,12 +759,24 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             <?php foreach($viewCols as $c): $m=$meta[$c]??[]; ?>
               <div class="cell">
                 <label><?=h($friendly[$c] ?? nice_label($c))?></label>
-                <?php if(substr($c,-3)==='_id' && !empty($fkCache[$c])): ?>
+                <?php
+                  $isBool  = isset($boolCols[$c]);
+                  $styleB  = $isBool ? $boolCols[$c] : '01';
+                  if ($styleB==='SN'){ $vTrue='S'; $vFalse='N'; } else { $vTrue='1'; $vFalse='0'; }
+                  $defVal  = ($hasActivo && $c === $activoCol) ? $vTrue : '';
+                ?>
+                <?php if(isset($fkCache[$c])): ?>
                   <select name="<?=h($c)?>">
                     <option value="">(nulo)</option>
                     <?php foreach($fkCache[$c] as $k=>$txt): ?>
                       <option value="<?=h((string)$k)?>"><?=h($txt)?></option>
                     <?php endforeach; ?>
+                  </select>
+                <?php elseif($isBool): ?>
+                  <select name="<?=h($c)?>">
+                    <option value="" <?=$defVal===''?'selected':''?>>(nulo)</option>
+                    <option value="<?=$vFalse?>" <?=$defVal===$vFalse?'selected':''?>><?=$vFalse?></option>
+                    <option value="<?=$vTrue?>"  <?=$defVal===$vTrue?'selected':''?>><?=$vTrue?></option>
                   </select>
                 <?php elseif(strpos(strtolower($m['data_type']??''),'int')!==false): ?>
                   <input type="number" name="<?=h($c)?>">
@@ -711,12 +788,6 @@ require_once __DIR__ . '/../bi/_menu_global.php';
                   <input type="datetime-local" name="<?=h($c)?>">
                 <?php elseif($c==='email'||$c==='correo'): ?>
                   <input type="email" name="<?=h($c)?>">
-                <?php elseif(in_array($c,['activo','email_ok','requiere_factura','credito_bloqueado'],true)): ?>
-                  <select name="<?=h($c)?>">
-                    <option value="">(nulo)</option>
-                    <option value="0">0</option>
-                    <option value="1" selected>1</option>
-                  </select>
                 <?php else: ?>
                   <input name="<?=h($c)?>">
                 <?php endif; ?>
@@ -726,6 +797,71 @@ require_once __DIR__ . '/../bi/_menu_global.php';
               <button class="btn-adv secondary">Guardar</button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <!-- Modal editar -->
+      <div id="modal-edit" onclick="if(event.target===this)closeEdit();">
+        <div class="card-new">
+          <div class="card-header-new">
+            <div class="muted" style="font-weight:700">Editar registro</div>
+            <button type="button" class="btn-adv" onclick="closeEdit()">Cerrar</button>
+          </div>
+          <?php if($hasEdit): ?>
+          <form method="post" class="grid3" style="margin-top:4px;">
+            <input type="hidden" name="op" value="save">
+            <input type="hidden" name="__id" value="<?=h((string)($E[$pk] ?? ($_GET['edit'] ?? '')))?>">
+            <?php foreach($viewCols as $c): $m=$meta[$c]??[]; ?>
+              <div class="cell">
+                <label><?=h($friendly[$c] ?? nice_label($c))?></label>
+                <?php
+                  $isPk    = ($c === $pk);
+                  $isBool  = isset($boolCols[$c]);
+                  $styleB  = $isBool ? $boolCols[$c] : '01';
+                  $valCur  = (string)($E[$c] ?? '');
+                ?>
+                <?php if($isPk): ?>
+                  <input name="<?=h($c)?>" value="<?=h($valCur)?>" disabled>
+                <?php elseif(isset($fkCache[$c])):
+                      $val=(string)($E[$c]??''); ?>
+                  <select name="<?=h($c)?>">
+                    <option value="">(nulo)</option>
+                    <?php foreach($fkCache[$c] as $k=>$txt): ?>
+                      <option value="<?=h((string)$k)?>" <?=$val===(string)$k?'selected':''?>><?=h($txt)?></option>
+                    <?php endforeach; ?>
+                  </select>
+                <?php elseif($isBool):
+                    if ($styleB==='SN'){
+                        $vTrue='S'; $vFalse='N';
+                    } else {
+                        $vTrue='1'; $vFalse='0';
+                    }
+                ?>
+                  <select name="<?=h($c)?>">
+                    <option value="" <?=$valCur===''?'selected':''?>>(nulo)</option>
+                    <option value="<?=$vFalse?>" <?=$valCur===$vFalse?'selected':''?>><?=$vFalse?></option>
+                    <option value="<?=$vTrue?>"  <?=$valCur===$vTrue?'selected':''?>><?=$vTrue?></option>
+                  </select>
+                <?php elseif(strpos(strtolower($m['data_type']??''),'int')!==false): ?>
+                  <input type="number" name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php elseif(in_array(strtolower($m['data_type']??''),['decimal','double','float'])): ?>
+                  <input type="number" step="0.01" name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php elseif(in_array(strtolower($m['data_type']??''),['date'])): ?>
+                  <input type="date" name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php elseif(in_array(strtolower($m['data_type']??''),['datetime','timestamp'])): ?>
+                  <input type="datetime-local" name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php elseif($c==='email'||$c==='correo'): ?>
+                  <input type="email" name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php else: ?>
+                  <input name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php endif; ?>
+              </div>
+            <?php endforeach; ?>
+            <div class="cell" style="grid-column:1/-1;margin-top:4px">
+              <button class="btn-adv secondary">Guardar cambios</button>
+            </div>
+          </form>
+          <?php endif; ?>
         </div>
       </div>
 

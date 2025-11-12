@@ -107,3 +107,5 @@ Creado       : 2025-11-10 22:30:33
 3.1) Analisis de ocupacion y control de BL (2025-11-10 22:32:42)
    Archivo  : c_empresa - Imprimir.pdf  [etl/License_Plates/c_empresa_Imprimir_20251111_053242.pdf] (65.6 KB)  MIME=application/pdf
 
+3.2) Analisis de ocupacion y control de BL (2025-11-11 09:10:08)
+

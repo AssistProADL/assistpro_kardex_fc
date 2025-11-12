@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../app/db.php';
 /* ===== Parámetros UI ===== */
 $show     = $_GET['show']    ?? '';                 // 'almacenes' | 'productos' | 'usuarios' | 'ubicaciones'
 $q        = trim($_GET['q']  ?? '');                // filtro texto para la grilla visible
-$almIn    = trim($_GET['almacen'] ?? '');           // almacén principal (stg_c_almacenp.clave)
+$almIn    = trim($_GET['almacen'] ?? '');           // almacén principal (c_almacenp.clave)
 $perPage  = 25;
 
 /* Paginación por grilla */
@@ -14,21 +14,21 @@ $pageU = max(1, (int)($_GET['pageU'] ?? 1));  $offU = ($pageU-1)*$perPage;
 $pageUb= max(1, (int)($_GET['pageUb']?? 1));  $offUb= ($pageUb-1)*$perPage;
 
 /* ===== KPIs ===== */
-$tot_prod = (int) db_val("SELECT COUNT(*) FROM stg_c_articulo");
-$tot_alm  = (int) db_val("SELECT COUNT(*) FROM stg_c_almacenp");
-$tot_usr  = (int) db_val("SELECT COUNT(*) FROM stg_c_usuario");
-$tot_ubi  = (int) db_val("SELECT COUNT(CodigoCSD) FROM stg_c_ubicacion");
+$tot_prod = (int) db_val("SELECT COUNT(*) FROM c_articulo");
+$tot_alm  = (int) db_val("SELECT COUNT(*) FROM c_almacenp");
+$tot_usr  = (int) db_val("SELECT COUNT(*) FROM c_usuario");
+$tot_ubi  = (int) db_val("SELECT COUNT(CodigoCSD) FROM c_ubicacion");
 
 /* ===== Helpers ===== */
 function likeParam($s){ return "%{$s}%"; }
 
 /* Catálogo de almacenes principales para selects */
-$opts = db_all("SELECT clave, nombre FROM stg_c_almacenp ORDER BY clave LIMIT 1000");
+$opts = db_all("SELECT clave, nombre FROM c_almacenp ORDER BY clave LIMIT 1000");
 
 /* Resolver empresa del almacén principal (para filtrar productos/usuarios por compañía del AP) */
 $empresaDeAlm = null;
 if ($almIn !== '') {
-  $empresaDeAlm = db_val("SELECT empresa_id FROM stg_c_almacenp WHERE clave = :c LIMIT 1", ['c'=>$almIn]);
+  $empresaDeAlm = db_val("SELECT empresa_id FROM c_almacenp WHERE clave = :c LIMIT 1", ['c'=>$almIn]);
 }
 
 /* ===== Grilla: Almacenes principales (AP) + # ubicaciones (via ub -> al -> ap) ===== */
@@ -40,13 +40,13 @@ $sqlAlmData = "
     ap.clave              AS cve_almacenp,
     ap.nombre             AS nombre_almacenp,
     COALESCE(u.num_ub,0)  AS ubicaciones
-  FROM stg_c_almacenp AS ap
-  LEFT JOIN stg_c_compania AS c
+  FROM c_almacenp AS ap
+  LEFT JOIN c_compania AS c
     ON c.empresa_id = ap.empresa_id
   LEFT JOIN (
     SELECT a.empresa_id, a.cve_almacenp AS clave_ap, COUNT(ub.CodigoCSD) AS num_ub
-    FROM stg_c_ubicacion AS ub
-    INNER JOIN stg_c_almacen AS a
+    FROM c_ubicacion AS ub
+    INNER JOIN c_almacen AS a
       ON a.empresa_id = ub.empresa_id AND a.cve_almac = ub.cve_almac
     GROUP BY a.empresa_id, a.cve_almacenp
   ) AS u
@@ -73,8 +73,8 @@ $sqlProdData = "
     p.empresa_id,
     p.cve_articulo,
     p.des_articulo
-  FROM stg_c_articulo AS p
-  LEFT JOIN stg_c_compania AS c ON c.empresa_id = p.empresa_id
+  FROM c_articulo AS p
+  LEFT JOIN c_compania AS c ON c.empresa_id = p.empresa_id
   WHERE 1=1
 ";
 if ($empresaDeAlm !== null) { $sqlProdData .= " AND p.empresa_id = :empP"; $paramsP['empP'] = $empresaDeAlm; }
@@ -92,10 +92,10 @@ $hasMoreP = ($offP + count($productos)) < $totalP;
 /* ===== Grilla: Usuarios (t_usuariosperfil + t_roles) ===== */
 $paramsU = [];
 $sqlUsrBase = "
-  FROM stg_c_usuario AS u
-  LEFT JOIN stg_c_compania       AS c  ON c.empresa_id = u.empresa_id
-  LEFT JOIN stg_t_usuariosperfil AS up ON up.empresa_id = u.empresa_id AND up.cve_usuario = u.cve_usuario
-  LEFT JOIN stg_t_roles          AS r  ON r.empresa_id = up.empresa_id AND r.id_role = up.Id_Perfil
+  FROM c_usuario AS u
+  LEFT JOIN c_compania       AS c  ON c.empresa_id = u.empresa_id
+  LEFT JOIN t_usuariosperfil AS up ON up.empresa_id = u.empresa_id AND up.cve_usuario = u.cve_usuario
+  LEFT JOIN t_roles          AS r  ON r.empresa_id = up.empresa_id AND r.id_role = up.Id_Perfil
   WHERE 1=1
 ";
 if ($empresaDeAlm !== null) { $sqlUsrBase .= " AND u.empresa_id = :empU"; $paramsU['empU'] = $empresaDeAlm; }
@@ -132,18 +132,18 @@ $hasMoreU = ($offU + count($usuarios)) < $totalU;
 /* ===== Grilla: Ubicaciones (ub -> al -> ap) ===== */
 $paramsUb = [];
 $sqlUbiBase = "
-  FROM stg_c_ubicacion AS ub
-  INNER JOIN stg_c_almacen AS al
+  FROM c_ubicacion AS ub
+  INNER JOIN c_almacen AS al
     ON al.empresa_id = ub.empresa_id AND al.cve_almac = ub.cve_almac
-  LEFT JOIN stg_c_almacenp AS ap
+  LEFT JOIN c_almacenp AS ap
     ON ap.empresa_id = al.empresa_id AND ap.clave = al.cve_almacenp
-  LEFT JOIN stg_c_compania  AS c
+  LEFT JOIN c_compania  AS c
     ON c.empresa_id = ub.empresa_id
   LEFT JOIN (
     /* conteo por AP para la columna '# Ubicaciones (AP)' */
     SELECT a.empresa_id, a.cve_almacenp AS clave_ap, COUNT(ub.CodigoCSD) AS num_ub_ap
-    FROM stg_c_ubicacion AS ub
-    INNER JOIN stg_c_almacen AS a
+    FROM c_ubicacion AS ub
+    INNER JOIN c_almacen AS a
       ON a.empresa_id = ub.empresa_id AND a.cve_almac = ub.cve_almac
     GROUP BY a.empresa_id, a.cve_almacenp
   ) AS uap
@@ -189,19 +189,19 @@ $por_empresa = db_all("
     COALESCE(a.cnt,0) AS almacenes,
     COALESCE(u.cnt,0) AS usuarios
   FROM (
-    SELECT empresa_id FROM stg_c_articulo
+    SELECT empresa_id FROM c_articulo
     UNION
-    SELECT empresa_id FROM stg_c_almacenp
+    SELECT empresa_id FROM c_almacenp
     UNION
-    SELECT empresa_id FROM stg_c_usuario
+    SELECT empresa_id FROM c_usuario
   ) AS e
-  LEFT JOIN stg_c_compania AS c
+  LEFT JOIN c_compania AS c
     ON c.empresa_id = e.empresa_id
-  LEFT JOIN (SELECT empresa_id, COUNT(*) cnt FROM stg_c_articulo  GROUP BY empresa_id) p
+  LEFT JOIN (SELECT empresa_id, COUNT(*) cnt FROM c_articulo  GROUP BY empresa_id) p
     ON p.empresa_id = e.empresa_id
-  LEFT JOIN (SELECT empresa_id, COUNT(*) cnt FROM stg_c_almacenp GROUP BY empresa_id) a
+  LEFT JOIN (SELECT empresa_id, COUNT(*) cnt FROM c_almacenp GROUP BY empresa_id) a
     ON a.empresa_id = e.empresa_id
-  LEFT JOIN (SELECT empresa_id, COUNT(*) cnt FROM stg_c_usuario  GROUP BY empresa_id) u
+  LEFT JOIN (SELECT empresa_id, COUNT(*) cnt FROM c_usuario  GROUP BY empresa_id) u
     ON u.empresa_id = e.empresa_id
   ORDER BY e.empresa_id
 ");
@@ -454,11 +454,11 @@ $por_empresa = db_all("
             $totAp = (int) db_val("
               SELECT COALESCE(uap.num_ub_ap,0) FROM (
                 SELECT a.empresa_id, a.cve_almacenp AS clave_ap, COUNT(ub.CodigoCSD) AS num_ub_ap
-                FROM stg_c_ubicacion AS ub
-                INNER JOIN stg_c_almacen AS a ON a.empresa_id = ub.empresa_id AND a.cve_almac = ub.cve_almac
+                FROM c_ubicacion AS ub
+                INNER JOIN c_almacen AS a ON a.empresa_id = ub.empresa_id AND a.cve_almac = ub.cve_almac
                 GROUP BY a.empresa_id, a.cve_almacenp
               ) uap
-              INNER JOIN stg_c_almacenp ap ON ap.empresa_id = :e AND ap.clave = :c
+              INNER JOIN c_almacenp ap ON ap.empresa_id = :e AND ap.clave = :c
               WHERE uap.empresa_id = ap.empresa_id AND uap.clave_ap = ap.clave
             ", ['e'=>$empresaDeAlm ?? 0, 'c'=>$almIn]);
           ?>

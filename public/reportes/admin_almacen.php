@@ -27,12 +27,12 @@ $export = isset($_GET['export']) && $_GET['export']==='excel';
 */
 $params = [];
 $sqlBase = "
-  FROM stg_c_charolas ch
-  LEFT JOIN stg_c_almacenp ap
+  FROM c_charolas ch
+  LEFT JOIN c_almacenp ap
          ON ap.Id      = ch.cve_almac
-  LEFT JOIN stg_c_almacen al
+  LEFT JOIN c_almacen al
          ON al.cve_almacenp  = ap.Id
-  LEFT JOIN stg_c_compania c
+  LEFT JOIN c_compania c
          ON c.Cve_Cia  = ap.Cve_Cia
   WHERE COALESCE(ch.Activo,0) = 1
 ";

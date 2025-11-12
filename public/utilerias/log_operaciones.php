@@ -17,7 +17,7 @@ if ($IFRAME) {
   $activeItem    = 'log_operaciones';
   $pageTitle     = 'Log de Operaciones · AssistPro';
   // Layout global (como en index.php)
-  include __DIR__.'../_menu_global.php';
+  include __DIR__.'../../bi/_menu_global.php';
 }
 
 /* ===== Helpers ===== */
@@ -233,7 +233,7 @@ if ($export === 'csv') {
   </div>
 </div>
 
-<?php if (!$IFRAME) { include __DIR__.'/_menu_global_end.php'; } ?>
+<?php if (!$IFRAME) { include __DIR__.'/../bi/_menu_global_end.php'; } ?>
 
 <?php if ($IFRAME): ?>
 <!-- Auto-resize para el iframe (opcional) -->

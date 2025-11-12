@@ -93,7 +93,6 @@ function friendly_error(Throwable $e, string $ctx): string {
     return $ctx.': '.$msg;
 }
 
-/* PK dinámica */
 function get_pk(PDO $pdo, string $tabla, array $cols): string {
     $st = $pdo->prepare("SELECT column_name
                          FROM information_schema.columns
@@ -143,107 +142,23 @@ function detect_softdelete_column(array $meta): ?string {
 }
 
 $pdo      = db_pdo();
-$tabla    = 'c_cliente';
-$titulo   = 'Cliente';
+$tabla    = 'c_articulo_codigo';
+$titulo   = 'Articulo Codigo';
 $cols     = array (
-  0 => 'id_cliente',
-  1 => 'Cve_Clte',
-  2 => 'RazonSocial',
-  3 => 'RazonComercial',
-  4 => 'CalleNumero',
-  5 => 'Colonia',
-  6 => 'Ciudad',
-  7 => 'Estado',
-  8 => 'Pais',
-  9 => 'CodigoPostal',
-  10 => 'RFC',
-  11 => 'Telefono1',
-  12 => 'Telefono2',
-  13 => 'Telefono3',
-  14 => 'ClienteTipo',
-  15 => 'ClienteTipo2',
-  16 => 'ClienteGrupo',
-  17 => 'ClienteFamilia',
-  18 => 'CondicionPago',
-  19 => 'MedioEmbarque',
-  20 => 'ViaEmbarque',
-  21 => 'CondicionEmbarque',
-  22 => 'ZonaVenta',
-  23 => 'cve_ruta',
-  24 => 'ID_Proveedor',
-  25 => 'Cve_CteProv',
-  26 => 'Activo',
-  27 => 'Cve_Almacenp',
-  28 => 'Fol_Serie',
-  29 => 'Contacto',
-  30 => 'id_destinatario',
-  31 => 'longitud',
-  32 => 'latitud',
-  33 => 'IdEmpresa',
-  34 => 'email_cliente',
-  35 => 'Cve_SAP',
-  36 => 'Encargado',
-  37 => 'Referencia',
-  38 => 'credito',
-  39 => 'limite_credito',
-  40 => 'dias_credito',
-  41 => 'credito_actual',
-  42 => 'saldo_inicial',
-  43 => 'saldo_actual',
-  44 => 'validar_gps',
-  45 => 'cliente_general',
-  46 => 'Id_RegFis',
-  47 => 'Id_CFDI',
+  0 => 'Cve_Almacen',
+  1 => 'Cve_Articulo',
+  2 => 'Cve_Clte',
+  3 => 'Codigo',
+  4 => 'Sku_R',
+  5 => 'Descripcion',
 );
 $friendly = array (
-  'id_cliente' => 'Id Cliente',
+  'Cve_Almacen' => 'Cve Almacen',
+  'Cve_Articulo' => 'Cve Articulo',
   'Cve_Clte' => 'Cve Clte',
-  'RazonSocial' => 'Razonsocial',
-  'RazonComercial' => 'Razoncomercial',
-  'CalleNumero' => 'Callenumero',
-  'Colonia' => 'Colonia',
-  'Ciudad' => 'Ciudad',
-  'Estado' => 'Estado',
-  'Pais' => 'Pais',
-  'CodigoPostal' => 'Codigopostal',
-  'RFC' => 'Rfc',
-  'Telefono1' => 'Telefono1',
-  'Telefono2' => 'Telefono2',
-  'Telefono3' => 'Telefono3',
-  'ClienteTipo' => 'Clientetipo',
-  'ClienteTipo2' => 'Clientetipo2',
-  'ClienteGrupo' => 'Clientegrupo',
-  'ClienteFamilia' => 'Clientefamilia',
-  'CondicionPago' => 'Condicionpago',
-  'MedioEmbarque' => 'Medioembarque',
-  'ViaEmbarque' => 'Viaembarque',
-  'CondicionEmbarque' => 'Condicionembarque',
-  'ZonaVenta' => 'Zonaventa',
-  'cve_ruta' => 'Cve Ruta',
-  'ID_Proveedor' => 'Id Proveedor',
-  'Cve_CteProv' => 'Cve Cteprov',
-  'Activo' => 'Activo',
-  'Cve_Almacenp' => 'Cve Almacenp',
-  'Fol_Serie' => 'Fol Serie',
-  'Contacto' => 'Contacto',
-  'id_destinatario' => 'Id Destinatario',
-  'longitud' => 'Longitud',
-  'latitud' => 'Latitud',
-  'IdEmpresa' => 'Idempresa',
-  'email_cliente' => 'Email Cliente',
-  'Cve_SAP' => 'Cve Sap',
-  'Encargado' => 'Encargado',
-  'Referencia' => 'Referencia',
-  'credito' => 'Credito',
-  'limite_credito' => 'Limite Credito',
-  'dias_credito' => 'Dias Credito',
-  'credito_actual' => 'Credito Actual',
-  'saldo_inicial' => 'Saldo Inicial',
-  'saldo_actual' => 'Saldo Actual',
-  'validar_gps' => 'Validar Gps',
-  'cliente_general' => 'Cliente General',
-  'Id_RegFis' => 'Id Regfis',
-  'Id_CFDI' => 'Id Cfdi',
+  'Codigo' => 'Codigo',
+  'Sku_R' => 'Sku R',
+  'Descripcion' => 'Descripcion',
 );
 $meta     = col_meta($pdo,$tabla);
 
@@ -458,7 +373,7 @@ foreach($viewCols as $c){
     }
 }
 
-/* ========== Listado ========== */
+/* ========== Listado con paginación (25) ========== */
 
 $q      = trim((string)($_GET['q']??''));
 $where  = [];
@@ -485,11 +400,34 @@ if ($q!==''){
 }
 $whereSql = empty($where)? '' : 'WHERE '.implode(' AND ',$where);
 
+// total filtrado
+$stCnt = $pdo->prepare("SELECT COUNT(*) FROM $tabla $whereSql");
+$stCnt->execute($pars);
+$totalFiltered = (int)$stCnt->fetchColumn();
+
+$perPage = 25;
+$page    = max(1, (int)($_GET['p'] ?? 1));
+$maxPage = max(1, (int)ceil($totalFiltered / $perPage));
+if ($page > $maxPage) $page = $maxPage;
+$offset  = ($page - 1) * $perPage;
+
 $sql = "SELECT ".implode(',', array_unique(array_merge([$pk], $viewCols))).
-       " FROM $tabla $whereSql ORDER BY $pk DESC LIMIT 500";
+       " FROM $tabla $whereSql ORDER BY $pk DESC LIMIT $perPage OFFSET $offset";
 $st  = $pdo->prepare($sql);
 $st->execute($pars);
 $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+/* ========== Carga previa para edición (para modal) ========== */
+
+$hasEdit = false;
+$E       = [];
+if (isset($_GET['edit'])) {
+    $hasEdit = true;
+    $idEdit  = $_GET['edit'];
+    $stE = $pdo->prepare("SELECT ".implode(',', array_unique(array_merge([$pk], $viewCols)))." FROM $tabla WHERE $pk=?");
+    $stE->execute([$idEdit]);
+    $E = $stE->fetch(PDO::FETCH_ASSOC) ?: [];
+}
 
 /* ========== UI ========== */
 
@@ -604,8 +542,28 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       padding:4px 6px;
       font-size:10px;
     }
-    /* MODAL NUEVO REGISTRO */
-    #modal-new{
+    .pager{
+      margin-top:4px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      font-size:10px;
+      color:#6d757d;
+    }
+    .pager-links a{
+      margin-right:4px;
+      text-decoration:none;
+      padding:2px 6px;
+      border-radius:6px;
+      border:1px solid var(--muted);
+    }
+    .pager-links .current{
+      background:var(--primary);
+      color:#fff;
+      border-color:var(--primary);
+    }
+    #modal-new,
+    #modal-edit{
       display:none;
       position:fixed;
       inset:0;
@@ -614,7 +572,8 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       justify-content:center;
       z-index:1050;
     }
-    #modal-new .card-new{
+    #modal-new .card-new,
+    #modal-edit .card-new{
       background:#fff;
       border:1px solid var(--muted);
       border-radius:10px;
@@ -625,14 +584,16 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       display:flex;
       flex-direction:column;
     }
-    #modal-new .card-header-new{
+    #modal-new .card-header-new,
+    #modal-edit .card-header-new{
       display:flex;
       justify-content:space-between;
       align-items:center;
       gap:8px;
       margin-bottom:6px;
     }
-    #modal-new .grid3{
+    #modal-new .grid3,
+    #modal-edit .grid3{
       display:grid;
       grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
       gap:8px;
@@ -640,38 +601,14 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       overflow-y:auto;
       padding-right:2px;
     }
-    #modal-new .cell{
+    #modal-new .cell,
+    #modal-edit .cell{
       display:flex;
       flex-direction:column;
       gap:3px;
     }
-    #modal-new .cell label{
-      font-size:10px;
-      color:#6d757d;
-    }
-    .edit-block{
-      border:1px solid var(--muted);
-      border-radius:8px;
-      padding:8px;
-      margin-top:6px;
-    }
-    .edit-block .title-edit{
-      font-weight:700;
-      margin-bottom:6px;
-      font-size:10px;
-    }
-    .edit-block .grid3{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-      gap:8px;
-      margin-top:4px;
-    }
-    .edit-block .cell{
-      display:flex;
-      flex-direction:column;
-      gap:3px;
-    }
-    .edit-block label{
+    #modal-new .cell label,
+    #modal-edit .cell label{
       font-size:10px;
       color:#6d757d;
     }
@@ -686,7 +623,25 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       var m = document.getElementById('modal-new');
       if (m){ m.style.display='none'; }
     }
+    function closeEdit(){
+      var m = document.getElementById('modal-edit');
+      if (m){ m.style.display='none'; }
+      if (history && history.replaceState) {
+        var url = new URL(window.location.href);
+        url.searchParams.delete('edit');
+        history.replaceState({}, '', url);
+      }
+    }
   </script>
+
+  <?php if($hasEdit): ?>
+  <script>
+    window.addEventListener('DOMContentLoaded', function(){
+      var m = document.getElementById('modal-edit');
+      if (m){ m.style.display='flex'; }
+    });
+  </script>
+  <?php endif; ?>
 
   <div class="wrap-cat">
     <div class="cat-card">
@@ -735,16 +690,16 @@ require_once __DIR__ . '/../bi/_menu_global.php';
           <?php foreach($rows as $r): ?>
             <tr>
               <td class="act">
-                <a title="Editar" href="?edit=<?=urlencode((string)$r[$pk])?><?=$showInact?'&show_inactivos=1':'';?>">✏️</a>
+                <a title="Editar" href="?edit=<?=urlencode((string)$r[$pk])?><?=$showInact?'&show_inactivos=1':'';?>&p=<?=$page?>">✏️</a>
                 <?php if($hasActivo):
                     $valAct = isset($r[$activoCol]) ? (string)$r[$activoCol] : ''; ?>
                   <?php if($valAct !== $activeVal): ?>
-                    <a title="Recuperar" href="?rec=<?=urlencode((string)$r[$pk])?>&show_inactivos=1">♻️</a>
+                    <a title="Recuperar" href="?rec=<?=urlencode((string)$r[$pk])?>&show_inactivos=1&p=<?=$page?>">♻️</a>
                   <?php else: ?>
-                    <a title="Borrar" href="?del=<?=urlencode((string)$r[$pk])?><?=$showInact?'&show_inactivos=1':'';?>" onclick="return confirm('¿Borrar?')">🗑️</a>
+                    <a title="Borrar" href="?del=<?=urlencode((string)$r[$pk])?><?=$showInact?'&show_inactivos=1':'';?>&p=<?=$page?>" onclick="return confirm('¿Borrar?')">🗑️</a>
                   <?php endif; ?>
                 <?php else: ?>
-                  <a title="Borrar" href="?del=<?=urlencode((string)$r[$pk])?><?=$showInact?'&show_inactivos=1':'';?>" onclick="return confirm('¿Borrar?')">🗑️</a>
+                  <a title="Borrar" href="?del=<?=urlencode((string)$r[$pk])?><?=$showInact?'&show_inactivos=1':'';?>&p=<?=$page?>" onclick="return confirm('¿Borrar?')">🗑️</a>
                 <?php endif; ?>
               </td>
               <?php foreach($viewCols as $c): ?>
@@ -756,68 +711,26 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         </table>
       </div>
 
-      <?php if(isset($_GET['edit'])):
-        $id = $_GET['edit'];
-        $st=$pdo->prepare("SELECT ".implode(',', array_unique(array_merge([$pk], $viewCols)))." FROM $tabla WHERE $pk=?");
-        $st->execute([$id]); $E=$st->fetch(PDO::FETCH_ASSOC) ?: [];
-      ?>
-        <div class="edit-block">
-          <div class="title-edit">Editar</div>
-          <form method="post" class="grid3">
-            <input type="hidden" name="op" value="save">
-            <input type="hidden" name="__id" value="<?=h((string)($E[$pk] ?? $id))?>">
-            <?php foreach($viewCols as $c): $m=$meta[$c]??[]; ?>
-              <div class="cell">
-                <label><?=h($friendly[$c] ?? nice_label($c))?></label>
-                <?php
-                  $isPk    = ($c === $pk);
-                  $isBool  = isset($boolCols[$c]);
-                  $styleB  = $isBool ? $boolCols[$c] : '01';
-                  $valCur  = (string)($E[$c] ?? '');
-                ?>
-                <?php if($isPk): ?>
-                  <input name="<?=h($c)?>" value="<?=h($valCur)?>" disabled>
-                <?php elseif(isset($fkCache[$c])):
-                      $val=(string)($E[$c]??''); ?>
-                  <select name="<?=h($c)?>">
-                    <option value="">(nulo)</option>
-                    <?php foreach($fkCache[$c] as $k=>$txt): ?>
-                      <option value="<?=h((string)$k)?>" <?=$val===(string)$k?'selected':''?>><?=h($txt)?></option>
-                    <?php endforeach; ?>
-                  </select>
-                <?php elseif($isBool):
-                    if ($styleB==='SN'){
-                        $vTrue='S'; $vFalse='N';
-                    } else {
-                        $vTrue='1'; $vFalse='0';
-                    }
-                ?>
-                  <select name="<?=h($c)?>">
-                    <option value="" <?=$valCur===''?'selected':''?>>(nulo)</option>
-                    <option value="<?=$vFalse?>" <?=$valCur===$vFalse?'selected':''?>><?=$vFalse?></option>
-                    <option value="<?=$vTrue?>"  <?=$valCur===$vTrue?'selected':''?>><?=$vTrue?></option>
-                  </select>
-                <?php elseif(strpos(strtolower($m['data_type']??''),'int')!==false): ?>
-                  <input type="number" name="<?=h($c)?>" value="<?=h($valCur)?>">
-                <?php elseif(in_array(strtolower($m['data_type']??''),['decimal','double','float'])): ?>
-                  <input type="number" step="0.01" name="<?=h($c)?>" value="<?=h($valCur)?>">
-                <?php elseif(in_array(strtolower($m['data_type']??''),['date'])): ?>
-                  <input type="date" name="<?=h($c)?>" value="<?=h($valCur)?>">
-                <?php elseif(in_array(strtolower($m['data_type']??''),['datetime','timestamp'])): ?>
-                  <input type="datetime-local" name="<?=h($c)?>" value="<?=h($valCur)?>">
-                <?php elseif($c==='email'||$c==='correo'): ?>
-                  <input type="email" name="<?=h($c)?>" value="<?=h($valCur)?>">
-                <?php else: ?>
-                  <input name="<?=h($c)?>" value="<?=h($valCur)?>">
-                <?php endif; ?>
-              </div>
-            <?php endforeach; ?>
-            <div class="cell" style="grid-column:1/-1;margin-top:4px">
-              <button class="btn-adv secondary">Guardar cambios</button>
-            </div>
-          </form>
+      <div class="pager">
+        <div>
+          Página <?= $page ?> de <?= $maxPage ?> (<?= $totalFiltered ?> registros)
         </div>
-      <?php endif; ?>
+        <div class="pager-links">
+          <?php
+            $qs = $_GET;
+            unset($qs['p']);
+            $base = '?'.http_build_query($qs);
+            if ($base === '?') $base = '';
+          ?>
+          <?php if($page > 1): ?>
+            <a href="<?=$base.($base===''?'?':'&')?>p=<?=($page-1)?>">&laquo; Anterior</a>
+          <?php endif; ?>
+          <span class="current"><?=$page?></span>
+          <?php if($page < $maxPage): ?>
+            <a href="<?=$base.($base===''?'?':'&')?>p=<?=($page+1)?>">Siguiente &raquo;</a>
+          <?php endif; ?>
+        </div>
+      </div>
 
       <!-- Modal nuevo -->
       <div id="modal-new" onclick="if(event.target===this)closeNew();">
@@ -870,6 +783,71 @@ require_once __DIR__ . '/../bi/_menu_global.php';
               <button class="btn-adv secondary">Guardar</button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <!-- Modal editar -->
+      <div id="modal-edit" onclick="if(event.target===this)closeEdit();">
+        <div class="card-new">
+          <div class="card-header-new">
+            <div class="muted" style="font-weight:700">Editar registro</div>
+            <button type="button" class="btn-adv" onclick="closeEdit()">Cerrar</button>
+          </div>
+          <?php if($hasEdit): ?>
+          <form method="post" class="grid3" style="margin-top:4px;">
+            <input type="hidden" name="op" value="save">
+            <input type="hidden" name="__id" value="<?=h((string)($E[$pk] ?? ($_GET['edit'] ?? '')))?>">
+            <?php foreach($viewCols as $c): $m=$meta[$c]??[]; ?>
+              <div class="cell">
+                <label><?=h($friendly[$c] ?? nice_label($c))?></label>
+                <?php
+                  $isPk    = ($c === $pk);
+                  $isBool  = isset($boolCols[$c]);
+                  $styleB  = $isBool ? $boolCols[$c] : '01';
+                  $valCur  = (string)($E[$c] ?? '');
+                ?>
+                <?php if($isPk): ?>
+                  <input name="<?=h($c)?>" value="<?=h($valCur)?>" disabled>
+                <?php elseif(isset($fkCache[$c])):
+                      $val=(string)($E[$c]??''); ?>
+                  <select name="<?=h($c)?>">
+                    <option value="">(nulo)</option>
+                    <?php foreach($fkCache[$c] as $k=>$txt): ?>
+                      <option value="<?=h((string)$k)?>" <?=$val===(string)$k?'selected':''?>><?=h($txt)?></option>
+                    <?php endforeach; ?>
+                  </select>
+                <?php elseif($isBool):
+                    if ($styleB==='SN'){
+                        $vTrue='S'; $vFalse='N';
+                    } else {
+                        $vTrue='1'; $vFalse='0';
+                    }
+                ?>
+                  <select name="<?=h($c)?>">
+                    <option value="" <?=$valCur===''?'selected':''?>>(nulo)</option>
+                    <option value="<?=$vFalse?>" <?=$valCur===$vFalse?'selected':''?>><?=$vFalse?></option>
+                    <option value="<?=$vTrue?>"  <?=$valCur===$vTrue?'selected':''?>><?=$vTrue?></option>
+                  </select>
+                <?php elseif(strpos(strtolower($m['data_type']??''),'int')!==false): ?>
+                  <input type="number" name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php elseif(in_array(strtolower($m['data_type']??''),['decimal','double','float'])): ?>
+                  <input type="number" step="0.01" name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php elseif(in_array(strtolower($m['data_type']??''),['date'])): ?>
+                  <input type="date" name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php elseif(in_array(strtolower($m['data_type']??''),['datetime','timestamp'])): ?>
+                  <input type="datetime-local" name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php elseif($c==='email'||$c==='correo'): ?>
+                  <input type="email" name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php else: ?>
+                  <input name="<?=h($c)?>" value="<?=h($valCur)?>">
+                <?php endif; ?>
+              </div>
+            <?php endforeach; ?>
+            <div class="cell" style="grid-column:1/-1;margin-top:4px">
+              <button class="btn-adv secondary">Guardar cambios</button>
+            </div>
+          </form>
+          <?php endif; ?>
         </div>
       </div>
 

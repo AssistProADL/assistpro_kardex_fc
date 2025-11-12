@@ -1,3 +1,85 @@
+ <?php
+// public/catalogos/generador.php
+require_once __DIR__ . '/../../app/db.php';
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+
+function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+
+function nice_label_global(string $c): string {
+    $c = str_replace('_',' ', $c);
+    $c = preg_replace('/\s+id$/i','', $c);
+    return mb_convert_case($c, MB_CASE_TITLE, 'UTF-8');
+}
+
+/* ================= Helpers de metadata ================= */
+
+function tablas(PDO $pdo): array {
+    $sql = "SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = DATABASE()
+              AND table_type = 'BASE TABLE'
+            ORDER BY table_name";
+    return $pdo->query($sql)->fetchAll(PDO::FETCH_COLUMN);
+}
+
+function columnas(PDO $pdo, string $t): array {
+    $st = $pdo->prepare(
+        "SELECT column_name,data_type,column_type,is_nullable,column_key
+         FROM information_schema.columns
+         WHERE table_schema = DATABASE()
+           AND table_name=?
+         ORDER BY ordinal_position"
+    );
+    $st->execute([$t]);
+    return $st->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function friendly_title(string $table): string {
+    $t = preg_replace('/^c_/', '', $table);
+    $t = str_replace('_', ' ', $t);
+    return mb_convert_case($t, MB_CASE_TITLE, "UTF-8");
+}
+
+/* ================= Acción: GENERAR ================= */
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'generate') {
+    $pdo   = db_pdo();
+    $tabla = preg_replace('/[^a-zA-Z0-9_]/', '', (string)($_POST['tabla'] ?? ''));
+    if ($tabla === '') { die('Tabla requerida'); }
+
+    // columnas seleccionadas
+    $colsSel = array_values(array_filter(array_map(
+        fn($c) => preg_replace('/[^a-zA-Z0-9_]/', '', $c),
+        $_POST['cols'] ?? []
+    )));
+
+    if (empty($colsSel)) {
+        $colsSel = array_column(columnas($pdo, $tabla), 'column_name');
+    }
+
+    // friendly names
+    $friendlyPost = $_POST['friendly'] ?? [];
+    $friendly = [];
+    foreach ($friendlyPost as $col => $fn) {
+        $colSafe = preg_replace('/[^a-zA-Z0-9_]/','', $col);
+        if ($colSafe === '') continue;
+        $fn = trim((string)$fn);
+        if ($fn === '') {
+            $fn = nice_label_global($colSafe);
+        }
+        $friendly[$colSafe] = $fn;
+    }
+
+    $colsPhp      = var_export($colsSel, true);
+    $friendlyPhp  = var_export($friendly, true);
+    $title        = friendly_title($tabla);
+    $file         = 'cat_'.$tabla.'.php';
+
+    // IMPORTANTE: se generan en public/catalogos
+    $abs          = __DIR__ . '/' . $file;
+
+    /* =============== PLANTILLA CRUD ================== */
+    $tpl = <<<'PHP'
 <?php
 require_once __DIR__ . '/../../app/db.php';
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
@@ -143,50 +225,10 @@ function detect_softdelete_column(array $meta): ?string {
 }
 
 $pdo      = db_pdo();
-$tabla    = 'c_proveedores';
-$titulo   = 'Proveedores';
-$cols     = array (
-  0 => 'Empresa',
-  1 => 'Nombre',
-  2 => 'RUT',
-  3 => 'direccion',
-  4 => 'cve_dane',
-  5 => 'ID_Externo',
-  6 => 'Activo',
-  7 => 'cve_proveedor',
-  8 => 'colonia',
-  9 => 'estado',
-  10 => 'pais',
-  11 => 'telefono1',
-  12 => 'telefono2',
-  13 => 'es_cliente',
-  14 => 'longitud',
-  15 => 'latitud',
-  16 => 'es_transportista',
-  17 => 'envio_correo_automatico',
-);
-$friendly = array (
-  'ID_Proveedor' => 'Id Proveedor',
-  'Empresa' => 'Empresa',
-  'Nombre' => 'Nombre',
-  'RUT' => 'RFC',
-  'direccion' => 'Direccion',
-  'cve_dane' => 'CP',
-  'ID_Externo' => 'Id Externo',
-  'Activo' => 'Activo',
-  'cve_proveedor' => 'Cve Proveedor',
-  'colonia' => 'Colonia',
-  'ciudad' => 'Ciudad',
-  'estado' => 'Estado',
-  'pais' => 'Pais',
-  'telefono1' => 'Telefono1',
-  'telefono2' => 'Telefono2',
-  'es_cliente' => 'Es Cliente',
-  'longitud' => 'Longitud',
-  'latitud' => 'Latitud',
-  'es_transportista' => 'Es Transportista',
-  'envio_correo_automatico' => 'Envio Correo Automatico',
-);
+$tabla    = '__TABLA__';
+$titulo   = '__TITLE__';
+$cols     = __COLS__;
+$friendly = __FRIENDLY__;
 $meta     = col_meta($pdo,$tabla);
 
 // PK real
@@ -883,3 +925,152 @@ require_once __DIR__ . '/../bi/_menu_global.php';
   </div>
 </div>
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
+PHP;
+
+    // Rellenar placeholders
+    $tpl = str_replace(
+        ['__TABLA__','__COLS__','__TITLE__','__FRIENDLY__'],
+        [$tabla, $colsPhp, addslashes($title), $friendlyPhp],
+        $tpl
+    );
+    file_put_contents($abs, $tpl);
+
+    // ====== Auto-agregar al menú (bloque AUTO-MENU) ======
+    $menuFile = __DIR__ . '/../menu.php';
+    if (is_writable($menuFile)) {
+        $menu  = file_get_contents($menuFile);
+        // el link del menú es relativo al public/index: catalogos/archivo
+        $link  = 'catalogos/'.basename($abs);
+        $label = friendly_title($tabla);
+        if (strpos($menu, $link) === false) {
+            $needleStart = '<!-- AUTO-MENU-START -->';
+            $needleEnd   = '<!-- AUTO-MENU-END -->';
+            $insert      = " <a href=\"{$link}\" target=\"content\"><span>{$label}</span></a>\n";
+            if (strpos($menu, $needleStart)!==false && strpos($menu, $needleEnd)!==false) {
+                $menu = preg_replace(
+                    '/(<!-- AUTO-MENU-START -->)(.*?)(<!-- AUTO-MENU-END -->)/s',
+                    '$1'."\n".$insert.' '."$3",
+                    $menu
+                );
+            } else {
+                $menu .= "\n".$insert;
+            }
+            file_put_contents($menuFile, $menu);
+        }
+    }
+
+    // Redirigir / abrir en iframe principal (desde index) a catalogos/cat_*.php
+    $baseName = htmlspecialchars(basename($abs), ENT_QUOTES);
+    echo '<script>
+      (function(){
+        var url = "catalogos/'.$baseName.'";
+        if (parent && parent.document && parent.document.getElementById("content")) {
+          parent.document.getElementById("content").src = url;
+        } else {
+          window.location.href = url;
+        }
+      })();
+    </script>';
+    exit;
+}
+
+/* ================= UI del generador ================= */
+
+$pdo      = db_pdo();
+$tablaSel = isset($_GET['tabla']) ? preg_replace('/[^a-zA-Z0-9_]/','', $_GET['tabla']) : '';
+$lista    = tablas($pdo);
+$cols     = $tablaSel ? columnas($pdo, $tablaSel) : [];
+
+require_once __DIR__ . '/../bi/_menu_global.php';
+?>
+<div class="container-fluid" style="font-size:10px;">
+  <div style="
+      background:#fff;
+      border:1px solid #eef1f4;
+      border-radius:14px;
+      padding:18px;
+      width:100%;
+      box-sizing:border-box;
+  ">
+    <h1 style="font-weight:800;font-size:18px;color:#000F9F;margin:0 0 12px;">
+      Generador de catálogos
+    </h1>
+    <form method="get" style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+      <label>Tabla:
+        <select name="tabla" onchange="this.form.submit()"
+                style="padding:6px 8px;border:1px solid #eef1f4;border-radius:8px;font-size:10px;">
+          <option value="">-- Selecciona tabla --</option>
+          <?php foreach($lista as $t): ?>
+            <option value="<?=h($t)?>" <?=$t===$tablaSel?'selected':''?>><?=h($t)?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+      <?php if($tablaSel): ?>
+        <span style="color:#7a8088;font-size:11px;">
+          Archivo a generar:
+          <code>public/catalogos/cat_<?=h($tablaSel)?>.php</code>
+        </span>
+      <?php endif; ?>
+    </form>
+
+    <?php if($tablaSel && $cols): ?>
+      <form method="post">
+        <input type="hidden" name="accion" value="generate">
+        <input type="hidden" name="tabla" value="<?=h($tablaSel)?>">
+        <div style="color:#7a8088;font-size:11px;margin-bottom:6px;">
+          Selecciona las columnas visibles y define sus nombres amigables (encabezados).<br>
+          Los campos <code>created_at</code> y <code>updated_at</code> se manejarán automáticamente.
+        </div>
+
+        <div style="
+          display:grid;
+          grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
+          gap:6px 12px;
+          margin-top:10px;
+          width:100%;
+        ">
+          <?php foreach($cols as $c): ?>
+            <?php
+              $colName     = $c['column_name'];
+              $defFriendly = nice_label_global($colName);
+            ?>
+            <label style="
+              font-size:11px;
+              display:flex;
+              flex-direction:column;
+              background:#f8f9fa;
+              border:1px solid #e2e6ea;
+              border-radius:6px;
+              padding:4px 6px;
+            ">
+              <span style="display:flex;align-items:center;margin-bottom:3px;">
+                <input type="checkbox" name="cols[]" value="<?=h($colName)?>" checked style="margin-right:6px;">
+                <strong><?=h($colName)?></strong>
+                <span style="color:#7a8088;font-size:10px;margin-left:4px;">(<?=h($c['data_type'])?>)</span>
+              </span>
+              <input
+                type="text"
+                name="friendly[<?=h($colName)?>]"
+                value="<?=h($defFriendly)?>"
+                placeholder="Nombre amigable"
+                style="padding:3px 5px;border:1px solid #dde1e6;border-radius:4px;font-size:10px;"
+              >
+            </label>
+          <?php endforeach; ?>
+        </div>
+
+        <div style="margin-top:16px">
+          <button style="display:inline-block;padding:8px 14px;border-radius:999px;background:#000F9F;color:#fff;text-decoration:none;border:0;cursor:pointer;font-size:11px;">
+            Generar y abrir
+          </button>
+          <span style="color:#7a8088;font-size:11px;">
+            Se creará <strong>public/catalogos/cat_<?=h($tablaSel)?>.php</strong>,
+            se abrirá en el iframe (si existe) y se agregará al menú automático.
+          </span>
+        </div>
+      </form>
+    <?php endif; ?>
+  </div>
+</div>
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
+

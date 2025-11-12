@@ -33,7 +33,7 @@
         left: 0;
         width: var(--sidebar-width);
         height: 100vh;
-        background-color: var(--sidebar-bg);
+        background-color: #0F5AAD;
         color: #fff;
         overflow-y: auto;
         box-shadow: 2px 0 6px rgba(0,0,0,0.2);
@@ -142,67 +142,111 @@
 
 <div class="sidebar">
     <div class="logo">
-        <img src="/public/img/logo_adventech_white.png" alt="Logo">
+        <img src="/assistpro_kardex_fc/public/img/logo_adventech_white.png" alt="Logo">
         AssistPro WMS
     </div>
 
     <?php
-    // Menús principales (sin Utilería, sólo 5 secciones)
+    // Base del proyecto
+    $baseUrl = '/assistpro_kardex_fc/public/';
+
+    // Menús principales
     $menus = [
 
         // DASHBOARD
         'Dashboard' => [
-            ['titulo' => 'Online Tracking',      'url' => 'dashboard/onlinetracking.php',   'icono' => 'fa-location-dot'],
-            ['titulo' => 'Resumen Ejecutivo',    'url' => 'dashboard/resumen.php',          'icono' => 'fa-chart-line'],
-            ['titulo' => 'Inventario',           'url' => 'dashboard/inventario.php',       'icono' => 'fa-boxes-stacked'],
-            ['titulo' => 'Monitoreo Entregas',   'url' => 'dashboard/monitoreo.php',        'icono' => 'fa-truck-fast'],
-            ['titulo' => 'Monitoreo Pedidos',    'url' => 'dashboard/monitoreopedidos.php', 'icono' => 'fa-receipt'],
+            ['titulo' => 'Online Tracking',          'url' => 'dashboard/onlinetracking.php',               'icono' => 'fa-location-dot'],
+            ['titulo' => 'Resumen Ejecutivo',        'url' => 'dashboard/resumen.php',                      'icono' => 'fa-chart-line'],
+            ['titulo' => 'Inventario',               'url' => 'dashboard/inventario.php',                   'icono' => 'fa-boxes-stacked'],
+            ['titulo' => 'Monitoreo Entregas',       'url' => 'dashboard/monitoreo.php',                    'icono' => 'fa-truck-fast'],
+            ['titulo' => 'Monitoreo Pedidos',        'url' => 'dashboard/monitoreopedidos.php',             'icono' => 'fa-receipt'],
+            ['titulo' => 'Resumen Básico',           'url' => 'dashboard/resumen_basico.php',               'icono' => 'fa-chart-pie'],
+            ['titulo' => 'Dashboard License Plate',  'url' => 'dashboard/license_plate.php',                'icono' => 'fa-barcode'],
+            ['titulo' => 'Dashboard Inventarios',    'url' => 'dashboard/adm_inventarios.php',              'icono' => 'fa-warehouse'],
+            ['titulo' => 'Config. de Almacén',       'url' => 'dashboard/configuracion_almacen.php',        'icono' => 'fa-gear'],
+            ['titulo' => 'Cobranza – Cobro',         'url' => 'dashboard/cobranza_cobro.php',               'icono' => 'fa-money-bill-wave'],
+            ['titulo' => 'Cobranza – Analítico',     'url' => 'dashboard/cobranza_analitico.php',           'icono' => 'fa-chart-area'],
+            ['titulo' => 'Kardex Productividad',     'url' => 'dashboard/kardex_productividad_session.php', 'icono' => 'fa-chart-line'],
+            ['titulo' => 'Kardex Dashboard',         'url' => 'dashboard/kardex.php',                       'icono' => 'fa-file-lines'],
         ],
 
         // ADMINISTRACIÓN
         'Administración' => [
-            ['titulo' => 'Compañías',            'url' => 'admin/companias.php',            'icono' => 'fa-building'],
-            ['titulo' => 'Usuarios',             'url' => 'admin/usuarios.php',             'icono' => 'fa-user'],
-            ['titulo' => 'Perfiles',             'url' => 'admin/perfiles.php',             'icono' => 'fa-id-badge'],
-            ['titulo' => 'Zonas',                'url' => 'admin/zonas.php',                'icono' => 'fa-map'],
+            ['titulo' => 'Compañías',                'url' => 'admin/companias.php',                        'icono' => 'fa-building'],
+            ['titulo' => 'Usuarios',                 'url' => 'admin/usuarios.php',                         'icono' => 'fa-user'],
+            ['titulo' => 'Perfiles',                 'url' => 'admin/perfiles.php',                         'icono' => 'fa-id-badge'],
+            ['titulo' => 'Zonas',                    'url' => 'admin/zonas.php',                            'icono' => 'fa-map'],
         ],
 
         // CATÁLOGOS
         'Catálogos' => [
-            ['titulo' => 'Generador de Catálogos',       'url' => 'catalogos/generador.php',                          'icono' => 'fa-wand-magic-sparkles'],
-            ['titulo' => 'Ajustes | Incidencias',        'url' => 'catalogos/catalogos/cat_c_motivoajuste.php',       'icono' => 'fa-circle'],
-            ['titulo' => 'License Plate',                'url' => 'catalogos/catalogos/cat_c_licenseplate.php',       'icono' => 'fa-circle'],
-            ['titulo' => 'Motivo No Ventas',             'url' => 'catalogos/catalogos/cat_c_motivosnoventas.php',    'icono' => 'fa-circle'],
-            ['titulo' => 'Motivo de Devolución',         'url' => 'catalogos/catalogos/cat_c_motivodevolucion.php',   'icono' => 'fa-circle'],
-            ['titulo' => 'Pallet y Contenedores',        'url' => 'catalogos/catalogos/cat_c_contenedores.php',       'icono' => 'fa-box-open'],
-            ['titulo' => 'Rutas / Destinatarios',        'url' => 'catalogos/catalogos/cat_c_destinatarios.php',      'icono' => 'fa-route'],
-            ['titulo' => 'Protocolos de Entrada',        'url' => 'catalogos/catalogos/cat_c_protocolos.php',         'icono' => 'fa-clipboard-check'],
-            ['titulo' => 'Proveedores',                  'url' => 'catalogos/catalogos/cat_c_proveedores.php',        'icono' => 'fa-truck-field'],
-            ['titulo' => 'Proyectos | CC',               'url' => 'catalogos/catalogos/cat_c_proyectos.php',          'icono' => 'fa-diagram-project'],
-            ['titulo' => 'QA | Cuarentena',              'url' => 'catalogos/catalogos/cat_c_motivocuarentena.php',   'icono' => 'fa-triangle-exclamation'],
-            ['titulo' => 'Rutas',                        'url' => 'catalogos/catalogos/cat_c_ruta.php',               'icono' => 'fa-road'],
-            ['titulo' => 'Tipo de Prioridad',            'url' => 'catalogos/catalogos/cat_c_tipodeprioridad.php',    'icono' => 'fa-layer-group'],
+            
+            ['titulo' => 'Ajustes | Incidencias',    'url' => 'catalogos/catalogos/cat_c_motivoajuste.php',           'icono' => 'fa-circle'],
+            ['titulo' => 'License Plate',            'url' => 'catalogos/catalogos/cat_c_licenseplate.php',           'icono' => 'fa-circle'],
+            ['titulo' => 'Motivo No Ventas',         'url' => 'catalogos/catalogos/cat_c_motivosnoventas.php',        'icono' => 'fa-circle'],
+            ['titulo' => 'Motivo de Devolución',     'url' => 'catalogos/catalogos/cat_c_motivodevolucion.php',       'icono' => 'fa-circle'],
+            ['titulo' => 'Pallet y Contenedores',    'url' => 'catalogos/catalogos/cat_c_contenedores.php',           'icono' => 'fa-box-open'],
+            ['titulo' => 'Rutas / Destinatarios',    'url' => 'catalogos/catalogos/cat_c_destinatarios.php',          'icono' => 'fa-route'],
+            ['titulo' => 'Protocolos de Entrada',    'url' => 'catalogos/catalogos/cat_c_protocolos.php',             'icono' => 'fa-clipboard-check'],
+            ['titulo' => 'Proveedores',              'url' => 'catalogos/catalogos/cat_c_proveedores.php',            'icono' => 'fa-truck-field'],
+            ['titulo' => 'Proyectos | CC',           'url' => 'catalogos/catalogos/cat_c_proyectos.php',              'icono' => 'fa-diagram-project'],
+            ['titulo' => 'QA | Cuarentena',          'url' => 'catalogos/catalogos/cat_c_motivocuarentena.php',       'icono' => 'fa-triangle-exclamation'],
+            ['titulo' => 'Rutas',                    'url' => 'catalogos/catalogos/cat_c_ruta.php',                   'icono' => 'fa-road'],
+            ['titulo' => 'Tipo de Prioridad',        'url' => 'catalogos/catalogos/cat_c_tipodeprioridad.php',        'icono' => 'fa-layer-group'],
+        ],
+
+        // SFA
+        'SFA' => [
+            ['titulo' => 'Lista de Precios',         'url' => 'sfa/lista_precios.php',                     'icono' => 'fa-tags'],
+            ['titulo' => 'Lista de Descuentos',      'url' => 'sfa/lista_descuentos.php',                  'icono' => 'fa-percent'],
+            ['titulo' => 'Promociones',              'url' => 'sfa/promociones.php',                       'icono' => 'fa-gift'],
+            ['titulo' => 'Grupo Promociones',        'url' => 'sfa/grupo_promociones.php',                 'icono' => 'fa-layer-group'],
+            ['titulo' => 'Formas de Pago',           'url' => 'sfa/formas_pago.php',                       'icono' => 'fa-credit-card'],
+            ['titulo' => 'Ticket',                   'url' => 'sfa/ticket.php',                            'icono' => 'fa-ticket'],
         ],
 
         // PROCESOS
         'Procesos' => [
-            ['titulo' => 'Pallets y Contenedores',       'url' => 'procesos/paletsycontenedores.php',                 'icono' => 'fa-boxes-packing'],
-            ['titulo' => 'Control de Incidencias (PQRS)','url' => 'procesos/incidencias.php',                         'icono' => 'fa-flag'],
+            ['titulo' => 'Entradas',                 'url' => 'procesos/entradas.php',                      'icono' => 'fa-right-to-bracket'],
+            ['titulo' => 'Cross Dock',               'url' => 'procesos/crossdock.php',                     'icono' => 'fa-right-left'],
+            ['titulo' => 'Put Away',                 'url' => 'procesos/putaway.php',                       'icono' => 'fa-box-archive'],
+            ['titulo' => 'Pallets y Contenedores',   'url' => 'procesos/paletsycontenedores.php',           'icono' => 'fa-boxes-packing'],
+            ['titulo' => 'Picking',                  'url' => 'procesos/picking.php',                       'icono' => 'fa-hand-pointer'],
+            ['titulo' => 'Reabasto (Replenishment)', 'url' => 'procesos/reabasto.php',                      'icono' => 'fa-rotate'],
+            ['titulo' => 'QA / Auditoría',           'url' => 'procesos/qa_auditoria.php',                  'icono' => 'fa-clipboard-check'],
+            ['titulo' => 'Inventarios',              'url' => 'procesos/inventarios.php',                   'icono' => 'fa-clipboard-list'],
+            ['titulo' => 'Existencias',              'url' => 'procesos/existencias.php',                   'icono' => 'fa-cubes'],
+            ['titulo' => 'Embarques',                'url' => 'procesos/embarques.php',                     'icono' => 'fa-truck-ramp-box'],
+            ['titulo' => 'Planeación',               'url' => 'procesos/planeacion.php',                    'icono' => 'fa-calendar-check'],
+            ['titulo' => 'Administración',           'url' => 'procesos/administracion.php',                'icono' => 'fa-briefcase'],
+            ['titulo' => 'Manufactura',              'url' => 'procesos/manufactura.php',                   'icono' => 'fa-industry'],
+            ['titulo' => 'Control de Incidencias (PQRS)','url' => 'procesos/incidencias.php',              'icono' => 'fa-flag'],
+            ['titulo' => 'Control de Activos',       'url' => 'procesos/control_activos.php',               'icono' => 'fa-screwdriver-wrench'],
+            ['titulo' => 'Logística Inversa',        'url' => 'procesos/logistica_inversa.php',             'icono' => 'fa-rotate-left'],
         ],
 
         // REPORTES
         'Reportes' => [
-            ['titulo' => 'Log de Operaciones',           'url' => 'reportes/operaciones.php',                         'icono' => 'fa-timeline'],
-            ['titulo' => 'Salidas',                      'url' => 'reportes/salidas.php',                             'icono' => 'fa-arrow-right-arrow-left'],
-            ['titulo' => 'Kardex | Trazabilidad',        'url' => 'reportes/kardex.php',                              'icono' => 'fa-clipboard-list'],
-            ['titulo' => 'Kardex | Movimientos',         'url' => 'reportes/kardexw.php',                             'icono' => 'fa-right-left'],
+            ['titulo' => 'Log de Operaciones',       'url' => 'reportes/operaciones.php',                   'icono' => 'fa-timeline'],
+            ['titulo' => 'Salidas',                  'url' => 'reportes/salidas.php',                       'icono' => 'fa-arrow-right-arrow-left'],
+            ['titulo' => 'Kardex | Trazabilidad',    'url' => 'reportes/kardex.php',                        'icono' => 'fa-clipboard-list'],
+            ['titulo' => 'Kardex | Movimientos',     'url' => 'reportes/kardexw.php',                       'icono' => 'fa-right-left'],
         ],
-    ];
+
+        // UTILERÍAS
+        'Utilerías' => [
+            ['titulo' => 'Log de Operaciones',       'url' => 'utilerias/log_operaciones.php',              'icono' => 'fa-timeline'],
+            ['titulo' => 'Log WebServices',              'url' => 'utilerias/log_ws.php',                   'icono' => 'fa-arrow-right-arrow-left'],
+            ['titulo' => 'Browser ETL',       'url' => 'etl/etl_browser.php',              'icono' => 'fa-timeline'],
+            ['titulo' => 'Administrador Procesos ',              'url' => 'etl/administrador_procesos.php',                   'icono' => 'fa-arrow-right-arrow-left'],
+            ['titulo' => 'Generador de Catálogos',   'url' => 'utilerias/generador.php',                     'icono' => 'fa-clipboard-list'],
+        ],
+    ];    
     ?>
 
-    <?php foreach ($menus as $menu => $submenus): 
+    <?php foreach ($menus as $menu => $submenus):
         $menuId = 'menu_' . preg_replace('/[^a-z0-9]+/i', '_', strtolower($menu));
-        $collapsed = true; // Todos colapsados por defecto
+        $collapsed = true; // todos colapsados por defecto
     ?>
         <div class="menu-header menu-toggle <?= $collapsed ? 'collapsed' : '' ?>" data-target="#<?= $menuId ?>">
             <div class="left">
@@ -214,7 +258,7 @@
             <?php foreach ($submenus as $item):
                 $icono = !empty($item['icono']) ? $item['icono'] : 'fa-circle';
             ?>
-                <a href="/public/<?= htmlspecialchars($item['url']) ?>">
+                <a href="<?= $baseUrl . htmlspecialchars($item['url']) ?>">
                     <i class="fa <?= htmlspecialchars($icono) ?>"></i>
                     <?= htmlspecialchars($item['titulo']) ?>
                 </a>

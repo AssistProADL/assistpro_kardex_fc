@@ -129,6 +129,7 @@ foreach ($zonas as $z) {
 }
 ?>
 <div class="container-fluid py-3" style="font-size:10px;">
+    <!-- Título + filtros -->
     <div class="row align-items-end mb-3">
         <div class="col-lg-5">
             <div class="fw-bold" style="font-size:16px;color:#0F5AAD;">Configuración de Almacén</div>
@@ -169,38 +170,56 @@ foreach ($zonas as $z) {
         </div>
     </div>
 
-    <!-- Cards resumen -->
+    <!-- Cards resumen (con color) -->
     <div class="row g-3 mb-3">
+        <!-- Ubicaciones -->
         <div class="col-6 col-md-3 col-xl-2">
-            <div class="card border-0 shadow-sm">
+            <div class="card border-0 shadow-sm text-white" style="background:linear-gradient(135deg,#0F5AAD,#1b75d1);">
                 <div class="card-body p-2 text-center">
-                    <div class="fw-bold" style="font-size:11px;color:#0F5AAD;">Ubicaciones</div>
-                    <div class="fs-5 fw-bold"><?= number_format($totales['total']) ?></div>
-                    <div class="text-muted" style="font-size:9px;">
+                    <div class="fw-semibold text-uppercase" style="font-size:10px;letter-spacing:.05em;">Ubicaciones</div>
+                    <div class="fw-bold" style="font-size:18px;"><?= number_format($totales['total']) ?></div>
+                    <div class="text-white-50" style="font-size:9px;">
                         <?= htmlspecialchars($nombreAlmacenActual) ?>
                         <?= $nombreZonaActual ? ' · ' . htmlspecialchars($nombreZonaActual) : '' ?>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Activas -->
         <div class="col-6 col-md-3 col-xl-2">
-            <div class="card border-0 shadow-sm">
+            <div class="card border-0 shadow-sm text-white" style="background:linear-gradient(135deg,#198754,#34c38f);">
                 <div class="card-body p-2 text-center">
-                    <div class="fw-bold" style="font-size:11px;color:#0F5AAD;">Activas</div>
-                    <div class="fs-5 fw-bold"><?= number_format($totales['activas']) ?></div>
-                    <div class="text-muted" style="font-size:9px;">
+                    <div class="fw-semibold text-uppercase" style="font-size:10px;letter-spacing:.05em;">Activas</div>
+                    <div class="fw-bold" style="font-size:18px;"><?= number_format($totales['activas']) ?></div>
+                    <div class="text-white-50" style="font-size:9px;">
                         <?= $totales['total'] > 0 ? round($totales['activas'] * 100 / $totales['total'], 1) : 0 ?>%
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Picking / Reabasto -->
         <div class="col-6 col-md-3 col-xl-2">
-            <div class="card border-0 shadow-sm">
+            <div class="card border-0 shadow-sm text-white" style="background:linear-gradient(135deg,#fd7e14,#ff9f43);">
                 <div class="card-body p-2 text-center">
-                    <div class="fw-bold" style="font-size:11px;color:#0F5AAD;">Picking</div>
-                    <div class="fs-5 fw-bold"><?= number_format($totales['picking']) ?></div>
-                    <div class="text-muted" style="font-size:9px;">
+                    <div class="fw-semibold text-uppercase" style="font-size:10px;letter-spacing:.05em;">Picking</div>
+                    <div class="fw-bold" style="font-size:18px;"><?= number_format($totales['picking']) ?></div>
+                    <div class="text-white-50" style="font-size:9px;">
                         Reabasto: <?= number_format($totales['reabasto']) ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Acomodo mixto (gris) -->
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="card border-0 shadow-sm text-dark" style="background:linear-gradient(135deg,#f8f9fa,#e9ecef);">
+                <div class="card-body p-2 text-center">
+                    <div class="fw-semibold text-uppercase" style="font-size:10px;letter-spacing:.05em;">Acomodo mixto</div>
+                    <div class="fw-bold" style="font-size:18px;"><?= number_format($totales['acomodo_mixto']) ?></div>
+                    <div class="text-muted" style="font-size:9px;">
+                        Ubicaciones que permiten mezcla
                     </div>
                 </div>
             </div>

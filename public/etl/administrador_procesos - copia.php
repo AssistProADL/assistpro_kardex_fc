@@ -1,15 +1,16 @@
 <?php
-// /public/administrador_procesos.php
+// /public/etl/administrador_procesos.php
 // Administrador de procesos funcionales AssistPro ETL
 
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-require_once dirname(__DIR__) . '/app/db.php';
+require_once dirname(__DIR__) . '/../app/db.php';
 $pdo = db();
 
 // ==== Esquema base =================================================================
 try {
+    // Procesos
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS etl_processes (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -21,9 +22,10 @@ try {
         DEFAULT CHARSET=utf8mb4
         COLLATE=utf8mb4_unicode_ci
     ");
-    // por si la tabla vino sin group_name
+    // por si venimos de versión sin group_name
     $pdo->exec("ALTER TABLE etl_processes ADD COLUMN IF NOT EXISTS group_name VARCHAR(191) NULL");
 
+    // Relación proceso - objetos (origen/destino)
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS etl_process_objects (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -41,12 +43,17 @@ try {
         COLLATE=utf8mb4_unicode_ci
     ");
 
+    // Documentos extra
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS etl_process_docs (
           id INT AUTO_INCREMENT PRIMARY KEY,
           process_id INT NOT NULL,
           title VARCHAR(191) NOT NULL,
           url VARCHAR(500) NULL,
+          file_name VARCHAR(255) NULL,
+          file_path VARCHAR(500) NULL,
+          mime_type VARCHAR(191) NULL,
+          file_size BIGINT NULL,
           notes TEXT NULL,
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           CONSTRAINT fk_proc_docs_process
@@ -56,6 +63,12 @@ try {
         DEFAULT CHARSET=utf8mb4
         COLLATE=utf8mb4_unicode_ci
     ");
+
+    // Por si ya existía sin columnas de archivo
+    $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN IF NOT EXISTS file_name VARCHAR(255) NULL");
+    $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN IF NOT EXISTS file_path VARCHAR(500) NULL");
+    $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN IF NOT EXISTS mime_type VARCHAR(191) NULL");
+    $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN IF NOT EXISTS file_size BIGINT NULL");
 } catch (Throwable $e) {
     die("Error inicializando catálogo de procesos: " . $e->getMessage());
 }
@@ -74,42 +87,337 @@ function qOne($pdo, $sql, $params = []) {
 function id_safe($s) {
     return preg_replace('~[^a-zA-Z0-9_]+~', '_', $s);
 }
+function short_text($s, $max = 80) {
+    $s = trim((string)$s);
+    if ($s === '') return '';
+    if (function_exists('mb_strlen')) {
+        if (mb_strlen($s, 'UTF-8') <= $max) return $s;
+        return mb_substr($s, 0, $max - 3, 'UTF-8') . '...';
+    } else {
+        if (strlen($s) <= $max) return $s;
+        return substr($s, 0, $max - 3) . '...';
+    }
+}
+
+// ==== Helper para generar TXT de un proceso =======================================
+function etl_generate_process_txt(PDO $pdo, int $processId, ?string $dirParam, ?string &$relativePathOut, ?string &$errorOut): bool
+{
+    $relativePathOut = null;
+    $errorOut        = null;
+
+    try {
+        $proc = qOne($pdo, "SELECT * FROM etl_processes WHERE id=:id", [':id'=>$processId]);
+        if (!$proc) {
+            $errorOut = "Proceso no encontrado.";
+            return false;
+        }
+
+        // Carpeta base RELATIVA a /public (ej. '', 'template', 'kardex/template')
+        $dirParam = trim((string)$dirParam);
+        if ($dirParam === '') {
+            $dirParam = 'etl';
+        }
+        $dirBaseSafe = preg_replace('~[^a-zA-Z0-9_/\-]+~', '_', $dirParam);
+        $procDir     = id_safe($proc['name']);
+
+        // Objetos asociados
+        $objs = qAll(
+            $pdo,
+            "SELECT po.alias, po.remote_db, po.object_name,
+                    m.dest_table,
+                    m.comment, m.procesos,
+                    m.last_action_at, m.last_action_type, m.last_action_rows
+             FROM etl_process_objects po
+             LEFT JOIN etl_object_meta m
+               ON  m.alias      = po.alias
+               AND m.remote_db  = po.remote_db
+               AND m.object_name= po.object_name
+             WHERE po.process_id = :id
+             ORDER BY COALESCE(m.dest_table, po.object_name)",
+            [':id'=>$processId]
+        );
+
+        // Documentos anexos
+        $docs = qAll(
+            $pdo,
+            "SELECT title, url, file_name, file_path, mime_type, file_size, notes, created_at
+             FROM etl_process_docs
+             WHERE process_id = :id
+             ORDER BY created_at",
+            [':id'=>$processId]
+        );
+
+        // Schema local
+        $dbRow = qOne($pdo, "SELECT DATABASE() AS db");
+        $localSchema = $dbRow['db'] ?? null;
+
+        $line = str_repeat('=', 80);
+        $sub  = str_repeat('-', 80);
+
+        $txt  = "{$line}\n";
+        $txt .= "ASSISTPRO ETL  |  DOCUMENTO DE PROCESO\n";
+        $txt .= "{$line}\n\n";
+
+        $txt .= "1. INFORMACIÓN GENERAL\n";
+        $txt .= "{$sub}\n";
+        $txt .= "ID Proceso   : {$proc['id']}\n";
+        $txt .= "Nombre       : {$proc['name']}\n";
+        $txt .= "Grupo        : ".($proc['group_name'] ?: '(sin grupo)')."\n";
+        $txt .= "Descripción  : ".($proc['description'] !== '' ? $proc['description'] : '(sin descripción)')."\n";
+        $txt .= "Creado       : {$proc['created_at']}\n\n";
+
+        $txt .= "2. TABLAS / VISTAS ASOCIADAS\n";
+        $txt .= "{$sub}\n\n";
+
+        if ($objs) {
+            $nTabla = 1;
+            foreach ($objs as $o) {
+                $dest = $o['dest_table'] ?: '(sin tabla destino definida aún)';
+                $comment  = $o['comment']  ? preg_replace("/\r?\n/", " ", $o['comment'])  : '(sin comentario)';
+                $procs    = $o['procesos'] ? preg_replace("/\r?\n/", " ", $o['procesos']) : '(sin listado adicional)';
+                $lastInfo = $o['last_action_at']
+                    ? "{$o['last_action_at']} ({$o['last_action_type']} · filas={$o['last_action_rows']})"
+                    : 'N/D';
+
+                $txt .= "2.{$nTabla}) {$dest}\n";
+                $txt .= str_repeat('.', 80)."\n";
+                $txt .= "  Origen     : {$o['object_name']} [alias={$o['alias']} · db={$o['remote_db']}]\n";
+                $txt .= "  Comentario : {$comment}\n";
+                $txt .= "  Procesos   : {$procs}\n";
+                $txt .= "  Última ETL : {$lastInfo}\n";
+                $txt .= "  Estructura (local):\n";
+
+                if ($localSchema && $o['dest_table']) {
+                    $schema = $localSchema;
+                    $tbl    = $o['dest_table'];
+                    if (strpos($tbl, '.') !== false) {
+                        [$schemaPart, $tablePart] = explode('.', $tbl, 2);
+                        $schema = trim($schemaPart, '`');
+                        $tbl    = trim($tablePart, '`');
+                    }
+
+                    try {
+                        $cols = qAll(
+                            $pdo,
+                            "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE,
+                                    COLUMN_DEFAULT, COLUMN_KEY, EXTRA
+                             FROM INFORMATION_SCHEMA.COLUMNS
+                             WHERE TABLE_SCHEMA = :s
+                               AND TABLE_NAME   = :t
+                             ORDER BY ORDINAL_POSITION",
+                            [':s'=>$schema, ':t'=>$tbl]
+                        );
+                    } catch (Throwable $e) {
+                        $cols = [];
+                    }
+
+                    if ($cols) {
+                        $txt .= "    " . str_pad("Columna", 30)
+                             . str_pad("Tipo", 25)
+                             . str_pad("Null", 6)
+                             . str_pad("Key", 6)
+                             . str_pad("Default", 12)
+                             . "Extra\n";
+                        $txt .= "    " . str_repeat('-', 78) . "\n";
+
+                        foreach ($cols as $c) {
+                            $nullable = ($c['IS_NULLABLE'] === 'YES') ? 'YES' : 'NO';
+                            $key      = $c['COLUMN_KEY'] ?: '';
+                            $def      = $c['COLUMN_DEFAULT'] !== null ? (string)$c['COLUMN_DEFAULT'] : '';
+                            $extra    = $c['EXTRA'] ?: '';
+
+                            $txt .= "    "
+                                 . str_pad($c['COLUMN_NAME'], 30)
+                                 . str_pad($c['COLUMN_TYPE'], 25)
+                                 . str_pad($nullable, 6)
+                                 . str_pad($key, 6)
+                                 . str_pad($def, 12)
+                                 . $extra . "\n";
+                        }
+                    } else {
+                        $txt .= "    (no se encontró la tabla en INFORMATION_SCHEMA)\n";
+                    }
+                } else {
+                    $txt .= "    (sin tabla destino definida / sin schema local)\n";
+                }
+
+                $txt .= "\n";
+                $nTabla++;
+            }
+        } else {
+            $txt .= "(sin tablas asociadas al proceso)\n\n";
+        }
+
+        $txt .= "3. DOCUMENTOS ADICIONALES\n";
+        $txt .= "{$sub}\n\n";
+        if ($docs) {
+            $nDoc = 1;
+            foreach ($docs as $d) {
+                $notes = $d['notes'] ? preg_replace("/\r?\n/", " ", $d['notes']) : '';
+                $txt .= "3.{$nDoc}) {$d['title']} ({$d['created_at']})\n";
+                if ($d['url']) {
+                    $txt .= "   URL      : {$d['url']}\n";
+                }
+                if ($d['file_path']) {
+                    $sizeKB = $d['file_size'] ? round($d['file_size'] / 1024, 1) : null;
+                    $txt .= "   Archivo  : {$d['file_name']}  [{$d['file_path']}]";
+                    if ($sizeKB !== null) {
+                        $txt .= " ({$sizeKB} KB)";
+                    }
+                    if ($d['mime_type']) {
+                        $txt .= "  MIME={$d['mime_type']}";
+                    }
+                    $txt .= "\n";
+                }
+                if ($notes !== '') {
+                    $txt .= "   Notas    : {$notes}\n";
+                }
+                $txt .= "\n";
+                $nDoc++;
+            }
+        } else {
+            $txt .= "(sin documentos anexos)\n";
+        }
+
+        // Guardar archivo en /public/<carpeta_base>/<proceso>/
+        $baseDir  = __DIR__ . '/' . $dirBaseSafe . '/' . $procDir;
+        if (!is_dir($baseDir)) {
+            @mkdir($baseDir, 0775, true);
+        }
+        $filename = 'proceso_'.id_safe($proc['name']).'.txt';
+        $filePath = $baseDir . '/' . $filename;
+
+        if (file_put_contents($filePath, $txt) === false) {
+            $errorOut = "No se pudo escribir el archivo en {$filePath}. Revisa permisos de escritura.";
+            return false;
+        }
+
+        // Ruta relativa desde /public
+        $relativePathOut = $dirBaseSafe . '/' . $procDir . '/' . $filename;
+        return true;
+
+    } catch (Throwable $e) {
+        $errorOut = $e->getMessage();
+        return false;
+    }
+}
 
 $msg = null;
 $err = null;
 
-$action    = $_GET['action'] ?? '';
-$search    = trim($_GET['q'] ?? '');
+$action      = $_GET['action'] ?? '';
+$search      = trim($_GET['q'] ?? '');
 $groupFilter = trim($_GET['group'] ?? '');
-$processId = (int)($_GET['id'] ?? 0);
-$pageSize  = 25;
-$page      = max(1, (int)($_GET['page'] ?? 1));
+$processId   = (int)($_GET['id'] ?? 0);
+$pageSize    = 25;
+$page        = max(1, (int)($_GET['page'] ?? 1));
 
-// ==== Acciones sobre documentos ====================================================
+// ==== Catálogo de grupos (para filtro) ============================================
+$groups = qAll(
+    $pdo,
+    "SELECT DISTINCT group_name
+     FROM etl_processes
+     WHERE group_name IS NOT NULL AND group_name <> ''
+     ORDER BY group_name"
+);
 
-// Alta documento
+// ==== Acciones sobre documentos (único botón: documento + TXT) ===================
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['doc_action'] ?? '') === 'add_doc') {
     $pid      = (int)($_POST['doc_process_id'] ?? 0);
     $docTitle = trim($_POST['doc_title'] ?? '');
     $docUrl   = trim($_POST['doc_url'] ?? '');
     $docNotes = trim($_POST['doc_notes'] ?? '');
+    $txtDir   = trim($_POST['txt_dir'] ?? '');
 
     if ($pid <= 0 || $docTitle === '') {
         $err = "Debes indicar proceso y título del documento.";
     } else {
         try {
+            // Info del proceso para nombrar carpeta
+            $procRow = qOne($pdo, "SELECT name FROM etl_processes WHERE id=:id", [':id'=>$pid]);
+            $procNameSafe = $procRow ? id_safe($procRow['name']) : 'proceso_'.$pid;
+
+            // Carpeta base relativa donde van TXT y adjuntos
+            if ($txtDir === '') {
+                $txtDir = 'etl';
+            }
+            $dirBaseSafe = preg_replace('~[^a-zA-Z0-9_/\-]+~', '_', $txtDir);
+            $docsBaseDir = __DIR__ . '/' . $dirBaseSafe . '/' . $procNameSafe;
+
+            if (!is_dir($docsBaseDir)) {
+                @mkdir($docsBaseDir, 0775, true);
+            }
+
+            $fileName = null;
+            $filePath = null;
+            $mime     = null;
+            $size     = null;
+
+            // === Manejo de archivo adjunto ===
+            if (isset($_FILES['doc_file']) && $_FILES['doc_file']['name'] !== '') {
+
+                $fileError = (int)$_FILES['doc_file']['error'];
+
+                // Si hubo error en la subida, lo mostramos claro
+                if ($fileError !== UPLOAD_ERR_OK) {
+                    throw new Exception(
+                        "Error al subir el archivo (código {$fileError}). " .
+                        "Revisa tamaño máximo (upload_max_filesize / post_max_size) y permisos."
+                    );
+                }
+
+                $original = $_FILES['doc_file']['name'];
+                $tmp      = $_FILES['doc_file']['tmp_name'];
+                $size     = (int)$_FILES['doc_file']['size'];
+                $mime     = $_FILES['doc_file']['type'] ?? null;
+
+                $ext = strtolower(pathinfo($original, PATHINFO_EXTENSION));
+                // Permitimos imágenes, PDF, Word, Excel, CSV
+                $allowed = ['pdf','doc','docx','xls','xlsx','csv','png','jpg','jpeg'];
+                if (!in_array($ext, $allowed, true)) {
+                    throw new Exception("Tipo de archivo no permitido: .$ext");
+                }
+
+                $clean  = id_safe(pathinfo($original, PATHINFO_FILENAME));
+                $stored = $clean . '_' . date('Ymd_His') . '.' . $ext;
+                $dest   = $docsBaseDir . '/' . $stored;
+
+                if (!move_uploaded_file($tmp, $dest)) {
+                    throw new Exception("No se pudo mover el archivo subido a {$dest}.");
+                }
+
+                $fileName = $original;
+                // ruta relativa desde /public (misma carpeta que TXT)
+                $filePath = $dirBaseSafe . '/' . $procNameSafe . '/' . $stored;
+            }
+
             $st = $pdo->prepare("
-              INSERT INTO etl_process_docs (process_id, title, url, notes, created_at)
-              VALUES (:pid, :title, :url, :notes, NOW())
+              INSERT INTO etl_process_docs (process_id, title, url, file_name, file_path, mime_type, file_size, notes, created_at)
+              VALUES (:pid, :title, :url, :fname, :fpath, :mime, :fsize, :notes, NOW())
             ");
             $st->execute([
                 ':pid'   => $pid,
                 ':title' => $docTitle,
                 ':url'   => $docUrl !== '' ? $docUrl : null,
+                ':fname' => $fileName,
+                ':fpath' => $filePath,
+                ':mime'  => $mime,
+                ':fsize' => $size,
                 ':notes' => $docNotes !== '' ? $docNotes : null,
             ]);
-            $msg = "Documento agregado al proceso.";
+
+            // Después de guardar el documento, generamos/actualizamos el TXT del proceso
             $processId = $pid;
+            $txtRelPath = null;
+            $txtError   = null;
+            if (etl_generate_process_txt($pdo, $pid, $txtDir, $txtRelPath, $txtError)) {
+                $msg = "Documento agregado y TXT actualizado para el proceso. "
+                     . "Archivo: <a href=\"".htmlspecialchars($txtRelPath)."\" target=\"_blank\">abrir / descargar TXT</a>";
+            } else {
+                $err = "Documento agregado, pero hubo un error al generar el TXT: " . $txtError;
+            }
+
         } catch (Throwable $e) {
             $err = "Error guardando documento: " . $e->getMessage();
         }
@@ -121,8 +429,16 @@ if ($action === 'del_doc' && isset($_GET['doc_id'])) {
     $docId = (int)$_GET['doc_id'];
     if ($docId > 0) {
         try {
-            $row = qOne($pdo, "SELECT process_id FROM etl_process_docs WHERE id=:id", [':id'=>$docId]);
-            if ($row) $processId = (int)$row['process_id'];
+            $row = qOne($pdo, "SELECT process_id, file_path FROM etl_process_docs WHERE id=:id", [':id'=>$docId]);
+            if ($row) {
+                $processId = (int)$row['process_id'];
+                if (!empty($row['file_path'])) {
+                    $absolute = __DIR__ . '/' . $row['file_path'];
+                    if (is_file($absolute)) {
+                        @unlink($absolute);
+                    }
+                }
+            }
             $st = $pdo->prepare("DELETE FROM etl_process_docs WHERE id = :id");
             $st->execute([':id'=>$docId]);
             $msg = "Documento eliminado.";
@@ -132,217 +448,135 @@ if ($action === 'del_doc' && isset($_GET['doc_id'])) {
     }
 }
 
-// ==== Acciones sobre tablas del proceso (quitar/agregar) ==========================
+// ==== Acciones sobre tablas del proceso ==========================================
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['obj_action'])) {
-    $objAction = $_POST['obj_action'];
-    $pid       = (int)($_POST['obj_process_id'] ?? 0);
+// Quitar tablas del proceso
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['obj_action'] ?? '') === 'delete_obj') {
+    $pid = (int)($_POST['obj_process_id'] ?? 0);
+    $ids = isset($_POST['obj_ids']) && is_array($_POST['obj_ids'])
+        ? array_map('intval', $_POST['obj_ids'])
+        : [];
+
     if ($pid <= 0) {
         $err = "Proceso inválido.";
+    } elseif (!$ids) {
+        $err = "Selecciona al menos una tabla/vista para quitar del proceso.";
     } else {
-        if ($objAction === 'delete_obj') {
-            $ids = isset($_POST['obj_ids']) && is_array($_POST['obj_ids'])
-                ? array_map('intval', $_POST['obj_ids'])
-                : [];
-            if (!$ids) {
-                $err = "Selecciona al menos una tabla/vista para quitar del proceso.";
-            } else {
-                try {
-                    $ph = implode(',', array_fill(0, count($ids), '?'));
-                    $params = $ids;
-                    array_unshift($params, $pid);
-                    $st = $pdo->prepare("
-                      DELETE FROM etl_process_objects
-                      WHERE process_id = ?
-                        AND id IN ($ph)
-                    ");
-                    $st->execute($params);
-                    $msg = "Se quitaron ".count($ids)." tabla(s)/vista(s) del proceso.";
-                    $processId = $pid;
-                } catch (Throwable $e) {
-                    $err = "Error al quitar tablas del proceso: " . $e->getMessage();
-                }
-            }
-
-        } elseif ($objAction === 'add_objs') {
-            $keys = isset($_POST['obj_keys']) && is_array($_POST['obj_keys'])
-                ? $_POST['obj_keys']
-                : [];
-            if (!$keys) {
-                $err = "Selecciona al menos una tabla migrada para agregar al proceso.";
-            } else {
-                try {
-                    $proc = qOne($pdo, "SELECT name FROM etl_processes WHERE id=:id", [':id'=>$pid]);
-                    $procName = $proc['name'] ?? '';
-
-                    $ins = $pdo->prepare("
-                      INSERT IGNORE INTO etl_process_objects
-                        (process_id, alias, remote_db, object_name, created_at)
-                      VALUES
-                        (:pid, :alias, :db, :obj, NOW())
-                    ");
-                    $metaUpdate = $pdo->prepare("
-                      INSERT INTO etl_object_meta
-                        (alias, remote_db, object_name, procesos, created_at, updated_at)
-                      VALUES
-                        (:alias, :db, :obj, :proc, NOW(), NOW())
-                      ON DUPLICATE KEY UPDATE
-                        procesos   = :proc2,
-                        updated_at = NOW()
-                    ");
-
-                    $added = 0;
-                    foreach ($keys as $k) {
-                        $parts = explode('|', $k);
-                        if (count($parts) !== 3) continue;
-                        [$aliasK, $dbK, $objK] = $parts;
-
-                        $ins->execute([
-                            ':pid'   => $pid,
-                            ':alias' => $aliasK,
-                            ':db'    => $dbK,
-                            ':obj'   => $objK,
-                        ]);
-                        if ($ins->rowCount() > 0) $added++;
-
-                        $meta = qOne(
-                            $pdo,
-                            "SELECT procesos
-                             FROM etl_object_meta
-                             WHERE alias=:a AND remote_db=:d AND object_name=:o",
-                            [':a'=>$aliasK, ':d'=>$dbK, ':o'=>$objK]
-                        );
-                        $oldP = $meta['procesos'] ?? '';
-                        $list = array_filter(array_map('trim', explode(',', $oldP)));
-                        if ($procName && !in_array($procName, $list, true)) {
-                            $list[] = $procName;
-                        }
-                        $newP = implode(', ', $list);
-
-                        $metaUpdate->execute([
-                            ':alias' => $aliasK,
-                            ':db'    => $dbK,
-                            ':obj'   => $objK,
-                            ':proc'  => $newP,
-                            ':proc2' => $newP,
-                        ]);
-                    }
-
-                    $msg = "Se agregaron {$added} tabla(s)/vista(s) migradas al proceso.";
-                    $processId = $pid;
-                } catch (Throwable $e) {
-                    $err = "Error al agregar tablas al proceso: " . $e->getMessage();
-                }
-            }
+        try {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            $params = $ids;
+            array_unshift($params, $pid);
+            $st = $pdo->prepare("
+              DELETE FROM etl_process_objects
+              WHERE process_id = ?
+                AND id IN ($ph)
+            ");
+            $st->execute($params);
+            $msg = "Se quitaron ".count($ids)." tabla(s)/vista(s) del proceso.";
+            $processId = $pid;
+        } catch (Throwable $e) {
+            $err = "Error al quitar tablas del proceso: " . $e->getMessage();
         }
     }
 }
 
-// ==== Exportar TXT de un proceso (guardar en public/etl + descargar) ===============
+// Agregar tablas migradas al proceso
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['obj_action'] ?? '') === 'add_objs') {
+    $pid  = (int)($_POST['obj_process_id'] ?? 0);
+    $keys = isset($_POST['obj_keys']) && is_array($_POST['obj_keys'])
+        ? $_POST['obj_keys']
+        : [];
+
+    if ($pid <= 0) {
+        $err = "Proceso inválido.";
+    } elseif (!$keys) {
+        $err = "Selecciona al menos una tabla migrada (destino) para agregar al proceso.";
+    } else {
+        try {
+            $proc = qOne($pdo, "SELECT name FROM etl_processes WHERE id=:id", [':id'=>$pid]);
+            $procName = $proc['name'] ?? '';
+
+            $insObj = $pdo->prepare("
+              INSERT IGNORE INTO etl_process_objects
+                (process_id, alias, remote_db, object_name, created_at)
+              VALUES
+                (:pid, :alias, :db, :obj, NOW())
+            ");
+
+            $metaUpdate = $pdo->prepare("
+              INSERT INTO etl_object_meta
+                (alias, remote_db, object_name, procesos, created_at, updated_at)
+              VALUES
+                (:alias, :db, :obj, :proc, NOW(), NOW())
+              ON DUPLICATE KEY UPDATE
+                procesos   = :proc2,
+                updated_at = NOW()
+            ");
+
+            $added = 0;
+            foreach ($keys as $k) {
+                $parts = explode('|', $k);
+                if (count($parts) !== 3) continue;
+                [$aliasK, $dbK, $objK] = $parts;
+
+                $insObj->execute([
+                    ':pid'   => $pid,
+                    ':alias' => $aliasK,
+                    ':db'    => $dbK,
+                    ':obj'   => $objK,
+                ]);
+                if ($insObj->rowCount() > 0) $added++;
+
+                $meta = qOne(
+                    $pdo,
+                    "SELECT procesos
+                     FROM etl_object_meta
+                     WHERE alias=:a AND remote_db=:d AND object_name=:o",
+                    [':a'=>$aliasK, ':d'=>$dbK, ':o'=>$objK]
+                );
+                $oldP = $meta['procesos'] ?? '';
+                $list = array_filter(array_map('trim', explode(',', $oldP)));
+                if ($procName && !in_array($procName, $list, true)) {
+                    $list[] = $procName;
+                }
+                $newP = implode(', ', $list);
+
+                $metaUpdate->execute([
+                    ':alias' => $aliasK,
+                    ':db'    => $dbK,
+                    ':obj'   => $objK,
+                    ':proc'  => $newP,
+                    ':proc2' => $newP,
+                ]);
+            }
+
+            $msg = "Se agregaron {$added} tabla(s)/vista(s) migradas al proceso.";
+            $processId = $pid;
+        } catch (Throwable $e) {
+            $err = "Error al agregar tablas al proceso: " . $e->getMessage();
+        }
+    }
+}
+
+// ==== Export TXT vía GET (compatibilidad, sin botón visible) =====================
+
 if ($action === 'export_txt' && $processId > 0) {
-    try {
-        $proc = qOne($pdo, "SELECT * FROM etl_processes WHERE id=:id", [':id'=>$processId]);
-        if (!$proc) throw new Exception("Proceso no encontrado.");
-
-        $objs = qAll(
-            $pdo,
-            "SELECT po.alias, po.remote_db, po.object_name,
-                    m.comment, m.procesos, m.dest_table,
-                    m.last_action_at, m.last_action_type, m.last_action_rows
-             FROM etl_process_objects po
-             LEFT JOIN etl_object_meta m
-               ON  m.alias      = po.alias
-               AND m.remote_db  = po.remote_db
-               AND m.object_name= po.object_name
-             WHERE po.process_id = :id
-               AND m.dest_table IS NOT NULL
-               AND m.dest_table <> ''
-             ORDER BY m.dest_table, po.alias, po.remote_db, po.object_name",
-            [':id'=>$processId]
-        );
-
-        $txt  = "AssistPro ETL - Documento de proceso\n";
-        $txt .= "=======================================\n\n";
-        $txt .= "ID proceso: {$proc['id']}\n";
-        $txt .= "Nombre: {$proc['name']}\n";
-        $txt .= "Grupo: ".($proc['group_name'] ?? '(sin grupo)')."\n";
-        $txt .= "Descripción: ".($proc['description'] !== '' ? $proc['description'] : '(sin descripción)')."\n";
-        $txt .= "Creado: {$proc['created_at']}\n\n";
-
-        $txt .= "Tablas destino asociadas (migradas):\n";
-        if ($objs) {
-            foreach ($objs as $o) {
-                $comment  = $o['comment']  ? preg_replace("/\r?\n/", " ", $o['comment'])  : '(sin comentario)';
-                $procs    = $o['procesos'] ? preg_replace("/\r?\n/", " ", $o['procesos']) : '(sin listado adicional)';
-                $lastInfo = $o['last_action_at']
-                    ? "{$o['last_action_at']} ({$o['last_action_type']} · filas={$o['last_action_rows']})"
-                    : 'N/D';
-                $dest = $o['dest_table'] ?: '(no definida)';
-
-                $txt .= "- Tabla destino: {$dest}\n";
-                $txt .= "  Origen: {$o['object_name']} [alias={$o['alias']} · db={$o['remote_db']}]\n";
-                $txt .= "  Comentario: {$comment}\n";
-                $txt .= "  Procesos/vistas relacionados: {$procs}\n";
-                $txt .= "  Última acción ETL: {$lastInfo}\n\n";
-            }
-        } else {
-            $txt .= "(sin tablas destino asociadas)\n\n";
-        }
-
-        $docs = qAll(
-            $pdo,
-            "SELECT title, url, notes, created_at
-             FROM etl_process_docs
-             WHERE process_id = :id
-             ORDER BY created_at",
-            [':id'=>$processId]
-        );
-        $txt .= "Documentos adicionales:\n";
-        if ($docs) {
-            foreach ($docs as $d) {
-                $notes = $d['notes'] ? preg_replace("/\r?\n/", " ", $d['notes']) : '';
-                $txt .= "- {$d['title']} ({$d['created_at']})\n";
-                if ($d['url'])   $txt .= "  URL: {$d['url']}\n";
-                if ($notes !== '') $txt .= "  Notas: {$notes}\n";
-                $txt .= "\n";
-            }
-        } else {
-            $txt .= "(sin documentos anexos)\n";
-        }
-
-        // Guardar en public/etl
-        $dir = __DIR__ . '/etl';
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
-        $filename = 'proceso_'.id_safe($proc['name']).'_'.date('Ymd_His').'.txt';
-        $filePath = $dir . '/' . $filename;
-        @file_put_contents($filePath, $txt);
-
-        // Descargar al navegador
-        header('Content-Type: text/plain; charset=utf-8');
-        header('Content-Disposition: attachment; filename="'.$filename.'"');
-        echo $txt;
-        exit;
-    } catch (Throwable $e) {
-        $err = "Error al exportar TXT: " . $e->getMessage();
+    $dirParam   = $_REQUEST['dir'] ?? '';
+    $txtRelPath = null;
+    $txtError   = null;
+    if (etl_generate_process_txt($pdo, $processId, $dirParam, $txtRelPath, $txtError)) {
+        $msg = "TXT generado para el proceso. "
+             . "<a href=\"".htmlspecialchars($txtRelPath)."\" target=\"_blank\">abrir / descargar TXT</a>";
+    } else {
+        $err = "Error al exportar TXT: " . $txtError;
     }
 }
 
-// ==== Filtros (grupos) y listado de procesos ======================================
+// ==== Listado de procesos + export CSV ===========================================
 
-// catálogo de grupos existentes
-$groups = qAll(
-    $pdo,
-    "SELECT DISTINCT group_name
-     FROM etl_processes
-     WHERE group_name IS NOT NULL AND group_name <> ''
-     ORDER BY group_name"
-);
-
-// construir WHERE de búsqueda + grupo
 $whereParts = [];
-$params = [];
+$params     = [];
+
 if ($search !== '') {
     $whereParts[] = "(p.name LIKE :q OR p.description LIKE :q OR p.group_name LIKE :q)";
     $params[':q'] = "%{$search}%";
@@ -353,7 +587,6 @@ if ($groupFilter !== '') {
 }
 $whereSql = $whereParts ? ('WHERE '.implode(' AND ', $whereParts)) : '';
 
-// listado completo (para paginar y exportar)
 $allProcesses = qAll(
     $pdo,
     "SELECT p.*,
@@ -366,7 +599,7 @@ $allProcesses = qAll(
     $params
 );
 
-// Export CSV de la grilla actual
+// Export CSV
 if ($action === 'export_csv') {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="procesos_etl_'.date('Ymd_His').'.csv"');
@@ -388,30 +621,33 @@ if ($action === 'export_csv') {
     exit;
 }
 
-// paginación
+// Paginación
 $totalProcesses = count($allProcesses);
 $totalPages     = max(1, (int)ceil($totalProcesses / $pageSize));
 if ($page > $totalPages) $page = $totalPages;
 $offset         = ($page - 1) * $pageSize;
 $processesPage  = array_slice($allProcesses, $offset, $pageSize);
 
-// proceso seleccionado para modal
+// ==== Proceso seleccionado + detalle =============================================
+
 if ($processId === 0 && $allProcesses) {
     $processId = (int)$allProcesses[0]['id'];
 }
 
-$procSel  = null;
-$objsSel  = [];
-$docsSel  = [];
+$procSel   = null;
+$objsSel   = [];
+$docsSel   = [];
 $allMigrated = [];
 
 if ($processId > 0) {
     $procSel = qOne($pdo, "SELECT * FROM etl_processes WHERE id=:id", [':id'=>$processId]);
+
     if ($procSel) {
         $objsSel = qAll(
             $pdo,
             "SELECT po.*,
-                    m.comment, m.procesos, m.dest_table,
+                    m.dest_table,
+                    m.comment, m.procesos,
                     m.last_action_at, m.last_action_type, m.last_action_rows
              FROM etl_process_objects po
              LEFT JOIN etl_object_meta m
@@ -419,9 +655,7 @@ if ($processId > 0) {
                AND m.remote_db  = po.remote_db
                AND m.object_name= po.object_name
              WHERE po.process_id = :id
-               AND m.dest_table IS NOT NULL
-               AND m.dest_table <> ''
-             ORDER BY m.dest_table, po.alias, po.remote_db, po.object_name",
+             ORDER BY COALESCE(m.dest_table, po.object_name)",
             [':id'=>$processId]
         );
 
@@ -438,13 +672,13 @@ if ($processId > 0) {
             "SELECT m.alias, m.remote_db, m.object_name, m.dest_table,
                     m.comment, m.procesos,
                     m.last_action_at, m.last_action_type, m.last_action_rows,
-                    CASE WHEN po2.id IS NULL THEN 0 ELSE 1 END AS in_process
+                    CASE WHEN po2.id IS NULL THEN 0 ELSE 1 END AS in_this_process
              FROM etl_object_meta m
              LEFT JOIN etl_process_objects po2
-               ON po2.alias      = m.alias
-              AND po2.remote_db  = m.remote_db
-              AND po2.object_name= m.object_name
-              AND po2.process_id = :pid
+               ON  po2.alias      = m.alias
+               AND po2.remote_db  = m.remote_db
+               AND po2.object_name= m.object_name
+               AND po2.process_id = :pid
              WHERE m.dest_table IS NOT NULL
                AND m.dest_table <> ''
              ORDER BY m.dest_table",
@@ -480,8 +714,15 @@ body{
   background: linear-gradient(90deg,var(--ap-blue),var(--ap-cyan));
   color:#fff;
 }
-.ap-topbar h1{font-size:1.4rem;margin:0;}
-.ap-badge{font-size:.7rem;letter-spacing:.03em;text-transform:uppercase;}
+.ap-topbar h1{
+  font-size:1.4rem;
+  margin:0;
+}
+.ap-badge{
+  font-size:.7rem;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+}
 .card{
   border-radius:1rem;
   border:none;
@@ -514,8 +755,12 @@ body{
   border-bottom:1px solid #f1f1f1;
   white-space:nowrap;
 }
-.table-grid tbody tr:hover{background:#eef5ff;}
-.table-grid tbody tr:last-child td{border-bottom:none;}
+.table-grid tbody tr:hover{
+  background:#eef5ff;
+}
+.table-grid tbody tr:last-child td{
+  border-bottom:none;
+}
 </style>
 </head>
 <body>
@@ -561,7 +806,7 @@ body{
             </div>
             <select name="group" class="form-select form-select-sm">
               <option value="">[Todos los grupos]</option>
-              <?php foreach($groups as $g): $gn = $g['group_name']; ?>
+              <?php foreach($groups as $g): $gn=$g['group_name']; ?>
                 <option value="<?=htmlspecialchars($gn)?>" <?=$groupFilter===$gn?'selected':''?>>
                   <?=$gn?>
                 </option>
@@ -601,13 +846,13 @@ body{
               <td class="text-muted"><?=$i++?></td>
               <td class="mono"><?=htmlspecialchars($p['created_at'])?></td>
               <td class="fw-semibold"><?=htmlspecialchars($p['name'])?></td>
-              <td class="text-truncate" style="max-width:320px"
+              <td class="text-truncate" style="max-width:320px;"
                   title="<?=htmlspecialchars($p['description'] ?? '')?>">
-                <?= $p['description'] ?: '—' ?>
+                <?=$p['description'] ?: '—'?>
               </td>
-              <td class="text-truncate" style="max-width:160px"
+              <td class="text-truncate" style="max-width:160px;"
                   title="<?=htmlspecialchars($p['group_name'] ?? '')?>">
-                <?= $p['group_name'] ?: '—' ?>
+                <?=$p['group_name'] ?: '—'?>
               </td>
               <td class="text-center"><?=$p['objetos_cnt']?></td>
               <td>
@@ -646,7 +891,7 @@ body{
 </div>
 
 <?php if($procSel): ?>
-<!-- Modal detalle proceso -->
+<!-- Modal detalle de proceso -->
 <div class="modal fade" id="processDetailModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content">
@@ -657,22 +902,14 @@ body{
             ID <?=$procSel['id']?> · Creado <?=$procSel['created_at']?>
           </div>
         </div>
-        <div class="d-flex gap-2">
-          <a href="?action=export_txt&id=<?=$procSel['id']?>&q=<?=urlencode($search)?>&group=<?=urlencode($groupFilter)?>&page=<?=$page?>"
-             class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-file-earmark-text"></i> Exportar TXT
-          </a>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <div class="mb-3">
           <div class="small-label mb-1">Proceso</div>
           <div class="fw-semibold"><?=htmlspecialchars($procSel['name'])?></div>
           <div class="small-label mt-2 mb-1">Grupo</div>
-          <div class="small">
-            <?= $procSel['group_name'] ?: '<span class="text-muted">Sin grupo</span>' ?>
-          </div>
+          <div class="small"><?= $procSel['group_name'] ?: '<span class="text-muted">Sin grupo</span>' ?></div>
           <div class="small-label mt-2 mb-1">Descripción</div>
           <div class="small">
             <?=$procSel['description'] ? nl2br(htmlspecialchars($procSel['description'])) : '<span class="text-muted">Sin descripción.</span>'?>
@@ -717,7 +954,7 @@ body{
                     <td class="text-center">
                       <input type="checkbox" name="obj_ids[]" value="<?=$o['id']?>">
                     </td>
-                    <td><div class="fw-semibold"><?=$o['dest_table'] ?: '—'?></div></td>
+                    <td><div class="fw-semibold"><?=$o['dest_table'] ?: '(sin tabla destino)'?></div></td>
                     <td>
                       <div><?=$o['object_name']?></div>
                       <div class="text-muted small"><?=$o['alias']?> · <?=$o['remote_db']?></div>
@@ -760,12 +997,12 @@ body{
         <div class="row g-3">
           <div class="col-md-6">
             <h6 class="small-label mb-2">Documentos anexos</h6>
-            <div class="table-responsive" style="max-height:200px;overflow:auto">
+            <div class="table-responsive" style="max-height:220px;overflow:auto">
               <table class="table table-sm align-middle mb-0">
                 <thead class="table-light small">
                   <tr>
                     <th>Título</th>
-                    <th>URL</th>
+                    <th>Recurso</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -777,7 +1014,7 @@ body{
                       <td>
                         <div class="fw-semibold"><?=$d['title']?></div>
                         <?php if($d['notes']): ?>
-                          <div class="text-muted small text-truncate" style="max-width:200px"
+                          <div class="text-muted small text-truncate" style="max-width:220px"
                                title="<?=htmlspecialchars($d['notes'])?>">
                             <?=$d['notes']?>
                           </div>
@@ -786,8 +1023,20 @@ body{
                       </td>
                       <td>
                         <?php if($d['url']): ?>
-                          <a href="<?=$d['url']?>" target="_blank" class="small">Abrir</a>
-                        <?php else: ?>
+                          <div class="small">
+                            <i class="bi bi-link-45deg"></i>
+                            <a href="<?=$d['url']?>" target="_blank">Abrir URL</a>
+                          </div>
+                        <?php endif; ?>
+                        <?php if($d['file_path']): ?>
+                          <div class="small">
+                            <i class="bi bi-paperclip"></i>
+                            <a href="<?=htmlspecialchars($d['file_path'])?>" target="_blank">
+                              <?=$d['file_name'] ?: basename($d['file_path'])?>
+                            </a>
+                          </div>
+                        <?php endif; ?>
+                        <?php if(!$d['url'] && !$d['file_path']): ?>
                           <span class="text-muted small">—</span>
                         <?php endif; ?>
                       </td>
@@ -804,31 +1053,54 @@ body{
               </table>
             </div>
           </div>
+
           <div class="col-md-6">
-            <h6 class="small-label mb-2">Agregar documento</h6>
-            <form method="post">
+            <h6 class="small-label mb-2">Guardar documentación (TXT + documentos)</h6>
+            <?php
+              $autoTitle = short_text($procSel['description'] ?: $procSel['name'], 80);
+            ?>
+            <form method="post" enctype="multipart/form-data">
               <input type="hidden" name="doc_action" value="add_doc">
               <input type="hidden" name="doc_process_id" value="<?=$procSel['id']?>">
               <div class="mb-2">
-                <label class="form-label small-label">Título</label>
+                <label class="form-label small-label">Título del documento</label>
                 <input type="text" name="doc_title"
                        class="form-control form-control-sm" required
-                       placeholder="Ej. Especificación funcional, Diagrama, Jira, Confluence">
+                       value="<?=htmlspecialchars($autoTitle)?>"
+                       placeholder="Ej. Vista general de ubicaciones, Layout inventarios, etc.">
               </div>
               <div class="mb-2">
                 <label class="form-label small-label">URL (opcional)</label>
                 <input type="url" name="doc_url"
                        class="form-control form-control-sm"
-                       placeholder="https://...">
+                       placeholder="https://... (SharePoint, Confluence, Jira, etc.)">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small-label">Archivo (opcional)</label>
+                <input type="file" name="doc_file"
+                       class="form-control form-control-sm"
+                       accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg">
+                <div class="form-text small">
+                  El archivo y el TXT se guardan en la misma carpeta base: <code>/public/&lt;carpeta&gt;/&lt;proceso&gt;</code>.
+                </div>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small-label">Carpeta TXT (relativa a /public)</label>
+                <input type="text" name="txt_dir"
+                       class="form-control form-control-sm"
+                       placeholder="Ej. template, kardex/template">
+                <div class="form-text small">
+                  Si se deja vacío, se usará <code>etl</code>. Dentro de esa carpeta se generará una subcarpeta con el nombre del proceso.
+                </div>
               </div>
               <div class="mb-2">
                 <label class="form-label small-label">Notas</label>
                 <textarea name="doc_notes" rows="2"
                           class="form-control form-control-sm"
-                          placeholder="Comentarios relevantes, versión, etc."></textarea>
+                          placeholder="Ej. Alcance, versión del documento, comentarios relevantes."></textarea>
               </div>
               <button type="submit" class="btn btn-sm btn-primary">
-                <i class="bi bi-plus-circle"></i> Agregar documento
+                <i class="bi bi-save"></i> Guardar documentación (TXT + documento)
               </button>
             </form>
           </div>
@@ -837,7 +1109,7 @@ body{
       </div>
       <div class="modal-footer justify-content-between">
         <div class="small text-muted">
-          Proceso registrado en AssistPro ETL. Las relaciones con tablas migradas se basan en <code>etl_object_meta.dest_table</code>.
+          Proceso registrado en AssistPro ETL. La documentación se basa en tablas migradas (destino) desde <code>etl_object_meta</code>.
         </div>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
       </div>
@@ -880,22 +1152,20 @@ body{
                 <th>Última acción ETL</th>
                 <th>Comentario</th>
                 <th>Procesos / vistas</th>
-                <th>Estado</th>
+                <th>Estado en este proceso</th>
               </tr>
             </thead>
             <tbody class="small mono">
               <?php if(!$allMigrated): ?>
-                <tr><td colspan="7" class="text-muted text-center">No se encontraron tablas migradas.</td></tr>
+                <tr><td colspan="7" class="text-muted text-center">
+                  No se encontraron tablas migradas (destino) en etl_object_meta.
+                </td></tr>
               <?php else: foreach ($allMigrated as $m): ?>
                 <tr>
                   <td class="text-center">
-                    <?php if($m['in_process']): ?>
-                      <input type="checkbox" disabled>
-                    <?php else: ?>
-                      <input type="checkbox"
-                             name="obj_keys[]"
-                             value="<?=htmlspecialchars($m['alias'].'|'.$m['remote_db'].'|'.$m['object_name'])?>">
-                    <?php endif; ?>
+                    <input type="checkbox"
+                           name="obj_keys[]"
+                           value="<?=htmlspecialchars($m['alias'].'|'.$m['remote_db'].'|'.$m['object_name'])?>">
                   </td>
                   <td><div class="fw-semibold"><?=$m['dest_table']?></div></td>
                   <td>
@@ -919,8 +1189,8 @@ body{
                     <?=$m['procesos'] ?: '—'?>
                   </td>
                   <td>
-                    <?php if($m['in_process']): ?>
-                      <span class="badge bg-success-subtle text-success border">Ya en proceso</span>
+                    <?php if($m['in_this_process']): ?>
+                      <span class="badge bg-success-subtle text-success border">Ya en este proceso</span>
                     <?php else: ?>
                       <span class="badge bg-secondary-subtle text-secondary border">Disponible</span>
                     <?php endif; ?>
@@ -932,12 +1202,13 @@ body{
         </div>
 
         <div class="small text-muted mt-2">
-          Solo se listan tablas que ya fueron migradas (tienen <code>dest_table</code> en <code>etl_object_meta</code>).
+          Solo se listan <strong>tablas destino (locales)</strong> que fueron migradas (tienen <code>dest_table</code> en <code>etl_object_meta</code>).
+          La información de origen (alias/BD/tabla) es solo para referencia.
         </div>
       </div>
       <div class="modal-footer justify-content-between">
         <div class="small text-muted">
-          Las tablas ya asociadas aparecen como “Ya en proceso”.
+          Una misma tabla puede participar en MÚLTIPLES procesos. Dentro de este proceso, los duplicados se ignoran automáticamente.
         </div>
         <button type="submit" class="btn btn-success">
           <i class="bi bi-plus-circle"></i> Agregar seleccionadas
@@ -956,7 +1227,7 @@ function toggleAllObj(master){
 function toggleAllAdd(master){
   document.querySelectorAll('#tablesToAddTable tbody tr').forEach(tr => {
     const ch = tr.querySelector('input[name="obj_keys[]"]');
-    if (ch && !ch.disabled) ch.checked = master.checked;
+    if (ch) ch.checked = master.checked;
   });
 }
 document.addEventListener('DOMContentLoaded', function(){

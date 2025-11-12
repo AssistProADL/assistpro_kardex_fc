@@ -71,7 +71,7 @@ table.dataTable tbody td{ white-space:nowrap; overflow:hidden; text-overflow:ell
 </style>
 </head>
 <body>
-<?php if(!$IFRAME): include __DIR__ . '/_menu_global.php'; endif; ?>
+<?php if(!$IFRAME): include __DIR__ . '/../bi/_menu_global.php'; endif; ?>
 
 <!-- Topbar: título + KPIs + filtros en UNA FILA -->
 <div class="topbar">
@@ -136,7 +136,7 @@ table.dataTable tbody td{ white-space:nowrap; overflow:hidden; text-overflow:ell
   <tbody></tbody>
 </table>
 
-<?php if(!$IFRAME): include __DIR__ . '/_menu_global_end.php'; endif; ?>
+<?php if(!$IFRAME): include __DIR__ . '/../bi/_menu_global_end.php'; endif; ?>
 
 <!-- Modal -->
 <div id="modal">

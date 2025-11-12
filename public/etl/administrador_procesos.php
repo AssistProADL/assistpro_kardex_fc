@@ -1,5 +1,5 @@
 <?php
-// /public/etl/administrador_procesos.php
+// /public/administrador_procesos.php
 // Administrador de procesos funcionales AssistPro ETL
 
 ini_set('display_errors', 1);
@@ -22,8 +22,6 @@ try {
         DEFAULT CHARSET=utf8mb4
         COLLATE=utf8mb4_unicode_ci
     ");
-    // por si venimos de versión sin group_name
-    $pdo->exec("ALTER TABLE etl_processes ADD COLUMN IF NOT EXISTS group_name VARCHAR(191) NULL");
 
     // Relación proceso - objetos (origen/destino)
     $pdo->exec("
@@ -64,11 +62,67 @@ try {
         COLLATE=utf8mb4_unicode_ci
     ");
 
-    // Por si ya existía sin columnas de archivo
-    $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN IF NOT EXISTS file_name VARCHAR(255) NULL");
-    $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN IF NOT EXISTS file_path VARCHAR(500) NULL");
-    $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN IF NOT EXISTS mime_type VARCHAR(191) NULL");
-    $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN IF NOT EXISTS file_size BIGINT NULL");
+    // Compatibilidad MySQL 5.x: asegurar columnas sin usar IF NOT EXISTS
+    $dbName = $pdo->query("SELECT DATABASE()")->fetchColumn();
+    if ($dbName) {
+        $colSql = "SELECT COUNT(*)
+                   FROM INFORMATION_SCHEMA.COLUMNS
+                   WHERE TABLE_SCHEMA = :db
+                     AND TABLE_NAME   = :tbl
+                     AND COLUMN_NAME  = :col";
+        $chk = $pdo->prepare($colSql);
+
+        // etl_processes.group_name
+        $chk->execute([
+            ':db'  => $dbName,
+            ':tbl' => 'etl_processes',
+            ':col' => 'group_name'
+        ]);
+        if (!$chk->fetchColumn()) {
+            $pdo->exec("ALTER TABLE etl_processes ADD COLUMN group_name VARCHAR(191) NULL");
+        }
+
+        // etl_process_docs.file_name
+        $chk->execute([
+            ':db'  => $dbName,
+            ':tbl' => 'etl_process_docs',
+            ':col' => 'file_name'
+        ]);
+        if (!$chk->fetchColumn()) {
+            $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN file_name VARCHAR(255) NULL");
+        }
+
+        // etl_process_docs.file_path
+        $chk->execute([
+            ':db'  => $dbName,
+            ':tbl' => 'etl_process_docs',
+            ':col' => 'file_path'
+        ]);
+        if (!$chk->fetchColumn()) {
+            $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN file_path VARCHAR(500) NULL");
+        }
+
+        // etl_process_docs.mime_type
+        $chk->execute([
+            ':db'  => $dbName,
+            ':tbl' => 'etl_process_docs',
+            ':col' => 'mime_type'
+        ]);
+        if (!$chk->fetchColumn()) {
+            $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN mime_type VARCHAR(191) NULL");
+        }
+
+        // etl_process_docs.file_size
+        $chk->execute([
+            ':db'  => $dbName,
+            ':tbl' => 'etl_process_docs',
+            ':col' => 'file_size'
+        ]);
+        if (!$chk->fetchColumn()) {
+            $pdo->exec("ALTER TABLE etl_process_docs ADD COLUMN file_size BIGINT NULL");
+        }
+    }
+
 } catch (Throwable $e) {
     die("Error inicializando catálogo de procesos: " . $e->getMessage());
 }
@@ -112,7 +166,7 @@ function etl_generate_process_txt(PDO $pdo, int $processId, ?string $dirParam, ?
             return false;
         }
 
-        // Carpeta base RELATIVA a /public (ej. '', 'template', 'kardex/template')
+        // Carpeta base RELATIVA a /public
         $dirParam = trim((string)$dirParam);
         if ($dirParam === '') {
             $dirParam = 'etl';
@@ -284,6 +338,7 @@ function etl_generate_process_txt(PDO $pdo, int $processId, ?string $dirParam, ?
         if (!is_dir($baseDir)) {
             @mkdir($baseDir, 0775, true);
         }
+        // Un solo TXT por proceso (sobrescribe)
         $filename = 'proceso_'.id_safe($proc['name']).'.txt';
         $filePath = $baseDir . '/' . $filename;
 
@@ -359,7 +414,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['doc_action'] ?? '') === 'a
 
                 $fileError = (int)$_FILES['doc_file']['error'];
 
-                // Si hubo error en la subida, lo mostramos claro
                 if ($fileError !== UPLOAD_ERR_OK) {
                     throw new Exception(
                         "Error al subir el archivo (código {$fileError}). " .
@@ -373,7 +427,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['doc_action'] ?? '') === 'a
                 $mime     = $_FILES['doc_file']['type'] ?? null;
 
                 $ext = strtolower(pathinfo($original, PATHINFO_EXTENSION));
-                // Permitimos imágenes, PDF, Word, Excel, CSV
                 $allowed = ['pdf','doc','docx','xls','xlsx','csv','png','jpg','jpeg'];
                 if (!in_array($ext, $allowed, true)) {
                     throw new Exception("Tipo de archivo no permitido: .$ext");
