@@ -1,0 +1,2 @@
+include __DIR__ . '/../partials/filtros_assistpro.php';
+document.addEventListener('assistpro:filtros:aplicar',(e)=>{/* consumir filtros */});

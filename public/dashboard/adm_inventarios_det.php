@@ -1,555 +1,156 @@
 <?php
-// adm_inventarios_det.php
-// Detalle y diferencias de inventario (físico / cíclico) con filtro por conteo y exportación
+// public/dashboard/adm_inventarios_det.php
+// Detalle de inventario físico por folio, con Conteo 1/2/3 pivotado
 
-require_once __DIR__ . '/../app/db.php';
+require_once __DIR__ . '/../../app/db.php';
 
-if (!function_exists('db_all')) {
-    function db_all($sql, $params = [])
-    {
-        global $pdo; // ajusta si tu conexión usa otro nombre
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-}
-
-// ---------------------------------------------------------
-//  Parámetros
-// ---------------------------------------------------------
-$tipo   = isset($_GET['tipo'])  ? strtoupper($_GET['tipo']) : 'F';   // F = físico, C = cíclico
-$view   = isset($_GET['view'])  ? strtolower($_GET['view']) : 'det'; // det | dif
-$folio  = isset($_GET['folio']) ? (int)$_GET['folio'] : 0;
-$conteo = isset($_GET['conteo']) ? (int)$_GET['conteo'] : 0;         // 0 = todos
-
+$folio = isset($_GET['folio']) ? (int)$_GET['folio'] : 0;
 if ($folio <= 0) {
-    require_once __DIR__ . '/../bi/_menu_global.php';
-    ?>
-    <div class="container-fluid py-3" style="font-size:10px;">
-        <h5>Detalle de inventario</h5>
-        <div class="alert alert-warning">No se recibió un folio válido.</div>
-        <a href="adm_inventarios.php" class="btn btn-sm btn-secondary mt-2">Regresar</a>
-    </div>
-    <?php
-    require_once __DIR__ . '/../bi/_menu_global_end.php';
-    exit;
+    die('Folio inválido');
 }
 
-// ---------------------------------------------------------
-//  Helpers de datos (detalle + lista de conteos disponibles)
-// ---------------------------------------------------------
-function get_conteos_disponibles($tipo, $folio)
-{
-    if ($tipo === 'F') {
-        $rows = db_all(
-            "SELECT DISTINCT NConteo 
-             FROM t_invpiezas 
-             WHERE ID_Inventario = ?
-             ORDER BY NConteo",
-            [$folio]
-        );
-    } else {
-        $rows = db_all(
-            "SELECT DISTINCT NConteo 
-             FROM t_invpiezasciclico 
-             WHERE ID_PLAN = ?
-             ORDER BY NConteo",
-            [$folio]
-        );
-    }
-    return array_column($rows, 'NConteo');
-}
+/* Datos del encabezado para mostrar título */
+$enc = db_all("
+    SELECT th.ID_Inventario, th.Nombre, th.Fecha, ap.nombre AS almacen, ca.des_almac AS zona
+    FROM th_inventario th
+    LEFT JOIN c_almacenp ap ON ap.clave = th.cve_almacen
+    LEFT JOIN c_almacen  ca ON ca.cve_almac = th.cve_zona
+    WHERE th.ID_Inventario = :fol
+    LIMIT 1
+", [':fol' => $folio]);
+$encabezado = $enc ? $enc[0] : null;
 
-function get_det_rows($tipo, $view, $folio, $conteo)
-{
-    $params = [$folio];
+/* Pivot de conteos 1/2/3 */
+$sql = "
+SELECT
+  d.idy_ubica,
+  d.cve_articulo,
+  d.cve_lote,
 
-    if ($tipo === 'F' && $view === 'det') {
-        // Detalle inventario físico
-        $sql = "
-            SELECT
-                v.ID_Inventario          AS folio_inventario,
-                v.NConteo,
-                v.idy_ubica,
-                v.ntarima,
-                v.cve_articulo,
-                a.des_articulo,
-                v.cve_lote,
-                v.Cantidad               AS cantidad_conteo,
-                v.cve_usuario,
-                v.fecha
-            FROM v_inventario v
-            LEFT JOIN c_articulo a
-                   ON a.cve_articulo = v.cve_articulo
-            WHERE v.ID_Inventario = ?
-        ";
-        if ($conteo > 0) {
-            $sql .= " AND v.NConteo = ?";
-            $params[] = $conteo;
-        }
-        $sql .= "
-            ORDER BY v.NConteo, v.idy_ubica, v.cve_articulo, v.cve_lote
-        ";
-        return db_all($sql, $params);
-    }
+  SUM(CASE WHEN d.NConteo=1 THEN d.Cantidad           ELSE 0 END) AS c1_cant,
+  SUM(CASE WHEN d.NConteo=1 THEN d.ExistenciaTeorica   ELSE 0 END) AS c1_teo,
+  MAX(CASE WHEN d.NConteo=1 THEN u.nombre_completo     END)        AS c1_usuario,
+  SUM(CASE WHEN d.NConteo=1 THEN (d.Cantidad - d.ExistenciaTeorica) ELSE 0 END) AS c1_dif,
 
-    if ($tipo === 'F' && $view === 'dif') {
-        // Diferencias inventario físico
-        $sql = "
-            SELECT
-                p.ID_Inventario                      AS folio_inventario,
-                p.NConteo,
-                p.idy_ubica,
-                p.cve_articulo,
-                a.des_articulo,
-                p.cve_lote,
-                p.Cantidad                           AS cantidad_conteo,
-                p.ExistenciaTeorica,
-                (COALESCE(p.Cantidad,0) -
-                 COALESCE(p.ExistenciaTeorica,0))    AS diferencia_piezas,
-                COALESCE(a.costoPromedio, a.imp_costo, 0) AS costo_unitario,
-                (COALESCE(p.Cantidad,0) -
-                 COALESCE(p.ExistenciaTeorica,0)) *
-                COALESCE(a.costoPromedio, a.imp_costo, 0) AS diferencia_valor,
-                p.ID_Proveedor,
-                p.Cuarentena,
-                p.ClaveEtiqueta,
-                p.cve_usuario,
-                p.fecha
-            FROM t_invpiezas p
-            LEFT JOIN c_articulo a
-                   ON a.cve_articulo = p.cve_articulo
-            WHERE p.ID_Inventario = ?
-              AND ABS(COALESCE(p.Cantidad,0) - COALESCE(p.ExistenciaTeorica,0)) <> 0
-        ";
-        if ($conteo > 0) {
-            $sql .= " AND p.NConteo = ?";
-            $params[] = $conteo;
-        }
-        $sql .= "
-            ORDER BY p.NConteo, p.idy_ubica, p.cve_articulo
-        ";
-        return db_all($sql, $params);
-    }
+  SUM(CASE WHEN d.NConteo=2 THEN d.Cantidad           ELSE 0 END) AS c2_cant,
+  SUM(CASE WHEN d.NConteo=2 THEN d.ExistenciaTeorica   ELSE 0 END) AS c2_teo,
+  MAX(CASE WHEN d.NConteo=2 THEN u.nombre_completo     END)        AS c2_usuario,
+  SUM(CASE WHEN d.NConteo=2 THEN (d.Cantidad - d.ExistenciaTeorica) ELSE 0 END) AS c2_dif,
 
-    if ($tipo === 'C' && $view === 'det') {
-        // Detalle inventario cíclico
-        $sql = "
-            SELECT
-                c.ID_PLAN               AS folio_plan,
-                c.NConteo,
-                c.idy_ubica,
-                c.cve_articulo,
-                a.des_articulo,
-                c.cve_lote,
-                c.Cantidad              AS cantidad_conteo,
-                c.cve_usuario,
-                c.fecha
-            FROM vd_inventariociclico c
-            LEFT JOIN c_articulo a
-                   ON a.cve_articulo = c.cve_articulo
-            WHERE c.ID_PLAN = ?
-        ";
-        if ($conteo > 0) {
-            $sql .= " AND c.NConteo = ?";
-            $params[] = $conteo;
-        }
-        $sql .= "
-            ORDER BY c.NConteo, c.idy_ubica, c.cve_articulo, c.cve_lote
-        ";
-        return db_all($sql, $params);
-    }
+  SUM(CASE WHEN d.NConteo=3 THEN d.Cantidad           ELSE 0 END) AS c3_cant,
+  SUM(CASE WHEN d.NConteo=3 THEN d.ExistenciaTeorica   ELSE 0 END) AS c3_teo,
+  MAX(CASE WHEN d.NConteo=3 THEN u.nombre_completo     END)        AS c3_usuario,
+  SUM(CASE WHEN d.NConteo=3 THEN (d.Cantidad - d.ExistenciaTeorica) ELSE 0 END) AS c3_dif
 
-    if ($tipo === 'C' && $view === 'dif') {
-        // Diferencias inventario cíclico
-        $sql = "
-            SELECT
-                p.ID_PLAN                           AS folio_plan,
-                p.NConteo,
-                p.idy_ubica,
-                p.cve_articulo,
-                a.des_articulo,
-                p.cve_lote,
-                p.Cantidad                          AS cantidad_conteo,
-                p.ExistenciaTeorica,
-                (COALESCE(p.Cantidad,0) -
-                 COALESCE(p.ExistenciaTeorica,0))   AS diferencia_piezas,
-                COALESCE(a.costoPromedio, a.imp_costo, 0) AS costo_unitario,
-                (COALESCE(p.Cantidad,0) -
-                 COALESCE(p.ExistenciaTeorica,0)) *
-                COALESCE(a.costoPromedio, a.imp_costo, 0) AS diferencia_valor,
-                p.Id_Proveedor,
-                p.Cuarentena,
-                p.ClaveEtiqueta,
-                p.cve_usuario,
-                p.fecha
-            FROM t_invpiezasciclico p
-            LEFT JOIN c_articulo a
-                   ON a.cve_articulo = p.cve_articulo
-            WHERE p.ID_PLAN = ?
-              AND ABS(COALESCE(p.Cantidad,0) - COALESCE(p.ExistenciaTeorica,0)) <> 0
-        ";
-        if ($conteo > 0) {
-            $sql .= " AND p.NConteo = ?";
-            $params[] = $conteo;
-        }
-        $sql .= "
-            ORDER BY p.NConteo, p.idy_ubica, p.cve_articulo
-        ";
-        return db_all($sql, $params);
-    }
+FROM t_invpiezas d
+LEFT JOIN c_usuario u ON u.cve_usuario = d.cve_usuario
+WHERE d.ID_Inventario = :fol
+GROUP BY d.idy_ubica, d.cve_articulo, d.cve_lote
+ORDER BY d.idy_ubica, d.cve_articulo, d.cve_lote
+LIMIT 5000
+";
 
-    return [];
-}
+$rows = db_all($sql, [':fol' => $folio]);
 
-// ---------------------------------------------------------
-//  Exportación CSV (se hace ANTES de imprimir HTML)
-// ---------------------------------------------------------
-if (isset($_GET['export']) && $_GET['export'] === 'csv') {
-    $rows = get_det_rows($tipo, $view, $folio, $conteo);
-
-    $nombreTipo = ($tipo === 'F') ? 'fisico' : 'ciclico';
-    $nombreView = ($view === 'dif') ? 'dif' : 'det';
-    $nombreArchivo = "inv_{$nombreTipo}_{$nombreView}_{$folio}";
-    if ($conteo > 0) {
-        $nombreArchivo .= "_c{$conteo}";
-    }
-    $nombreArchivo .= ".csv";
-
-    header('Content-Type: text/csv; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="' . $nombreArchivo . '"');
-
-    $out = fopen('php://output', 'w');
-
-    if ($tipo === 'F' && $view === 'det') {
-        fputcsv($out, [
-            'Folio','Conteo','Ubicacion','Tarima',
-            'Articulo','Descripcion','Lote',
-            'Cantidad','Usuario','Fecha'
-        ]);
-        foreach ($rows as $r) {
-            fputcsv($out, [
-                $r['folio_inventario'],
-                $r['NConteo'],
-                $r['idy_ubica'],
-                $r['ntarima'],
-                $r['cve_articulo'],
-                $r['des_articulo'],
-                $r['cve_lote'],
-                $r['cantidad_conteo'],
-                $r['cve_usuario'],
-                $r['fecha'],
-            ]);
-        }
-    } elseif ($tipo === 'F' && $view === 'dif') {
-        fputcsv($out, [
-            'Folio','Conteo','Ubicacion','Articulo','Descripcion',
-            'Lote','Cantidad','Teorico','Dif_Pzs','Costo','Dif_Valor',
-            'Proveedor','Cuarentena','Etiqueta','Usuario','Fecha'
-        ]);
-        foreach ($rows as $r) {
-            fputcsv($out, [
-                $r['folio_inventario'],
-                $r['NConteo'],
-                $r['idy_ubica'],
-                $r['cve_articulo'],
-                $r['des_articulo'],
-                $r['cve_lote'],
-                $r['cantidad_conteo'],
-                $r['ExistenciaTeorica'],
-                $r['diferencia_piezas'],
-                $r['costo_unitario'],
-                $r['diferencia_valor'],
-                $r['ID_Proveedor'],
-                $r['Cuarentena'],
-                $r['ClaveEtiqueta'],
-                $r['cve_usuario'],
-                $r['fecha'],
-            ]);
-        }
-    } elseif ($tipo === 'C' && $view === 'det') {
-        fputcsv($out, [
-            'Plan','Conteo','Ubicacion','Articulo','Descripcion',
-            'Lote','Cantidad','Usuario','Fecha'
-        ]);
-        foreach ($rows as $r) {
-            fputcsv($out, [
-                $r['folio_plan'],
-                $r['NConteo'],
-                $r['idy_ubica'],
-                $r['cve_articulo'],
-                $r['des_articulo'],
-                $r['cve_lote'],
-                $r['cantidad_conteo'],
-                $r['cve_usuario'],
-                $r['fecha'],
-            ]);
-        }
-    } else { // Cíclico diferencias
-        fputcsv($out, [
-            'Plan','Conteo','Ubicacion','Articulo','Descripcion',
-            'Lote','Cantidad','Teorico','Dif_Pzs','Costo','Dif_Valor',
-            'Proveedor','Cuarentena','Etiqueta','Usuario','Fecha'
-        ]);
-        foreach ($rows as $r) {
-            fputcsv($out, [
-                $r['folio_plan'],
-                $r['NConteo'],
-                $r['idy_ubica'],
-                $r['cve_articulo'],
-                $r['des_articulo'],
-                $r['cve_lote'],
-                $r['cantidad_conteo'],
-                $r['ExistenciaTeorica'],
-                $r['diferencia_piezas'],
-                $r['costo_unitario'],
-                $r['diferencia_valor'],
-                $r['Id_Proveedor'],
-                $r['Cuarentena'],
-                $r['ClaveEtiqueta'],
-                $r['cve_usuario'],
-                $r['fecha'],
-            ]);
-        }
-    }
-
-    fclose($out);
-    exit;
-}
-
-// ---------------------------------------------------------
-//  Vista normal (HTML)
-// ---------------------------------------------------------
-$conteosDisponibles = get_conteos_disponibles($tipo, $folio);
-$rows               = get_det_rows($tipo, $view, $folio, $conteo);
-
-$tituloBase = ($tipo === 'F') ? 'Inventario físico' : 'Inventario cíclico';
-if ($view === 'dif') {
-    $titulo = "Diferencias {$tituloBase} {$folio}";
-} else {
-    $titulo = "Detalle {$tituloBase} {$folio}";
+/* KPIs simples para cards */
+$lineas = count($rows);
+$pzas_cont_tot = 0;
+$diferencia_tot = 0;
+foreach ($rows as $r) {
+    $pzas_cont_tot += (float)$r['c3_cant'] ?: ((float)$r['c2_cant'] ?: (float)$r['c1_cant']);
+    $diferencia_tot += (float)$r['c3_dif'] ?: ((float)$r['c2_dif'] ?: (float)$r['c1_dif']);
 }
 
 require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
 <div class="container-fluid py-3" style="font-size:10px;">
-    <div class="row mb-2">
-        <div class="col">
-            <h5 class="mb-0"><?= htmlspecialchars($titulo) ?></h5>
-            <small class="text-muted">
-                <a href="adm_inventarios.php" class="text-decoration-none">« Regresar</a>
-            </small>
-        </div>
-        <div class="col-auto text-end">
-            <?php
-            // URL base para export (conservando filtros)
-            $urlExport = 'adm_inventarios_det.php?tipo=' . urlencode($tipo)
-                       . '&view=' . urlencode($view)
-                       . '&folio=' . urlencode($folio)
-                       . '&conteo=' . urlencode($conteo)
-                       . '&export=csv';
-            ?>
-            <a href="<?= $urlExport ?>" class="btn btn-sm btn-success">
-                Exportar CSV
-            </a>
-        </div>
+  <div class="row mb-2">
+    <div class="col">
+      <h5 class="mb-0">
+        Detalle Inventario Físico <?= htmlspecialchars($folio) ?>
+        <?php if ($encabezado): ?>
+          – <?= htmlspecialchars($encabezado['Nombre']) ?> (<?= htmlspecialchars($encabezado['almacen']) ?> / <?= htmlspecialchars($encabezado['zona']) ?>)
+        <?php endif; ?>
+      </h5>
+      <small class="text-muted">Vista pivotada por Conteo 1 / 2 / 3.</small>
     </div>
+  </div>
 
-    <!-- Filtros locales de la vista -->
-    <form method="get" class="card mb-2 shadow-sm border-0">
-        <div class="card-body p-2">
-            <input type="hidden" name="tipo" value="<?= htmlspecialchars($tipo) ?>">
-            <input type="hidden" name="view" value="<?= htmlspecialchars($view) ?>">
-            <input type="hidden" name="folio" value="<?= htmlspecialchars($folio) ?>">
-
-            <div class="row g-2 align-items-end">
-                <div class="col-6 col-md-2">
-                    <label class="form-label mb-1">Folio</label>
-                    <input type="text" class="form-control form-control-sm"
-                           value="<?= htmlspecialchars($folio) ?>" disabled>
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label mb-1">Conteo</label>
-                    <select name="conteo" class="form-select form-select-sm">
-                        <option value="0">[Todos]</option>
-                        <?php foreach ($conteosDisponibles as $c): ?>
-                            <option value="<?= (int)$c ?>" <?= ($conteo == $c ? 'selected' : '') ?>>
-                                Conteo <?= (int)$c ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-6 col-md-2">
-                    <button type="submit" class="btn btn-sm btn-primary mt-3">
-                        Aplicar filtros
-                    </button>
-                </div>
-            </div>
-        </div>
-    </form>
-
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-2">
-            <div class="table-responsive">
-                <table id="tblDetInv" class="table table-sm table-striped table-bordered w-100" style="font-size:10px;">
-                    <thead class="table-light">
-                    <?php if ($tipo === 'F' && $view === 'det'): ?>
-                        <tr>
-                            <th>Folio</th>
-                            <th>Conteo</th>
-                            <th>Ubicación</th>
-                            <th>Tarima</th>
-                            <th>Artículo</th>
-                            <th>Descripción</th>
-                            <th>Lote</th>
-                            <th>Cant. Conteo</th>
-                            <th>Usuario</th>
-                            <th>Fecha</th>
-                        </tr>
-                    <?php elseif ($tipo === 'F' && $view === 'dif'): ?>
-                        <tr>
-                            <th>Folio</th>
-                            <th>Conteo</th>
-                            <th>Ubicación</th>
-                            <th>Artículo</th>
-                            <th>Descripción</th>
-                            <th>Lote</th>
-                            <th>Cant. Conteo</th>
-                            <th>Teórico</th>
-                            <th>Dif. Pzs</th>
-                            <th>Costo</th>
-                            <th>Dif. Valor</th>
-                            <th>Proveedor</th>
-                            <th>Cuarentena</th>
-                            <th>Etiqueta</th>
-                            <th>Usuario</th>
-                            <th>Fecha</th>
-                        </tr>
-                    <?php elseif ($tipo === 'C' && $view === 'det'): ?>
-                        <tr>
-                            <th>Plan</th>
-                            <th>Conteo</th>
-                            <th>Ubicación</th>
-                            <th>Artículo</th>
-                            <th>Descripción</th>
-                            <th>Lote</th>
-                            <th>Cant. Conteo</th>
-                            <th>Usuario</th>
-                            <th>Fecha</th>
-                        </tr>
-                    <?php else: ?>
-                        <tr>
-                            <th>Plan</th>
-                            <th>Conteo</th>
-                            <th>Ubicación</th>
-                            <th>Artículo</th>
-                            <th>Descripción</th>
-                            <th>Lote</th>
-                            <th>Cant. Conteo</th>
-                            <th>Teórico</th>
-                            <th>Dif. Pzs</th>
-                            <th>Costo</th>
-                            <th>Dif. Valor</th>
-                            <th>Proveedor</th>
-                            <th>Cuarentena</th>
-                            <th>Etiqueta</th>
-                            <th>Usuario</th>
-                            <th>Fecha</th>
-                        </tr>
-                    <?php endif; ?>
-                    </thead>
-                    <tbody>
-                    <?php if (empty($rows)): ?>
-                        <tr><td colspan="16" class="text-center">Sin datos para los filtros seleccionados</td></tr>
-                    <?php else: ?>
-                        <?php foreach ($rows as $r): ?>
-                            <?php if ($tipo === 'F' && $view === 'det'): ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($r['folio_inventario']) ?></td>
-                                    <td><?= htmlspecialchars($r['NConteo']) ?></td>
-                                    <td><?= htmlspecialchars($r['idy_ubica']) ?></td>
-                                    <td><?= htmlspecialchars($r['ntarima']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_articulo']) ?></td>
-                                    <td><?= htmlspecialchars($r['des_articulo']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_lote']) ?></td>
-                                    <td class="text-end"><?= number_format($r['cantidad_conteo'], 2) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_usuario']) ?></td>
-                                    <td><?= htmlspecialchars($r['fecha']) ?></td>
-                                </tr>
-                            <?php elseif ($tipo === 'F' && $view === 'dif'): ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($r['folio_inventario']) ?></td>
-                                    <td><?= htmlspecialchars($r['NConteo']) ?></td>
-                                    <td><?= htmlspecialchars($r['idy_ubica']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_articulo']) ?></td>
-                                    <td><?= htmlspecialchars($r['des_articulo']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_lote']) ?></td>
-                                    <td class="text-end"><?= number_format($r['cantidad_conteo'], 2) ?></td>
-                                    <td class="text-end"><?= number_format($r['ExistenciaTeorica'], 2) ?></td>
-                                    <td class="text-end"><?= number_format($r['diferencia_piezas'], 2) ?></td>
-                                    <td class="text-end"><?= number_format($r['costo_unitario'], 4) ?></td>
-                                    <td class="text-end"><?= number_format($r['diferencia_valor'], 2) ?></td>
-                                    <td><?= htmlspecialchars($r['ID_Proveedor']) ?></td>
-                                    <td><?= (int)$r['Cuarentena'] === 1 ? 'S' : 'N' ?></td>
-                                    <td><?= htmlspecialchars($r['ClaveEtiqueta']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_usuario']) ?></td>
-                                    <td><?= htmlspecialchars($r['fecha']) ?></td>
-                                </tr>
-                            <?php elseif ($tipo === 'C' && $view === 'det'): ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($r['folio_plan']) ?></td>
-                                    <td><?= htmlspecialchars($r['NConteo']) ?></td>
-                                    <td><?= htmlspecialchars($r['idy_ubica']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_articulo']) ?></td>
-                                    <td><?= htmlspecialchars($r['des_articulo']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_lote']) ?></td>
-                                    <td class="text-end"><?= number_format($r['cantidad_conteo'], 2) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_usuario']) ?></td>
-                                    <td><?= htmlspecialchars($r['fecha']) ?></td>
-                                </tr>
-                            <?php else: ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($r['folio_plan']) ?></td>
-                                    <td><?= htmlspecialchars($r['NConteo']) ?></td>
-                                    <td><?= htmlspecialchars($r['idy_ubica']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_articulo']) ?></td>
-                                    <td><?= htmlspecialchars($r['des_articulo']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_lote']) ?></td>
-                                    <td class="text-end"><?= number_format($r['cantidad_conteo'], 2) ?></td>
-                                    <td class="text-end"><?= number_format($r['ExistenciaTeorica'], 2) ?></td>
-                                    <td class="text-end"><?= number_format($r['diferencia_piezas'], 2) ?></td>
-                                    <td class="text-end"><?= number_format($r['costo_unitario'], 4) ?></td>
-                                    <td class="text-end"><?= number_format($r['diferencia_valor'], 2) ?></td>
-                                    <td><?= htmlspecialchars($r['Id_Proveedor']) ?></td>
-                                    <td><?= (int)$r['Cuarentena'] === 1 ? 'S' : 'N' ?></td>
-                                    <td><?= htmlspecialchars($r['ClaveEtiqueta']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_usuario']) ?></td>
-                                    <td><?= htmlspecialchars($r['fecha']) ?></td>
-                                </tr>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+  <!-- Cards -->
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm border-0"><div class="card-body p-2">
+        <div class="text-muted">Líneas (Ubic-Articulo-Lote)</div>
+        <div class="h6 m-0"><?= number_format($lineas) ?></div>
+      </div></div>
     </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm border-0"><div class="card-body p-2">
+        <div class="text-muted">Pzas Contadas (último conteo)</div>
+        <div class="h6 m-0"><?= number_format($pzas_cont_tot) ?></div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm border-0"><div class="card-body p-2">
+        <div class="text-muted">Dif. total (último conteo)</div>
+        <div class="h6 m-0"><?= number_format($diferencia_tot) ?></div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-2">
+      <div class="table-responsive">
+        <table id="tblDet" class="table table-sm table-striped table-bordered w-100">
+          <thead class="table-light">
+            <tr>
+              <th>Ubicación</th><th>Artículo</th><th>Lote</th>
+              <th>C1 Cant</th><th>C1 Teo</th><th>C1 Dif</th><th>C1 Usuario</th>
+              <th>C2 Cant</th><th>C2 Teo</th><th>C2 Dif</th><th>C2 Usuario</th>
+              <th>C3 Cant</th><th>C3 Teo</th><th>C3 Dif</th><th>C3 Usuario</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php foreach ($rows as $r): ?>
+            <tr>
+              <td><?= htmlspecialchars($r['idy_ubica']) ?></td>
+              <td><?= htmlspecialchars($r['cve_articulo']) ?></td>
+              <td><?= htmlspecialchars($r['cve_lote']) ?></td>
+
+              <td class="text-end"><?= number_format((float)$r['c1_cant']) ?></td>
+              <td class="text-end"><?= number_format((float)$r['c1_teo']) ?></td>
+              <td class="text-end"><?= number_format((float)$r['c1_dif']) ?></td>
+              <td><?= htmlspecialchars($r['c1_usuario']) ?></td>
+
+              <td class="text-end"><?= number_format((float)$r['c2_cant']) ?></td>
+              <td class="text-end"><?= number_format((float)$r['c2_teo']) ?></td>
+              <td class="text-end"><?= number_format((float)$r['c2_dif']) ?></td>
+              <td><?= htmlspecialchars($r['c2_usuario']) ?></td>
+
+              <td class="text-end"><?= number_format((float)$r['c3_cant']) ?></td>
+              <td class="text-end"><?= number_format((float)$r['c3_teo']) ?></td>
+              <td class="text-end"><?= number_format((float)$r['c3_dif']) ?></td>
+              <td><?= htmlspecialchars($r['c3_usuario']) ?></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
-
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (window.jQuery && $.fn.DataTable) {
-        $('#tblDetInv').DataTable({
-            pageLength: 50,
-            scrollX: true,
-            lengthChange: false,
-            ordering: true,
-            language: {
-                url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json'
-            }
-        });
-    }
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.jQuery && $.fn.DataTable) {
+    $('#tblDet').DataTable({
+      pageLength: 25,
+      lengthChange: false,
+      ordering: true,
+      scrollX: true,
+      language: { url:'//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json' }
+    });
+  }
 });
 </script>

@@ -1,108 +1,153 @@
 <?php
+// /public/reportes/existencias_por_ubicacion.php
 require_once __DIR__ . '/../../app/db.php';
+require_once __DIR__ . '/../bi/_menu_global.php'; // menú corporativo
+?>
+<div class="container-fluid p-2">
+  <?php include __DIR__ . '/../partials/filtros_assistpro.php'; ?>
 
-$almacen = $_GET['almacen'] ?? '';
-$params = [];
+  <!-- KPIs -->
+  <div class="row g-2 mb-2" style="font-size:10px;">
+    <div class="col-12 col-md-3">
+      <div class="card" style="border-left:4px solid #0F5AAD;">
+        <div class="card-body p-2">
+          <div class="text-muted">Filas (coincidencias)</div>
+          <div id="kpi_total_filas" style="font-size:18px;font-weight:700;">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-3">
+      <div class="card" style="border-left:4px solid #00A3E0;">
+        <div class="card-body p-2">
+          <div class="text-muted">LP únicos</div>
+          <div id="kpi_lp_unicos" style="font-size:18px;font-weight:700;">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-3">
+      <div class="card" style="border-left:4px solid #099;">
+        <div class="card-body p-2">
+          <div class="text-muted">Existencia total</div>
+          <div id="kpi_total_exist" style="font-size:18px;font-weight:700;">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-$hasView = db_val("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'stg_vs_existencia'") > 0;
+  <!-- Grilla -->
+  <div class="card">
+    <div class="card-body p-2">
+      <div class="table-responsive" style="font-size:10px; max-height:60vh; overflow:auto;">
+        <table class="table table-sm table-striped table-hover">
+          <thead class="table-light" style="position:sticky; top:0; z-index:1;">
+            <tr>
+              <th>#</th>
+              <th>Empresa</th>
+              <th>Almacén</th>
+              <th>Zona</th>
+              <th>BL (codigocsd)</th>
+              <th>Tipo BL</th>
+              <th>Status</th>
+              <th>Pasillo</th>
+              <th>Rack</th>
+              <th>Nivel</th>
+              <th>SKU</th>
+              <th>Producto</th>
+              <th>UM</th>
+              <th>LP</th>
+              <th>Tipo LP</th>
+              <th>Lote</th>
+              <th>Serie</th>
+              <th>Existencia</th>
+              <th>Actualizado</th>
+            </tr>
+          </thead>
+          <tbody id="tb_rows"></tbody>
+        </table>
+      </div>
+      <div class="d-flex justify-content-between align-items-center mt-2" style="font-size:10px;">
+        <div><small class="text-muted">* Mostrando 25 registros por defecto (ajustable).</small></div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-light btn-sm" id="btn_prev">Anterior</button>
+          <button class="btn btn-light btn-sm" id="btn_next">Siguiente</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-if ($hasView) {
-  $sql = "
-  SELECT
-    e.empresa_id,
-    u.cve_almac,
-    al.nombre   AS des_almac,
-    u.CodigoCSD AS bl_code,
-    e.cve_articulo,
-    a.des_articulo,
-    e.cve_lote,
-    CAST(NULLIF(e.Existencia,'') AS DECIMAL(18,4)) AS cantidad
-  FROM stg_vs_existencia e
-  LEFT JOIN stg_c_ubicacion u
-    ON u.empresa_id=e.empresa_id AND u.idy_ubica=e.idy_ubica
-  LEFT JOIN stg_c_almacenp al
-    ON al.empresa_id=e.empresa_id AND al.clave=u.cve_almac
-  LEFT JOIN stg_c_articulo a
-    ON a.empresa_id=e.empresa_id AND a.cve_articulo=e.cve_articulo
-  WHERE 1=1
-  ";
-  if ($almacen!==''){ $sql.=" AND u.cve_almac=:almacen"; $params['almacen']=$almacen; }
-  $sql.=" ORDER BY u.cve_almac, bl_code, e.cve_articulo, e.cve_lote";
-} else {
-  $sql = "
-  WITH ult AS (
-    SELECT
-      p.empresa_id,
-      p.idy_ubica,
-      u.CodigoCSD AS bl_code,
-      u.cve_almac,
-      p.cve_articulo,
-      p.cve_lote,
-      CAST(NULLIF(p.Cantidad,'') AS DECIMAL(18,4)) AS cantidad,
-      COALESCE(
-        STR_TO_DATE(p.fecha,'%Y-%m-%d %H:%i:%s'),
-        STR_TO_DATE(p.fecha,'%Y-%m-%d'),
-        STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i:%s'),
-        STR_TO_DATE(p.fecha,'%d/%m/%Y')
-      ) AS fecha_dt,
-      ROW_NUMBER() OVER (PARTITION BY p.empresa_id,p.idy_ubica,p.cve_articulo,p.cve_lote ORDER BY
-        COALESCE(
-          STR_TO_DATE(p.fecha,'%Y-%m-%d %H:%i:%s'),
-          STR_TO_DATE(p.fecha,'%Y-%m-%d'),
-          STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i:%s'),
-          STR_TO_DATE(p.fecha,'%d/%m/%Y')
-        ) DESC
-      ) AS rn
-    FROM stg_t_invpiezas p
-    LEFT JOIN stg_c_ubicacion u
-      ON u.empresa_id=p.empresa_id AND u.idy_ubica=p.idy_ubica
-  )
-  SELECT
-    x.empresa_id,
-    x.cve_almac,
-    al.nombre   AS des_almac,
-    x.bl_code,
-    x.cve_articulo,
-    a.des_articulo,
-    x.cve_lote,
-    SUM(x.cantidad) AS cantidad
-  FROM ult x
-  LEFT JOIN stg_c_articulo a
-    ON a.empresa_id=x.empresa_id AND a.cve_articulo=x.cve_articulo
-  LEFT JOIN stg_c_almacenp al
-    ON al.empresa_id=x.empresa_id AND al.clave=x.cve_almac
-  WHERE x.rn=1
-  ";
-  if ($almacen!==''){ $sql.=" AND x.cve_almac=:almacen"; $params['almacen']=$almacen; }
-  $sql.=" GROUP BY x.empresa_id,x.cve_almac,al.nombre,x.bl_code,x.cve_articulo,a.des_articulo,x.cve_lote
-          ORDER BY x.cve_almac,x.bl_code,x.cve_articulo,x.cve_lote";
+<script>
+const API_REP = '/public/api/reporte_existencias_ubic.php';
+let limit = 25, offset = 0, lastPayload = {};
+
+function pintaKPIs(k){
+  document.getElementById('kpi_total_filas').textContent = (k?.total_filas ?? 0);
+  document.getElementById('kpi_lp_unicos').textContent   = (k?.lp_unicos ?? 0);
+  document.getElementById('kpi_total_exist').textContent  = (k?.total_existencia ?? 0);
+}
+function pintaTabla(rows){
+  const tb = document.getElementById('tb_rows');
+  tb.innerHTML = '';
+  rows.forEach((r, i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${offset + i + 1}</td>
+      <td>${r.empresa ?? ''}</td>
+      <td>${r.almacen ?? ''}</td>
+      <td>${r.zona ?? ''}</td>
+      <td>${r.bl ?? ''}</td>
+      <td>${r.tipo_bl ?? ''}</td>
+      <td>${r.status_bl ?? ''}</td>
+      <td>${r.pasillo ?? ''}</td>
+      <td>${r.rack ?? ''}</td>
+      <td>${r.nivel ?? ''}</td>
+      <td>${r.sku ?? ''}</td>
+      <td>${r.producto ?? ''}</td>
+      <td>${r.um ?? ''}</td>
+      <td>${r.lp ?? ''}</td>
+      <td>${r.lp_tipo ?? ''}</td>
+      <td>${r.lote ?? ''}</td>
+      <td>${r.serie ?? ''}</td>
+      <td class="text-end">${(r.existencia ?? 0)}</td>
+      <td>${(r.updated_at ?? '').toString().slice(0,19).replace('T',' ')}</td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+async function consulta(payload){
+  const res = await fetch(API_REP, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({...payload, limit, offset})
+  });
+  const json = await res.json();
+  if(!json.ok){ alert('Error: '+json.error); return; }
+  pintaKPIs(json.kpi);
+  pintaTabla(json.rows);
+  // Habilita/deshabilita paginación
+  document.getElementById('btn_prev').disabled = (offset === 0);
+  const masPosibles = (offset + limit) < (json.kpi?.total_filas ?? 0);
+  document.getElementById('btn_next').disabled = !masPosibles;
 }
 
-$rows = db_all($sql,$params);
-?>
-<!doctype html><html lang="es"><head>
-<meta charset="utf-8"><title>Existencias por Ubicación</title>
-<style>body{font-family:system-ui;margin:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;font-size:12px}th{background:#f5f5f5}</style>
-</head><body>
-<h2>Existencias por Ubicación</h2>
-<form method="get">
-  Almacén: <input name="almacen" value="<?=htmlspecialchars($almacen)?>">
-  <button>Filtrar</button>
-</form>
-<table><thead><tr>
-  <th>Empresa</th><th>Almacén</th><th>Ubicación (BL)</th><th>Artículo</th><th>Descripción</th><th>Lote</th><th>Cantidad</th>
-</tr></thead><tbody>
-<?php foreach($rows as $r): ?>
-<tr>
-  <td><?=htmlspecialchars($r['empresa_id'])?></td>
-  <td><?=htmlspecialchars(($r['cve_almac']??'').' '.($r['des_almac']??''))?></td>
-  <td><?=htmlspecialchars($r['bl_code'])?></td>
-  <td><?=htmlspecialchars($r['cve_articulo'])?></td>
-  <td><?=htmlspecialchars($r['des_articulo'])?></td>
-  <td><?=htmlspecialchars($r['cve_lote'])?></td>
-  <td style="text-align:right"><?=number_format((float)($r['cantidad']??0),4)?></td>
-</tr>
-<?php endforeach; ?>
-</tbody></table>
-<p>Total filas: <?=count($rows)?></p>
-</body></html>
+document.addEventListener('assistpro:filtros:aplicar', (e)=>{
+  offset = 0; // reset página
+  lastPayload = e.detail || {};
+  consulta(lastPayload);
+});
+
+document.getElementById('btn_prev').addEventListener('click', ()=>{
+  if(offset===0) return;
+  offset = Math.max(0, offset - limit);
+  consulta(lastPayload);
+});
+document.getElementById('btn_next').addEventListener('click', ()=>{
+  offset += limit;
+  consulta(lastPayload);
+});
+
+// Carga inicial vacía (o podrías forzar una empresa por defecto)
+consulta({});
+</script>
+
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
