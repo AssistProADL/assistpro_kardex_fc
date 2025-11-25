@@ -990,8 +990,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
 
 <script>
+console.log('=== INICIO SCRIPT ORDEN_COMPRA_EDIT ===');
 const API_FILTROS_URL = '../api/filtros_assistpro.php?action=init';
 const productosApi = <?php echo json_encode($productos, JSON_UNESCAPED_UNICODE); ?>;
+console.log('productosApi cargados:', productosApi ? productosApi.length : 0);
 
 // Variables de edición inyectadas desde PHP
 const editIdAduana  = <?php echo $idAduanaEdit; ?>;
@@ -999,10 +1001,16 @@ const editAlmacen   = "<?php echo htmlspecialchars($almacenVal, ENT_QUOTES, 'UTF
 const editProveedor = "<?php echo htmlspecialchars($proveedorVal, ENT_QUOTES, 'UTF-8'); ?>";
 const editEmpresa   = "<?php echo htmlspecialchars($empresaVal, ENT_QUOTES, 'UTF-8'); ?>"; // Probablemente vacío si no se guarda
 
+console.log('editIdAduana:', editIdAduana);
+console.log('editAlmacen:', editAlmacen);
+console.log('editProveedor:', editProveedor);
+
 var detalleOC = <?php echo $detalleJson; ?>;
-console.log(detalleOC);
+console.log('detalleOC:', detalleOC);
+console.log('detalleOC length:', detalleOC ? detalleOC.length : 0);
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('=== DOMContentLoaded EJECUTADO ===');
     const hoy = new Date();
     const inpFechaOC = document.getElementById('fecha_oc');
     if (inpFechaOC && !inpFechaOC.value) {
@@ -1012,9 +1020,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const selMoneda = document.getElementById('moneda');
     // if (selMoneda) selMoneda.value = 'MXN'; // Quitamos esto para no sobrescribir valor PHP
 
+    console.log('Llamando a cargarFiltrosDesdeApi()...');
     cargarFiltrosDesdeApi();
+    console.log('Llamando a inicializarEventos()...');
     inicializarEventos();
+    console.log('Llamando a renderDetalle()...');
     renderDetalle(); // Renderizar detalle inicial si venía de PHP
+    console.log('=== DOMContentLoaded COMPLETADO ===');
 });
 
 function inicializarEventos() {
@@ -1281,12 +1293,20 @@ function eliminarLineaDetalle(id) {
 }
 
 function renderDetalle() {
+    console.log('=== INICIO renderDetalle() ===');
+    console.log('detalleOC actual:', detalleOC);
     const tbody = document.getElementById('tbodyDetalle');
-    if (!tbody) return;
+    console.log('tbody encontrado:', tbody);
+    if (!tbody) {
+        console.error('ERROR: No se encontró el elemento tbodyDetalle');
+        return;
+    }
 
     tbody.innerHTML = '';
+    console.log('tbody limpiado');
 
     if (!detalleOC.length) {
+        console.log('No hay productos en detalleOC');
         const tr = document.createElement('tr');
         const td = document.createElement('td');
         td.colSpan = 9;
@@ -1295,9 +1315,11 @@ function renderDetalle() {
         tr.appendChild(td);
         tbody.appendChild(tr);
         actualizarTotales();
+        console.log('=== FIN renderDetalle() - Sin productos ===');
         return;
     }
 
+    console.log('Renderizando', detalleOC.length, 'productos...');
     detalleOC.forEach(r => {
         const tr = document.createElement('tr');
 
@@ -1350,7 +1372,9 @@ function renderDetalle() {
         tbody.appendChild(tr);
     });
 
+    console.log('Productos renderizados. Llamando a actualizarTotales()...');
     actualizarTotales();
+    console.log('=== FIN renderDetalle() - Completado ===');
 }
 
 function actualizarTotales() {
