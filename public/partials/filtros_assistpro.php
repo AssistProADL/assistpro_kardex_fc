@@ -1,529 +1,641 @@
 <?php
 // public/partials/filtros_assistpro.php
+// Filtros generales — AssistPro (constructor de templates + filtros funcionales)
 
-// La receta por defecto llega del template
-if (!isset($vista_id_default)) {
-    $vista_id_default = '';
+declare(strict_types=1);
+
+require_once __DIR__ . '/../../app/db.php';
+require_once __DIR__ . '/../bi/_menu_global.php';
+
+
+$pdo = db_pdo();
+
+// =========================
+// 1. Catálogos base
+// =========================
+
+// EMPRESAS (c_compania)
+$empresas = [];
+try {
+    $empresas = db_all("
+        SELECT cve_cia, des_cia
+        FROM c_compania
+        WHERE COALESCE(Activo,1) = 1
+        ORDER BY des_cia
+    ");
+} catch (Throwable $e) {
+    $empresas = [];
 }
+
+// ALMACENES (macro-almacén: c_almacenp)
+$almacenes = [];
+try {
+    $almacenes = db_all("
+        SELECT id, clave, nombre
+        FROM c_almacenp
+        WHERE COALESCE(Activo,'S') <> 'N'
+        ORDER BY clave, nombre
+    ");
+} catch (Throwable $e) {
+    $almacenes = [];
+}
+
+// =========================
+// 2. Valores seleccionados
+// =========================
+
+$empresaSel    = $_GET['empresa']    ?? '';
+$almacenSel    = $_GET['almacen']    ?? '';
+$zonaSel       = $_GET['zona']       ?? '';
+$blSel         = $_GET['bl']         ?? '';
+$rutaSel       = $_GET['ruta']       ?? '';
+$clienteSel    = $_GET['cliente']    ?? '';
+$lpSel         = $_GET['lp']         ?? '';
+$prodSel       = $_GET['producto']   ?? '';
+$loteSel       = $_GET['lote']       ?? '';
+$proveedorSel  = $_GET['proveedor']  ?? '';
+$vendedorSel   = $_GET['vendedor']   ?? '';
+$usuarioSel    = $_GET['usuario']    ?? '';
+$zonaRecepSel  = $_GET['zona_recep'] ?? '';
+$zonaQASel     = $_GET['zona_qa']    ?? '';
+$zonaEmbSel    = $_GET['zona_emb']   ?? '';
+$proyectoSel   = $_GET['proyecto']   ?? '';
+
+// checks de “usar en template”
+$useEmpresa    = isset($_GET['use_empresa'])    ? $_GET['use_empresa']    === '1' : true;
+$useAlmacen    = isset($_GET['use_almacen'])    ? $_GET['use_almacen']    === '1' : true;
+$useZona       = isset($_GET['use_zona'])       ? $_GET['use_zona']       === '1' : true;
+$useBL         = isset($_GET['use_bl'])         ? $_GET['use_bl']         === '1' : true;
+$useLP         = isset($_GET['use_lp'])         ? $_GET['use_lp']         === '1' : true;
+$useProd       = isset($_GET['use_producto'])   ? $_GET['use_producto']   === '1' : true;
+$useLote       = isset($_GET['use_lote'])       ? $_GET['use_lote']       === '1' : true;
+$useRuta       = isset($_GET['use_ruta'])       ? $_GET['use_ruta']       === '1' : true;
+$useCliente    = isset($_GET['use_cliente'])    ? $_GET['use_cliente']    === '1' : true;
+$useProv       = isset($_GET['use_proveedor'])  ? $_GET['use_proveedor']  === '1' : true;
+$useVend       = isset($_GET['use_vendedor'])   ? $_GET['use_vendedor']   === '1' : true;
+$useUsuario    = isset($_GET['use_usuario'])    ? $_GET['use_usuario']    === '1' : true;
+$useZonaRecep  = isset($_GET['use_zona_recep']) ? $_GET['use_zona_recep'] === '1' : true;
+$useZonaQA     = isset($_GET['use_zona_qa'])    ? $_GET['use_zona_qa']    === '1' : true;
+$useZonaEmb    = isset($_GET['use_zona_emb'])   ? $_GET['use_zona_emb']   === '1' : true;
+$useProyecto   = isset($_GET['use_proyecto'])   ? $_GET['use_proyecto']   === '1' : true;
+
+// =========================
+// 3. Catálogos dependientes
+// =========================
+
+// ZONAS DE ALMACENAJE (c_almacen) – dependen de c_almacenp.id
+$zonas = [];
+if ($almacenSel !== '') {
+    try {
+        $zonas = db_all("
+            SELECT cve_almac, des_almac
+            FROM c_almacen
+            WHERE COALESCE(Activo,'S') <> 'N'
+              AND cve_almacenp = ?
+            ORDER BY des_almac
+        ", [$almacenSel]);
+    } catch (Throwable $e) {
+        $zonas = [];
+    }
+}
+
+// BL (Bin Location) – c_ubicacion.CodigoCSD por zona
+$bls = [];
+if ($zonaSel !== '') {
+    try {
+        $bls = db_all("
+            SELECT DISTINCT CodigoCSD
+            FROM c_ubicacion
+            WHERE COALESCE(Activo,'S') <> 'N'
+              AND cve_almac = ?
+              AND NULLIF(CodigoCSD,'') IS NOT NULL
+            ORDER BY CodigoCSD
+            LIMIT 500
+        ", [$zonaSel]);
+    } catch (Throwable $e) {
+        $bls = [];
+    }
+}
+
+// RUTAS (t_ruta)
+$rutas = [];
+try {
+    $rutas = db_all("
+        SELECT ID_Ruta, cve_ruta, descripcion
+        FROM t_ruta
+        WHERE COALESCE(Activo,1) = 1
+        ORDER BY cve_ruta
+    ");
+} catch (Throwable $e) {
+    $rutas = [];
+}
+
+// CLIENTES (c_cliente) – top 500
+$clientes = [];
+try {
+    $clientes = db_all("
+        SELECT id_cliente, Cve_Clte, RazonSocial
+        FROM c_cliente
+        ORDER BY RazonSocial
+        LIMIT 500
+    ");
+} catch (Throwable $e) {
+    $clientes = [];
+}
+
+// LICENSE PLATE (LP) – c_charolas
+$lps = [];
+try {
+    $lps = db_all("
+        SELECT DISTINCT CveLP
+        FROM c_charolas
+        WHERE COALESCE(Activo,1) = 1
+          AND NULLIF(CveLP,'') IS NOT NULL
+        ORDER BY CveLP
+        LIMIT 500
+    ");
+} catch (Throwable $e) {
+    $lps = [];
+}
+
+// PRODUCTOS – c_articulo
+$productos = [];
+try {
+    $productos = db_all("
+        SELECT cve_articulo, des_articulo
+        FROM c_articulo
+        WHERE COALESCE(Activo,'S') <> 'N'
+        ORDER BY des_articulo
+        LIMIT 500
+    ");
+} catch (Throwable $e) {
+    $productos = [];
+}
+
+// PROVEEDORES – c_proveedores
+$proveedores = [];
+try {
+    $proveedores = db_all("
+        SELECT ID_Proveedor, cve_proveedor, Nombre
+        FROM c_proveedores
+        WHERE COALESCE(Activo,1) = 1
+        ORDER BY Nombre
+        LIMIT 500
+    ");
+} catch (Throwable $e) {
+    $proveedores = [];
+}
+
+// VENDEDORES – t_vendedores (ajusta si el naming es distinto)
+$vendedores = [];
+try {
+    $vendedores = db_all("
+        SELECT id_vendedor, cve_vendedor, nombre
+        FROM t_vendedores
+        ORDER BY nombre
+        LIMIT 500
+    ");
+} catch (Throwable $e) {
+    $vendedores = [];
+}
+
+// USUARIOS – c_usuarios (ajusta columnas si difieren)
+$usuarios = [];
+try {
+    $usuarios = db_all("
+        SELECT id_usuario, usuario, nombre
+        FROM c_usuarios
+        ORDER BY nombre
+        LIMIT 500
+    ");
+} catch (Throwable $e) {
+    $usuarios = [];
+}
+
+// Zonas de recepción / retención – tubicacionesretencion
+$zonasRecep = [];
+try {
+    $zonasRecep = db_all("
+        SELECT id, cve_ubicacion, desc_ubicacion
+        FROM tubicacionesretencion
+        WHERE COALESCE(Activo,1) = 1
+        ORDER BY cve_ubicacion, desc_ubicacion
+    ");
+} catch (Throwable $e) {
+    $zonasRecep = [];
+}
+
+// Zonas de QA / revisión – t_ubicaciones_revision
+$zonasQA = [];
+try {
+    $zonasQA = db_all("
+        SELECT ID_URevision, cve_ubicacion, descripcion
+        FROM t_ubicaciones_revision
+        WHERE COALESCE(Activo,1) = 1
+        ORDER BY cve_ubicacion, descripcion
+    ");
+} catch (Throwable $e) {
+    $zonasQA = [];
+}
+
+// Zonas de embarque – t_ubicacionembarque
+$zonasEmb = [];
+try {
+    $zonasEmb = db_all("
+        SELECT ID_Embarque, cve_ubicacion, descripcion
+        FROM t_ubicacionembarque
+        WHERE COALESCE(Activo,1) = 1
+        ORDER BY cve_ubicacion, descripcion
+    ");
+} catch (Throwable $e) {
+    $zonasEmb = [];
+}
+
+// Proyectos – c_proyecto (si hay almacén, filtramos por id_almacen)
+$proyectos = [];
+try {
+    if ($almacenSel !== '') {
+        $proyectos = db_all("
+            SELECT Id, Cve_Proyecto, Des_Proyecto
+            FROM c_proyecto
+            WHERE id_almacen = ?
+            ORDER BY Des_Proyecto
+        ", [$almacenSel]);
+    } else {
+        $proyectos = db_all("
+            SELECT Id, Cve_Proyecto, Des_Proyecto
+            FROM c_proyecto
+            ORDER BY Des_Proyecto
+        ");
+    }
+} catch (Throwable $e) {
+    $proyectos = [];
+}
+
+// Helper para options
+function ap_opt(string $value, string $label, string $selected): string {
+    $sel = ($value === $selected) ? ' selected' : '';
+    return '<option value="'.htmlspecialchars($value, ENT_QUOTES, 'UTF-8').'"'.$sel.'>'.
+           htmlspecialchars($label, ENT_QUOTES, 'UTF-8').
+           '</option>';
+}
+
 ?>
-<div class="card mb-2">
-    <div class="card-header py-1" style="background:#0F5AAD;color:#fff;">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <strong>Filtros generales — AssistPro</strong>
-            </div>
-            <div class="d-flex align-items-center" style="gap:.25rem;">
-                <select id="receta_vista" class="form-select form-select-sm" style="width:220px;">
-                    <option value="">— Recetas de vista —</option>
+<style>
+    .ap-filtros-bar {
+        background:#0F5AAD;
+        color:#fff;
+        font-size:11px;
+        padding:6px 10px;
+        border-radius:4px 4px 0 0;
+        margin-bottom:0;
+    }
+    .ap-filtros-body {
+        background:#fff;
+        border:1px solid #d0d0d0;
+        border-top:none;
+        border-radius:0 0 4px 4px;
+        padding:8px 10px 6px 10px;
+        font-size:11px;
+    }
+    .ap-row {
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px 16px;
+        margin-bottom:4px;
+    }
+    .ap-col {
+        min-width:230px;
+    }
+    .ap-label {
+        font-weight:600;
+        margin-bottom:2px;
+    }
+    .ap-select,
+    .ap-input {
+        font-size:11px;
+        height:24px;
+        padding:2px 4px;
+    }
+    .ap-btn {
+        font-size:11px;
+        height:24px;
+        padding:2px 8px;
+    }
+    .ap-check-label {
+        font-weight:400;
+        margin-left:2px;
+    }
+</style>
+
+<div class="ap-filtros-bar d-flex justify-content-between align-items-center">
+    <div><strong>Filtros generales — AssistPro</strong></div>
+    <div>
+        <button type="button" class="btn btn-light ap-btn" onclick="apFiltrosLimpiar()">Limpiar</button>
+        <button type="submit" form="formFiltrosAssistpro" class="btn btn-warning ap-btn">Aplicar</button>
+    </div>
+</div>
+
+<div class="ap-filtros-body">
+    <form id="formFiltrosAssistpro" method="get">
+
+        <!-- Fila 1: Empresa / Almacén / Zona / BL -->
+        <div class="ap-row">
+
+            <!-- Empresa -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_empresa" value="1" <?= $useEmpresa?'checked':''; ?>>
+                    <span class="ap-check-label">Empresa</span>
+                </div>
+                <select name="empresa" class="form-select ap-select">
+                    <option value="">Todas</option>
+                    <?php foreach ($empresas as $e): ?>
+                        <?= ap_opt((string)$e['cve_cia'], $e['des_cia'], (string)$empresaSel); ?>
+                    <?php endforeach; ?>
                 </select>
-                <button id="btn_limpiar" type="button" class="btn btn-sm btn-light">
-                    Limpiar
-                </button>
-                <button id="btn_aplicar" type="button" class="btn btn-sm btn-primary">
-                    Aplicar
-                </button>
             </div>
-        </div>
-    </div>
-    <div class="card-body pb-2">
 
-        <!-- Filtros -->
-        <form id="form_filtros">
-            <div class="row g-2">
-
-                <!-- CONTEXTO -->
-                <div class="col-12 col-xl-3">
-                    <h6 style="font-size:11px;font-weight:bold;">Contexto</h6>
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Empresa</label>
-                        <select id="f_empresa" name="empresa" class="form-select form-select-sm">
-                            <option value="">Todas</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Almacén</label>
-                        <select id="f_almacen" name="almacen" class="form-select form-select-sm">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Zona de Almacenaje</label>
-                        <select id="f_zona" name="zona" class="form-select form-select-sm">
-                            <option value="">Todas</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">BL (Bin Location)</label>
-                        <input id="f_bl" name="bl" type="text"
-                               class="form-control form-control-sm"
-                               placeholder="BL / CodigoCSD">
-                        <div style="font-size:10px;color:#777;">
-                            Fuente: c_ubicacion.CodigoCSD
-                        </div>
-                    </div>
+            <!-- Almacén (macro) -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_almacen" value="1" <?= $useAlmacen?'checked':''; ?>>
+                    <span class="ap-check-label">Almacén</span>
                 </div>
+                <select name="almacen" class="form-select ap-select" onchange="this.form.submit()">
+                    <option value="">Todos</option>
+                    <?php foreach ($almacenes as $a):
+                        $txt = trim(($a['clave'] ?? '').' - '.($a['nombre'] ?? ''));
+                    ?>
+                        <?= ap_opt((string)$a['id'], $txt, (string)$almacenSel); ?>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-                <!-- ATRIBUTOS DE UBICACIÓN -->
-                <div class="col-12 col-xl-3">
-                    <h6 style="font-size:11px;font-weight:bold;">Atributos de ubicación</h6>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Tipo BL</label>
-                        <select id="f_tipo_bl" name="tipo_bl" class="form-select form-select-sm">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Status</label>
-                        <select id="f_status_bl" name="status_bl" class="form-select form-select-sm">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Pasillo</label>
-                        <input id="f_pasillo" name="pasillo" class="form-control form-control-sm" type="text">
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Rack</label>
-                        <input id="f_rack" name="rack" class="form-control form-control-sm" type="text">
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Nivel</label>
-                        <input id="f_nivel" name="nivel" class="form-control form-control-sm" type="text">
-                    </div>
+            <!-- Zona de almacenaje -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_zona" value="1" <?= $useZona?'checked':''; ?>>
+                    <span class="ap-check-label">Zona de almacenaje</span>
                 </div>
+                <select name="zona" class="form-select ap-select" onchange="this.form.submit()">
+                    <option value="">Todas</option>
+                    <?php foreach ($zonas as $z):
+                        $txt = trim($z['cve_almac'].' - '.$z['des_almac']);
+                    ?>
+                        <?= ap_opt((string)$z['cve_almac'], $txt, (string)$zonaSel); ?>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-                <!-- ENTIDADES LOGÍSTICAS -->
-                <div class="col-12 col-xl-3">
-                    <h6 style="font-size:11px;font-weight:bold;">Entidades logísticas</h6>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">License Plate (LP)</label>
-                        <input id="f_lp" name="lp" class="form-control form-control-sm"
-                               placeholder="LP / LPN / contenedor">
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Pallet o Contenedor</label>
-                        <input id="f_pallet" name="pallet" class="form-control form-control-sm"
-                               placeholder="Pallet / Contenedor">
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Ruta</label>
-                        <select id="f_ruta" name="ruta" class="form-select form-select-sm">
-                            <option value="">Todas</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Día Operativo</label>
-                        <input id="f_dia_oper" name="dia_oper" type="date"
-                               class="form-control form-control-sm">
-                    </div>
-
-                    <div class="form-check mt-1">
-                        <input class="form-check-input" type="checkbox" id="f_solo_no_qa" name="solo_no_qa" value="1">
-                        <label class="form-check-label" for="f_solo_no_qa" style="font-size:11px;">
-                            Excluir QA (solo disponible)
-                        </label>
-                    </div>
+            <!-- BL (Bin Location) -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_bl" value="1" <?= $useBL?'checked':''; ?>>
+                    <span class="ap-check-label">BL (Bin Location)</span>
                 </div>
+                <select name="bl" class="form-select ap-select">
+                    <option value="">Todos</option>
+                    <?php foreach ($bls as $b): ?>
+                        <?= ap_opt((string)$b['CodigoCSD'], (string)$b['CodigoCSD'], (string)$blSel); ?>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-muted">Fuente: c_ubicacion.CodigoCSD</small>
+            </div>
 
-                <!-- TERCEROS, PRODUCTO Y FECHAS -->
-                <div class="col-12 col-xl-3">
-                    <h6 style="font-size:11px;font-weight:bold;">Terceros y producto</h6>
+        </div>
 
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Cliente / Proveedor</label>
-                        <select id="f_cliente" name="cliente" class="form-select form-select-sm">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
+        <!-- Fila 2: LP / Producto / Lote -->
+        <div class="ap-row">
 
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Producto</label>
-                        <input id="f_producto" name="producto" class="form-control form-control-sm"
-                               placeholder="SKU / clave / código">
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Lote</label>
-                        <input id="f_lote" name="lote" class="form-control form-control-sm"
-                               placeholder="Lote o N.S.">
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Serie</label>
-                        <input id="f_serie" name="serie" class="form-control form-control-sm"
-                               placeholder="Serie / N.S.">
-                    </div>
-
-                    <h6 class="mt-2" style="font-size:11px;font-weight:bold;">Fechas</h6>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Fecha inicial</label>
-                        <input id="f_fini" name="f_ini" type="date" class="form-control form-control-sm">
-                    </div>
-
-                    <div class="mb-1">
-                        <label class="form-label mb-0" style="font-size:11px;">Fecha final</label>
-                        <input id="f_ffin" name="f_fin" type="date" class="form-control form-control-sm">
-                    </div>
+            <!-- License Plate -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_lp" value="1" <?= $useLP?'checked':''; ?>>
+                    <span class="ap-check-label">License Plate (LP)</span>
                 </div>
+                <select name="lp" class="form-select ap-select">
+                    <option value="">Todos</option>
+                    <?php foreach ($lps as $lp): ?>
+                        <?= ap_opt((string)$lp['CveLP'], (string)$lp['CveLP'], (string)$lpSel); ?>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-muted">Fuente: c_charolas.CveLP</small>
+            </div>
 
+            <!-- Producto -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_producto" value="1" <?= $useProd?'checked':''; ?>>
+                    <span class="ap-check-label">Producto</span>
+                </div>
+                <select name="producto" class="form-select ap-select">
+                    <option value="">Todos</option>
+                    <?php foreach ($productos as $p):
+                        $txt = trim($p['cve_articulo'].' - '.$p['des_articulo']);
+                    ?>
+                        <?= ap_opt((string)$p['cve_articulo'], $txt, (string)$prodSel); ?>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-muted">Fuente: c_articulo</small>
             </div>
-        </form>
 
-    </div>
-</div>
+            <!-- Lote / Serie -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_lote" value="1" <?= $useLote?'checked':''; ?>>
+                    <span class="ap-check-label">Lote / Serie</span>
+                </div>
+                <input type="text"
+                       name="lote"
+                       value="<?= htmlspecialchars($loteSel, ENT_QUOTES, 'UTF-8'); ?>"
+                       class="form-control ap-input"
+                       placeholder="Lote o serie">
+                <small class="text-muted">Serie = S en c_lotes</small>
+            </div>
 
-<!-- Cards -->
-<div class="row g-2 mb-2">
-    <div class="col-6 col-md-3">
-        <div class="card card-kpi" style="border-radius:.75rem;box-shadow:0 2px 4px rgba(0,0,0,.08);">
-            <div class="card-body py-2 px-3">
-                <div style="font-size:11px;text-transform:uppercase;color:#666;">Registros</div>
-                <div id="kpi_total_reg" style="font-size:1.2rem;font-weight:bold;">0</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card card-kpi" style="border-radius:.75rem;box-shadow:0 2px 4px rgba(0,0,0,.08);">
-            <div class="card-body py-2 px-3">
-                <div style="font-size:11px;text-transform:uppercase;color:#666;">License Plates</div>
-                <div id="kpi_total_lp" style="font-size:1.2rem;font-weight:bold;">0</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card card-kpi" style="border-radius:.75rem;box-shadow:0 2px 4px rgba(0,0,0,.08);">
-            <div class="card-body py-2 px-3">
-                <div style="font-size:11px;text-transform:uppercase;color:#666;">Ubicaciones ocupadas</div>
-                <div id="kpi_total_ubicas" style="font-size:1.2rem;font-weight:bold;">0</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card card-kpi" style="border-radius:.75rem;box-shadow:0 2px 4px rgba(0,0,0,.08);">
-            <div class="card-body py-2 px-3">
-                <div style="font-size:11px;text-transform:uppercase;color:#666;">Productos únicos</div>
-                <div id="kpi_total_prod" style="font-size:1.2rem;font-weight:bold;">0</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Grilla -->
-<div class="card">
-    <div class="card-body p-2">
-        <div class="table-responsive" style="max-height:480px;overflow-y:auto;overflow-x:auto;">
-            <table id="tabla_resultados" class="table table-sm table-striped table-hover mb-0">
-                <thead class="table-light">
-                <tr id="thead_resultados">
-                    <!-- Se llena dinámicamente según la receta -->
-                </tr>
-                </thead>
-                <tbody id="tbody_resultados">
-                <tr>
-                    <td colspan="12" class="text-center text-muted">
-                        Seleccione una receta, configure filtros y pulse <strong>Aplicar</strong>.
-                    </td>
-                </tr>
-                </tbody>
-            </table>
         </div>
 
-        <div class="d-flex justify-content-between align-items-center mt-2" id="paginacion_wrap" style="display:none;">
-            <div style="font-size:11px;">
-                <span id="pag_info"></span>
+        <!-- Fila 3: Ruta / Cliente / Proveedor -->
+        <div class="ap-row">
+
+            <!-- Ruta -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_ruta" value="1" <?= $useRuta?'checked':''; ?>>
+                    <span class="ap-check-label">Ruta</span>
+                </div>
+                <select name="ruta" class="form-select ap-select">
+                    <option value="">Todas</option>
+                    <?php foreach ($rutas as $r):
+                        $txt = trim($r['cve_ruta'].' - '.$r['descripcion']);
+                    ?>
+                        <?= ap_opt((string)$r['ID_Ruta'], $txt, (string)$rutaSel); ?>
+                    <?php endforeach; ?>
+                </select>
             </div>
-            <div>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn_prev">«</button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn_next">»</button>
+
+            <!-- Cliente -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_cliente" value="1" <?= $useCliente?'checked':''; ?>>
+                    <span class="ap-check-label">Cliente</span>
+                </div>
+                <select name="cliente" class="form-select ap-select">
+                    <option value="">Todos</option>
+                    <?php foreach ($clientes as $c):
+                        $rs  = html_entity_decode((string)$c['RazonSocial'], ENT_QUOTES, 'UTF-8');
+                        $txt = trim(($c['Cve_Clte'] ?? '').' - '.$rs);
+                    ?>
+                        <?= ap_opt((string)$c['id_cliente'], $txt, (string)$clienteSel); ?>
+                    <?php endforeach; ?>
+                </select>
             </div>
+
+            <!-- Proveedor -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_proveedor" value="1" <?= $useProv?'checked':''; ?>>
+                    <span class="ap-check-label">Proveedor</span>
+                </div>
+                <select name="proveedor" class="form-select ap-select">
+                    <option value="">Todos</option>
+                    <?php foreach ($proveedores as $p):
+                        $txt = trim(($p['cve_proveedor'] ?? '').' - '.($p['Nombre'] ?? ''));
+                    ?>
+                        <?= ap_opt((string)$p['ID_Proveedor'], $txt, (string)$proveedorSel); ?>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
         </div>
-    </div>
+
+        <!-- Fila 4: Vendedor / Usuario / Proyecto -->
+        <div class="ap-row">
+
+            <!-- Vendedor -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_vendedor" value="1" <?= $useVend?'checked':''; ?>>
+                    <span class="ap-check-label">Vendedor</span>
+                </div>
+                <select name="vendedor" class="form-select ap-select">
+                    <option value="">Todos</option>
+                    <?php foreach ($vendedores as $v):
+                        $txt = trim(($v['cve_vendedor'] ?? '').' - '.($v['nombre'] ?? ''));
+                    ?>
+                        <?= ap_opt((string)$v['id_vendedor'], $txt, (string)$vendedorSel); ?>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Usuario -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_usuario" value="1" <?= $useUsuario?'checked':''; ?>>
+                    <span class="ap-check-label">Usuario</span>
+                </div>
+                <select name="usuario" class="form-select ap-select">
+                    <option value="">Todos</option>
+                    <?php foreach ($usuarios as $u):
+                        $txt = trim(($u['usuario'] ?? '').' - '.($u['nombre'] ?? ''));
+                    ?>
+                        <?= ap_opt((string)$u['id_usuario'], $txt, (string)$usuarioSel); ?>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Proyecto -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_proyecto" value="1" <?= $useProyecto?'checked':''; ?>>
+                    <span class="ap-check-label">Proyecto</span>
+                </div>
+                <select name="proyecto" class="form-select ap-select">
+                    <option value="">Todos</option>
+                    <?php foreach ($proyectos as $pr):
+                        $txt = trim(($pr['Cve_Proyecto'] ?? '').' - '.($pr['Des_Proyecto'] ?? ''));
+                    ?>
+                        <?= ap_opt((string)$pr['Id'], $txt, (string)$proyectoSel); ?>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+        </div>
+
+        <!-- Fila 5: Zonas recepción / QA / embarques -->
+        <div class="ap-row">
+
+            <!-- Zona recepción / retención -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_zona_recep" value="1" <?= $useZonaRecep?'checked':''; ?>>
+                    <span class="ap-check-label">Zona recepción / retención</span>
+                </div>
+                <select name="zona_recep" class="form-select ap-select">
+                    <option value="">Todas</option>
+                    <?php foreach ($zonasRecep as $zr):
+                        $txt = trim(($zr['cve_ubicacion'] ?? '').' - '.($zr['desc_ubicacion'] ?? ''));
+                    ?>
+                        <?= ap_opt((string)$zr['id'], $txt, (string)$zonaRecepSel); ?>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Zona QA / revisión -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_zona_qa" value="1" <?= $useZonaQA?'checked':''; ?>>
+                    <span class="ap-check-label">Zona QA / revisión</span>
+                </div>
+                <select name="zona_qa" class="form-select ap-select">
+                    <option value="">Todas</option>
+                    <?php foreach ($zonasQA as $zq):
+                        $txt = trim(($zq['cve_ubicacion'] ?? '').' - '.($zq['descripcion'] ?? ''));
+                    ?>
+                        <?= ap_opt((string)$zq['ID_URevision'], $txt, (string)$zonaQASel); ?>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Zona embarques -->
+            <div class="ap-col">
+                <div class="ap-label">
+                    <input type="checkbox" name="use_zona_emb" value="1" <?= $useZonaEmb?'checked':''; ?>>
+                    <span class="ap-check-label">Zona embarques</span>
+                </div>
+                <select name="zona_emb" class="form-select ap-select">
+                    <option value="">Todas</option>
+                    <?php foreach ($zonasEmb as $ze):
+                        $txt = trim(($ze['cve_ubicacion'] ?? '').' - '.($ze['descripcion'] ?? ''));
+                    ?>
+                        <?= ap_opt((string)$ze['ID_Embarque'], $txt, (string)$zonaEmbSel); ?>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+        </div>
+
+    </form>
 </div>
 
 <script>
-// ------------------ CONFIG ------------------
-const API_FILTROS_URL = '../api/filtros_assistpro.php';
-const VISTA_DEFAULT   = <?php echo json_encode($vista_id_default, JSON_UNESCAPED_UNICODE); ?>;
+function apFiltrosLimpiar() {
+    const form = document.getElementById('formFiltrosAssistpro');
+    if (!form) return;
 
-// Estado de paginación en front
-let state = {
-    vista_id: VISTA_DEFAULT || '',
-    page: 1,
-    per_page: 25,
-    total_rows: 0
-};
-
-// ------------------ INIT ------------------
-document.addEventListener('DOMContentLoaded', () => {
-    initFiltrosAssistPro();
-
-    document.getElementById('btn_aplicar').addEventListener('click', () => {
-        state.page = 1;
-        aplicarFiltros();
-    });
-
-    document.getElementById('btn_limpiar').addEventListener('click', limpiarFiltros);
-
-    document.getElementById('btn_prev').addEventListener('click', () => {
-        if (state.page > 1) {
-            state.page--;
-            aplicarFiltros(false);
+    for (const el of form.elements) {
+        if (!el.name) continue;
+        if (el.tagName === 'SELECT') {
+            el.selectedIndex = 0;
+        } else if (el.type === 'text') {
+            el.value = '';
+        } else if (el.type === 'checkbox') {
+            el.checked = true; // por defecto, todos los filtros activos en plantilla
         }
-    });
-
-    document.getElementById('btn_next').addEventListener('click', () => {
-        const maxPage = Math.ceil(state.total_rows / state.per_page);
-        if (state.page < maxPage) {
-            state.page++;
-            aplicarFiltros(false);
-        }
-    });
-});
-
-function initFiltrosAssistPro() {
-    fetch(API_FILTROS_URL + '?action=init')
-        .then(r => r.json())
-        .then(data => {
-            if (!data.ok) {
-                console.error('Init filtros error:', data.error);
-                return;
-            }
-
-            // Recetas
-            const selRec = document.getElementById('receta_vista');
-            selRec.innerHTML = '<option value="">— Recetas de vista —</option>';
-            (data.recetas || []).forEach(r => {
-                const opt = document.createElement('option');
-                opt.value = r.id;
-                opt.textContent = r.nombre;
-                selRec.appendChild(opt);
-            });
-
-            if (VISTA_DEFAULT && data.recetas.some(r => r.id === VISTA_DEFAULT)) {
-                selRec.value = VISTA_DEFAULT;
-                state.vista_id = VISTA_DEFAULT;
-            }
-
-            // Empresas
-            const selEmp = document.getElementById('f_empresa');
-            (data.empresas || []).forEach(e => {
-                const opt = document.createElement('option');
-                opt.value = e.cve_cia;
-                opt.textContent = e.des_cia;
-                selEmp.appendChild(opt);
-            });
-
-            // Almacenes
-            const selAlm = document.getElementById('f_almacen');
-            (data.almacenes || []).forEach(a => {
-                const opt = document.createElement('option');
-                opt.value = a.cve_almac;
-                opt.textContent = a.clave_almacen + ' - ' + a.des_almac;
-                selAlm.appendChild(opt);
-            });
-
-            // Rutas
-            const selRuta = document.getElementById('f_ruta');
-            (data.rutas || []).forEach(r => {
-                const opt = document.createElement('option');
-                opt.value = r.cve_ruta;
-                opt.textContent = r.cve_ruta + ' - ' + r.descripcion;
-                selRuta.appendChild(opt);
-            });
-
-            // Clientes
-            const selCli = document.getElementById('f_cliente');
-            (data.clientes || []).forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.Cve_Clte;
-                opt.textContent = c.Cve_Clte + ' - ' + c.RazonSocial;
-                selCli.appendChild(opt);
-            });
-
-            // Si hay receta default, podemos precargar una vez
-            if (state.vista_id) {
-                aplicarFiltros();
-            }
-        })
-        .catch(err => {
-            console.error('Init filtros error:', err);
-        });
-}
-
-function limpiarFiltros() {
-    document.getElementById('form_filtros').reset();
-    document.getElementById('tbody_resultados').innerHTML = `
-        <tr>
-            <td colspan="12" class="text-center text-muted">
-                Seleccione una receta, configure filtros y pulse <strong>Aplicar</strong>.
-            </td>
-        </tr>`;
-    document.getElementById('kpi_total_reg').textContent  = '0';
-    document.getElementById('kpi_total_lp').textContent   = '0';
-    document.getElementById('kpi_total_ubicas').textContent = '0';
-    document.getElementById('kpi_total_prod').textContent = '0';
-    state.total_rows = 0;
-    document.getElementById('paginacion_wrap').style.display = 'none';
-}
-
-function recogerFiltros() {
-    const f = document.getElementById('form_filtros');
-    const fd = new FormData(f);
-    const obj = {};
-    fd.forEach((v, k) => {
-        if (v !== '') obj[k] = v;
-    });
-    // check QA
-    const chkNoQA = document.getElementById('f_solo_no_qa');
-    if (chkNoQA.checked) {
-        obj['solo_no_qa'] = '1';
     }
-    return obj;
+    form.submit();
 }
+require_once __DIR__ . '/../bi/_menu_global_end.php';
 
-function aplicarFiltros(showLoading = true) {
-    const vistaSelect = document.getElementById('receta_vista');
-    const vistaId = vistaSelect.value;
-    if (!vistaId) {
-        alert('Seleccione una receta de vista.');
-        return;
-    }
-    state.vista_id = vistaId;
-
-    const filtros = recogerFiltros();
-    const params = new URLSearchParams();
-    params.append('action', 'consulta');
-    params.append('vista_id', vistaId);
-    params.append('page', state.page);
-    params.append('per_page', state.per_page);
-    Object.keys(filtros).forEach(k => params.append(k, filtros[k]));
-
-    if (showLoading) {
-        document.getElementById('tbody_resultados').innerHTML = `
-            <tr><td colspan="12" class="text-center text-muted">Cargando...</td></tr>`;
-    }
-
-    fetch(API_FILTROS_URL, {
-        method: 'POST',
-        body: params
-    })
-        .then(r => r.json())
-        .then(data => {
-            if (!data.ok) {
-                console.error('Consulta error:', data.error);
-                document.getElementById('tbody_resultados').innerHTML = `
-                    <tr><td colspan="12" class="text-center text-danger">
-                        Error en consulta: ${data.error || 'desconocido'}
-                    </td></tr>`;
-                return;
-            }
-
-            // KPIs
-            const cards = data.cards || {};
-            document.getElementById('kpi_total_reg').textContent   = (cards.total_registros || 0).toLocaleString();
-            document.getElementById('kpi_total_lp').textContent    = (cards.total_lps || 0).toLocaleString();
-            document.getElementById('kpi_total_ubicas').textContent = (cards.total_ubicaciones || 0).toLocaleString();
-            document.getElementById('kpi_total_prod').textContent  = (cards.total_productos || 0).toLocaleString();
-
-            // Grilla
-            const rows = data.rows || [];
-            state.total_rows = data.total_rows || rows.length;
-
-            pintarTablaSegunReceta(vistaId, rows);
-
-            // Paginación
-            const maxPage = Math.max(1, Math.ceil(state.total_rows / state.per_page));
-            document.getElementById('paginacion_wrap').style.display = (maxPage > 1 ? 'flex' : 'none');
-            document.getElementById('pag_info').textContent =
-                `Página ${state.page} de ${maxPage} — ${state.total_rows.toLocaleString()} reg.`;
-        })
-        .catch(err => {
-            console.error('Consulta error:', err);
-            document.getElementById('tbody_resultados').innerHTML = `
-                <tr><td colspan="12" class="text-center text-danger">
-                    Error de comunicación con el servidor.
-                </td></tr>`;
-        });
-}
-
-function pintarTablaSegunReceta(vistaId, rows) {
-    const thead = document.getElementById('thead_resultados');
-    const tbody = document.getElementById('tbody_resultados');
-    thead.innerHTML = '';
-    tbody.innerHTML = '';
-
-    if (vistaId === 'existencias_ubicacion') {
-        // Cabecera específica
-        const cols = [
-            'BL','Pasillo','Rack','Nivel',
-            'Almacén',
-            'Producto','Descripción','Tipo','Lote/Serie','Caducidad',
-            'Existencia','QA','Estado BL','LP'
-        ];
-        cols.forEach(c => {
-            const th = document.createElement('th');
-            th.textContent = c;
-            if (c === 'Existencia') th.classList.add('text-end');
-            thead.appendChild(th);
-        });
-
-        if (!rows.length) {
-            tbody.innerHTML = `
-                <tr><td colspan="${cols.length}" class="text-center text-muted">
-                    No se encontraron registros con los filtros aplicados.
-                </td></tr>`;
-            return;
-        }
-
-        rows.forEach(r => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${escapeHtml(r.bl ?? '')}</td>
-                <td>${escapeHtml(r.pasillo ?? '')}</td>
-                <td>${escapeHtml(r.rack ?? '')}</td>
-                <td>${escapeHtml(r.nivel ?? '')}</td>
-                <td>${escapeHtml(r.cve_almac ?? '')}</td>
-                <td>${escapeHtml(r.cve_articulo ?? '')}</td>
-                <td>${escapeHtml(r.des_articulo ?? '')}</td>
-                <td>${escapeHtml(r.tipo_control ?? '')}</td>
-                <td>${escapeHtml(r.cve_lote ?? '')}</td>
-                <td>${escapeHtml(r.Caducidad ?? '')}</td>
-                <td class="text-end">${Number(r.existencia ?? 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                <td class="text-center">${r.es_qa ? 'QA' : ''}</td>
-                <td>${escapeHtml(r.estado_bl ?? '')}</td>
-                <td>${escapeHtml(r.CveLP ?? '')}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } else {
-        // Receta desconocida
-        thead.innerHTML = '<th>Resultado</th>';
-        tbody.innerHTML = `
-            <tr><td class="text-center text-muted">
-                Receta no configurada todavía.
-            </td></tr>`;
-    }
-}
-
-function escapeHtml(text) {
-    return String(text ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
 </script>

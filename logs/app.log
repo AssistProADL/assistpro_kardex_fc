@@ -1,0 +1,95 @@
+[2025-11-17 06:45:12] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-17 06:46:15] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-17 06:47:07] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-17 06:56:57] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-17 06:57:23] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:01:50] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:19:04] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:22:10] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:25:20] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:27:34] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:46:53] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:46:53] INFO: SMTP creado {"nombre":"AssistPro ER"}
+[2025-11-18 08:48:21] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:48:58] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:48:58] INFO: SMTP creado {"nombre":"AssistPro ER"}
+[2025-11-18 08:50:47] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:51:30] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:51:30] INFO: SMTP creado {"nombre":"AssistPro ER"}
+[2025-11-18 08:51:30] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:51:52] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:51:54] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:51:54] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:52:25] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:52:27] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 08:52:29] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:01:22] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:01:30] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:01:31] ERROR: Error prueba SMTP {"id":1,"error":"SMTP Error: Could not authenticate."}
+[2025-11-18 09:01:36] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:01:36] ERROR: Error prueba SMTP {"id":2,"error":"SMTP Error: Could not authenticate."}
+[2025-11-18 09:01:39] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:01:40] ERROR: Error prueba SMTP {"id":3,"error":"SMTP Error: Could not authenticate."}
+[2025-11-18 09:01:51] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:01:51] INFO: SMTP eliminado {"id":1}
+[2025-11-18 09:01:51] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:01:55] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:01:55] INFO: SMTP eliminado {"id":2}
+[2025-11-18 09:01:55] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:01:57] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:02:32] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:02:32] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:02:38] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:02:43] ERROR: Error prueba SMTP {"id":3,"error":"SMTP Error: Could not authenticate."}
+[2025-11-18 09:05:04] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:05:38] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:05:38] ERROR: Error en correo de prueba {"error":"SMTP Error: Could not authenticate.","to":"aolivares@adventech-logistica.com","smtp":3}
+[2025-11-18 09:26:13] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:26:50] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:26:50] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:27:00] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:27:00] INFO: Prueba SMTP exitosa {"id":3}
+[2025-11-18 09:27:21] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:27:34] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:27:36] INFO: Correo de prueba enviado {"to":"aolivares@adventech-logistica.com","smtp":3,"alias":"","plantilla_id":0}
+[2025-11-18 09:27:51] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 09:28:02] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 16:50:27] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 16:50:40] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 16:50:41] INFO: Prueba SMTP exitosa {"id":3}
+[2025-11-18 16:50:53] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 16:51:03] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 16:52:29] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 16:52:33] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 16:53:47] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-18 16:53:48] INFO: Correo de prueba enviado {"to":"afrancisco@adventech-logistica.com","smtp":3,"alias":"AssistPro Master","plantilla_id":0}
+[2025-11-18 16:57:20] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 03:10:49] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 03:11:03] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 03:11:05] INFO: Prueba SMTP exitosa {"id":3}
+[2025-11-19 03:11:15] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 03:11:25] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 03:11:40] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 03:12:02] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 03:12:03] INFO: Correo de prueba enviado {"to":"elaureano@adventech-logistica.com","smtp":3,"alias":"","plantilla_id":0}
+[2025-11-19 21:48:24] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 21:48:43] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 21:48:44] INFO: Prueba SMTP exitosa {"id":3}
+[2025-11-19 21:48:58] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 21:49:42] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 21:50:22] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 21:51:08] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-19 21:51:09] INFO: Correo de prueba enviado {"to":"cremerialacanada@gmail.com","smtp":3,"alias":"","plantilla_id":0}
+[2025-11-21 20:30:32] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-21 20:31:11] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-21 20:32:33] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-23 19:22:03] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-23 19:22:32] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-25 00:05:06] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-25 00:05:28] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-25 00:05:29] INFO: Prueba SMTP exitosa {"id":3}
+[2025-11-25 00:05:49] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-25 00:06:27] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-25 00:07:10] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-25 00:07:37] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-11-25 00:07:40] INFO: Correo de prueba enviado {"to":"jorge.gomez@foamcreations.mx","smtp":3,"alias":"","plantilla_id":0}

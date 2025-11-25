@@ -50,14 +50,14 @@ SELECT
        THEN ABS(CAST(NULLIF(k.cantidad,'') AS DECIMAL(18,4))) ELSE 0 END AS salida,
   CAST(NULLIF(k.ajuste,'0') AS DECIMAL(18,4)) AS ajuste,
   k.cve_usuario
-FROM stg_t_cardex k
-LEFT JOIN stg_c_articulo a
+FROM t_cardex k
+LEFT JOIN c_articulo a
   ON a.empresa_id = k.empresa_id AND a.cve_articulo = k.cve_articulo
-LEFT JOIN stg_c_lotes l
+LEFT JOIN c_lotes l
   ON l.empresa_id = k.empresa_id AND l.cve_articulo = k.cve_articulo AND l.Lote = k.cve_lote
-LEFT JOIN stg_c_almacenp al
+LEFT JOIN c_almacenp al
   ON al.empresa_id = k.empresa_id AND al.clave = k.Cve_Almac
-LEFT JOIN stg_t_tipomovimiento tm
+LEFT JOIN t_tipomovimiento tm
   ON tm.empresa_id = k.empresa_id AND tm.id_TipoMovimiento = k.id_TipoMovimiento
 WHERE 1=1
   AND $fechadt BETWEEN :desde AND :hasta

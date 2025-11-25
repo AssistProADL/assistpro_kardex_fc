@@ -84,7 +84,7 @@ if ($op) {
       echo json_encode(['ok'=>true,'producto'=>$r]); exit;
     }
 
-    /* ---------- COMPONENTES DEL BOM (AQUÍ ESTABA EL PROBLEMA) ---------- */
+    /* ---------- COMPONENTES DEL BOM ---------- */
 
     if ($op === 'get_componentes') {
       $padre = trim($_POST['padre'] ?? $_GET['padre'] ?? '');
@@ -402,7 +402,7 @@ if ($op) {
 <body>
 <div class="container-fluid mt-2">
 
-  <!-- KPIs -->
+  <!-- KPIs generales -->
   <div class="row g-2 mb-2">
     <div class="col-sm-3">
       <div class="kpi-card p-3 h-100">
@@ -446,7 +446,7 @@ if ($op) {
         </table>
       </div>
 
-      <!-- Encabezado -->
+      <!-- Encabezado del producto compuesto -->
       <div id="panelPadre" class="alert alert-light border d-none">
         <div class="d-flex flex-wrap gap-3 align-items-center">
           <div><strong>Producto compuesto:</strong> <span id="p_cve">—</span></div>
@@ -454,6 +454,31 @@ if ($op) {
           <div><strong>UMed:</strong> <span id="p_ume">—</span></div>
         </div>
         <div class="muted mt-1">Componentes activos del producto seleccionado.</div>
+      </div>
+
+      <!-- Cards específicas del BOM seleccionado -->
+      <div id="cardsBOM" class="row g-2 mb-2 d-none">
+        <div class="col-sm-4">
+          <div class="kpi-card p-2 h-100">
+            <div class="kpi-title">Componentes del BOM</div>
+            <div id="cardNumComp" class="kpi-value">0</div>
+            <div class="text-muted mini">Número de componentes activos</div>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="kpi-card p-2 h-100">
+            <div class="kpi-title">Suma de cantidades</div>
+            <div id="cardSumCant" class="kpi-value">0</div>
+            <div class="text-muted mini">Σ Cantidad por unidad</div>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="kpi-card p-2 h-100">
+            <div class="kpi-title">Unidad de medida</div>
+            <div id="cardUmedPadre" class="kpi-value">-</div>
+            <div class="text-muted mini">UMed del producto compuesto</div>
+          </div>
+        </div>
       </div>
 
       <!-- Componentes -->
@@ -568,6 +593,7 @@ if ($op) {
   'use strict';
   let tRes=null,tComp=null,tPrev=null,padreSel='';
   let toastObj=null;
+  let umedPadreSel = '';
 
   function toast(msg,type='success'){
     const el=document.getElementById('appToast');
@@ -613,6 +639,7 @@ if ($op) {
       }
       if(tComp){tComp.clear().draw();}
       $('#panelPadre').addClass('d-none');
+      $('#cardsBOM').addClass('d-none');
       $('#btnCsv,#btnPdf').prop('disabled', true);
     },'json');
   }
@@ -624,8 +651,11 @@ if ($op) {
       $('#p_cve').text(p.cve_articulo||'—');
       $('#p_des').text(p.des_articulo||'—');
       $('#p_ume').text(p.unidadMedida||'—');
+      umedPadreSel = p.unidadMedida || '';
       $('#panelPadre').removeClass('d-none');
       $('#btnCsv,#btnPdf').prop('disabled', false);
+      // actualizamos la card de UMed por si ya hay componentes
+      $('#cardUmedPadre').text(umedPadreSel || '-');
     },'json');
   }
 
@@ -647,6 +677,18 @@ if ($op) {
       } else {
         tComp.clear().rows.add(data).draw(false);
       }
+
+      // === KPIs de BOM seleccionado ===
+      const numComp = data.length;
+      let sumCant = 0;
+      data.forEach(r=>{
+        const v = parseFloat(r.cantidad);
+        if(!isNaN(v)) sumCant += v;
+      });
+      $('#cardNumComp').text(numComp);
+      $('#cardSumCant').text(sumCant.toFixed(4));
+      $('#cardUmedPadre').text(umedPadreSel || $('#p_ume').text() || '-');
+      $('#cardsBOM').removeClass('d-none');
     },'json');
   }
 

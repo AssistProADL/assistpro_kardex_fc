@@ -6,14 +6,14 @@ $perPage = 25;
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $off     = ($page-1)*$perPage;
 
-$sub     = trim($_GET['sub'] ?? '');   // filtro por zona (stg_c_almacen.nombre)
+$sub     = trim($_GET['sub'] ?? '');   // filtro por zona (c_almacen.nombre)
 $q       = trim($_GET['q']   ?? '');   // búsqueda (zona / compañía)
 
 /* ==== Catálogo de Zonas (nombre) ==== */
 
 $optsSub = db_all("
   SELECT DISTINCT des_almac
-  FROM stg_c_almacen
+  FROM c_almacen
   WHERE des_almac IS NOT NULL AND des_almac <> ''
   ORDER BY des_almac
   LIMIT 2000
@@ -26,17 +26,17 @@ $optsSub = db_all("
 */
 $params = [];
 $sqlBase = "
-  FROM stg_c_charolas ch
+  FROM c_charolas ch
  
    
-  LEFT JOIN stg_c_almacenp ap
+  LEFT JOIN c_almacenp ap
     ON  ap.id      = ch.cve_almac
    
 
- LEFT JOIN stg_c_almacen al
+ LEFT JOIN c_almacen al
     ON  al.cve_almacenp = ap.id
   
-LEFT JOIN stg_c_compania c
+LEFT JOIN c_compania c
     ON c.cve_cia  = ap.cve_cia
   WHERE 1=1
     AND COALESCE(ch.Activo,0) = 1
@@ -64,7 +64,7 @@ $total = (int) db_val("SELECT COUNT(*) ".$sqlBase, $params);
 $sqlData = "
   SELECT
     c.des_cia           AS __desc_cia,
-    al.des_almac        AS __zona_nombre,        -- zona de almacenaje (stg_c_almacen.nombre)
+    al.des_almac        AS __zona_nombre,        -- zona de almacenaje (c_almacen.nombre)
     ap.nombre        AS __almacen_desc,       -- *** descripción del almacén (c_almacenp.nombre) ***
     al.cve_almac        AS __zona_clave,         -- clave de zona (referencia)
 

@@ -1,310 +1,634 @@
 <?php
 // public/pedido.php
-declare(strict_types=1);
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
-header('Content-Type: text/html; charset=utf-8');
-
-include_once __DIR__ . '/../../app/db.php'; // conexión central
-
-/* ========= Helpers ligeros (sin cambios de consultas) ========= */
-function rows(PDO $pdo, string $sql, array $p = []): array {
-  $st = $pdo->prepare($sql);
-  $st->execute($p);
-  return $st->fetchAll(PDO::FETCH_ASSOC);
-}
-function one(PDO $pdo, string $sql, array $p = []) {
-  $st = $pdo->prepare($sql);
-  $st->execute($p);
-  return $st->fetchColumn();
-}
-function sel(array $data, $value, string $valueKey='id', string $textKey='nombre'): string {
-  $h = '';
-  foreach ($data as $r) {
-    $v = (string)$r[$valueKey];
-    $t = htmlspecialchars((string)$r[$textKey]);
-    $h .= '<option value="'.$v.'"'.($v==(string)$value?' selected':'').'>'.$t.'</option>';
-  }
-  return $h;
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
-/* ========= Encabezado (sin cambios de lógica) ========= */
-$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-$enc = [
-  'empresa_id' => (int)($_SESSION['empresa_id'] ?? 1),
-  'almacen_id' => (int)($_SESSION['almacen_id'] ?? 1),
-  'tipo_id'    => 1,
-  'status_id' => 1,
-  'cliente_id' => null,
-  'ruta_id'    => null,
-  'proyecto_id'=> null,
-  'folio'      => '',
-  'fecha'      => date('Y-m-d'),
-  'comentarios'=> ''
-];
-
-if ($id > 0) {
-  $enc = rows($pdo,
-    "SELECT id, empresa_id, almacen_id, tipo_id, status_id, cliente_id, ruta_id, proyecto_id,
-            folio, fecha, comentarios
-     FROM th_pedido WHERE id=:id", [':id'=>$id])[0] ?? $enc;
-}
-
-/* ========= Catálogos (consultas SIN CAMBIOS) ========= */
-$empresas  = rows($pdo, "SELECT id, nombre FROM c_empresa ORDER BY nombre");
-$almacenes = rows($pdo,
-  "SELECT a.id, CONCAT(a.clave,' — ',a.nombre) AS nombre
-   FROM c_almacen a
-   WHERE (a.activo=1 OR a.activo IS NULL)
-     AND (a.empresa_id=:e1 OR :e2=0)
-   ORDER BY a.nombre",
-  [':e1'=>$enc['empresa_id'], ':e2'=>$enc['empresa_id']]
-);
-$clientes  = rows($pdo,
-  "SELECT id, CONCAT(clave,' — ',nombre) AS nombre
-   FROM c_cliente
-   WHERE (activo=1 OR activo IS NULL)
-   ORDER BY nombre");
-$rutas     = rows($pdo,
-  "SELECT id, CONCAT(clave,' — ',nombre) AS nombre
-   FROM c_ruta
-   WHERE (activo=1 OR activo IS NULL)
-   ORDER BY nombre");
-$proyectos = rows($pdo,
-  "SELECT id, CONCAT(clave,' — ',nombre) AS nombre
-   FROM c_proyecto
-   WHERE (activo=1 OR activo IS NULL)
-     AND (empresa_id=:e1 OR :e2=0)
-   ORDER BY nombre",
-  [':e1'=>$enc['empresa_id'], ':e2'=>$enc['empresa_id']]
-);
-$tipos     = rows($pdo,
-  "SELECT id, CONCAT(clave,' — ',nombre) AS nombre
-   FROM c_pedido_tipo
-   WHERE (activo=1 OR activo IS NULL)
-   ORDER BY nombre");
-$status   = rows($pdo,
-  "SELECT id, CONCAT(clave,' — ',nombre) AS nombre
-   FROM c_pedido_status
-   WHERE (activo=1 OR activo IS NULL)
-   ORDER BY id");
-
-/* ========= Productos para el select (sin tocar consulta; usa tu vista/tabla actual) =========
-   Si ya tenías un endpoint para autocompletar, puedes ignorar este listado y dejar el <select> vacío:
-   aquí solo aseguramos que el control exista visualmente.
-*/
-$productos = rows($pdo,
-  "SELECT id, CONCAT(clave,' — ',nombre) AS nombre
-   FROM c_producto
-   ORDER BY nombre
-   LIMIT 500"); // solo para que cargue rápido el UI
+// Frame general con menús globales
+require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<title>AssistPro SFA — Editar | Crear Pedido</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
-:root{ --primary:#000F9F; --muted:#EEF1F4; --text:#191817; --ink:#1f2328; }
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--text)}
-body{background:#fafbfc}
-h1{margin:10px 12px;font-size:20px;color:var(--primary);font-weight:800}
-.card{background:#fff;border:1px solid var(--muted);border-radius:10px;margin:10px 12px;padding:10px}
-.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:8px}
-.col-2{grid-column:span 2}.col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-6{grid-column:span 6}.col-12{grid-column:span 12}
-label{display:block;font-size:12px;color:#667085;margin-bottom:4px}
-input,select,textarea{width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;font-size:13px}
-.badge{display:inline-block;font-size:12px;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#1d4ed8}
-.row{display:flex;gap:8px;align-items:center}
-.btn{border:0;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer}
-.btn-primary{background:#1d4ed8;color:#fff}
-.btn-secondary{background:#e5e7eb}
-.btn-ghost{background:transparent;border:1px solid #e5e7eb}
-.btn-xs{padding:4px 8px;font-size:12px;border-radius:8px}
-.notice{font-size:12px;color:#6b7280}
-.table{width:100%;border-collapse:collapse}
-.table th,.table td{padding:8px;border-bottom:1px solid #f1f5f9;font-size:12px;vertical-align:middle}
-.table th{color:#6b7280;text-align:left}
-.actions{display:flex;gap:6px}
-.hr{height:1px;background:#f1f5f9;margin:8px 0}
+    :root{
+        --ap-primary:#0F5AAD;
+        --ap-primary-light:#00A3E0;
+        --ap-danger:#F05252;
+        --ap-bg:#F5F7FB;
+        --ap-card:#FFFFFF;
+        --ap-border:#E5E7EB;
+        --ap-text:#111827;
+        --ap-muted:#6B7280;
+    }
+
+    body{
+        background-color:var(--ap-bg);
+    }
+
+    .ap-page-wrapper{
+        padding:16px 24px 40px 24px;
+    }
+
+    .ap-title{
+        font-size:20px;
+        font-weight:700;
+        margin:0 0 12px 0;
+        color:var(--ap-primary);
+    }
+
+    .ap-card{
+        background:var(--ap-card);
+        border-radius:10px;
+        border:1px solid var(--ap-border);
+        padding:16px 18px;
+        margin-bottom:14px;
+    }
+
+    .ap-section-title{
+        font-size:15px;
+        margin:0 0 12px 0;
+        font-weight:600;
+        color:#374151;
+    }
+
+    .ap-grid{
+        display:grid;
+        grid-template-columns:repeat(12,minmax(0,1fr));
+        gap:10px 14px;
+    }
+    .ap-col-2{grid-column:span 2;}
+    .ap-col-3{grid-column:span 3;}
+    .ap-col-4{grid-column:span 4;}
+    .ap-col-6{grid-column:span 6;}
+    .ap-col-8{grid-column:span 8;}
+    .ap-col-12{grid-column:span 12;}
+
+    @media (max-width:1200px){
+        .ap-col-2,.ap-col-3,.ap-col-4,.ap-col-6,.ap-col-8{grid-column:span 6;}
+    }
+    @media (max-width:768px){
+        .ap-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+        .ap-col-2,.ap-col-3,.ap-col-4,.ap-col-6,.ap-col-8,.ap-col-12{grid-column:span 2;}
+    }
+
+    label{
+        display:block;
+        font-size:11px;
+        color:var(--ap-muted);
+        margin-bottom:3px;
+    }
+    .ap-required::after{
+        content:"*";
+        color:#DC2626;
+        margin-left:3px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="date"],
+    input[type="time"],
+    select,
+    textarea{
+        width:100%;
+        padding:7px 8px;
+        font-size:12px;
+        border-radius:8px;
+        border:1px solid var(--ap-border);
+        background:#FFFFFF;
+    }
+    input[readonly], textarea[readonly], .ap-ro{
+        background:#F3F4F6;
+        color:#4B5563;
+    }
+    textarea{
+        resize:vertical;
+        min-height:60px;
+    }
+
+    .ap-inline-options{
+        display:flex;
+        flex-wrap:wrap;
+        gap:10px 24px;
+        font-size:12px;
+    }
+    .ap-inline-options label{
+        margin-bottom:0;
+        display:flex;
+        align-items:center;
+        gap:4px;
+        cursor:pointer;
+        font-size:12px;
+        color:#374151;
+    }
+
+    .ap-btn{
+        border:0;
+        border-radius:8px;
+        padding:7px 14px;
+        font-size:12px;
+        font-weight:600;
+        cursor:pointer;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:6px;
+        white-space:nowrap;
+    }
+    .ap-btn-primary{
+        background:var(--ap-primary);
+        color:white;
+    }
+    .ap-btn-secondary{
+        background:#E5E7EB;
+        color:#111827;
+    }
+    .ap-btn-danger{
+        background:var(--ap-danger);
+        color:#FFFFFF;
+    }
+    .ap-btn-sm{
+        padding:5px 10px;
+        font-size:11px;
+    }
+    .ap-btn-lg{
+        padding:9px 18px;
+        font-size:13px;
+    }
+
+    .ap-flex{display:flex;}
+    .ap-flex-between{display:flex;align-items:center;justify-content:space-between;}
+    .ap-gap-8{gap:8px;}
+    .ap-gap-12{gap:12px;}
+    .ap-mt-8{margin-top:8px;}
+    .ap-mt-12{margin-top:12px;}
+    .ap-mt-16{margin-top:16px;}
+    .ap-text-right{text-align:right;}
+
+    /* Detalle */
+    .ap-detail-card{
+        border-radius:10px;
+        border:1px solid var(--ap-border);
+        background:#F9FAFB;
+        padding:14px 16px;
+    }
+
+    .ap-table-wrapper{
+        width:100%;
+        overflow-x:auto;
+    }
+    table.ap-table{
+        width:100%;
+        border-collapse:collapse;
+        font-size:11px;
+        min-width:960px;
+    }
+    .ap-table th,
+    .ap-table td{
+        border-bottom:1px solid #E5E7EB;
+        padding:6px 8px;
+        white-space:nowrap;
+    }
+    .ap-table th{
+        font-weight:600;
+        color:#6B7280;
+        background:#F9FAFB;
+        text-align:left;
+    }
+    .ap-table tr:nth-child(even) td{
+        background:#FDFDFE;
+    }
+
+    .ap-totals{
+        display:grid;
+        grid-template-columns:repeat(12,minmax(0,1fr));
+        gap:12px;
+        margin-top:14px;
+    }
+    .ap-total-box{
+        grid-column:span 4;
+        background:#F9FAFB;
+        border-radius:10px;
+        border:1px solid #E5E7EB;
+        padding:10px 12px;
+        font-size:12px;
+    }
+    .ap-total-label{
+        color:#6B7280;
+        margin-bottom:3px;
+    }
+    .ap-total-value{
+        font-size:14px;
+        font-weight:700;
+        color:#111827;
+    }
+    @media (max-width:900px){
+        .ap-total-box{grid-column:span 12;}
+    }
+
+    .ap-footer-actions{
+        margin-top:18px;
+        display:flex;
+        justify-content:flex-end;
+    }
+
+    .ap-help-text{
+        font-size:11px;
+        color:#9CA3AF;
+        margin-top:4px;
+    }
 </style>
-</head>
-<body>
 
-<h1>AssistPro SFA — <span class="badge"><?= $id>0?'Editar':'Crear'?> Pedido</span></h1>
+<div class="ap-page-wrapper">
+    <h1 class="ap-title">Registro de Pedidos</h1>
 
-<!-- Encabezado compacto -->
-<div class="card">
-  <div class="grid">
-    <div class="col-2">
-      <label>Folio</label>
-      <input type="text" value="<?= htmlspecialchars((string)$enc['folio']) ?>" readonly>
-    </div>
-    <div class="col-2">
-      <label>Fecha</label>
-      <input type="date" value="<?= htmlspecialchars((string)$enc['fecha']) ?>">
-    </div>
-    <div class="col-4">
-      <label>Empresa</label>
-      <select id="empresa_id"><?= sel($empresas,$enc['empresa_id']) ?></select>
-    </div>
-    <div class="col-4">
-      <label>Almacén</label>
-      <select id="almacen_id"><?= sel($almacenes,$enc['almacen_id']) ?></select>
-    </div>
-
-    <div class="col-3">
-      <label>Tipo de Pedido</label>
-      <select id="tipo_id"><?= sel($tipos,$enc['tipo_id']) ?></select>
-    </div>
-    <div class="col-3">
-      <label>status</label>
-      <select id="status_id"><?= sel($status,$enc['status_id']) ?></select>
-    </div>
-    <div class="col-3">
-      <label>Cliente</label>
-      <select id="cliente_id">
-        <option value="">— PÚBLICO GENERAL —</option>
-        <?= sel($clientes,$enc['cliente_id']) ?>
-      </select>
-    </div>
-    <div class="col-3">
-      <label>Ruta</label>
-      <select id="ruta_id">
-        <option value="">— Sin ruta —</option>
-        <?= sel($rutas,$enc['ruta_id']) ?>
-      </select>
+    <!-- ===================== Sección 1: Empresa y Almacén ===================== -->
+    <div class="ap-card">
+        <h2 class="ap-section-title">1. Empresa y Almacén</h2>
+        <div class="ap-grid">
+            <div class="ap-col-4">
+                <label class="ap-required">Empresa</label>
+                <select>
+                    <option>Empresa Demo 1</option>
+                    <option>Empresa Demo 2</option>
+                </select>
+            </div>
+            <div class="ap-col-4">
+                <label class="ap-required">Almacén</label>
+                <select>
+                    <option>(ID100) - Operador Logístico 3PL</option>
+                    <option>(ID200) - Almacén Norte</option>
+                </select>
+            </div>
+        </div>
     </div>
 
-    <div class="col-4">
-      <label>Proyecto</label>
-      <select id="proyecto_id">
-        <option value="">— Sin proyecto —</option>
-        <?= sel($proyectos,$enc['proyecto_id']) ?>
-      </select>
-    </div>
-    <div class="col-8">
-      <label>Comentarios</label>
-      <input type="text" id="comentarios" value="<?= htmlspecialchars((string)($enc['comentarios']??'')) ?>">
-    </div>
-  </div>
-  <div class="row" style="margin-top:8px">
-    <button class="btn btn-primary" id="btn-guardar">Guardar Encabezado</button>
-    <a class="btn btn-ghost" href="pedido_pdf.php?id=<?= (int)$id ?>" target="_blank" <?= $id? '':'style="pointer-events:none;opacity:.5"' ?>>PDF</a>
-    <span class="notice">Títulos en azul, layout compacto (10px) y scroll natural del navegador.</span>
-  </div>
-</div>
+    <!-- ===================== Sección 2: Pedido Externo ===================== -->
+    <div class="ap-card">
+        <h2 class="ap-section-title">2. Pedido Externo</h2>
+        <div class="ap-grid">
+            <div class="ap-col-3">
+                <label class="ap-required">Folio</label>
+                <input type="text" value="S202511142" readonly>
+            </div>
 
-<!-- Captura de detalle (Producto/Cliente visibles) -->
-<div class="card">
-  <div class="grid">
-    <div class="col-6">
-      <label>Producto</label>
-      <!-- visible: select directo (si usas autocomplete vía JS/endpoint, reemplázalo; no cambié consultas) -->
-      <select id="producto_id">
-        <option value="">— Selecciona un producto —</option>
-        <?= sel($productos, '', 'id', 'nombre') ?>
-      </select>
-    </div>
-    <div class="col-2">
-      <label>UOM</label>
-      <input type="text" id="uom" placeholder="PZA" readonly>
-    </div>
-    <div class="col-2">
-      <label>Cantidad</label>
-      <input type="number" id="cantidad" step="1" min="0">
-    </div>
-    <div class="col-2">
-      <label>Precio (Neto)</label>
-      <input type="number" id="precio" step="0.0001" min="0">
-    </div>
-    <div class="col-12 row" style="justify-content:flex-end">
-      <button class="btn btn-secondary btn-xs" id="btn-agregar" disabled>Agregar</button>
-    </div>
-  </div>
+            <div class="ap-col-3">
+                <label class="ap-required">Cliente</label>
+                <input type="text" placeholder="Código del Cliente">
+            </div>
 
-  <div class="hr"></div>
+            <div class="ap-col-3">
+                <label class="ap-required">Usuario que solicita</label>
+                <select>
+                    <option>Seleccione</option>
+                    <option>Usuario 1</option>
+                    <option>Usuario 2</option>
+                </select>
+            </div>
 
-  <table class="table">
-    <thead>
-      <tr>
-        <th style="width:120px">Acciones</th>
-        <th>#</th>
-        <th>Clave</th>
-        <th>Producto</th>
-        <th>UOM</th>
-        <th style="text-align:right">Cantidad</th>
-        <th style="text-align:right">Precio</th>
-        <th style="text-align:right">Subtotal</th>
-      </tr>
-    </thead>
-    <tbody id="grid-detalle">
-      <tr><td colspan="8" class="notice">Sin partidas aún.</td></tr>
-    </tbody>
-  </table>
+            <div class="ap-col-3">
+                <label>Prioridad</label>
+                <select>
+                    <option>1 - Urgente</option>
+                    <option>2 - Alta</option>
+                    <option>3 - Normal</option>
+                </select>
+            </div>
+
+            <div class="ap-col-6">
+                <label>Nombre Cliente</label>
+                <input type="text" class="ap-ro" value="Sin Cliente" readonly>
+            </div>
+
+            <div class="ap-col-3">
+                <label class="ap-required">Fecha de entrega solicitada</label>
+                <input type="date" value="2025-11-19">
+            </div>
+
+            <div class="ap-col-3">
+                <label>Tipo de Venta</label>
+                <div class="ap-inline-options">
+                    <label><input type="radio" name="tipo_venta" value="venta"> Venta</label>
+                    <label><input type="radio" name="tipo_venta" value="preventa" checked> Pre Venta</label>
+                </div>
+            </div>
+
+            <div class="ap-col-2">
+                <label>Horario Desde</label>
+                <input type="time">
+            </div>
+            <div class="ap-col-2">
+                <label>Horario Hasta</label>
+                <input type="time">
+            </div>
+
+            <div class="ap-col-6">
+                <label class="ap-required">Dirección de Entrega</label>
+                <div class="ap-flex ap-gap-8">
+                    <select style="flex:1;">
+                        <option>Seleccione</option>
+                    </select>
+                    <button type="button" class="ap-btn ap-btn-secondary ap-btn-sm">Agregar Destinatario</button>
+                </div>
+                <div class="ap-help-text">Dirección asociada al cliente para el envío del pedido.</div>
+            </div>
+
+            <div class="ap-col-3">
+                <label>Contacto</label>
+                <select>
+                    <option>Seleccione</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== Sección 3: Pedido Interno ===================== -->
+    <div class="ap-card">
+        <h2 class="ap-section-title">3. Pedido Interno</h2>
+        <div class="ap-grid">
+            <div class="ap-col-4">
+                <label>Ruta Venta | Preventa</label>
+                <select>
+                    <option>Ruta</option>
+                    <option>Ruta 1</option>
+                    <option>Ruta 2</option>
+                </select>
+            </div>
+            <div class="ap-col-4">
+                <label>Vendedor / Agente</label>
+                <select>
+                    <option>Seleccione</option>
+                    <option>Vendedor 1</option>
+                    <option>Vendedor 2</option>
+                </select>
+            </div>
+            <div class="ap-col-4">
+                <label>Dia Operativo</label>
+                <input type="text" class="ap-ro" value="" placeholder="Ej. Lunes">
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== Sección 4: Registro del Detalle ===================== -->
+    <div class="ap-card">
+        <h2 class="ap-section-title">4. Registro del Detalle</h2>
+
+        <div class="ap-detail-card">
+            <div class="ap-grid">
+
+                <!-- Fila 1: Proyecto / Contenedor / Pallet / Lote / Lote Alterno -->
+                <div class="ap-col-3">
+                    <label class="ap-required">Proyecto</label>
+                    <select id="proyecto">
+                        <option>Seleccione Proyecto</option>
+                    </select>
+                </div>
+
+                <div class="ap-col-2">
+                    <label>Contenedor</label>
+                    <select id="contenedor">
+                        <option>Seleccione Contenedor</option>
+                    </select>
+                </div>
+
+                <div class="ap-col-2">
+                    <label>Pallet</label>
+                    <select id="pallet">
+                        <option>Seleccione Pallet</option>
+                    </select>
+                </div>
+
+                <div class="ap-col-3">
+                    <label>Lote | Serie</label>
+                    <select id="lote">
+                        <option>Seleccione</option>
+                    </select>
+                </div>
+
+                <div class="ap-col-2">
+                    <label>Lote | Serie Alterno</label>
+                    <select id="lote_alt">
+                        <option>Seleccione Alterno</option>
+                    </select>
+                </div>
+
+                <!-- Fila 2: Artículo / UOM / Cantidad / Precio / Subtotal -->
+                <div class="ap-col-4">
+                    <label class="ap-required">Artículo</label>
+                    <select id="articulo">
+                        <option>Seleccione un Artículo</option>
+                    </select>
+                </div>
+
+                <div class="ap-col-2">
+                    <label class="ap-required">Unidad de Medida</label>
+                    <select id="uom">
+                        <option>PZA</option>
+                        <option>CJA</option>
+                    </select>
+                </div>
+
+                <div class="ap-col-2">
+                    <label class="ap-required">Cantidad</label>
+                    <input type="number" id="cantidad" min="0" placeholder="Cantidad">
+                </div>
+
+                <div class="ap-col-2">
+                    <label>Precio Unitario</label>
+                    <input type="number" id="precio" step="0.01" min="0" value="0.00">
+                </div>
+
+                <div class="ap-col-2">
+                    <label>SubTotal</label>
+                    <input type="text" id="subtotal" class="ap-ro" readonly value="0.00">
+                </div>
+
+                <!-- Fila 3: Descuentos, IVA, Importe -->
+                <div class="ap-col-3">
+                    <label>Descuento %</label>
+                    <input type="number" id="descuento_pct" step="0.01" min="0" value="0">
+                </div>
+
+                <div class="ap-col-3">
+                    <label>Descuento $</label>
+                    <input type="number" id="descuento_monto" step="0.01" min="0" value="0.00">
+                </div>
+
+                <div class="ap-col-3">
+                    <label>IVA</label>
+                    <input type="number" id="iva" step="0.01" min="0" value="0.16">
+                </div>
+
+                <div class="ap-col-3">
+                    <label>Importe Total</label>
+                    <input type="text" id="importe" class="ap-ro" readonly value="0.00">
+                </div>
+
+            </div>
+
+            <div class="ap-flex-between ap-mt-12">
+                <div class="ap-help-text">
+                    Capture la partida y presione <strong>Agregar</strong> para registrarla en la grilla.
+                </div>
+                <div class="ap-flex ap-gap-8">
+                    <button type="button" class="ap-btn ap-btn-primary ap-btn-sm" onclick="apAgregarPartida()">Agregar</button>
+                    <button type="button" class="ap-btn ap-btn-secondary ap-btn-sm">Excel</button>
+                    <button type="button" class="ap-btn ap-btn-danger ap-btn-sm">Imprimir Venta</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grilla ordenada -->
+        <div class="ap-table-wrapper ap-mt-16">
+            <table class="ap-table" id="tblDetalle">
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Proyecto</th>
+                    <th>Contenedor</th>
+                    <th>Pallet</th>
+                    <th>Artículo</th>
+                    <th>UOM</th>
+                    <th>Lote|Serie</th>
+                    <th>Lote|Serie Alterno</th>
+                    <th>Cantidad</th>
+                    <th>Precio Unitario</th>
+                    <th>Descto %</th>
+                    <th>Descto $</th>
+                    <th>IVA</th>
+                    <th>Total</th>
+                    <th>Acciones</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- se llena vía JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="ap-help-text ap-mt-8">
+            Grilla ordenada y limitada a 25 registros por página, con scroll horizontal y vertical según estándar AssistPro.
+        </div>
+
+        <div class="ap-totals">
+            <div class="ap-total-box">
+                <div class="ap-total-label">Total Artículos</div>
+                <div class="ap-total-value" id="totalArticulos">0</div>
+            </div>
+            <div class="ap-total-box">
+                <div class="ap-total-label">Total Piezas</div>
+                <div class="ap-total-value" id="totalPiezas">0</div>
+            </div>
+            <div class="ap-total-box">
+                <div class="ap-total-label">Importe Total Pedido</div>
+                <div class="ap-total-value" id="totalImporte">0.00</div>
+            </div>
+        </div>
+
+        <div class="ap-footer-actions">
+            <button type="button" class="ap-btn ap-btn-primary ap-btn-lg">Guardar</button>
+        </div>
+    </div>
 </div>
 
 <script>
-// Activación de "Agregar" solo para UI (no toca endpoints/consultas)
-const prodSel = document.getElementById('producto_id');
-const qtyInp  = document.getElementById('cantidad');
-const priceInp= document.getElementById('precio');
-const addBtn  = document.getElementById('btn-agregar');
+    const apPartidas = [];
 
-function toggleAdd(){
-  addBtn.disabled = !(prodSel.value && (+qtyInp.value>0));
-}
-['change','input'].forEach(ev=>{
-  prodSel.addEventListener(ev,toggleAdd);
-  qtyInp.addEventListener(ev,toggleAdd);
-  priceInp.addEventListener(ev,toggleAdd);
-});
-toggleAdd();
+    function apCalcImportesPartida() {
+        const precio = Number(document.getElementById('precio').value || 0);
+        const cantidad = Number(document.getElementById('cantidad').value || 0);
+        const descMonto = Number(document.getElementById('descuento_monto').value || 0);
+        const descPct = Number(document.getElementById('descuento_pct').value || 0);
+        const ivaPct = Number(document.getElementById('iva').value || 0);
 
-// Guardar encabezado (igual que antes)
-document.getElementById('btn-guardar')?.addEventListener('click', async () => {
-  const payload = {
-    id: <?= (int)$id ?>,
-    empresa_id: +document.getElementById('empresa_id').value || 0,
-    almacen_id: +document.getElementById('almacen_id').value || 0,
-    tipo_id: +document.getElementById('tipo_id').value || 0,
-    status_id: +document.getElementById('status_id').value || 0,
-    cliente_id: document.getElementById('cliente_id').value || null,
-    ruta_id: document.getElementById('ruta_id').value || null,
-    proyecto_id: document.getElementById('proyecto_id').value || null,
-    comentarios: document.getElementById('comentarios').value || ''
-  };
-  try{
-    const r = await fetch('pedido_guardar.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const j = await r.json();
-    if(!j.ok) throw new Error(j.msg||'Error al guardar');
-    alert('Encabezado guardado');
-    if(j.id && <?= (int)$id ?>===0){ location.href='pedido.php?id='+j.id; }
-  }catch(err){ alert(err.message); }
-});
+        let subtotal = precio * cantidad;
+        if (descPct > 0) subtotal = subtotal * (1 - (descPct / 100));
+        subtotal = subtotal - descMonto;
+        if (subtotal < 0) subtotal = 0;
 
-// Grid de ejemplo con acciones (solo visual; integra tu fuente real de líneas)
-function renderRow(idx,data){
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td>
-      <div class="actions">
-        <button class="btn btn-ghost btn-xs">✏️ Editar</button>
-        <a class="btn btn-secondary btn-xs" href="pedido_pdf.php?id=<?= (int)$id ?>" target="_blank" <?= $id? '':'style="pointer-events:none;opacity:.5"' ?>>PDF</a>
-      </div>
-    </td>
-    <td>${idx}</td>
-    <td>${data.clave||''}</td>
-    <td>${data.nombre||''}</td>
-    <td>${data.uom||''}</td>
-    <td style="text-align:right">${Number(data.cantidad||0).toLocaleString()}</td>
-    <td style="text-align:right">${Number(data.precio||0).toFixed(2)}</td>
-    <td style="text-align:right">${(Number(data.cantidad||0)*Number(data.precio||0)).toFixed(2)}</td>
-  `;
-  return tr;
-}
+        const iva = subtotal * ivaPct;
+        const total = subtotal + iva;
+
+        document.getElementById('subtotal').value = subtotal.toFixed(2);
+        document.getElementById('importe').value = total.toFixed(2);
+    }
+
+    ['precio','cantidad','descuento_monto','descuento_pct','iva'].forEach(id=>{
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', apCalcImportesPartida);
+    });
+
+    function apAgregarPartida() {
+        const articuloSel = document.getElementById('articulo');
+        if (!articuloSel.value) {
+            alert('Seleccione un artículo para agregar.');
+            return;
+        }
+
+        const data = {
+            proyecto: document.getElementById('proyecto').value,
+            contenedor: document.getElementById('contenedor').value,
+            pallet: document.getElementById('pallet').value,
+            articulo: articuloSel.options[articuloSel.selectedIndex].text,
+            uom: document.getElementById('uom').value,
+            lote: document.getElementById('lote').value,
+            lote_alt: document.getElementById('lote_alt').value,
+            cantidad: Number(document.getElementById('cantidad').value || 0),
+            precio: Number(document.getElementById('precio').value || 0),
+            descuento_pct: Number(document.getElementById('descuento_pct').value || 0),
+            descuento_monto: Number(document.getElementById('descuento_monto').value || 0),
+            iva: Number(document.getElementById('iva').value || 0),
+            importe: Number(document.getElementById('importe').value || 0)
+        };
+
+        apPartidas.push(data);
+        apRenderPartidas();
+    }
+
+    function apEliminarPartida(idx){
+        apPartidas.splice(idx,1);
+        apRenderPartidas();
+    }
+
+    function apRenderPartidas() {
+        const tbody = document.querySelector('#tblDetalle tbody');
+        tbody.innerHTML = '';
+
+        let totalArt = apPartidas.length;
+        let totalPzas = 0;
+        let totalImporte = 0;
+
+        apPartidas.forEach((p, idx) => {
+            totalPzas += p.cantidad;
+            totalImporte += p.importe;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${idx + 1}</td>
+                <td>${p.proyecto || ''}</td>
+                <td>${p.contenedor || ''}</td>
+                <td>${p.pallet || ''}</td>
+                <td>${p.articulo || ''}</td>
+                <td>${p.uom || ''}</td>
+                <td>${p.lote || ''}</td>
+                <td>${p.lote_alt || ''}</td>
+                <td class="ap-text-right">${p.cantidad.toLocaleString()}</td>
+                <td class="ap-text-right">${p.precio.toFixed(2)}</td>
+                <td class="ap-text-right">${p.descuento_pct.toFixed(2)}</td>
+                <td class="ap-text-right">${p.descuento_monto.toFixed(2)}</td>
+                <td class="ap-text-right">${p.iva.toFixed(2)}</td>
+                <td class="ap-text-right">${p.importe.toFixed(2)}</td>
+                <td>
+                    <button type="button" class="ap-btn ap-btn-secondary ap-btn-sm" onclick="apEliminarPartida(${idx})">Eliminar</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('totalArticulos').textContent = totalArt;
+        document.getElementById('totalPiezas').textContent = totalPzas.toLocaleString();
+        document.getElementById('totalImporte').textContent = totalImporte.toFixed(2);
+    }
 </script>
 
-</body>
-</html>
+<?php
+require_once __DIR__ . '/../bi/_menu_global_end.php';
+?>

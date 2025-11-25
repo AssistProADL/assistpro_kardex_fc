@@ -1,254 +1,236 @@
- <?php
+<?php
 @session_start();
 require_once __DIR__ . '/../../app/db.php';
+
+/* ============================================================
+   CONEXIÓN
+============================================================ */
 $pdo = db_pdo();
 
 /* ============================================================
-   CONFIG / HELPERS
+   HELPERS
 ============================================================ */
-$CFG = [
-  'BL_MANUFACTURA_DEFAULT' => 'MANU-BL',   // BL por defecto para manufactura
-];
-
-function table_exists($table){
-  return (int)db_val("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", [$table]) > 0;
-}
-function col_exists($table, $col){
-  return (int)db_val("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?", [$table, $col]) > 0;
-}
-function first_existing_col($table, $candidates){
-  foreach($candidates as $c){ if(col_exists($table,$c)) return $c; }
-  return null;
+function table_exists(string $table): bool {
+    return (int)db_val("
+        SELECT COUNT(*)
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = ?
+    ", [$table]) > 0;
 }
 
 /**
- * Devuelve stock disponible de un artículo en un BL específico.
- * Si no existe tabla/columnas de stock, devuelve null para no romper la vista.
+ * Stock disponible en un BL (zona + idy_ubica) para un artículo.
+ * Suma ts_existenciapiezas + ts_existenciatarima (solo activos / no QA).
  */
-function stock_disponible_en_bl($cve_articulo, $bl){
-  if (!table_exists('stock_ubic')) return null;
+function stock_disponible_en_bl(string $articulo, int $cve_almac, int $idy_ubica, array &$debug = null): float
+{
+    $total = 0.0;
+    $dbg   = [];
 
-  $colArt = first_existing_col('stock_ubic', ['Cve_Articulo','cve_articulo','Articulo','articulo','CLAVE']);
-  $colBL  = first_existing_col('stock_ubic', ['BL','Bl','bl','Bin','bin','Ubicacion','ubicacion','BL_CODE','bl_code']);
-  $qtyCol = first_existing_col('stock_ubic', ['Cantidad','cantidad','Existencia','existencia','Stock','stock','Disponible','disponible','qty','QTY']);
+    // Piezas
+    if (table_exists('ts_existenciapiezas')) {
+        $sql1 = "
+            SELECT SUM(Existencia)
+            FROM ts_existenciapiezas
+            WHERE cve_almac    = ?
+              AND idy_ubica    = ?
+              AND cve_articulo = ?
+              AND IFNULL(Cuarentena,0) = 0
+        ";
+        $p1  = [$cve_almac, $idy_ubica, $articulo];
+        $v1  = (float)db_val($sql1, $p1);
+        $total += $v1;
+        $dbg['piezas'] = ['sql' => $sql1, 'params' => $p1, 'resultado' => $v1];
+    }
 
-  if (!$colArt || !$colBL || !$qtyCol) return null;
+    // Tarimas
+    if (table_exists('ts_existenciatarima')) {
+        $sql2 = "
+            SELECT SUM(existencia)
+            FROM ts_existenciatarima
+            WHERE cve_almac    = ?
+              AND idy_ubica    = ?
+              AND cve_articulo = ?
+              AND IFNULL(Cuarentena,0) = 0
+              AND IFNULL(Activo,1) = 1
+        ";
+        $p2  = [$cve_almac, $idy_ubica, $articulo];
+        $v2  = (float)db_val($sql2, $p2);
+        $total += $v2;
+        $dbg['tarima'] = ['sql' => $sql2, 'params' => $p2, 'resultado' => $v2];
+    }
 
-  $sql = "SELECT SUM($qtyCol) AS qty FROM stock_ubic WHERE $colArt = ? AND $colBL = ?";
-  $r = db_row($sql, [$cve_articulo, $bl]);
-  if (!$r) return 0.0;
-  return (float)($r['qty'] ?? 0.0);
+    if ($debug !== null) {
+        $debug = $dbg;
+    }
+
+    return $total;
 }
 
 /* ============================================================
-   API AJAX
+   API AJAX (JSON)
 ============================================================ */
-$op = $_POST['op'] ?? $_GET['op'] ?? null;
+$op = $_GET['op'] ?? $_POST['op'] ?? null;
+
 if ($op) {
-
-  // Buscar productos compuestos (clave/descr)
-  if ($op === 'buscar_compuestos') {
     header('Content-Type: application/json; charset=utf-8');
-    try{
-      $q = trim($_GET['q'] ?? $_POST['q'] ?? '');
-      $p = [];
-      $sql = "
-        SELECT
-          cve_articulo,
-          des_articulo,
-          cve_umed AS unidadMedida
-        FROM c_articulo
-        WHERE COALESCE(Compuesto,'N')='S'
-      ";
-      if ($q !== '') {
-        $sql .= " AND (cve_articulo LIKE ? OR des_articulo LIKE ?) ";
-        $p[] = "%$q%"; $p[] = "%$q%";
-      }
-      $sql .= " ORDER BY des_articulo LIMIT 30";
-      $rows = db_all($sql, $p);
-      echo json_encode(['ok'=>true,'data'=>$rows]); exit;
-    }catch(Throwable $e){
-      echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); exit;
+
+    try {
+
+        /* ---------- ZONAS POR ALMACÉN (c_almacenp -> c_almacen) ---------- */
+        if ($op === 'listar_zonas') {
+            $almacenp = (int)($_GET['almacenp'] ?? $_POST['almacenp'] ?? 0);
+
+            if (!$almacenp) {
+                echo json_encode(['ok' => false, 'error' => 'Almacén requerido']); exit;
+            }
+
+            if (!table_exists('c_almacen')) {
+                echo json_encode(['ok' => false, 'error' => 'Tabla c_almacen no existe']); exit;
+            }
+
+            $rows = db_all("
+                SELECT
+                    cve_almac,
+                    clave_almacen,
+                    des_almac
+                FROM c_almacen
+                WHERE IFNULL(Activo,1) = 1
+                  AND cve_almacenp     = ?
+                ORDER BY clave_almacen, des_almac
+            ", [$almacenp]);
+
+            echo json_encode(['ok' => true, 'data' => $rows]); exit;
+        }
+
+        /* ---------- BL DE MANUFACTURA POR ZONA (c_ubicacion) ---------- */
+        if ($op === 'listar_bls') {
+            $zona = (int)($_GET['zona'] ?? $_POST['zona'] ?? 0);
+
+            if (!$zona) {
+                echo json_encode(['ok' => false, 'error' => 'Zona de almacén requerida']); exit;
+            }
+
+            if (!table_exists('c_ubicacion')) {
+                echo json_encode(['ok' => false, 'error' => 'Tabla c_ubicacion no existe']); exit;
+            }
+
+            // AJUSTE: AreaProduccion 'S'/'N' y Activo numérico 0/1
+            $rows = db_all("
+                SELECT
+                    idy_ubica,
+                    CodigoCSD AS bl
+                FROM c_ubicacion
+                WHERE cve_almac                 = ?
+                  AND IFNULL(AreaProduccion,'N') = 'S'
+                  AND IFNULL(Activo,1)           = 1
+                ORDER BY CodigoCSD
+            ", [$zona]);
+
+            echo json_encode(['ok' => true, 'data' => $rows]); exit;
+        }
+
+        /* ---------- CÁLCULO DE REQUERIMIENTOS ---------- */
+        if ($op === 'calc_requerimientos') {
+            $producto   = trim($_POST['producto']   ?? '');
+            $cantidad   = (float)($_POST['cantidad'] ?? 0);
+            $cve_almac  = (int)($_POST['cve_almac']  ?? 0);   // zona (c_almacen.cve_almac)
+            $idy_ubica  = (int)($_POST['idy_ubica']  ?? 0);   // BL (c_ubicacion.idy_ubica)
+            $wantDebug  = !empty($_POST['debug_stock']);
+
+            if ($producto === '' || $cantidad <= 0) {
+                echo json_encode(['ok' => false, 'error' => 'Producto compuesto y cantidad son requeridos']); exit;
+            }
+
+            if (!table_exists('t_artcompuesto')) {
+                echo json_encode(['ok' => false, 'error' => 'Tabla t_artcompuesto no existe']); exit;
+            }
+            if (!table_exists('c_articulo')) {
+                echo json_encode(['ok' => false, 'error' => 'Tabla c_articulo no existe']); exit;
+            }
+
+            // Componentes del BOM (idéntico a bom.php)
+            $componentes = db_all("
+                SELECT
+                    c.Cve_ArtComponente              AS componente,
+                    a.des_articulo                   AS descripcion,
+                    c.Cantidad                       AS cantidad,
+                    COALESCE(c.cve_umed, a.cve_umed) AS unidad
+                FROM t_artcompuesto c
+                LEFT JOIN c_articulo a
+                       ON a.cve_articulo = c.Cve_ArtComponente
+                WHERE c.Cve_Articulo = ?
+                  AND (c.Activo IS NULL OR c.Activo = 1)
+                ORDER BY c.Cve_ArtComponente
+            ", [$producto]);
+
+            if (!$componentes) {
+                echo json_encode(['ok' => false, 'error' => 'El producto no tiene componentes configurados en t_artcompuesto']); exit;
+            }
+
+            $detalles    = [];
+            $debugStock  = [];
+
+            foreach ($componentes as $idx => $c) {
+                $debugRow   = null;
+                $stock_bl   = 0.0;
+
+                if ($cve_almac && $idy_ubica) {
+                    $stock_bl = stock_disponible_en_bl($c['componente'], $cve_almac, $idy_ubica, $debugRow);
+                }
+
+                $cant_por_uni = (float)$c['cantidad'];
+                $cant_total   = $cant_por_uni * $cantidad;
+
+                $detalles[] = [
+                    'componente'        => $c['componente'],
+                    'descripcion'       => $c['descripcion'],
+                    'umed'              => $c['unidad'],
+                    'cantidad_por_uni'  => $cant_por_uni,
+                    'cantidad_total'    => $cant_total,
+                    'cantidad_solic'    => $cant_total, // por ahora igual
+                    'stock_bl'          => $stock_bl
+                ];
+
+                // Para no inflar la respuesta, mandamos el debug del primer componente
+                if ($wantDebug && $idx === 0) {
+                    $debugStock = $debugRow;
+                }
+            }
+
+            echo json_encode([
+                'ok'          => true,
+                'detalles'    => $detalles,
+                'debug_stock' => $debugStock
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        echo json_encode(['ok' => false, 'error' => 'Operación no válida']); exit;
+
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()]); exit;
     }
-  }
-
-  // Explosión BOM para cálculo de requerimientos
-  if ($op === 'explosion') {
-    header('Content-Type: application/json; charset=utf-8');
-    try{
-      $padre   = trim($_POST['padre'] ?? $_GET['padre'] ?? '');
-      $fec_ot  = trim($_POST['fec_ot'] ?? $_GET['fec_ot'] ?? '');
-      $fec_com = trim($_POST['fec_com'] ?? $_GET['fec_com'] ?? '');
-      $cant    = (float)($_POST['cantidad'] ?? $_GET['cantidad'] ?? 0);
-      $bl_man  = trim($_POST['bl_man'] ?? $_GET['bl_man'] ?? '');
-
-      if ($padre==='') throw new Exception('Selecciona un producto compuesto.');
-      if ($cant<=0)    throw new Exception('La cantidad a producir debe ser mayor a cero.');
-
-      // Encabezado del padre
-      $prod = db_row("
-        SELECT
-          cve_articulo,
-          des_articulo,
-          cve_umed AS unidadMedida
-        FROM c_articulo
-        WHERE cve_articulo = ?
-      ", [$padre]);
-      if (!$prod) throw new Exception('Producto no encontrado.');
-
-      // Componentes (BOM) desde t_artcompuesto + c_articulo
-      $rows = db_all("
-        SELECT
-          c.Cve_ArtComponente                 AS componente,
-          a.des_articulo                      AS descripcion,
-          COALESCE(c.cve_umed, a.cve_umed)    AS umed,
-          c.Cantidad                          AS cant_por_unidad
-        FROM t_artcompuesto c
-        LEFT JOIN c_articulo a
-               ON a.cve_articulo = c.Cve_ArtComponente
-        WHERE c.Cve_Articulo = ?
-          AND (c.Activo IS NULL OR c.Activo = 1)
-        ORDER BY c.Cve_ArtComponente
-      ", [$padre]);
-
-      // Calcular cantidades y stock
-      $det = [];
-      foreach($rows as $r){
-        $cant_unit  = (float)$r['cant_por_unidad'];
-        $cant_total = $cant_unit * $cant;
-        $stock = ($bl_man!=='') ? stock_disponible_en_bl($r['componente'], $bl_man) : null;
-        $det[] = [
-          'componente'      => $r['componente'],
-          'descripcion'     => $r['descripcion'],
-          'umed'            => $r['umed'],
-          'cant_por_unidad' => $cant_unit,
-          'cant_total'      => $cant_total,
-          'cant_solicitada' => $cant_total, // editable en UI
-          'stock_disponible'=> is_null($stock) ? null : (float)$stock,
-        ];
-      }
-
-      echo json_encode([
-        'ok'=>true,
-        'padre'=>$prod,
-        'fec_ot'=>$fec_ot,
-        'fec_com'=>$fec_com,
-        'cantidad'=>$cant,
-        'bl_man'=>$bl_man,
-        'det'=>$det
-      ]); exit;
-
-    }catch(Throwable $e){
-      echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); exit;
-    }
-  }
-
-  // Exportar CSV del requerimiento actual
-  if ($op === 'export_req_csv') {
-    try{
-      $padre   = trim($_GET['padre'] ?? '');
-      $cant    = (float)($_GET['cantidad'] ?? 0);
-      $bl_man  = trim($_GET['bl_man'] ?? '');
-      if ($padre==='' || $cant<=0) throw new Exception('Parámetros inválidos para exportar.');
-
-      $prod = db_row("
-        SELECT
-          cve_articulo,
-          des_articulo,
-          cve_umed AS unidadMedida
-        FROM c_articulo
-        WHERE cve_articulo = ?
-      ", [$padre]);
-      if (!$prod) throw new Exception('Producto no encontrado.');
-
-      $rows = db_all("
-        SELECT
-          c.Cve_ArtComponente                 AS componente,
-          a.des_articulo                      AS descripcion,
-          COALESCE(c.cve_umed, a.cve_umed)    AS umed,
-          c.Cantidad                          AS cant_por_unidad
-        FROM t_artcompuesto c
-        LEFT JOIN c_articulo a
-               ON a.cve_articulo = c.Cve_ArtComponente
-        WHERE c.Cve_Articulo = ?
-          AND (c.Activo IS NULL OR c.Activo = 1)
-        ORDER BY c.Cve_ArtComponente
-      ", [$padre]);
-
-      $filename = "REQ_{$padre}_".date('Ymd_His').".csv";
-      header('Content-Type: text/csv; charset=utf-8');
-      header("Content-Disposition: attachment; filename=\"$filename\"");
-      $out = fopen('php://output', 'w');
-      fputcsv($out, ['Producto Compuesto', $prod['cve_articulo']]);
-      fputcsv($out, ['Descripción',        $prod['des_articulo']]);
-      fputcsv($out, ['UMed (cve_umed)',    $prod['unidadMedida']]);
-      fputcsv($out, ['Cantidad a Producir',$cant]);
-      fputcsv($out, ['BL Manufactura',     $bl_man]);
-      fputcsv($out, ['Generado',           date('Y-m-d H:i:s')]);
-      fputcsv($out, []);
-      fputcsv($out, ['Componente','Descripción','UMed (cve_umed)','Cantidad por unidad','Cantidad total','Stock disponible (BL)']);
-      foreach($rows as $r){
-        $cant_total = (float)$r['cant_por_unidad'] * $cant;
-        $stock = ($bl_man!=='') ? stock_disponible_en_bl($r['componente'], $bl_man) : null;
-        fputcsv($out, [
-          $r['componente'],
-          $r['descripcion'],
-          $r['umed'],
-          $r['cant_por_unidad'],
-          $cant_total,
-          is_null($stock)?'':$stock
-        ]);
-      }
-      fclose($out); exit;
-
-    }catch(Throwable $e){
-      header('Content-Type: application/json; charset=utf-8');
-      echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); exit;
-    }
-  }
-
-  // Operación inválida
-  header('Content-Type: application/json; charset=utf-8');
-  echo json_encode(['ok'=>false,'msg'=>'Operación no válida']); exit;
 }
 
 /* ============================================================
-   CARGA DE COMBOS (solo para la vista normal, sin op)
+   CARGA INICIAL (HTML)
 ============================================================ */
 
-$almacenes = [];
-$zonas     = [];
-$pedidos   = [];
-
+// Almacenes (c_almacenp) -> value = id (clave interna)
+$almacenesP = [];
 if (table_exists('c_almacenp')) {
-  // Usa clave y nombre como comentaste
-  $almacenes = db_all("
-    SELECT clave, nombre
-    FROM c_almacenp
-    WHERE COALESCE(Activo,1) = 1
-    ORDER BY clave
-  ");
-}
-if (table_exists('c_almacen')) {
-  $zonas = db_all("
-    SELECT cve_almac, des_almac
-    FROM c_almacen
-    WHERE COALESCE(Activo,'1') = '1'
-    ORDER BY cve_almac
-  ");
-}
-if (table_exists('th_pedido')) {
-  // Ajusta si tu th_pedido tiene otros campos
-  $pedidos = db_all("
-    SELECT Folio_pedido
-    FROM th_pedido
-    ORDER BY Folio_pedido DESC
-    LIMIT 200
-  ");
+    $almacenesP = db_all("
+        SELECT id, clave, nombre
+        FROM c_almacenp
+        WHERE IFNULL(Activo,1) = 1
+        ORDER BY clave, nombre
+    ");
 }
 
+include __DIR__ . '/../bi/_menu_global.php';
 ?>
-<?php include __DIR__ . '/../bi/_menu_global.php'; ?>
 <!doctype html>
 <html lang="es">
 <head>
@@ -259,9 +241,11 @@ if (table_exists('th_pedido')) {
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <style>
   body{font-size:10px;}
-  .table-sm td,table-sm th{padding:.35rem .45rem;vertical-align:middle;}
-  .dt-right{text-align:right;} .dt-center{text-align:center;}
-  .muted{font-size:9px;color:#6c757d;}
+  .section-title{font-size:11px;font-weight:600;color:#555;margin-bottom:4px;}
+  .card-header small{font-size:9px;color:#777;}
+  .table-sm td,.table-sm th{padding:.3rem .4rem;vertical-align:middle;}
+  .dt-right{text-align:right;}
+  .dt-center{text-align:center;}
 </style>
 </head>
 <body>
@@ -269,133 +253,145 @@ if (table_exists('th_pedido')) {
 
   <div class="card mb-2">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <h6 class="mb-0"><i class="bi bi-gear-wide-connected"></i> Orden de Producción</h6>
-      <span class="text-muted">Manufactura</span>
+      <div>
+        <strong><i class="bi bi-diagram-3-fill"></i> Orden de Producción</strong>
+        <small class="ms-2 text-muted">Explosión de materiales / Manufactura</small>
+      </div>
+      <span class="badge bg-secondary">Borrador</span>
     </div>
     <div class="card-body">
 
-      <!-- SELECTS SUPERIORES CORREGIDOS -->
+      <!-- ENCABEZADO OT -->
       <div class="row g-2 mb-2">
-        <div class="col-md-4">
-          <label class="form-label mb-0">Almacén</label>
-          <select id="selAlmacen" class="form-select form-select-sm">
-            <option value="">Seleccione un almacén</option>
-            <?php foreach($almacenes as $a): ?>
-              <option value="<?php echo htmlspecialchars($a['clave']); ?>">
-                <?php echo htmlspecialchars($a['clave'].' - '.$a['nombre']); ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
+        <div class="col-md-3">
+          <label class="form-label section-title">No. OT (interno)</label>
+          <input type="text" class="form-control form-control-sm" id="txtOtInterno"
+                 value="Se asignará al guardar / importar" readonly>
         </div>
-        <div class="col-md-4">
-          <label class="form-label mb-0">Zona de Almacenaje</label>
-          <select id="selZonaAlm" class="form-select form-select-sm">
-            <option value="">Seleccione zona de almacén</option>
-            <?php foreach($zonas as $z): ?>
-              <option value="<?php echo htmlspecialchars($z['cve_almac']); ?>">
-                <?php echo htmlspecialchars($z['cve_almac'].' - '.$z['des_almac']); ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
+        <div class="col-md-3">
+          <label class="form-label section-title">OT ERP</label>
+          <input type="text" class="form-control form-control-sm" id="txtOtErp"
+                 placeholder="Referencia en ERP (opcional)">
         </div>
-        <div class="col-md-4">
-          <label class="form-label mb-0">Pedido de Venta</label>
-          <select id="selPedidoVenta" class="form-select form-select-sm">
-            <option value="">Seleccione pedido</option>
-            <?php foreach($pedidos as $p): ?>
-              <option value="<?php echo htmlspecialchars($p['Folio_pedido']); ?>">
-                <?php echo htmlspecialchars($p['Folio_pedido']); ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
+        <div class="col-md-3">
+          <label class="form-label section-title">Pedido de venta</label>
+          <input type="text" class="form-control form-control-sm" id="txtPedido"
+                 placeholder="(opcional)">
         </div>
       </div>
 
-      <hr class="mt-1 mb-2">
-
-      <!-- Selección de producto compuesto -->
-      <div class="row g-2">
-        <div class="col-md-5">
-          <label class="form-label mb-0">Producto compuesto (clave o descripción)</label>
-          <div class="input-group input-group-sm">
-            <input id="txtBuscar" class="form-control" placeholder="Ej. 1000011321-J1, 'Cherry', etc.">
-            <button id="btnBuscar" class="btn btn-outline-primary"><i class="bi bi-search"></i></button>
-          </div>
-          <div class="table-responsive mt-1" style="max-height:200px; overflow:auto;">
-            <table id="tblProductos" class="table table-sm table-striped table-hover w-100">
-              <thead><tr><th>Clave</th><th>Descripción</th><th>UMed (cve_umed)</th><th style="width:70px">Acción</th></tr></thead>
-              <tbody></tbody>
-            </table>
+      <!-- ALMACÉN / ZONA / BL -->
+      <div class="row g-2 mb-3">
+        <div class="col-md-3">
+          <label class="form-label section-title">Almacén</label>
+          <select class="form-select form-select-sm" id="selAlmacen">
+            <option value="">Seleccione almacén</option>
+            <?php foreach ($almacenesP as $a): ?>
+              <option value="<?= (int)$a['id'] ?>">
+                (<?= htmlspecialchars($a['clave']) ?>) <?= htmlspecialchars($a['nombre']) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label section-title">Zona de Almacenaje</label>
+          <select class="form-select form-select-sm" id="selZona">
+            <option value="">Seleccione zona de almacén</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label section-title">BL Manufactura</label>
+          <select class="form-select form-select-sm" id="selBL">
+            <option value="">Seleccione BL de Manufactura</option>
+          </select>
+          <div class="form-text" style="font-size:9px;">
+            Se listan únicamente BL marcados como área de producción.
           </div>
         </div>
+      </div>
 
-        <div class="col-md-7">
-          <div class="row g-2">
-            <div class="col-md-6">
-              <label class="form-label mb-0">Producto seleccionado</label>
-              <input id="txtPadre" class="form-control form-control-sm" readonly>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label mb-0">Descripción</label>
-              <input id="txtDesc" class="form-control form-control-sm" readonly>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label mb-0">UMed (cve_umed)</label>
-              <input id="txtUM" class="form-control form-control-sm" readonly>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label mb-0">Fecha OT</label>
-              <input id="txtFecOT" type="date" class="form-control form-control-sm">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label mb-0">Fecha compromiso</label>
-              <input id="txtFecCom" type="date" class="form-control form-control-sm">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label mb-0">Cantidad a producir</label>
-              <input id="txtCantidad" type="number" step="0.0001" min="0" class="form-control form-control-sm" value="1">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label mb-0">BL Manufactura</label>
-              <input id="txtBL" class="form-control form-control-sm" value="<?php echo htmlspecialchars($CFG['BL_MANUFACTURA_DEFAULT']); ?>">
-              <div class="muted">En este BL se garantiza el stock para consumo.</div>
-            </div>
-            <div class="col-md-8 d-flex align-items-end">
-              <div class="btn-group btn-group-sm ms-auto">
-                <button id="btnCalcular" class="btn btn-primary"><i class="bi bi-calculator"></i> Calcular requerimientos</button>
-                <button id="btnExport" class="btn btn-outline-secondary" disabled><i class="bi bi-filetype-csv"></i> Exportar CSV</button>
-              </div>
-            </div>
+      <!-- PRODUCTO COMPUESTO -->
+      <div class="row g-2 mb-2">
+        <div class="col-md-6">
+          <label class="form-label section-title">Producto compuesto (clave o descripción)</label>
+          <div class="input-group input-group-sm">
+            <input type="text" class="form-control" id="txtBuscarProd"
+                   placeholder="Escribe código o parte de la descripción">
+            <button class="btn btn-primary" id="btnBuscarProd">
+              <i class="bi bi-search"></i>
+            </button>
           </div>
+          <div class="form-text" style="font-size:9px;">
+            Se busca en c_articulo donde Compuesto = 'S'.
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label section-title">Producto compuesto seleccionado</label>
+          <input type="text" class="form-control form-control-sm" id="txtProdSel" readonly>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label section-title">Descripción</label>
+          <input type="text" class="form-control form-control-sm" id="txtProdDesc" readonly>
+        </div>
+      </div>
+
+      <div class="row g-2 mb-2">
+        <div class="col-md-2">
+          <label class="form-label section-title">UMed</label>
+          <input type="text" class="form-control form-control-sm" id="txtUMed" readonly>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label section-title">Fecha OT</label>
+          <input type="date" class="form-control form-control-sm" id="fecOT"
+                 value="<?= date('Y-m-d') ?>">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label section-title">Fecha compromiso</label>
+          <input type="date" class="form-control form-control-sm" id="fecComp"
+                 value="<?= date('Y-m-d', strtotime('+1 day')) ?>">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label section-title">Cantidad a producir</label>
+          <input type="number" min="1" step="1" class="form-control form-control-sm" id="txtCantidad" value="10">
+        </div>
+        <div class="col-md-4 d-flex align-items-end justify-content-end gap-2">
+          <button class="btn btn-primary btn-sm" id="btnCalc">
+            <i class="bi bi-calculator"></i> Calcular requerimientos
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" id="btnCsv" disabled>
+            <i class="bi bi-filetype-csv"></i> Exportar CSV
+          </button>
         </div>
       </div>
 
       <hr>
 
-      <!-- Resumen encabezado -->
-      <div id="resumenPanel" class="alert alert-light border d-none">
-        <div><strong>Producto compuesto:</strong> <span id="r_padre">—</span> — <span id="r_desc">—</span> (<span id="r_um">—</span>)</div>
-        <div><strong>Cantidad a producir:</strong> <span id="r_cant">—</span> |
-             <strong>Fecha OT:</strong> <span id="r_fecot">—</span> |
-             <strong>Fecha compromiso:</strong> <span id="r_feccom">—</span> |
-             <strong>BL Manufactura:</strong> <span id="r_bl">—</span></div>
+      <!-- RESUMEN CABECERA SELECCIONADA -->
+      <div id="resCabecera" class="mb-2" style="font-size:10px; display:none;">
+        <strong>Producto compuesto:</strong> <span id="lblProd"></span> —
+        <strong>Cantidad a producir:</strong> <span id="lblCant"></span> |
+        <strong>Fecha OT:</strong> <span id="lblFecOT"></span> |
+        <strong>Fecha compromiso:</strong> <span id="lblFecComp"></span> |
+        <strong>BL Manufactura:</strong> <span id="lblBL"></span>
       </div>
 
-      <!-- Componentes requeridos -->
+      <!-- TABLA COMPONENTES -->
       <div class="table-responsive">
-        <table id="tblComp" class="table table-sm table-striped table-hover w-100">
+        <table class="table table-sm table-striped table-hover w-100" id="tblComponentes">
           <thead>
             <tr>
               <th>Componente</th>
               <th>Descripción</th>
-              <th>UMed (cve_umed)</th>
+              <th>UMed</th>
               <th class="dt-right">Cantidad por unidad</th>
               <th class="dt-right">Cantidad total</th>
               <th class="dt-right">Cantidad solicitada</th>
               <th class="dt-right">Stock disponible (BL)</th>
             </tr>
           </thead>
-          <tbody></tbody>
+          <tbody>
+            <!-- se llena por JS -->
+          </tbody>
         </table>
       </div>
 
@@ -404,153 +400,205 @@ if (table_exists('th_pedido')) {
 
 </div>
 
-<!-- Toast -->
-<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1080">
-  <div id="appToast" class="toast align-items-center border-0 text-bg-success" role="alert" aria-live="assertive" aria-atomic="true">
-    <div class="d-flex">
-      <div id="toastBody" class="toast-body">Listo</div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
-    </div>
-  </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.datatables.net/v/bs5/dt-2.1.8/datatables.min.js"></script>
 <script>
 (function(){
   'use strict';
-  let tProd=null, tComp=null, padreSel=null, descSel='', umSel='';
-  let toastObj = new bootstrap.Toast(document.getElementById('appToast'), {delay:3500});
 
-  function toast(msg, ok=true){
-    const el=document.getElementById('appToast'); const body=document.getElementById('toastBody');
-    body.textContent=msg;
-    el.classList.remove('text-bg-success','text-bg-danger','text-bg-warning');
-    el.classList.add(ok?'text-bg-success':'text-bg-danger');
-    toastObj.show();
+  let dtComp = null;
+  let prodSel = null; // código del producto compuesto
+
+  function alertMsg(msg){
+    window.alert(msg);
   }
 
-  function buscar(){
-    const q = $('#txtBuscar').val().trim();
-    $.get('orden_produccion1.php',{op:'buscar_compuestos', q}, (r)=>{
-      if(!r.ok){ toast(r.msg||'Error al buscar', false); return; }
-      const data=r.data||[];
-      if(!tProd){
-        tProd = new DataTable('#tblProductos',{
-          data, paging:true, pageLength:8, lengthChange:false, searching:false, info:true, order:[[1,'asc']],
-          columns:[
-            {data:'cve_articulo'},
-            {data:'des_articulo'},
-            {data:'unidadMedida'},
-            {data:null, orderable:false, className:'dt-center',
-              render:(d,t,x)=>`<button class="btn btn-sm btn-outline-primary actSel" data-id="${x.cve_articulo}" data-desc="${x.des_articulo||''}" data-um="${x.unidadMedida||''}"><i class="bi bi-check2-circle"></i></button>`}
-          ]
-        });
-        $('#tblProductos').on('click','.actSel',function(){
-          padreSel = $(this).data('id'); 
-          descSel  = $(this).data('desc')||''; 
-          umSel    = $(this).data('um')||'';
-          $('#txtPadre').val(padreSel); 
-          $('#txtDesc').val(descSel); 
-          $('#txtUM').val(umSel);
-        });
-      }else{
-        tProd.clear().rows.add(data).draw(false);
+  /* ==========================
+     COMBOS: ALMACÉN → ZONA → BL
+  ========================== */
+  function cargarZonas() {
+    const alm = $('#selAlmacen').val();
+    $('#selZona').empty().append('<option value="">Seleccione zona de almacén</option>');
+    $('#selBL').empty().append('<option value="">Seleccione BL de Manufactura</option>');
+    if (!alm) return;
+
+    $.get('orden_produccion.php', { op:'listar_zonas', almacenp: alm }, function(r){
+      if (!r.ok) {
+        console.log('DEBUG zonas:', r);
+        alertMsg(r.error || 'Error al cargar zonas');
+        return;
       }
-    },'json');
+      (r.data || []).forEach(z => {
+        $('#selZona').append(
+          $('<option>', {
+            value: z.cve_almac,
+            text: '(' + z.clave_almacen + ') ' + z.des_almac
+          })
+        );
+      });
+    }, 'json');
   }
 
+  function cargarBL() {
+    const zona = $('#selZona').val();
+    $('#selBL').empty().append('<option value="">Seleccione BL de Manufactura</option>');
+    if (!zona) return;
+
+    $.get('orden_produccion.php', { op:'listar_bls', zona: zona }, function(r){
+      if (!r.ok) {
+        console.log('DEBUG BL:', r);
+        alertMsg(r.error || 'Error al cargar BL');
+        return;
+      }
+      (r.data || []).forEach(b => {
+        $('#selBL').append(
+          $('<option>', {
+            value: b.idy_ubica,
+            text: b.bl
+          })
+        );
+      });
+    }, 'json');
+  }
+
+  $('#selAlmacen').on('change', cargarZonas);
+  $('#selZona').on('change', cargarBL);
+
+  /* ==========================
+     BÚSQUEDA DE PRODUCTO (usa bom.php)
+  ========================== */
+  function buscarProducto() {
+    const q = $('#txtBuscarProd').val().trim();
+    if (!q) {
+      alertMsg('Escribe parte de la clave o descripción.');
+      return;
+    }
+    $.get('bom.php', { op:'buscar_compuestos', q:q }, function(r){
+      if (!r.ok) {
+        alertMsg(r.msg || 'Error en búsqueda');
+        return;
+      }
+      const data = r.data || [];
+      if (data.length === 0) {
+        alertMsg('No se encontraron productos compuestos que coincidan.');
+        return;
+      }
+      // Tomamos el primero
+      const p = data[0];
+      prodSel = p.cve_articulo;
+      $('#txtProdSel').val(p.cve_articulo);
+      $('#txtProdDesc').val(p.des_articulo);
+      $('#txtUMed').val(p.unidadMedida || '');
+    }, 'json');
+  }
+
+  $('#btnBuscarProd').on('click', buscarProducto);
+  $('#txtBuscarProd').on('keypress', function(e){
+    if (e.which === 13) {
+      e.preventDefault();
+      buscarProducto();
+    }
+  });
+
+  /* ==========================
+     CALCULAR REQUERIMIENTOS
+  ========================== */
   function calcular(){
-    const padre = $('#txtPadre').val().trim();
-    const fecot = $('#txtFecOT').val();
-    const feccom= $('#txtFecCom').val();
-    const cant  = parseFloat($('#txtCantidad').val()||'0');
-    const bl    = $('#txtBL').val().trim();
+    if (!prodSel) {
+      alertMsg('Selecciona primero un producto compuesto.');
+      return;
+    }
+    const cant = parseFloat($('#txtCantidad').val() || '0');
+    if (!(cant > 0)) {
+      alertMsg('Captura una cantidad a producir válida.');
+      return;
+    }
 
-    if(!padre){ toast('Selecciona un producto compuesto.', false); return; }
-    if(isNaN(cant)||cant<=0){ toast('Cantidad a producir inválida.', false); return; }
+    const zona = $('#selZona').val();
+    const bl   = $('#selBL').val();
 
-    $.post('orden_produccion1.php',{
-      op:'explosion',
-      padre:padre, fec_ot:fecot, fec_com:feccom,
-      cantidad:cant, bl_man:bl
-    },(r)=>{
-      if(!r.ok){ toast(r.msg||'No fue posible calcular', false); return; }
-
-      // Resumen
-      $('#resumenPanel').removeClass('d-none');
-      $('#r_padre').text(r.padre?.cve_articulo||'—');
-      $('#r_desc').text(r.padre?.des_articulo||'—');
-      $('#r_um').text(r.padre?.unidadMedida||'—');
-      $('#r_cant').text(r.cantidad);
-      $('#r_fecot').text(r.fec_ot || '—');
-      $('#r_feccom').text(r.fec_com || '—');
-      $('#r_bl').text(r.bl_man || '—');
-
-      // Grilla de componentes
-      const data = r.det||[];
-      if(!tComp){
-        tComp = new DataTable('#tblComp',{
-          data,paging:false,searching:false,info:false,order:[[0,'asc']],
-          columns:[
-            {data:'componente'},
-            {data:'descripcion'},
-            {data:'umed'},
-            {data:'cant_por_unidad',className:'dt-right',
-              render:(v)=> Number(v||0).toLocaleString()
-            },
-            {data:'cant_total',className:'dt-right',
-              render:(v)=> Number(v||0).toLocaleString()
-            },
-            // editable: cantidad solicitada
-            {data:'cant_solicitada',className:'dt-right',
-              render:(v,t,x,meta)=>`<input type="number" step="0.0001" min="0" class="form-control form-control-sm text-end inpSolic" value="${Number(v||0)}" data-row="${meta.row}">`
-            },
-            {data:'stock_disponible',className:'dt-right',
-              render:(v)=>(v===null||v===undefined||v==='')?'—':Number(v).toLocaleString()
-            }
-          ]
-        });
-        $('#tblComp').on('input','.inpSolic',function(){
-          const rowIndex = parseInt($(this).data('row'),10);
-          const val = parseFloat($(this).val()||'0');
-          const row = tComp.row(rowIndex).data();
-          row.cant_solicitada = isNaN(val)?0:val;
-          tComp.row(rowIndex).data(row);
-        });
-      }else{
-        tComp.clear().rows.add(data).draw(false);
+    $.post('orden_produccion.php', {
+      op: 'calc_requerimientos',
+      producto: prodSel,
+      cantidad: cant,
+      cve_almac: zona,
+      idy_ubica: bl,
+      debug_stock: 1
+    }, function(r){
+      console.log('DEBUG calc_requerimientos:', r.debug_stock || {});
+      if (!r.ok) {
+        alertMsg(r.error || 'Error al calcular requerimientos');
+        return;
       }
 
-      $('#btnExport').prop('disabled', false);
-      toast('Requerimiento calculado.');
-    },'json');
+      const det = r.detalles || [];
+
+      if (dtComp) {
+        dtComp.clear().destroy();
+        $('#tblComponentes tbody').empty();
+      }
+
+      det.forEach(d => {
+        $('#tblComponentes tbody').append(
+          `<tr>
+             <td>${d.componente}</td>
+             <td>${d.descripcion || ''}</td>
+             <td>${d.umed || ''}</td>
+             <td class="dt-right">${d.cantidad_por_uni}</td>
+             <td class="dt-right">${d.cantidad_total}</td>
+             <td class="dt-right">${d.cantidad_solic}</td>
+             <td class="dt-right">${d.stock_bl}</td>
+           </tr>`
+        );
+      });
+
+      dtComp = new DataTable('#tblComponentes', {
+        paging: false,
+        searching: false,
+        info: false,
+        order: [[0, 'asc']]
+      });
+
+      // resumen
+      $('#lblProd').text($('#txtProdSel').val() + ' — ' + ($('#txtProdDesc').val() || ''));
+      $('#lblCant').text(cant);
+      $('#lblFecOT').text($('#fecOT').val());
+      $('#lblFecComp').text($('#fecComp').val());
+      $('#lblBL').text($('#selBL option:selected').text() || '');
+      $('#resCabecera').show();
+
+      $('#btnCsv').prop('disabled', det.length === 0);
+
+    }, 'json');
   }
 
-  function exportReq(){
-    const padre = $('#txtPadre').val().trim();
-    const cant  = $('#txtCantidad').val().trim();
-    const bl    = $('#txtBL').val().trim();
-    if(!padre || !cant){ toast('Nada que exportar.', false); return; }
-    const url = `orden_produccion1.php?op=export_req_csv&padre=${encodeURIComponent(padre)}&cantidad=${encodeURIComponent(cant)}&bl_man=${encodeURIComponent(bl)}`;
-    window.location = url;
-  }
+  $('#btnCalc').on('click', calcular);
 
-  // Eventos
-  $('#btnBuscar').on('click',buscar);
-  $('#txtBuscar').on('keypress',e=>{ if(e.which===13) buscar(); });
-  $('#btnCalcular').on('click',calcular);
-  $('#btnExport').on('click',exportReq);
-
-  // Defaults fechas
-  const today = new Date().toISOString().substring(0,10);
-  $('#txtFecOT').val(today);
-  $('#txtFecCom').val(today);
+  /* ==========================
+     EXPORTAR CSV (simple, solo front)
+  ========================== */
+  $('#btnCsv').on('click', function(){
+    if (!dtComp) {
+      alertMsg('No hay datos para exportar.');
+      return;
+    }
+    let csv = 'Componente,Descripcion,UMed,Cantidad_por_unidad,Cantidad_total,Cantidad_solicitada,Stock_BL\n';
+    $('#tblComponentes tbody tr').each(function(){
+      const tds = $(this).find('td').map(function(){ return $(this).text().trim(); }).get();
+      csv += tds.map(v => `"${v.replace(/"/g,'""')}"`).join(',') + "\n";
+    });
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'OT_componentes.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
 
 })();
 </script>
 </body>
 </html>
 <?php include __DIR__ . '/../bi/_menu_global_end.php'; ?>
-

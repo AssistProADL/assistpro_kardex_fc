@@ -142,7 +142,7 @@
 
 <div class="sidebar">
     <div class="logo">
-        <img src="/assistpro_kardex_fc/public/img/logo_adventech_white.png" alt="Logo">
+        <img src="/assistpro_kardex_fc/public/img/logo.png" alt="Logo">
         AssistPro WMS
     </div>
 
@@ -155,32 +155,32 @@
 
         // DASHBOARD
         'Dashboard' => [
-            ['titulo' => 'Online Tracking',          'url' => 'dashboard/onlinetracking.php',               'icono' => 'fa-location-dot'],
-            ['titulo' => 'Resumen Ejecutivo',        'url' => 'dashboard/resumen.php',                      'icono' => 'fa-chart-line'],
+            ['titulo' => 'Análisis Global',          'url' => 'dashboard/index.php',                        'icono' => 'fa-location-dot'],
             ['titulo' => 'Inventario',               'url' => 'dashboard/inventario.php',                   'icono' => 'fa-boxes-stacked'],
-            ['titulo' => 'Monitoreo Entregas',       'url' => 'dashboard/monitoreo.php',                    'icono' => 'fa-truck-fast'],
-            ['titulo' => 'Monitoreo Pedidos',        'url' => 'dashboard/monitoreopedidos.php',             'icono' => 'fa-receipt'],
             ['titulo' => 'Resumen Básico',           'url' => 'dashboard/resumen_basico.php',               'icono' => 'fa-chart-pie'],
-            ['titulo' => 'Dashboard License Plate',  'url' => 'dashboard/license_plate.php',                'icono' => 'fa-barcode'],
             ['titulo' => 'Dashboard Inventarios',    'url' => 'dashboard/adm_inventarios.php',              'icono' => 'fa-warehouse'],
-            ['titulo' => 'Config. de Almacén',       'url' => 'dashboard/configuracion_almacen.php',        'icono' => 'fa-gear'],
             ['titulo' => 'Cobranza – Cobro',         'url' => 'dashboard/cobranza_cobro.php',               'icono' => 'fa-money-bill-wave'],
             ['titulo' => 'Cobranza – Analítico',     'url' => 'dashboard/cobranza_analitico.php',           'icono' => 'fa-chart-area'],
             ['titulo' => 'Kardex Productividad',     'url' => 'dashboard/kardex_productividad_session.php', 'icono' => 'fa-chart-line'],
             ['titulo' => 'Kardex Dashboard',         'url' => 'dashboard/kardex.php',                       'icono' => 'fa-file-lines'],
-        ],
+                      ],
 
-        // ADMINISTRACIÓN
+  // ADMINISTRACIÓN
         'Administración' => [
             ['titulo' => 'Compañías',                'url' => 'admin/companias.php',                        'icono' => 'fa-building'],
             ['titulo' => 'Usuarios',                 'url' => 'admin/usuarios.php',                         'icono' => 'fa-user'],
             ['titulo' => 'Perfiles',                 'url' => 'admin/perfiles.php',                         'icono' => 'fa-id-badge'],
             ['titulo' => 'Zonas',                    'url' => 'admin/zonas.php',                            'icono' => 'fa-map'],
-        ],
+                            ],
 
-        // CATÁLOGOS
+
+// CRM
+        'CRM' => [
+            ['titulo' => 'Cotizaciones',              'url' => 'crm/cotizaciones.php',                       'icono' => 'fa-building'],
+                 ],
+                       
+  // CATÁLOGOS
         'Catálogos' => [
-            
             ['titulo' => 'Ajustes | Incidencias',    'url' => 'catalogos/catalogos/cat_c_motivoajuste.php',           'icono' => 'fa-circle'],
             ['titulo' => 'License Plate',            'url' => 'catalogos/catalogos/cat_c_licenseplate.php',           'icono' => 'fa-circle'],
             ['titulo' => 'Motivo No Ventas',         'url' => 'catalogos/catalogos/cat_c_motivosnoventas.php',        'icono' => 'fa-circle'],
@@ -193,53 +193,116 @@
             ['titulo' => 'QA | Cuarentena',          'url' => 'catalogos/catalogos/cat_c_motivocuarentena.php',       'icono' => 'fa-triangle-exclamation'],
             ['titulo' => 'Rutas',                    'url' => 'catalogos/catalogos/cat_c_ruta.php',                   'icono' => 'fa-road'],
             ['titulo' => 'Tipo de Prioridad',        'url' => 'catalogos/catalogos/cat_c_tipodeprioridad.php',        'icono' => 'fa-layer-group'],
-        ],
+            ['titulo' => 'Formas de Pago',           'url' => 'sfa/formas_pago.php',                                  'icono' => 'fa-credit-card'],
+                       ],
 
-        // SFA
+ // SFA
         'SFA' => [
             ['titulo' => 'Lista de Precios',         'url' => 'sfa/lista_precios.php',                     'icono' => 'fa-tags'],
             ['titulo' => 'Lista de Descuentos',      'url' => 'sfa/lista_descuentos.php',                  'icono' => 'fa-percent'],
             ['titulo' => 'Promociones',              'url' => 'sfa/promociones.php',                       'icono' => 'fa-gift'],
             ['titulo' => 'Grupo Promociones',        'url' => 'sfa/grupo_promociones.php',                 'icono' => 'fa-layer-group'],
-            ['titulo' => 'Formas de Pago',           'url' => 'sfa/formas_pago.php',                       'icono' => 'fa-credit-card'],
-            ['titulo' => 'Ticket',                   'url' => 'sfa/ticket.php',                            'icono' => 'fa-ticket'],
-        ],
+                 ],
 
-        // PROCESOS
+ // ADMINISTRACIÓN DE ALMACEN
+         'Administración Almacen' => [
+            ['titulo' => 'Config. de Almacén',        'url' => 'config_almacen/configuracion_almacen.php',        'icono' => 'fa-gear'],
+            ['titulo' => 'Pallets y Contenedores',    'url' => 'config_almacen/license_plate.php',                'icono' => 'fa-right-left'],
+                 ],
+  
+
+ // PROCESOS
         'Procesos' => [
-            ['titulo' => 'Entradas',                 'url' => 'procesos/entradas.php',                      'icono' => 'fa-right-to-bracket'],
-            ['titulo' => 'Cross Dock',               'url' => 'procesos/crossdock.php',                     'icono' => 'fa-right-left'],
-            ['titulo' => 'Put Away',                 'url' => 'procesos/putaway.php',                       'icono' => 'fa-box-archive'],
-            ['titulo' => 'Pallets y Contenedores',   'url' => 'procesos/paletsycontenedores.php',           'icono' => 'fa-boxes-packing'],
-            ['titulo' => 'Picking',                  'url' => 'procesos/picking.php',                       'icono' => 'fa-hand-pointer'],
-            ['titulo' => 'Reabasto (Replenishment)', 'url' => 'procesos/reabasto.php',                      'icono' => 'fa-rotate'],
-            ['titulo' => 'QA / Auditoría',           'url' => 'procesos/qa_auditoria.php',                  'icono' => 'fa-clipboard-check'],
-            ['titulo' => 'Inventarios',              'url' => 'procesos/inventarios.php',                   'icono' => 'fa-clipboard-list'],
+            ['titulo' => 'Ingeniería y Servicio',    'url' => 'procesos/servicio_depot/recepcion.php',      'icono' => 'fa-rotate'],
             ['titulo' => 'Existencias',              'url' => 'procesos/existencias.php',                   'icono' => 'fa-cubes'],
-            ['titulo' => 'Embarques',                'url' => 'procesos/embarques.php',                     'icono' => 'fa-truck-ramp-box'],
-            ['titulo' => 'Planeación',               'url' => 'procesos/planeacion.php',                    'icono' => 'fa-calendar-check'],
-            ['titulo' => 'Administración',           'url' => 'procesos/administracion.php',                'icono' => 'fa-briefcase'],
-            ['titulo' => 'Manufactura',              'url' => 'procesos/manufactura.php',                   'icono' => 'fa-industry'],
             ['titulo' => 'Control de Incidencias (PQRS)','url' => 'procesos/incidencias.php',              'icono' => 'fa-flag'],
             ['titulo' => 'Control de Activos',       'url' => 'procesos/control_activos.php',               'icono' => 'fa-screwdriver-wrench'],
             ['titulo' => 'Logística Inversa',        'url' => 'procesos/logistica_inversa.php',             'icono' => 'fa-rotate-left'],
+                      ],
+
+// INGRESOS
+        'Ingresos' => [
+            ['titulo' => 'Orden de Compra',           'url' => 'ingresos/orden_compra.php',              'icono' => 'fa-right-to-bracket'],
+            ['titulo' => 'Recepción de Materiales',   'url' => 'ingresos/recepcion_materiales.php',      'icono' => 'fa-box-archive'],
+            ['titulo' => 'Administración de Ingresos','url' => 'ingresos/ingresos_admin.php',            'icono' => 'fa-right-left'],
+            ['titulo' => 'RTM',                       'url' => 'ingresos/rtm_pendiente_acomodo.php',     'icono' => 'fa-box-archive'],
+                      ],
+
+// PUTAWAY
+        'PutAway' => [
+            ['titulo' => 'PutAway (Acomodo)',         'url' => 'putaway/putaway.php',                   'icono' => 'fa-right-left'],
+            ['titulo' => 'Traslado',                  'url' => 'putaway/traslado.php',                  'icono' => 'fa-box-archive'],
+            ['titulo' => 'Traslado entre Almacenes',  'url' => 'putaway/traslado_entre_almacenes.php',  'icono' => 'fa-box-archive'],
+                                ],
+
+// PICKING
+        'Picking' => [
+            ['titulo' => 'Registro de Pedidos',       'url' => 'pedidos/pedido.php',                   'icono' => 'fa-right-left'],
+            ['titulo' => 'Administración de Pedidos', 'url' => 'pedidos/picking_admin.php',            'icono' => 'fa-right-left'],
+            ['titulo' => 'Secuencia de Surtido',      'url' => 'pedidos/secuencia_surtido.php',        'icono' => 'fa-box-archive'],
+                     ],
+
+
+// MANUFACTURA KITTING
+        'Manufactura' => [
+            ['titulo' => 'Agregar Editar Componentes ',  'url' => 'manufactura/bom.php',                   'icono' => 'fa-industry'],
+            ['titulo' => 'Orden de Produción',           'url' => 'manufactura/orden_produccion.php',         'icono' => 'fa-flag'],
+            ['titulo' => 'Administración OTs',           'url' => 'manufactura/orden_produccion_admin.php',   'icono' => 'fa-screwdriver-wrench'],
+               ],
+         
+// QA AUDITORIA
+        'QA Auditoría' => [
+            ['titulo' => 'Auditoria y Empaque',  'url' => 'qa_auditoria/auditoriayempaque.php',                   'icono' => 'fa-industry'],
+            ['titulo' => 'Admin',           'url' => 'qa_auditoria/admin.php',         'icono' => 'fa-flag'],
+            ['titulo' => 'Admin QA',           'url' => 'qa_auditoria/listas_adminqa.php',   'icono' => 'fa-screwdriver-wrench'],
+            ['titulo' => 'Listas QA Cuarentena',           'url' => 'qa_auditoria/listas_qacuarentena.php',   'icono' => 'fa-screwdriver-wrench'],
+                          ],
+
+// INVENTARIOS
+        'Inventarios' => [
+            ['titulo' => 'Inventario Físico',            'url' => 'inventarios/inventario_fisico.php',           'icono' => 'fa-industry'],
+            ['titulo' => 'Inventario Ciclíco',           'url' => 'inventarios/inventario_ciclico.php',          'icono' => 'fa-flag'],
+            ['titulo' => 'Administración Inventarios',   'url' => 'inventarios/inventario_administracion.php',   'icono' => 'fa-screwdriver-wrench'],
+               ],
+
+// EMBARQUES
+        'Embarques' => [
+            ['titulo' => 'Planeación',               'url' => 'embarques/planeacion_embarques.php',              'icono' => 'fa-calendar-check'],
+            ['titulo' => 'Administración',           'url' => 'embarques/admin_embarques.php',                   'icono' => 'fa-briefcase'],
+                       ],
+         
+ // REPORTES SFA
+        'Reportes SFA' => [
+            ['titulo' => 'Análisis de Ventas',         'url' => 'reportes_sfa/analisis_ventas.php',    'icono' => 'fa-arrow-right-arrow-left'],            
+            ['titulo' => 'Bitácora de Tiempos',        'url' => 'reportes_sfa/bitacora_tiempos.php',   'icono' => 'fa-timeline'],
+            ['titulo' => 'CXC | Cobranza ',            'url' => 'reportes_sfa/cobranza_analitico.php', 'icono' => 'fa-clipboard-list'],
+            ['titulo' => 'CXC | Cobranza Consolidado', 'url' => 'reportes_sfa/cobranza_consolidado',   'icono' => 'fa-right-left'],
         ],
 
-        // REPORTES
+ // REPORTES
         'Reportes' => [
-            ['titulo' => 'Log de Operaciones',       'url' => 'reportes/operaciones.php',                   'icono' => 'fa-timeline'],
-            ['titulo' => 'Salidas',                  'url' => 'reportes/salidas.php',                       'icono' => 'fa-arrow-right-arrow-left'],
-            ['titulo' => 'Kardex | Trazabilidad',    'url' => 'reportes/kardex.php',                        'icono' => 'fa-clipboard-list'],
-            ['titulo' => 'Kardex | Movimientos',     'url' => 'reportes/kardexw.php',                       'icono' => 'fa-right-left'],
+            ['titulo' => 'Log de Operaciones',       'url' => 'reportes/operaciones.php',    'icono' => 'fa-timeline'],
+            ['titulo' => 'Salidas',                  'url' => 'reportes/salidas.php',        'icono' => 'fa-arrow-right-arrow-left'],
+            ['titulo' => 'Kardex | Trazabilidad',    'url' => 'reportes/kardex.php',         'icono' => 'fa-clipboard-list'],
+            ['titulo' => 'Kardex | Movimientos',     'url' => 'reportes/kardexw.php',        'icono' => 'fa-right-left'],
         ],
+
+        // CONFIGURACIÓN CORREO
+        'Configuración Correos' => [
+            ['titulo' => 'Configuración SMTP',      'url' => 'config/correo_config.php',      'icono' => 'fa-timeline'],
+            ['titulo' => 'Plantillas',              'url' => 'config/correo_plantillas.php',  'icono' => 'fa-arrow-right-arrow-left'],
+            ['titulo' => 'Automatización',          'url' => 'config/correo_jobs.php',        'icono' => 'fa-timeline'],
+            ['titulo' => 'Testing',                 'url' => 'config/correo_test.php',        'icono' => 'fa-timeline'],
+                                   ],
+
 
         // UTILERÍAS
         'Utilerías' => [
-            ['titulo' => 'Log de Operaciones',       'url' => 'utilerias/log_operaciones.php',              'icono' => 'fa-timeline'],
-            ['titulo' => 'Log WebServices',              'url' => 'utilerias/log_ws.php',                   'icono' => 'fa-arrow-right-arrow-left'],
-            ['titulo' => 'Browser ETL',       'url' => 'etl/etl_browser.php',              'icono' => 'fa-timeline'],
-            ['titulo' => 'Administrador Procesos ',              'url' => 'etl/administrador_procesos.php',                   'icono' => 'fa-arrow-right-arrow-left'],
-            ['titulo' => 'Generador de Catálogos',   'url' => 'utilerias/generador.php',                     'icono' => 'fa-clipboard-list'],
+            ['titulo' => 'Log de Operaciones',      'url' => 'utilerias/log_operaciones.php',   'icono' => 'fa-timeline'],
+            ['titulo' => 'Log WebServices',         'url' => 'utilerias/log_ws.php',            'icono' => 'fa-arrow-right-arrow-left'],
+            ['titulo' => 'Browser ETL',             'url' => 'etl/etl_browser.php',             'icono' => 'fa-timeline'],
+            ['titulo' => 'Administrador Procesos ', 'url' => 'etl/administrador_procesos.php',  'icono' => 'fa-arrow-right-arrow-left'],
+            ['titulo' => 'Generador de Catálogos',  'url' => 'utilerias/generador.php',        'icono' => 'fa-clipboard-list'],
         ],
     ];    
     ?>

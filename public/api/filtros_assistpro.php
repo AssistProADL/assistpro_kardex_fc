@@ -16,248 +16,403 @@ try {
 
 $action = $_GET['action'] ?? $_POST['action'] ?? 'init';
 
-if ($action === 'init') {
-    init_filtros($pdo);
-} elseif ($action === 'consulta') {
-    consulta_vista($pdo);
-} else {
-    echo json_encode([
-        'ok'    => false,
-        'error' => 'Acción no soportada'
-    ], JSON_UNESCAPED_UNICODE);
-}
-
-function init_filtros(PDO $pdo)
-{
-    // Recetas disponibles
-    $recetas = [
-        [
-            'id'          => 'existencias_ubicacion',
-            'nombre'      => 'Existencias por ubicación',
-            'descripcion' => 'Stock por BL, producto, lote/serie y LP',
-            'vista_sql'   => 'v_existencias_por_ubicacion_ao'
-        ],
-        // Aquí podremos ir agregando más recetas para otros reportes / procesos
-    ];
-
-    // Empresas
-    $empresas = [];
-    try {
-        $sql = "SELECT cve_cia, des_cia 
-                FROM c_compania 
-                WHERE Activo = 1 OR Activo IS NULL
-                ORDER BY des_cia";
-        $empresas = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) {
-        $empresas = [];
-    }
-
-    // Almacenes (c_almacen + c_almacenp)
-    $almacenes = [];
-    try {
-        $sql = "SELECT a.cve_almac, a.clave_almacen, a.des_almac
-                FROM c_almacen a
-                WHERE a.Activo = 1 OR a.Activo IS NULL
-                ORDER BY a.clave_almacen, a.des_almac";
-        $almacenes = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) {
-        $almacenes = [];
-    }
-
-    // Rutas
-    $rutas = [];
-    try {
-        $sql = "SELECT ID_Ruta, cve_ruta, descripcion
-                FROM t_ruta
-                WHERE Activo = 1 OR Activo IS NULL
-                ORDER BY cve_ruta";
-        $rutas = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) {
-        $rutas = [];
-    }
-
-    // Clientes (limitamos un poco para no saturar)
-    $clientes = [];
-    try {
-        $sql = "SELECT id_cliente, Cve_Clte, RazonSocial
-                FROM c_cliente
-                ORDER BY RazonSocial
-                LIMIT 500";
-        $clientes = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) {
-        $clientes = [];
-    }
-
-    echo json_encode([
-        'ok'        => true,
-        'recetas'   => $recetas,
-        'empresas'  => $empresas,
-        'almacenes' => $almacenes,
-        'rutas'     => $rutas,
-        'clientes'  => $clientes
-    ], JSON_UNESCAPED_UNICODE);
-}
-
-function consulta_vista(PDO $pdo)
-{
-    $vista_id = $_POST['vista_id'] ?? '';
-
-    if ($vista_id === 'existencias_ubicacion') {
-        consulta_existencias_ubicacion($pdo);
-        return;
-    }
-
-    echo json_encode([
-        'ok'    => false,
-        'error' => 'Receta no configurada: ' . $vista_id
-    ], JSON_UNESCAPED_UNICODE);
-}
-
-function consulta_existencias_ubicacion(PDO $pdo)
-{
-    // Filtros base
-    $almacen      = trim($_POST['almacen']      ?? '');
-    $bl           = trim($_POST['bl']           ?? '');
-    $producto     = trim($_POST['producto']     ?? '');
-    $lote         = trim($_POST['lote']         ?? '');
-    $lp           = trim($_POST['lp']           ?? '');
-    $tipo_control = trim($_POST['tipo_control'] ?? '');
-    $solo_no_qa   = isset($_POST['solo_no_qa']) && $_POST['solo_no_qa'] === '1';
-
-    $page     = max(1, (int)($_POST['page']     ?? 1));
-    $per_page = max(1, (int)($_POST['per_page'] ?? 25));
-    $offset   = ($page - 1) * $per_page;
-
-    $where  = [];
-    $params = [];
-
-    if ($almacen !== '') {
-        $where[]            = 'cve_almac = :almacen';
-        $params[':almacen'] = $almacen;
-    }
-
-    // Solo ubicaciones con existencia
-    $where[] = 'existencia > 0';
-
-    if ($bl !== '') {
-        $where[]       = 'bl LIKE :bl';
-        $params[':bl'] = $bl . '%';
-    }
-
-    if ($producto !== '') {
-        $where[]            = 'cve_articulo = :prod';
-        $params[':prod']    = $producto;
-    }
-
-    if ($lote !== '') {
-        $where[]            = 'cve_lote = :lote';
-        $params[':lote']    = $lote;
-    }
-
-    if ($lp !== '') {
-        $where[]         = 'CveLP = :lp';
-        $params[':lp']   = $lp;
-    }
-
-    if ($tipo_control !== '') {
-        $where[]                     = 'tipo_control = :tipo_control';
-        $params[':tipo_control']     = $tipo_control;
-    }
-
-    if ($solo_no_qa) {
-        $where[] = 'es_qa = 0';
-    }
-
-    $whereSql = '';
-    if (!empty($where)) {
-        $whereSql = 'WHERE ' . implode(' AND ', $where);
-    }
-
-    // KPIs
-    $cards = [
-        'total_registros'   => 0,
-        'total_lps'         => 0,
-        'total_ubicaciones' => 0,
-        'total_productos'   => 0
-    ];
-
-    try {
-        $sqlCards = "
-            SELECT
-                COUNT(*) AS total_registros,
-                COUNT(DISTINCT CveLP) AS total_lps,
-                COUNT(DISTINCT CONCAT(cve_almac,'|',bl)) AS total_ubicaciones,
-                COUNT(DISTINCT cve_articulo) AS total_productos
-            FROM v_existencias_por_ubicacion_ao
-            $whereSql
-        ";
-        $stmt = $pdo->prepare($sqlCards);
-        $stmt->execute($params);
-        $rowCards = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($rowCards) {
-            foreach ($cards as $k => $v) {
-                if (isset($rowCards[$k])) {
-                    $cards[$k] = (int)$rowCards[$k];
-                }
-            }
-        }
-    } catch (Throwable $e) {
+try {
+    if ($action === 'init') {
+        init_filtros($pdo);
+    } else {
         echo json_encode([
             'ok'    => false,
-            'error' => 'Error en KPIs: ' . $e->getMessage()
+            'error' => 'Acción no soportada en filtros_assistpro.php: ' . $action
         ], JSON_UNESCAPED_UNICODE);
-        return;
+    }
+} catch (Throwable $e) {
+    echo json_encode([
+        'ok'    => false,
+        'error' => 'Error general en filtros_assistpro.php: ' . $e->getMessage()
+    ], JSON_UNESCAPED_UNICODE);
+}
+
+/**
+ * Acción principal: devolver todos los catálogos necesarios
+ * para los filtros estándar AssistPro.
+ */
+function init_filtros(PDO $pdo): void
+{
+    // Parámetros opcionales para filtrar algunos catálogos (BL, LP, etc.)
+    $empresa = trim($_GET['empresa'] ?? $_POST['empresa'] ?? '');
+    $almacen = trim($_GET['almacen'] ?? $_POST['almacen'] ?? '');
+    $zona    = trim($_GET['zona']    ?? $_POST['zona']    ?? '');
+
+    $data = [
+        'ok'           => true,
+        'empresas'     => [],
+        'almacenes'    => [],
+        'rutas'        => [],
+        'clientes'     => [],
+        'proveedores'  => [],
+        'vendedores'   => [],
+        'productos'    => [],
+        'bls'          => [],
+        'lps'          => [],
+        'zonas_recep'  => [],
+        'zonas_qa'     => [],
+        'zonas_emb'    => [],
+        'proyectos'    => [],
+        'recetas'      => [],
+        'zonas_almacenaje' => [],
+        'debug_params' => [
+            'empresa' => $empresa,
+            'almacen' => $almacen,
+            'zona'    => $zona,
+        ],
+    ];
+
+    // ===================== EMPRESAS (c_compania) =====================
+    try {
+        $data['empresas'] = db_all("
+            SELECT
+                cve_cia,
+                des_cia,
+                clave_empresa
+            FROM c_compania
+            WHERE IFNULL(Activo, 1) = 1
+            ORDER BY des_cia
+        ");
+    } catch (Throwable $e) {
+        $data['empresas_error'] = $e->getMessage();
     }
 
-    // Total rows (para paginación)
-    $total_rows = $cards['total_registros'];
-
-    // Detalle
-    $rows = [];
+    // ===================== ALMACENES (c_almacenp) =====================
+    // Se exponen almacenes lógicos (padre). Convención:
+    // - id_almacenp : PK numérica de c_almacenp
+    // - cve_almac   : clave corta tipo WHCR (para combos)
+    // - clave_almacen : alias de la misma clave (compatibilidad)
+    // - des_almac   : nombre descriptivo
     try {
-        $sqlDet = "
+        $data['almacenes'] = db_all("
+            SELECT 
+                id         AS id_almacenp,
+                clave      AS cve_almac,
+                clave      AS clave_almacen,
+                nombre     AS des_almac
+            FROM c_almacenp
+            WHERE IFNULL(Activo,1) = 1
+            ORDER BY clave
+        ");
+    } catch (Throwable $e) {
+        $data['almacenes_error'] = $e->getMessage();
+    }
+
+    // ===================== RUTAS (t_ruta) =====================
+    try {
+        $params = [];
+        $where  = ["IFNULL(Activo,1) = 1"];
+
+        // Más adelante, si quieres filtrar por almacén lógico, aquí podemos
+        // mapear cve_almacenp contra c_almacenp, por ahora traemos todas.
+        $sqlRutas = "
             SELECT
-                bl,
-                pasillo,
-                rack,
-                nivel,
-                cve_almac,
+                ID_Ruta,
+                cve_ruta,
+                descripcion,
+                cve_almacenp,
+                venta_preventa,
+                control_pallets_cont,
+                IFNULL(Activo,1) AS Activo
+            FROM t_ruta
+            " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
+            ORDER BY descripcion
+        ";
+
+        $data['rutas'] = db_all($sqlRutas, $params);
+    } catch (Throwable $e) {
+        $data['rutas_error'] = $e->getMessage();
+    }
+
+    // ===================== Zonas de Almacenaje (c_almacen) =====================
+    // Zonas hijas por almacén padre (c_almacenp):
+    // - Si se envía $almacen (clave WHCR, WHMX, etc.), filtramos por c_almacenp.clave.
+    // - Si no se envía, devolvemos todas las zonas activas.
+    try {
+        $params = [];
+        $where  = ["IFNULL(a.Activo,1) = 1"];
+
+        if ($almacen !== '') {
+            $where[]                 = 'ap.clave = :almacen_clave';
+            $params['almacen_clave'] = $almacen;
+        }
+
+        $sql = "
+            SELECT
+                a.cve_almac,
+                a.clave_almacen,
+                a.des_almac,
+                a.cve_almacenp,
+                ap.clave  AS almac_clave,
+                ap.nombre AS almac_nombre,
+                a.Cve_TipoZona,
+                a.clasif_abc,
+                a.ID_Proveedor
+            FROM c_almacen a
+            LEFT JOIN c_almacenp ap
+                   ON ap.id = a.cve_almacenp
+            " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
+            ORDER BY a.des_almac
+        ";
+
+        $data['zonas_almacenaje'] = db_all($sql, $params);
+    } catch (Throwable $e) {
+        $data['zonas_almacenaje_error'] = $e->getMessage();
+    }
+
+    // ===================== CLIENTES (c_cliente) =====================
+    try {
+        $data['clientes'] = db_all("
+            SELECT
+                id_cliente,
+                Cve_Clte,
+                RazonSocial
+            FROM c_cliente
+            WHERE IFNULL(Activo, 1) = 1
+            ORDER BY RazonSocial
+            LIMIT 2000
+        ");
+    } catch (Throwable $e) {
+        $data['clientes_error'] = $e->getMessage();
+    }
+
+    // ===================== PROVEEDORES (c_proveedores) =====================
+    try {
+        $data['proveedores'] = db_all("
+            SELECT
+                ID_Proveedor,
+                cve_proveedor,
+                Nombre
+            FROM c_proveedores
+            WHERE IFNULL(Activo, 1) = 1
+            ORDER BY Nombre
+        ");
+    } catch (Throwable $e) {
+        $data['proveedores_error'] = $e->getMessage();
+    }
+
+    // ===================== VENDEDORES (t_vendedores) =====================
+    try {
+        $data['vendedores'] = db_all("
+            SELECT
+                Id_Vendedor,
+                Cve_Vendedor,
+                Nombre
+            FROM t_vendedores
+            WHERE IFNULL(Activo, 1) = 1
+            ORDER BY Nombre
+        ");
+    } catch (Throwable $e) {
+        $data['vendedores_error'] = $e->getMessage();
+    }
+
+    // ===================== PRODUCTOS (c_articulo) =====================
+    try {
+        $params = [];
+        $where  = [];
+
+        // Si quisieras filtrar por almacén (cve_almac en c_articulo)
+        if ($almacen !== '') {
+            $where[]           = 'cve_almac = :almacen';
+            $params['almacen'] = $almacen;
+        }
+
+        $sqlProd = "
+            SELECT
                 cve_articulo,
                 des_articulo,
-                tipo_control,
-                cve_lote,
-                Caducidad,
-                existencia,
-                es_qa,
-                estado_bl,
-                CveLP
-            FROM v_existencias_por_ubicacion_ao
-            $whereSql
-            ORDER BY bl, cve_articulo, cve_lote
-            LIMIT :limit OFFSET :offset
+                cve_almac,
+                ID_Proveedor,
+                mav_obsoleto
+            FROM c_articulo
+            " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
+            ORDER BY des_articulo
+            LIMIT 5000
         ";
-        $stmt = $pdo->prepare($sqlDet);
-        foreach ($params as $k => $v) {
-            $stmt->bindValue($k, $v);
-        }
-        $stmt->bindValue(':limit',  $per_page, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset,   PDO::PARAM_INT);
-        $stmt->execute();
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $data['productos'] = db_all($sqlProd, $params);
     } catch (Throwable $e) {
-        echo json_encode([
-            'ok'    => false,
-            'error' => 'Error en detalle: ' . $e->getMessage()
-        ], JSON_UNESCAPED_UNICODE);
-        return;
+        $data['productos_error'] = $e->getMessage();
     }
 
-    echo json_encode([
-        'ok'         => true,
-        'cards'      => $cards,
-        'rows'       => $rows,
-        'total_rows' => $total_rows,
-        'page'       => $page,
-        'per_page'   => $per_page
-    ], JSON_UNESCAPED_UNICODE);
+    // ===================== BL / BIN LOCATIONS (c_ubicacion) =====================
+    // BL = Bin Locations. Convenciones de filtro:
+    // - Si se envía $zona, filtramos por cve_almac = zona (zona específica).
+    // - Si no hay zona pero sí $almacen, se asume que almacén ya viene como cve_almac.
+    try {
+        $params = [];
+        $where  = ["IFNULL(Activo,1) = 1", "IFNULL(CodigoCSD,'') <> ''"];
+
+        if ($zona !== '') {
+            $where[]         = 'cve_almac = :zona';
+            $params['zona']  = $zona;
+        } elseif ($almacen !== '') {
+            $where[]          = 'cve_almac = :almacen';
+            $params['almacen'] = $almacen;
+        }
+
+        $sqlBl = "
+            SELECT
+                idy_ubica,
+                cve_almac,
+                CodigoCSD      AS bl,
+                cve_pasillo    AS pasillo,
+                cve_rack       AS rack,
+                cve_nivel      AS nivel,
+                Seccion        AS seccion,
+                Status,
+                picking,
+                AreaProduccion,
+                AreaStagging,
+                clasif_abc
+            FROM c_ubicacion
+            " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
+            ORDER BY CodigoCSD
+            LIMIT 5000
+        ";
+
+        $data['bls'] = db_all($sqlBl, $params);
+    } catch (Throwable $e) {
+        $data['bls_error'] = $e->getMessage();
+    }
+
+    // ===================== LICENSE PLATE / CONTENEDORES (c_charolas) =====================
+    try {
+        $params = [];
+        $where  = ["IFNULL(Activo,1) = 1"];
+
+        if ($almacen !== '') {
+            $where[]           = 'cve_almac = :almacen';
+            $params['almacen'] = $almacen;
+        }
+
+        $sqlLp = "
+            SELECT
+                IDContenedor,
+                cve_almac,
+                CveLP,
+                Clave_Contenedor,
+                descripcion,
+                tipo,
+                Permanente
+            FROM c_charolas
+            " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
+            ORDER BY CveLP
+            LIMIT 5000
+        ";
+        $data['lps'] = db_all($sqlLp, $params);
+    } catch (Throwable $e) {
+        $data['lps_error'] = $e->getMessage();
+    }
+
+    // ===================== ZONA RECEPCIÓN / RETENCIÓN (tubicacionesretencion) =====================
+    try {
+        $data['zonas_recep'] = db_all("
+            SELECT
+                id,
+                cve_ubicacion,
+                cve_almacp,
+                desc_ubicacion,
+                AreaStagging,
+                B_Devolucion
+            FROM tubicacionesretencion
+            WHERE IFNULL(Activo,1) = 1
+            ORDER BY desc_ubicacion
+        ");
+    } catch (Throwable $e) {
+        $data['zonas_recep_error'] = $e->getMessage();
+    }
+
+    // ===================== ZONA QA / REVISIÓN (t_ubicaciones_revision) =====================
+    try {
+        $data['zonas_qa'] = db_all("
+            SELECT
+                ID_URevision,
+                cve_almac,
+                cve_ubicacion,
+                descripcion,
+                AreaStagging
+            FROM t_ubicaciones_revision
+            WHERE IFNULL(Activo,1) = 1
+            ORDER BY descripcion
+        ");
+    } catch (Throwable $e) {
+        $data['zonas_qa_error'] = $e->getMessage();
+    }
+
+    // ===================== ZONA EMBARQUES (t_ubicacionembarque) =====================
+    try {
+        $data['zonas_emb'] = db_all("
+            SELECT
+                ID_Embarque,
+                cve_ubicacion
+            FROM t_ubicacionembarque
+            ORDER BY ID_Embarque
+        ");
+    } catch (Throwable $e) {
+        $data['zonas_emb_error'] = $e->getMessage();
+    }
+
+    // ===================== PROYECTOS (c_proyecto) =====================
+    try {
+        $params = [];
+        $where  = [];
+
+        if ($almacen !== '') {
+            $where[]            = 'id_almacen = :almacen';
+            $params['almacen']  = $almacen;
+        }
+
+        $sqlProy = "
+            SELECT
+                Id,
+                Cve_Proyecto,
+                Des_Proyecto,
+                id_almacen
+            FROM c_proyecto
+            " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
+            ORDER BY Des_Proyecto
+        ";
+
+        $data['proyectos'] = db_all($sqlProy, $params);
+    } catch (Throwable $e) {
+        $data['proyectos_error'] = $e->getMessage();
+    }
+
+    // ===================== RECETAS / PLANTILLAS (ap_plantillas_filtros) =====================
+    try {
+        // Opcional: si no existe la tabla, saltará al catch
+        $rows = db_all("
+            SELECT
+                id,
+                modulo,
+                nombre,
+                vista_sql,
+                es_default,
+                activo
+            FROM ap_plantillas_filtros
+            ORDER BY modulo, es_default DESC, nombre
+        ");
+
+        $recetas = [];
+        foreach ($rows as $r) {
+            $recetas[] = [
+                'id'         => (int)$r['id'],
+                'modulo'     => $r['modulo'],
+                'nombre'     => $r['nombre'],
+                'vista_sql'  => $r['vista_sql'],
+                'es_default' => (int)($r['es_default'] ?? 0),
+                'activo'     => (int)($r['activo'] ?? 1),
+            ];
+        }
+        $data['recetas'] = $recetas;
+    } catch (Throwable $e) {
+        $data['recetas_error'] = $e->getMessage();
+    }
+
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
 }
