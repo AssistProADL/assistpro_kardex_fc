@@ -632,17 +632,10 @@ try {
 
 // $folio_sugerido ya no se usa aquí abajo porque usamos $folioVal calculado arriba
 // $folio_sugerido = siguiente_folio_oc_demo($pdo) ?? ('OC-' . date('Ymd-His'));
+
+require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <title>AssistPro SFA — Editar | Crear Orden de Compra</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <style>
+<style>
         body {
             background: #f5f7fb;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -750,10 +743,6 @@ try {
             color: #0F5AAD;
         }
     </style>
-</head>
-<body>
-
-<?php require_once __DIR__ . '/../bi/_menu_global.php'; ?>
 
 <div class="container-fluid py-2">
     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -999,7 +988,6 @@ try {
     </div>
 </div>
 
-<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
 
 <script>
 const API_FILTROS_URL = '../api/filtros_assistpro.php?action=init';
@@ -1480,3 +1468,6 @@ async function guardarOC() {
     }
 }
 </script>
+
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
+
