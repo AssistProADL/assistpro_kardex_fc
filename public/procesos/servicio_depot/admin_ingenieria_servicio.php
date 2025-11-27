@@ -64,7 +64,6 @@ if ($f_motivo !== '') {
     $params[':motivo'] = $f_motivo;
 }
 if ($f_cliente !== '') {
-    // permite buscar por id_cliente o parte de la razón social / clave
     $where[] = '(c.id_cliente = :cliente_id OR c.RazonSocial LIKE :cliente_txt OR c.Cve_Clte LIKE :cliente_txt)';
     $params[':cliente_id'] = (int)$f_cliente;
     $params[':cliente_txt'] = '%' . $f_cliente . '%';
@@ -156,7 +155,10 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
             </div>
             <div class="text-end" style="font-size:0.8rem;">
                 <a href="recepcion.php" class="btn btn-outline-secondary btn-sm">
-                    &laquo; Regresar a recepción Depot
+                    &laquo; Recepción Depot
+                </a>
+                <a href="laboratorio_servicio.php" class="btn btn-outline-primary btn-sm">
+                    Laboratorio
                 </a>
             </div>
         </div>
@@ -343,7 +345,13 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
                                            title="Ver ingreso PDF" target="_blank">
                                             PDF
                                         </a>
-                                        <!-- Futuro: botón Detalle / Bitácora -->
+                                        <?php if (isset($c['motivo']) && strtoupper($c['motivo']) === 'SERVICIO'): ?>
+                                            <a href="servicio_generar_cotizacion.php?id=<?= (int)$c['id'] ?>"
+                                               class="btn btn-warning btn-sm btn-icon mt-1"
+                                               title="Generar cotización CRM">
+                                                Cotizar
+                                            </a>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -371,7 +379,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const sel = document.getElementById('filtroAlmacen');
             if (!sel) return;
 
-            // Limpia pero dejando [Todos]
             const valorTodos = sel.querySelector('option[value=""]').outerHTML;
             sel.innerHTML = valorTodos;
 

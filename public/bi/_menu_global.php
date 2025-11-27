@@ -167,18 +167,12 @@
 
   // ADMINISTRACIÓN
         'Administración' => [
-            ['titulo' => 'Compañías',                'url' => 'admin/companias.php',                        'icono' => 'fa-building'],
-            ['titulo' => 'Usuarios',                 'url' => 'admin/usuarios.php',                         'icono' => 'fa-user'],
-            ['titulo' => 'Perfiles',                 'url' => 'admin/perfiles.php',                         'icono' => 'fa-id-badge'],
-            ['titulo' => 'Zonas',                    'url' => 'admin/zonas.php',                            'icono' => 'fa-map'],
+            ['titulo' => 'Empresas',                 'url' => 'catalogos/cat_c_companias.php',                        'icono' => 'fa-building'],
+            ['titulo' => 'Almacenes',                'url' => 'catalogos/cat_c_almacenes.php',                        'icono' => 'fa-building'],
+            ['titulo' => 'Usuarios',                 'url' => 'catalogos/cat_c_usuarios.php',                         'icono' => 'fa-user'],
+            ['titulo' => 'Perfiles',                 'url' => 'catalogos/cat_c_perfiles.php',                         'icono' => 'fa-id-badge'],
                             ],
-
-
-// CRM
-        'CRM' => [
-            ['titulo' => 'Cotizaciones',              'url' => 'crm/cotizaciones.php',                       'icono' => 'fa-building'],
-                 ],
-                       
+                     
   // CATÁLOGOS
         'Catálogos' => [
             ['titulo' => 'Ajustes | Incidencias',    'url' => 'catalogos/catalogos/cat_c_motivoajuste.php',           'icono' => 'fa-circle'],
@@ -196,6 +190,20 @@
             ['titulo' => 'Formas de Pago',           'url' => 'sfa/formas_pago.php',                                  'icono' => 'fa-credit-card'],
                        ],
 
+// CRM
+        'CRM' => [
+            ['titulo' => 'Cotizaciones',              'url' => 'crm/cotizaciones.php',                       'icono' => 'fa-building'],
+                 ],
+  
+// DEPOT SERVICE CONTROL
+        'DSC Depot Service Control' => [
+            ['titulo' => 'Recepción | Control de Garantías',    'url' => 'procesos/servicio_depot/recepcion.php',                 'icono' => 'fa-circle'],
+            ['titulo' => 'Administración Garantías',            'url' => 'procesos/servicio_depot/admin_ingenieria_servicio.php', 'icono' => 'fa-circle'],
+            ['titulo' => 'Laboratorio Servicio',                'url' => 'procesos/servicio_depot/laboratorio_servicio.php',      'icono' => 'fa-circle'],
+            ['titulo' => 'Reporte Diagnostico',                 'url' => 'procesos/servicio_depot/reporte_diagnostico.php',       'icono' => 'fa-circle'],
+            ['titulo' => 'Cotizaciones',                        'url' => 'procesos/servicio_depot/servicio_generar_cotizacion.php',  'icono' => 'fa-circle'],
+                                       ],
+
  // SFA
         'SFA' => [
             ['titulo' => 'Lista de Precios',         'url' => 'sfa/lista_precios.php',                     'icono' => 'fa-tags'],
@@ -203,6 +211,15 @@
             ['titulo' => 'Promociones',              'url' => 'sfa/promociones.php',                       'icono' => 'fa-gift'],
             ['titulo' => 'Grupo Promociones',        'url' => 'sfa/grupo_promociones.php',                 'icono' => 'fa-layer-group'],
                  ],
+
+ // TMS
+        'TMS' => [
+            ['titulo' => 'Mantenimiento',            'url' => 'tms/mto_transportes.php',                   'icono' => 'fa-tags'],
+            ['titulo' => 'Ordenes de Servicio',      'url' => 'tms/mto_ordenes.php',                       'icono' => 'fa-percent'],
+            ['titulo' => 'Promociones',              'url' => 'sfa/promociones.php',                       'icono' => 'fa-gift'],
+            ['titulo' => 'Grupo Promociones',        'url' => 'sfa/grupo_promociones.php',                 'icono' => 'fa-layer-group'],
+                 ],
+
 
  // ADMINISTRACIÓN DE ALMACEN
          'Administración Almacen' => [
@@ -213,7 +230,6 @@
 
  // PROCESOS
         'Procesos' => [
-            ['titulo' => 'Ingeniería y Servicio',    'url' => 'procesos/servicio_depot/recepcion.php',      'icono' => 'fa-rotate'],
             ['titulo' => 'Existencias',              'url' => 'procesos/existencias.php',                   'icono' => 'fa-cubes'],
             ['titulo' => 'Control de Incidencias (PQRS)','url' => 'procesos/incidencias.php',              'icono' => 'fa-flag'],
             ['titulo' => 'Control de Activos',       'url' => 'procesos/control_activos.php',               'icono' => 'fa-screwdriver-wrench'],
@@ -225,7 +241,7 @@
             ['titulo' => 'Orden de Compra',           'url' => 'ingresos/orden_compra.php',              'icono' => 'fa-right-to-bracket'],
             ['titulo' => 'Recepción de Materiales',   'url' => 'ingresos/recepcion_materiales.php',      'icono' => 'fa-box-archive'],
             ['titulo' => 'Administración de Ingresos','url' => 'ingresos/ingresos_admin.php',            'icono' => 'fa-right-left'],
-            ['titulo' => 'RTM',                       'url' => 'ingresos/rtm_pendiente_acomodo.php',     'icono' => 'fa-box-archive'],
+            ['titulo' => 'Importador',                'url' => 'ingresos/importador_ingresos.php',       'icono' => 'fa-box-archive'],
                       ],
 
 // PUTAWAY
@@ -245,10 +261,11 @@
 
 // MANUFACTURA KITTING
         'Manufactura' => [
-            ['titulo' => 'Agregar Editar Componentes ',  'url' => 'manufactura/bom.php',                   'icono' => 'fa-industry'],
+            ['titulo' => 'Agregar Editar Componentes ',  'url' => 'manufactura/bom.php',                      'icono' => 'fa-industry'],
             ['titulo' => 'Orden de Produción',           'url' => 'manufactura/orden_produccion.php',         'icono' => 'fa-flag'],
             ['titulo' => 'Administración OTs',           'url' => 'manufactura/orden_produccion_admin.php',   'icono' => 'fa-screwdriver-wrench'],
-               ],
+            ['titulo' => 'Importación OTs',              'url' => 'manufactura/ot_importar.php',              'icono' => 'fa-screwdriver-wrench'],
+                         ],
          
 // QA AUDITORIA
         'QA Auditoría' => [
@@ -294,9 +311,13 @@
             ['titulo' => 'Automatización',          'url' => 'config/correo_jobs.php',        'icono' => 'fa-timeline'],
             ['titulo' => 'Testing',                 'url' => 'config/correo_test.php',        'icono' => 'fa-timeline'],
                                    ],
-
-
-        // UTILERÍAS
+ // DISPOSITIVOS
+        'Dispositivos' => [
+            ['titulo' => 'Terminales EDA HHC RFID', 'url' => 'dispositivos/dispositivos.php',   'icono' => 'fa-timeline'],
+            ['titulo' => 'Impresoras',         'url' => 'dispositivos/impresoras.php',          'icono' => 'fa-arrow-right-arrow-left'],
+                          ],
+   
+ // UTILERÍAS
         'Utilerías' => [
             ['titulo' => 'Log de Operaciones',      'url' => 'utilerias/log_operaciones.php',   'icono' => 'fa-timeline'],
             ['titulo' => 'Log WebServices',         'url' => 'utilerias/log_ws.php',            'icono' => 'fa-arrow-right-arrow-left'],

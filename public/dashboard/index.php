@@ -6,29 +6,43 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
 $errorMsg = '';
 
+// Helper seguro para imprimir en HTML (evita TypeError en PHP 8)
+function h($v): string {
+    if ($v === null) return '';
+    if (is_int($v) || is_float($v)) {
+        $v = (string)$v;
+    } elseif (!is_string($v)) {
+        $v = json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+}
+
 // ===============================
 // KPIs globales (4 tarjetas)
 // ===============================
 try {
     $totAlmacenes = (int) db_val("
-        SELECT COUNT(*) 
+        SELECT COUNT(*)
         FROM c_almacen
         WHERE Activo IS NULL OR Activo <> 0
     ");
 
     $totArticulos = (int) db_val("
-        SELECT COUNT(*) 
+        SELECT COUNT(*)
         FROM c_articulo
     ");
 
+    // Para no matar la BD, contamos solo últimos 30 días
     $totEntradas = (int) db_val("
-        SELECT COUNT(*) 
+        SELECT COUNT(*)
         FROM th_entalmacen
+        WHERE Fec_Entrada >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
     ");
 
     $totSalidas = (int) db_val("
-        SELECT COUNT(*) 
+        SELECT COUNT(*)
         FROM th_salalmacen
+        WHERE fec_salida >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
     ");
 } catch (Throwable $e) {
     $totAlmacenes = $totArticulos = $totEntradas = $totSalidas = 0;
@@ -36,15 +50,13 @@ try {
 }
 
 // ===============================
-// Movimientos clásicos
-// Tomamos SOLO 25 entradas + 25 salidas y luego nos quedamos con
-// los 25 más recientes en PHP (ultra ligero).
+// Movimientos clásicos (máx 25)
 // ===============================
 $movimientos = [];
 
 try {
     $entradas = db_all("
-        SELECT 
+        SELECT
             'ENTRADA' AS tipo_mov,
             Fol_Folio AS folio,
             Cve_Almac AS almac,
@@ -52,6 +64,7 @@ try {
             Cve_Usuario AS usuario,
             Fol_OEP AS doc_ref
         FROM th_entalmacen
+        WHERE Fec_Entrada IS NOT NULL
         ORDER BY Fec_Entrada DESC
         LIMIT 25
     ");
@@ -65,6 +78,7 @@ try {
             cve_usuario AS usuario,
             RefFolio AS doc_ref
         FROM th_salalmacen
+        WHERE fec_salida IS NOT NULL
         ORDER BY fec_salida DESC
         LIMIT 25
     ");
@@ -73,10 +87,10 @@ try {
 
     // Ordenar en PHP por fecha DESC
     usort($movimientos, function ($a, $b) {
-        return strcmp($b['fecha'] ?? '', $a['fecha'] ?? '');
+        return strcmp((string)($b['fecha'] ?? ''), (string)($a['fecha'] ?? ''));
     });
 
-    // Nos quedamos con SOLO 25 para grilla y gráfica
+    // Solo 25 para grilla y gráfica
     $movimientos = array_slice($movimientos, 0, 25);
 
 } catch (Throwable $e) {
@@ -85,8 +99,7 @@ try {
 }
 
 // ===============================
-// Existencias por tarima / artículo
-// SOLO 25 registros con mayor existencia
+// Existencias por tarima / artículo (máx 25, sin ORDER BY pesado)
 // ===============================
 $existencias = [];
 
@@ -99,10 +112,9 @@ try {
             t.lote,
             t.existencia
         FROM ts_existenciatarima t
-        LEFT JOIN c_articulo a 
+        LEFT JOIN c_articulo a
                ON a.cve_articulo = t.cve_articulo
         WHERE t.existencia IS NOT NULL
-        ORDER BY t.existencia DESC
         LIMIT 25
     ");
 } catch (Throwable $e) {
@@ -111,10 +123,10 @@ try {
 }
 
 // ===============================
-// Preparar datos para gráficas (sin más consultas)
+// Datos para gráficas (sin consultas extra)
 // ===============================
 
-// Gráfica Entradas vs Salidas por día (desde $movimientos)
+// Entradas vs Salidas por día
 $contEnt = [];
 $contSal = [];
 
@@ -122,7 +134,7 @@ foreach ($movimientos as $m) {
     $fecha = substr((string)($m['fecha'] ?? ''), 0, 10); // YYYY-MM-DD
     if ($fecha === '') continue;
 
-    if ($m['tipo_mov'] === 'ENTRADA') {
+    if (($m['tipo_mov'] ?? '') === 'ENTRADA') {
         $contEnt[$fecha] = ($contEnt[$fecha] ?? 0) + 1;
     } else {
         $contSal[$fecha] = ($contSal[$fecha] ?? 0) + 1;
@@ -139,28 +151,26 @@ foreach ($fechas as $f) {
     $dataSal[] = $contSal[$f] ?? 0;
 }
 
-// Gráfica Top 10 artículos por existencia (desde $existencias)
-$acumArt = []; // cve_articulo => existencia total
-$descArt = []; // cve_articulo => descripción
+// Top 10 artículos por existencia (acumulado de esas 25 filas)
+$acumArt = [];
+$descArt = [];
 
 foreach ($existencias as $e) {
-    $art = $e['cve_articulo'] ?? '';
+    $art = (string)($e['cve_articulo'] ?? '');
     if ($art === '') continue;
     $acumArt[$art] = ($acumArt[$art] ?? 0) + (float)($e['existencia'] ?? 0);
     if (!isset($descArt[$art])) {
-        $descArt[$art] = $e['des_articulo'] ?? '';
+        $descArt[$art] = (string)($e['des_articulo'] ?? '');
     }
 }
 
-// Ordenar por existencia DESC y tomar top 10
 arsort($acumArt);
 $acumArt = array_slice($acumArt, 0, 10, true);
 
 $topLabels = [];
 $topValues = [];
 foreach ($acumArt as $art => $exist) {
-    $label = trim($art . ' - ' . ($descArt[$art] ?? ''));
-    $topLabels[] = $label;
+    $topLabels[] = trim($art . ' - ' . ($descArt[$art] ?? ''));
     $topValues[] = $exist;
 }
 ?>
@@ -177,15 +187,12 @@ foreach ($acumArt as $art => $exist) {
 
     <?php if (!empty($errorMsg)): ?>
         <div class="alert alert-warning py-2" style="font-size:11px;">
-            <strong>Nota:</strong> <?= htmlspecialchars($errorMsg, ENT_QUOTES, 'UTF-8') ?>
+            <strong>Nota:</strong> <?= h($errorMsg) ?>
         </div>
     <?php endif; ?>
 
-    <!-- ======================
-         KPIs: 4 tarjetas
-         ====================== -->
+    <!-- KPIs: 4 tarjetas -->
     <div class="row g-3">
-
         <!-- Almacenes -->
         <div class="col-12 col-sm-6 col-md-3">
             <div class="card shadow-sm border-0 h-100">
@@ -234,7 +241,7 @@ foreach ($acumArt as $art => $exist) {
                 <div class="card-body d-flex flex-column py-2">
                     <div class="d-flex justify-content-between mb-2">
                         <div>
-                            <div class="text-muted" style="font-size:10px;">MOVIMIENTOS DE ENTRADA</div>
+                            <div class="text-muted" style="font-size:10px;">ENTRADAS (últimos 30 días)</div>
                             <div class="fw-bold" style="font-size:22px;"><?= number_format($totEntradas) ?></div>
                         </div>
                         <div class="rounded-circle bg-info text-white d-flex align-items-center justify-content-center"
@@ -243,7 +250,7 @@ foreach ($acumArt as $art => $exist) {
                         </div>
                     </div>
                     <small class="text-muted mt-auto" style="font-size:10px;">
-                        Registros en th_entalmacen.
+                        Registros en th_entalmacen (30 días).
                     </small>
                 </div>
             </div>
@@ -255,7 +262,7 @@ foreach ($acumArt as $art => $exist) {
                 <div class="card-body d-flex flex-column py-2">
                     <div class="d-flex justify-content-between mb-2">
                         <div>
-                            <div class="text-muted" style="font-size:10px;">MOVIMIENTOS DE SALIDA</div>
+                            <div class="text-muted" style="font-size:10px;">SALIDAS (últimos 30 días)</div>
                             <div class="fw-bold" style="font-size:22px;"><?= number_format($totSalidas) ?></div>
                         </div>
                         <div class="rounded-circle bg-warning text-white d-flex align-items-center justify-content-center"
@@ -264,17 +271,14 @@ foreach ($acumArt as $art => $exist) {
                         </div>
                     </div>
                     <small class="text-muted mt-auto" style="font-size:10px;">
-                        Registros en th_salalmacen.
+                        Registros en th_salalmacen (30 días).
                     </small>
                 </div>
             </div>
         </div>
+    </div>
 
-    </div><!-- /row KPIs -->
-
-    <!-- ======================
-         Gráficas
-         ====================== -->
+    <!-- Gráficas -->
     <div class="row mt-4 g-3">
         <div class="col-12 col-lg-6">
             <div class="card shadow-sm border-0 h-100">
@@ -294,7 +298,7 @@ foreach ($acumArt as $art => $exist) {
                 <div class="card-body">
                     <h6 class="mb-1">Top 10 artículos por existencia</h6>
                     <small class="text-muted" style="font-size:10px;">
-                        Suma de existencia de las 25 tarimas con mayor stock.
+                        Basado en las 25 filas de mayor prioridad consultadas.
                     </small>
                     <div style="height:280px;">
                         <canvas id="chartTopArticulos"></canvas>
@@ -304,9 +308,7 @@ foreach ($acumArt as $art => $exist) {
         </div>
     </div>
 
-    <!-- ======================
-         Grillas (25 registros máx)
-         ====================== -->
+    <!-- Grillas -->
     <div class="row mt-4 g-3">
 
         <!-- Movimientos clásicos -->
@@ -317,7 +319,7 @@ foreach ($acumArt as $art => $exist) {
                     <small class="text-muted" style="font-size:10px;">
                         Últimos 25 movimientos (entradas y salidas).
                     </small>
-                    <div class="table-responsive mt-2" style="max-height:300px; overflow-y:auto;">
+                    <div class="table-responsive mt-2" style="max-height:300px; overflow-y:auto; overflow-x:auto;">
                         <table id="tabla-movimientos" class="table table-striped table-bordered table-sm"
                                style="width:100%;font-size:10px;">
                             <thead class="table-light">
@@ -333,12 +335,12 @@ foreach ($acumArt as $art => $exist) {
                             <tbody>
                             <?php foreach ($movimientos as $m): ?>
                                 <tr>
-                                    <td><?= htmlspecialchars($m['tipo_mov'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><?= htmlspecialchars($m['folio'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><?= htmlspecialchars($m['almac'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><?= htmlspecialchars($m['fecha'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><?= htmlspecialchars($m['usuario'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><?= htmlspecialchars($m['doc_ref'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td><?= h($m['tipo_mov'] ?? '') ?></td>
+                                    <td><?= h($m['folio'] ?? '') ?></td>
+                                    <td><?= h($m['almac'] ?? '') ?></td>
+                                    <td><?= h($m['fecha'] ?? '') ?></td>
+                                    <td><?= h($m['usuario'] ?? '') ?></td>
+                                    <td><?= h($m['doc_ref'] ?? '') ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -348,15 +350,15 @@ foreach ($acumArt as $art => $exist) {
             </div>
         </div>
 
-        <!-- Existencias por tarima / artículo -->
+        <!-- Existencias -->
         <div class="col-12 col-xl-6">
             <div class="card shadow-sm border-0">
                 <div class="card-body">
                     <h6 class="mb-1">Top existencias por tarima / artículo</h6>
                     <small class="text-muted" style="font-size:10px;">
-                        25 registros con mayor existencia en ts_existenciatarima.
+                        25 registros consultados de ts_existenciatarima.
                     </small>
-                    <div class="table-responsive mt-2" style="max-height:300px; overflow-y:auto;">
+                    <div class="table-responsive mt-2" style="max-height:300px; overflow-y:auto; overflow-x:auto;">
                         <table id="tabla-existencias" class="table table-striped table-bordered table-sm"
                                style="width:100%;font-size:10px;">
                             <thead class="table-light">
@@ -371,10 +373,10 @@ foreach ($acumArt as $art => $exist) {
                             <tbody>
                             <?php foreach ($existencias as $e): ?>
                                 <tr>
-                                    <td><?= htmlspecialchars($e['cve_almac'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><?= htmlspecialchars($e['cve_articulo'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><?= htmlspecialchars($e['des_articulo'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><?= htmlspecialchars($e['lote'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td><?= h($e['cve_almac'] ?? '') ?></td>
+                                    <td><?= h($e['cve_articulo'] ?? '') ?></td>
+                                    <td><?= h($e['des_articulo'] ?? '') ?></td>
+                                    <td><?= h($e['lote'] ?? '') ?></td>
                                     <td class="text-end">
                                         <?= number_format((float)($e['existencia'] ?? 0), 2) ?>
                                     </td>
@@ -387,15 +389,14 @@ foreach ($acumArt as $art => $exist) {
             </div>
         </div>
 
-    </div><!-- /row grillas -->
+    </div>
 
-</div><!-- /container-fluid -->
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // DataTables sólo para search/orden, SIN más carga
     if (typeof $ !== 'undefined' && $.fn.DataTable) {
         $('#tabla-movimientos').DataTable({
             pageLength: 25,
@@ -420,7 +421,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Gráfica Entradas vs Salidas
     const ctxES = document.getElementById('chartEntradasSalidas');
     if (ctxES) {
         new Chart(ctxES, {
@@ -442,14 +442,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 ]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false
-            }
+            options: { responsive: true, maintainAspectRatio: false }
         });
     }
 
-    // Gráfica Top artículos
     const ctxTop = document.getElementById('chartTopArticulos');
     if (ctxTop) {
         new Chart(ctxTop, {

@@ -4,6 +4,22 @@ require_once __DIR__ . '/../../app/db.php';
 $pdo = db_pdo();
 
 /* ============================================================
+   HELPERS
+============================================================ */
+function col_exists(string $table, string $col): bool {
+    return (int)db_val(
+        "SELECT COUNT(*) 
+         FROM information_schema.COLUMNS 
+         WHERE TABLE_SCHEMA = DATABASE() 
+           AND TABLE_NAME = ? 
+           AND COLUMN_NAME = ?",
+        [$table, $col]
+    ) > 0;
+}
+
+$HAS_FOLIOIMPORT = col_exists('t_ordenprod', 'FolioImport');
+
+/* ============================================================
    API AJAX
 ============================================================ */
 $op = $_POST['op'] ?? $_GET['op'] ?? null;
@@ -13,126 +29,25 @@ if ($op) {
 
     try {
 
-        /* =========================================
-           COMÚN: construir WHERE de filtros
-        ==========================================*/
-        function build_where_ots(&$params) {
-            $almacen = trim($_POST['almacen'] ?? $_GET['almacen'] ?? '');
-            $status  = trim($_POST['status']  ?? $_GET['status']  ?? '');
-            $f_ini   = trim($_POST['f_ini']   ?? $_GET['f_ini']   ?? '');
-            $f_fin   = trim($_POST['f_fin']   ?? $_GET['f_fin']   ?? '');
-            $buscar  = trim($_POST['buscar']  ?? $_GET['buscar']  ?? '');
+        /* ---------- CATÁLOGO DE FOLIOS DE IMPORTACIÓN ---------- */
+        if ($op === 'folios_import') {
 
-            $where = [];
-
-            if ($almacen !== '') {
-                $where[]   = "o.cve_almac = ?";
-                $params[]  = $almacen;
-            }
-
-            if ($status !== '' && strtoupper($status) !== 'TODOS') {
-                $where[]   = "IFNULL(o.Status,'') = ?";
-                $params[]  = $status;
-            }
-
-            if ($f_ini !== '' && $f_fin !== '') {
-                $where[]   = "DATE(o.FechaReg) BETWEEN ? AND ?";
-                $params[]  = $f_ini;
-                $params[]  = $f_fin;
-            } elseif ($f_ini !== '') {
-                $where[]   = "DATE(o.FechaReg) >= ?";
-                $params[]  = $f_ini;
-            } elseif ($f_fin !== '') {
-                $where[]   = "DATE(o.FechaReg) <= ?";
-                $params[]  = $f_fin;
-            }
-
-            if ($buscar !== '') {
-                $where[]  = "(o.Folio_Pro LIKE ? OR o.Referencia LIKE ? OR o.Cve_Articulo LIKE ?)";
-                $like     = '%' . $buscar . '%';
-                $params[] = $like;
-                $params[] = $like;
-                $params[] = $like;
-            }
-
-            return count($where) ? ('WHERE '.implode(' AND ', $where)) : '';
-        }
-
-        /* =========================================
-           LISTA DE OTs (ADMIN GRID)
-        ==========================================*/
-        if ($op === 'list_ots') {
-
-            $params   = [];
-            $whereSql = build_where_ots($params);
-
-            $sql = "
-                SELECT
-                    o.id,
-                    o.Folio_Pro,
-                    o.Cve_Articulo,
-                    o.Cant_Prod,
-                    o.cve_almac,
-                    DATE_FORMAT(o.Fecha,    '%d/%m/%Y') AS fecha_ot,
-                    DATE_FORMAT(o.FechaReg, '%d/%m/%Y') AS fecha_reg,
-                    IFNULL(o.Status,'')                 AS status,
-                    IFNULL(o.Referencia,'')             AS referencia
-                FROM t_ordenprod o
-                $whereSql
-                ORDER BY o.FechaReg DESC, o.id DESC
-                LIMIT 500
-            ";
-
-            $rows = db_all($sql, $params);
-
-            echo json_encode([
-                'ok'   => true,
-                'data' => $rows
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-
-        /* =========================================
-           DETALLE DE COMPONENTES POR OT
-        ==========================================*/
-        if ($op === 'componentes_ot') {
-            $id_ot = intval($_POST['id_ot'] ?? $_GET['id_ot'] ?? 0);
-            $folio = trim($_POST['folio']  ?? $_GET['folio']  ?? '');
-            $art   = trim($_POST['art']    ?? $_GET['art']    ?? '');
-
-            $where  = '';
-            $params = [];
-
-            if ($id_ot > 0) {
-                $where  = 'o.id = ?';
-                $params = [$id_ot];
-            } elseif ($folio !== '' && $art !== '') {
-                $where  = 'o.Folio_Pro = ? AND o.Cve_Articulo = ?';
-                $params = [$folio, $art];
-            } else {
-                echo json_encode(['ok'=>false,'msg'=>'OT inválida (sin identificador)'], JSON_UNESCAPED_UNICODE);
+            if (!$HAS_FOLIOIMPORT) {
+                echo json_encode([
+                    'ok'   => true,
+                    'data' => []
+                ], JSON_UNESCAPED_UNICODE);
                 exit;
             }
 
-            $sql = "
-                SELECT
-                    ac.Cve_ArtComponente              AS cve_componente,
-                    ca.des_articulo                   AS desc_componente,
-                    IFNULL(ac.cve_umed, ca.cve_umed)  AS uom,
-                    ac.Cantidad                       AS factor,
-                    o.Cant_Prod                       AS cant_ot,
-                    (ac.Cantidad * o.Cant_Prod)       AS cant_requerida
-                FROM t_ordenprod o
-                JOIN t_artcompuesto ac
-                    ON ac.Cve_Articulo = o.Cve_Articulo
-                LEFT JOIN c_articulo ca
-                    ON ca.cve_articulo = ac.Cve_ArtComponente
-                WHERE $where
-                  AND (ac.Activo IS NULL OR ac.Activo <> 0)
-                ORDER BY ca.des_articulo, ac.Cve_ArtComponente
-            ";
-
-            $rows = db_all($sql, $params);
+            $rows = db_all("
+                SELECT DISTINCT FolioImport
+                FROM t_ordenprod
+                WHERE FolioImport IS NOT NULL
+                  AND FolioImport <> ''
+                ORDER BY FechaReg DESC, FolioImport DESC
+                LIMIT 200
+            ");
 
             echo json_encode([
                 'ok'   => true,
@@ -141,35 +56,230 @@ if ($op) {
             exit;
         }
 
-        /* =========================================
-           CONSOLIDADO DE COMPONENTES (según filtros)
-        ==========================================*/
-        if ($op === 'componentes_consol') {
-            $params   = [];
-            $whereSql = build_where_ots($params);
+        /* ---------- BUSCAR OTs ---------- */
+        if ($op === 'buscar') {
 
-            // Aseguramos WHERE correcto + condición de activo
-            if ($whereSql !== '') {
-                $whereSql .= " AND (ac.Activo IS NULL OR ac.Activo <> 0)";
-            } else {
-                $whereSql  = "WHERE (ac.Activo IS NULL OR ac.Activo <> 0)";
+            $almacen      = trim($_POST['almacen']      ?? '');
+            $status       = trim($_POST['status']       ?? '');
+            $f_ini        = trim($_POST['f_ini']        ?? '');
+            $f_fin        = trim($_POST['f_fin']        ?? '');
+            $folioImport  = trim($_POST['folio_import'] ?? '');
+            $buscar       = trim($_POST['buscar']       ?? '');
+            $buscar_lp    = trim($_POST['buscar_lp']    ?? '');
+
+            $where  = [];
+            $params = [];
+
+            if ($almacen !== '' && $almacen !== 'Todos') {
+                $where[]  = 'o.cve_almac = ?';
+                $params[] = $almacen;
+            }
+
+            if ($status !== '' && $status !== 'Todos') {
+                $where[]  = 'o.Status = ?';
+                $params[] = $status;
+            }
+
+            if ($f_ini !== '') {
+                $where[]  = 'DATE(o.FechaReg) >= ?';
+                $params[] = $f_ini;
+            }
+
+            if ($f_fin !== '') {
+                $where[]  = 'DATE(o.FechaReg) <= ?';
+                $params[] = $f_fin;
+            }
+
+            if ($HAS_FOLIOIMPORT && $folioImport !== '' && $folioImport !== 'Todos') {
+                $where[]  = 'o.FolioImport = ?';
+                $params[] = $folioImport;
+            }
+
+            if ($buscar !== '') {
+                $where[] = "(
+                    o.Folio_Pro    LIKE ?
+                 OR " . ($HAS_FOLIOIMPORT ? "IFNULL(o.FolioImport,'')" : "''") . " LIKE ?
+                 OR o.Cve_Articulo LIKE ?
+                 OR a.des_articulo LIKE ?
+                 OR IFNULL(o.Referencia,'') LIKE ?
+                 OR IFNULL(o.Cve_Lote,'') LIKE ?
+                )";
+                $like   = "%$buscar%";
+                $params = array_merge($params, [$like, $like, $like, $like, $like, $like]);
+            }
+
+            if ($buscar_lp !== '') {
+                $where[] = "(
+                    IFNULL(o.Cve_Lote,'')   LIKE ?
+                 OR IFNULL(o.Referencia,'') LIKE ?
+                 OR o.Folio_Pro            LIKE ?
+                )";
+                $likeLP = "%$buscar_lp%";
+                $params = array_merge($params, [$likeLP, $likeLP, $likeLP]);
+            }
+
+            $selectFolioImport = $HAS_FOLIOIMPORT
+                ? ", IFNULL(o.FolioImport,'') AS FolioImport"
+                : ", '' AS FolioImport";
+
+            $sql = "
+                SELECT
+                    o.Folio_Pro,
+                    o.cve_almac                                AS Almacen,
+                    o.Cve_Articulo,
+                    a.des_articulo                             AS NombreProducto,
+                    o.Cantidad,
+                    DATE_FORMAT(o.Fecha,    '%d/%m/%Y')        AS FechaOT,
+                    DATE_FORMAT(o.FechaReg, '%d/%m/%Y')        AS FechaReg,
+                    o.Status,
+                    IFNULL(o.Referencia,'')                    AS Referencia
+                    $selectFolioImport
+                FROM t_ordenprod o
+                LEFT JOIN c_articulo a
+                       ON a.cve_articulo = o.Cve_Articulo
+            ";
+
+            if ($where) {
+                $sql .= ' WHERE ' . implode(' AND ', $where);
+            }
+
+            $sql .= ' ORDER BY o.FechaReg DESC, o.Folio_Pro DESC LIMIT 500';
+
+            $rows = db_all($sql, $params);
+
+            echo json_encode([
+                'ok'   => true,
+                'data' => $rows,
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        /* ---------- DETALLE DE COMPONENTES POR OT ---------- */
+        if ($op === 'detalle_ot') {
+
+            $folio = trim($_POST['folio'] ?? '');
+            if ($folio === '') {
+                throw new Exception('Folio OT requerido.');
             }
 
             $sql = "
                 SELECT
-                    ac.Cve_ArtComponente              AS cve_componente,
-                    ca.des_articulo                   AS desc_componente,
-                    IFNULL(ac.cve_umed, ca.cve_umed)  AS uom,
-                    SUM(o.Cant_Prod * ac.Cantidad)    AS cant_total
+                    o.Folio_Pro,
+                    o.cve_almac                       AS Almacen,
+                    o.Cve_Articulo                    AS articulo_pt,
+                    pt.des_articulo                  AS desc_pt,
+                    o.Cantidad                        AS cant_ot,
+                    c.Cve_ArtComponente               AS componente,
+                    comp.des_articulo                 AS descripcion,
+                    c.cve_umed                        AS uom,
+                    c.Cantidad                        AS factor_pt,
+                    (c.Cantidad * o.Cantidad)         AS requerido
                 FROM t_ordenprod o
-                JOIN t_artcompuesto ac
-                    ON ac.Cve_Articulo = o.Cve_Articulo
-                LEFT JOIN c_articulo ca
-                    ON ca.cve_articulo = ac.Cve_ArtComponente
-                $whereSql
-                GROUP BY ac.Cve_ArtComponente, ca.des_articulo, uom
-                ORDER BY ca.des_articulo, ac.Cve_ArtComponente
-                LIMIT 5000
+                JOIN t_artcompuesto c
+                  ON c.Cve_Articulo = o.Cve_Articulo
+                 AND IFNULL(c.Activo,1) = 1
+                LEFT JOIN c_articulo comp
+                  ON comp.cve_articulo = c.Cve_ArtComponente
+                LEFT JOIN c_articulo pt
+                  ON pt.cve_articulo = o.Cve_Articulo
+                WHERE o.Folio_Pro = ?
+                ORDER BY c.Cve_ArtComponente
+            ";
+
+            $rows = db_all($sql, [$folio]);
+
+            echo json_encode([
+                'ok'   => true,
+                'data' => $rows,
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        /* ---------- CONSOLIDADO DE COMPONENTES SEGÚN FILTROS ---------- */
+        if ($op === 'consolidado') {
+
+            $almacen      = trim($_POST['almacen']      ?? '');
+            $status       = trim($_POST['status']       ?? '');
+            $f_ini        = trim($_POST['f_ini']        ?? '');
+            $f_fin        = trim($_POST['f_fin']        ?? '');
+            $folioImport  = trim($_POST['folio_import'] ?? '');
+            $buscar       = trim($_POST['buscar']       ?? '');
+            $buscar_lp    = trim($_POST['buscar_lp']    ?? '');
+
+            $where  = [];
+            $params = [];
+
+            if ($almacen !== '' && $almacen !== 'Todos') {
+                $where[]  = 'o.cve_almac = ?';
+                $params[] = $almacen;
+            }
+
+            if ($status !== '' && $status !== 'Todos') {
+                $where[]  = 'o.Status = ?';
+                $params[] = $status;
+            }
+
+            if ($f_ini !== '') {
+                $where[]  = 'DATE(o.FechaReg) >= ?';
+                $params[] = $f_ini;
+            }
+
+            if ($f_fin !== '') {
+                $where[]  = 'DATE(o.FechaReg) <= ?';
+                $params[] = $f_fin;
+            }
+
+            if ($HAS_FOLIOIMPORT && $folioImport !== '' && $folioImport !== 'Todos') {
+                $where[]  = 'o.FolioImport = ?';
+                $params[] = $folioImport;
+            }
+
+            if ($buscar !== '') {
+                $where[] = "(
+                    o.Folio_Pro    LIKE ?
+                 OR " . ($HAS_FOLIOIMPORT ? "IFNULL(o.FolioImport,'')" : "''") . " LIKE ?
+                 OR o.Cve_Articulo LIKE ?
+                 OR IFNULL(o.Referencia,'') LIKE ?
+                 OR IFNULL(o.Cve_Lote,'') LIKE ?
+                )";
+                $like   = "%$buscar%";
+                $params = array_merge($params, [$like, $like, $like, $like, $like]);
+            }
+
+            if ($buscar_lp !== '') {
+                $where[] = "(
+                    IFNULL(o.Cve_Lote,'')   LIKE ?
+                 OR IFNULL(o.Referencia,'') LIKE ?
+                 OR o.Folio_Pro            LIKE ?
+                )";
+                $likeLP = "%$buscar_lp%";
+                $params = array_merge($params, [$likeLP, $likeLP, $likeLP]);
+            }
+
+            $sql = "
+                SELECT
+                    c.Cve_ArtComponente               AS componente,
+                    comp.des_articulo                 AS descripcion,
+                    c.cve_umed                        AS uom,
+                    SUM(o.Cantidad)                   AS total_ot,
+                    SUM(c.Cantidad)                   AS total_factor_pt,
+                    SUM(c.Cantidad * o.Cantidad)      AS requerido_total,
+                    COUNT(DISTINCT o.Folio_Pro)       AS num_ots
+                FROM t_ordenprod o
+                JOIN t_artcompuesto c
+                  ON c.Cve_Articulo = o.Cve_Articulo
+                 AND IFNULL(c.Activo,1) = 1
+                LEFT JOIN c_articulo comp
+                  ON comp.cve_articulo = c.Cve_ArtComponente
+            ";
+
+            if ($where) {
+                $sql .= ' WHERE ' . implode(' AND ', $where);
+            }
+
+            $sql .= "
+                GROUP BY c.Cve_ArtComponente, comp.des_articulo, c.cve_umed
+                ORDER BY c.Cve_ArtComponente
             ";
 
             $rows = db_all($sql, $params);
@@ -181,194 +291,152 @@ if ($op) {
             exit;
         }
 
-        echo json_encode(['ok'=>false,'msg'=>'Operación no soportada'], JSON_UNESCAPED_UNICODE);
+        throw new Exception('Operación no soportada.');
+
     } catch (Throwable $e) {
-        echo json_encode(['ok'=>false,'msg'=>$e->getMessage()], JSON_UNESCAPED_UNICODE);
+        echo json_encode([
+            'ok'  => false,
+            'msg' => $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
     }
-    exit;
 }
 
 /* ============================================================
-   VISTA HTML
+   VISTA
 ============================================================ */
 $TITLE = 'Administración de Órdenes de Trabajo';
-include __DIR__ . '/../bi/_menu_global.php';
+require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<title>Administración de Órdenes de Trabajo</title>
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.datatables.net/v/bs5/dt-2.1.8/datatables.min.css" rel="stylesheet">
-
-<style>
-body { font-size:10px; }
-.table-sm td, .table-sm th { padding:.30rem; }
-.card-header { font-weight:bold; }
-</style>
-</head>
-<body>
-
 <div class="container-fluid mt-2">
 
-<div class="card">
-  <div class="card-header">
-    Administración de Órdenes de Trabajo
-  </div>
-  <div class="card-body">
+  <div class="card">
+    <!-- TÍTULO CORPORATIVO -->
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+      <h5 class="mb-0">
+        <i class="bi bi-diagram-3-fill me-2"></i>
+        Administración de Órdenes de Trabajo
+      </h5>
+      <small class="text-light">Mostrando hasta 500 órdenes más recientes según filtros</small>
+    </div>
 
-    <!-- Filtros -->
-    <div class="card mb-3">
-      <div class="card-body">
-        <div class="row g-2 align-items-end">
+    <div class="card-body">
 
-          <div class="col-md-3">
-            <label for="fAlmacen" class="form-label">Almacén</label>
-            <select id="fAlmacen" class="form-select form-select-sm">
-              <option value="">Todos</option>
-            </select>
-          </div>
-
-          <div class="col-md-2">
-            <label for="fStatus" class="form-label">Status</label>
-            <select id="fStatus" class="form-select form-select-sm">
-              <option value="">Todos</option>
-              <option value="P">Pendiente</option>
-              <option value="A">En proceso</option>
-              <option value="T">Terminado</option>
-            </select>
-          </div>
-
-          <div class="col-md-2">
-            <label for="fIni" class="form-label">Fecha inicio</label>
-            <input type="date" id="fIni" class="form-control form-control-sm">
-          </div>
-
-          <div class="col-md-2">
-            <label for="fFin" class="form-label">Fecha fin</label>
-            <input type="date" id="fFin" class="form-control form-control-sm">
-          </div>
-
-          <div class="col-md-3">
-            <label for="fBuscar" class="form-label">Buscar (folio / producto / referencia)</label>
-            <input type="text" id="fBuscar" class="form-control form-control-sm" placeholder="Texto a buscar">
-          </div>
-
+      <!-- FILTROS (fila 1) -->
+      <div class="row g-2 mb-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label mb-0">Almacén</label>
+          <select id="cmbAlmacen" class="form-select form-select-sm">
+            <option value="">Todos</option>
+          </select>
         </div>
 
-        <div class="row mt-3">
-          <div class="col">
-            <button id="btnBuscar"  class="btn btn-primary btn-sm">
-              Buscar
-            </button>
-            <button id="btnLimpiar" class="btn btn-outline-secondary btn-sm">
-              Limpiar
-            </button>
-          </div>
-          <div class="col text-end">
-            <button id="btnExport" class="btn btn-outline-primary btn-sm">
-              Exportar OT Pendientes
-            </button>
-          </div>
+        <div class="col-md-2">
+          <label class="form-label mb-0">Status</label>
+          <select id="cmbStatus" class="form-select form-select-sm">
+            <option value="Todos">Todos</option>
+            <option value="P">P - Pendiente</option>
+            <option value="T">T - Terminado</option>
+            <option value="C">C - Cancelado</option>
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0">Fecha inicio</label>
+          <input type="date" id="fIni" class="form-control form-control-sm">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0">Fecha fin</label>
+          <input type="date" id="fFin" class="form-control form-control-sm">
+        </div>
+
+        <div class="col-md-3 text-end">
+          <button id="btnBuscar" class="btn btn-primary btn-sm">
+            <i class="bi bi-search"></i> Buscar
+          </button>
+          <button id="btnLimpiar" class="btn btn-outline-secondary btn-sm">
+            Limpiar
+          </button>
+          <button id="btnConsolidado" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-collection"></i> Consolidado
+          </button>
         </div>
       </div>
-    </div>
 
-    <!-- Grid -->
-    <div class="table-responsive">
-      <table id="tblOT" class="table table-sm table-striped table-bordered align-middle">
-        <thead>
-        <tr>
-          <th>#</th>
-          <th>Folio OT</th>
-          <th>Almacén</th>
-          <th>Clave producto</th>
-          <th>Cantidad</th>
-          <th>Fecha OT</th>
-          <th>Fecha alta</th>
-          <th>Status</th>
-          <th>Referencia</th>
-          <th>Acciones</th>
-        </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
+      <!-- FILTROS (fila 2) -->
+      <div class="row g-2 mb-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label mb-0">Buscar (folio / producto / referencia)</label>
+          <input type="text" id="fBuscar" class="form-control form-control-sm"
+                 placeholder="Texto a buscar">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label mb-0">Buscar LP / lote</label>
+          <input type="text" id="fBuscarLP" class="form-control form-control-sm"
+                 placeholder="Lote / LP / referencia">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label mb-0">Folio de importación</label>
+          <select id="cmbFolioImport" class="form-select form-select-sm">
+            <option value="Todos">Todos</option>
+          </select>
+        </div>
+      </div>
 
+      <!-- TABLA PRINCIPAL -->
+      <div class="table-responsive">
+        <table id="tblOT" class="table table-sm table-striped table-bordered align-middle">
+          <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>Folio OT</th>
+            <th>Almacén</th>
+            <th>Clave producto</th>
+            <th>Nombre producto</th>
+            <th>Cantidad</th>
+            <th>Fecha OT</th>
+            <th>Fecha alta</th>
+            <th>Status</th>
+            <th>Referencia</th>
+            <th>Folio importación</th>
+            <th>Acciones</th>
+          </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+    </div>
   </div>
 </div>
 
-</div> <!-- container -->
-
-<!-- Modal Componentes -->
+<!-- MODAL: COMPONENTES X OT -->
 <div class="modal fade" id="mdlComponentes" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Componentes de OT</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="modal-body">
-
-        <div id="otInfo" class="mb-3 small"></div>
-
-        <ul class="nav nav-tabs" role="tablist">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="tab-detalle-ot" data-bs-toggle="tab"
-                    data-bs-target="#panel-detalle-ot" type="button" role="tab">
-              Detalle OT
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab-consol" data-bs-toggle="tab"
-                    data-bs-target="#panel-consol" type="button" role="tab">
-              Consolidado (según filtros)
-            </button>
-          </li>
-        </ul>
-
-        <div class="tab-content mt-3">
-
-          <!-- Detalle OT -->
-          <div class="tab-pane fade show active" id="panel-detalle-ot" role="tabpanel">
-            <div class="table-responsive">
-              <table class="table table-sm table-bordered" id="tblCompOT">
-                <thead>
-                <tr>
-                  <th>Componente</th>
-                  <th>Descripción</th>
-                  <th>UOM</th>
-                  <th>Factor x PT</th>
-                  <th>Cant. OT</th>
-                  <th>Requerido</th>
-                </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Consolidado -->
-          <div class="tab-pane fade" id="panel-consol" role="tabpanel">
-            <div class="table-responsive">
-              <table class="table table-sm table-bordered" id="tblCompConsol">
-                <thead>
-                <tr>
-                  <th>Componente</th>
-                  <th>Descripción</th>
-                  <th>UOM</th>
-                  <th>Cantidad total requerida</th>
-                </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-          </div>
-
+        <div id="infoOT" class="mb-2 text-muted" style="font-size:10px;"></div>
+        <div class="table-responsive">
+          <table id="tblComp" class="table table-sm table-striped table-bordered align-middle">
+            <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Componente</th>
+              <th>Descripción</th>
+              <th>UOM</th>
+              <th>Factor x PT</th>
+              <th>Cant. OT</th>
+              <th>Requerido</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
-
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
@@ -377,219 +445,377 @@ body { font-size:10px; }
   </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/v/bs5/dt-2.1.8/datatables.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- MODAL: CONSOLIDADO -->
+<div class="modal fade" id="mdlConsolidado" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Consolidado de componentes (según filtros)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="infoCons" class="mb-2 text-muted" style="font-size:10px;"></div>
+        <div class="table-responsive">
+          <table id="tblCons" class="table table-sm table-striped table-bordered align-middle">
+            <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Componente</th>
+              <th>Descripción</th>
+              <th>UOM</th>
+              <th># OTs</th>
+              <th>Total OTs (piezas PT)</th>
+              <th>Total requerido</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST SIMPLE PARA ERRORES -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1080">
+  <div id="appToast" class="toast align-items-center border-0 text-bg-danger" role="alert"
+       aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div id="appToastBody" class="toast-body">...</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto"
+              data-bs-dismiss="toast" aria-label="Cerrar"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 
 <script>
-(function(){
+(function () {
+  'use strict';
 
-  let tbl = null;
-  let mdlComponentes = null;
-  let consolCargado = false;
+  let dtOT   = null;
+  let dtComp = null;
+  let dtCons = null;
+  let toastObj = null;
 
+  function toast(msg) {
+    const el   = document.getElementById('appToast');
+    const body = document.getElementById('appToastBody');
+    body.textContent = msg || 'Error desconocido';
+
+    if (!toastObj) {
+      toastObj = new bootstrap.Toast(el, {delay: 3500});
+    }
+    toastObj.show();
+  }
+
+  // =============== CARGAR ALMACENES DESDE API =================
   function cargarAlmacenes() {
-    $.ajax({
-      url: '../api/filtros_assistpro.php',
-      method: 'GET',
-      dataType: 'json',
-      data: { action: 'init' },
-      success: function(r){
-        const $c = $('#fAlmacen');
-        $c.empty().append('<option value="">Todos</option>');
-        if (!r || !r.ok) return;
-        (r.almacenes || []).forEach(function(a){
-          const val  = a.cve_almac;
-          const text = '(' + (a.clave_almacen || a.cve_almac) + ') ' + (a.des_almac || a.cve_almac);
-          $c.append($('<option>').val(val).text(text));
+    $.getJSON('../api/filtros_assistpro.php', {action: 'init'})
+      .done(function (r) {
+        if (!r || r.ok === false) {
+          return;
+        }
+        const $cmb = $('#cmbAlmacen');
+        $cmb.empty().append('<option value="">Todos</option>');
+        const almacenes = r.almacenes || [];
+        almacenes.forEach(function (a) {
+          const val = a.cve_almac || a.clave_almacen || '';
+          const txt = '(' + val + ') ' + (a.des_almac || val);
+          $cmb.append($('<option>').val(val).text(txt));
         });
-      }
-    });
-  }
-
-  function initTabla() {
-    if (tbl) return;
-
-    tbl = $('#tblOT').DataTable({
-      pageLength: 25,
-      searching: false,
-      info: true,
-      autoWidth: false,
-      columns: [
-        { data: null },
-        { data: 'Folio_Pro' },
-        { data: 'cve_almac' },
-        { data: 'Cve_Articulo' },
-        { data: 'Cant_Prod' },
-        { data: 'fecha_ot' },
-        { data: 'fecha_reg' },
-        { data: 'status' },
-        { data: 'referencia' },
-        {
-          data: null,
-          orderable: false,
-          render: function(){
-            return '<button class="btn btn-sm btn-outline-primary btnComponentes">Componentes</button>';
-          }
-        }
-      ],
-      order: [[6,'desc']],
-      createdRow: function(row, data){
-        if (data.status === 'P') {
-          $(row).addClass('table-warning');
-        }
-      }
-    });
-
-    tbl.on('order.dt search.dt draw.dt', function () {
-      let i = 1;
-      tbl.rows({ page:'current' }).every(function(){
-        const cell = this.cell(this.index(), 0).node();
-        $(cell).text(i++);
+      })
+      .fail(function () {
+        console.warn('No se pudieron cargar almacenes desde filtros_assistpro.php');
       });
-    });
+  }
 
-    $('#tblOT tbody').on('click', '.btnComponentes', function(){
-      const rowData = tbl.row($(this).closest('tr')).data();
-      if (!rowData) return;
-      abrirModalComponentes(rowData);
+  // =============== CARGAR FOLIOS DE IMPORTACIÓN =================
+  function cargarFolios() {
+    $.post('orden_produccion_admin.php', {op: 'folios_import'}, function (r) {
+      if (!r || r.ok === false) {
+        return;
+      }
+      const $cmb = $('#cmbFolioImport');
+      $cmb.empty();
+      $cmb.append('<option value="Todos">Todos</option>');
+      (r.data || []).forEach(function (row) {
+        const fol = row.FolioImport || '';
+        if (!fol) return;
+        $cmb.append($('<option>').val(fol).text(fol));
+      });
+    }, 'json').fail(function () {
+      console.warn('No se pudieron cargar folios de importación');
     });
   }
 
-  function obtenerFiltros() {
+  // =============== BUSCAR OTs =================
+  function getFiltrosPayload() {
     return {
-      almacen: $('#fAlmacen').val() || '',
-      status : $('#fStatus').val()  || '',
-      f_ini  : $('#fIni').val()     || '',
-      f_fin  : $('#fFin').val()     || '',
-      buscar : $('#fBuscar').val()  || ''
+      almacen:      $('#cmbAlmacen').val()      || '',
+      status:       $('#cmbStatus').val()       || '',
+      f_ini:        $('#fIni').val()            || '',
+      f_fin:        $('#fFin').val()            || '',
+      buscar:       $('#fBuscar').val()         || '',
+      buscar_lp:    $('#fBuscarLP').val()       || '',
+      folio_import: $('#cmbFolioImport').val()  || ''
     };
   }
 
   function buscar() {
-    initTabla();
-    const params = Object.assign({ op:'list_ots' }, obtenerFiltros());
-    $.post('orden_produccion_admin.php', params, function(r){
-      if (!r || !r.ok) {
-        alert(r && r.msg ? r.msg : 'Error al consultar OTs');
+    const payload = Object.assign({op: 'buscar'}, getFiltrosPayload());
+
+    $.post('orden_produccion_admin.php', payload, function (r) {
+      if (!r || r.ok === false) {
+        toast((r && r.msg) || 'Error al buscar órdenes de trabajo');
         return;
       }
-      tbl.clear().rows.add(r.data || []).draw();
-    }, 'json');
+      renderTabla(r.data || []);
+    }, 'json').fail(function () {
+      toast('Error de comunicación con el servidor (buscar)');
+    });
   }
 
-  function limpiar() {
-    $('#fAlmacen').val('');
-    $('#fStatus').val('');
-    const hoy = new Date().toISOString().substring(0,10);
-    $('#fIni').val(hoy);
-    $('#fFin').val(hoy);
-    $('#fBuscar').val('');
+  function renderTabla(data) {
+    if (dtOT) {
+      dtOT.clear();
+      dtOT.rows.add(data);
+      dtOT.draw();
+      return;
+    }
+
+    dtOT = $('#tblOT').DataTable({
+      data: data,
+      paging: true,
+      searching: false,
+      info: true,
+      lengthChange: false,
+      pageLength: 25,
+      order: [],
+      columns: [
+        {
+          data: null,
+          className: 'text-center',
+          render: function (data, type, row, meta) {
+            return meta.row + 1;
+          }
+        },
+        { data: 'Folio_Pro' },
+        { data: 'Almacen' },
+        { data: 'Cve_Articulo' },
+        { data: 'NombreProducto' },
+        {
+          data: 'Cantidad',
+          className: 'text-end'
+        },
+        { data: 'FechaOT' },
+        { data: 'FechaReg' },
+        { data: 'Status' },
+        { data: 'Referencia' },
+        { data: 'FolioImport' },
+        {
+          data: null,
+          orderable: false,
+          className: 'text-center',
+          render: function () {
+            return '<button type="button" class="btn btn-sm btn-outline-primary btn-comp">Componentes</button>';
+          }
+        }
+      ]
+    });
   }
 
-  $('#btnBuscar').on('click', function(){
-    consolCargado = false;
-    buscar();
-  });
-
-  $('#btnLimpiar').on('click', function(){
-    limpiar();
-    consolCargado = false;
-    buscar();
-  });
-
-  $('#fBuscar').on('keypress', function(e){
-    if (e.which === 13){
-      consolCargado = false;
-      buscar();
-    }
-  });
-
-  $('#btnExport').on('click', function(){
-    alert('Exportar OT pendientes (pendiente de amarrar al reporte real).');
-  });
-
-  function abrirModalComponentes(ot) {
-    if (!mdlComponentes) {
-      mdlComponentes = new bootstrap.Modal(document.getElementById('mdlComponentes'));
+  // =============== COMPONENTES POR OT =================
+  function cargarComponentes(row) {
+    if (!row || !row.Folio_Pro) {
+      toast('Folio OT no disponible');
+      return;
     }
 
-    $('#otInfo').html(
-      '<b>Folio OT:</b> ' + (ot.Folio_Pro || '') +
-      ' &nbsp; | &nbsp; <b>Producto:</b> ' + (ot.Cve_Articulo || '') +
-      ' &nbsp; | &nbsp; <b>Cantidad:</b> ' + (ot.Cant_Prod || '') +
-      ' &nbsp; | &nbsp; <b>Almacén:</b> ' + (ot.cve_almac || '')
+    $('#infoOT').text(
+      'Folio OT: ' + (row.Folio_Pro || '') +
+      ' | Almacén: ' + (row.Almacen || '') +
+      ' | Producto: ' + (row.Cve_Articulo || '') +
+      ' - ' + (row.NombreProducto || '') +
+      ' | Cantidad: ' + (row.Cantidad || '')
     );
 
-    $('#tblCompOT tbody').empty();
-    $('#tblCompConsol tbody').empty();
-    consolCargado = false;
+    if (dtComp) {
+      dtComp.clear().draw();
+    }
+    $('#tblComp tbody').empty();
 
     $.post('orden_produccion_admin.php', {
-      op   : 'componentes_ot',
-      id_ot: ot.id || 0,
-      folio: ot.Folio_Pro || '',
-      art  : ot.Cve_Articulo || ''
-    }, function(r){
-      if (r && r.ok) {
-        const $tb = $('#tblCompOT tbody');
-        (r.data || []).forEach(function(c){
-          $tb.append(
-            '<tr>' +
-            '<td>' + (c.cve_componente || '') + '</td>' +
-            '<td>' + (c.desc_componente || '') + '</td>' +
-            '<td>' + (c.uom || '') + '</td>' +
-            '<td class="text-end">' + (c.factor ?? '') + '</td>' +
-            '<td class="text-end">' + (c.cant_ot ?? '') + '</td>' +
-            '<td class="text-end">' + (c.cant_requerida ?? '') + '</td>' +
-            '</tr>'
-          );
-        });
-      } else {
-        alert(r && r.msg ? r.msg : 'Error al obtener componentes de la OT');
+      op:    'detalle_ot',
+      folio: row.Folio_Pro
+    }, function (r) {
+      if (!r || r.ok === false) {
+        toast((r && r.msg) || 'Error al obtener componentes');
+        return;
       }
-    }, 'json');
 
-    mdlComponentes.show();
+      const data = r.data || [];
+      if (!dtComp) {
+        dtComp = $('#tblComp').DataTable({
+          paging: false,
+          searching: false,
+          info: false,
+          lengthChange: false,
+          order: [],
+          columns: [
+            {
+              data: null,
+              className: 'text-center',
+              render: function (data, type, row, meta) {
+                return meta.row + 1;
+              }
+            },
+            { data: 'componente' },
+            { data: 'descripcion' },
+            { data: 'uom' },
+            {
+              data: 'factor_pt',
+              className: 'text-end'
+            },
+            {
+              data: 'cant_ot',
+              className: 'text-end'
+            },
+            {
+              data: 'requerido',
+              className: 'text-end'
+            }
+          ]
+        });
+      }
+
+      dtComp.clear();
+      dtComp.rows.add(data);
+      dtComp.draw();
+
+      new bootstrap.Modal(document.getElementById('mdlComponentes')).show();
+
+    }, 'json').fail(function () {
+      toast('Error de comunicación con el servidor (componentes)');
+    });
   }
 
-  $('#tab-consol').on('shown.bs.tab', function () {
-    if (consolCargado) return;
+  // =============== CONSOLIDADO SEGÚN FILTROS =================
+  function cargarConsolidado() {
+    const payload = Object.assign({op: 'consolidado'}, getFiltrosPayload());
 
-    const filtros = obtenerFiltros();
-    filtros.op = 'componentes_consol';
-
-    $.post('orden_produccion_admin.php', filtros, function(r){
-      if (r && r.ok) {
-        const $tb = $('#tblCompConsol tbody');
-        $tb.empty();
-        (r.data || []).forEach(function(c){
-          $tb.append(
-            '<tr>' +
-            '<td>' + (c.cve_componente || '') + '</td>' +
-            '<td>' + (c.desc_componente || '') + '</td>' +
-            '<td>' + (c.uom || '') + '</td>' +
-            '<td class="text-end">' + (c.cant_total ?? '') + '</td>' +
-            '</tr>'
-          );
-        });
-        consolCargado = true;
-      } else {
-        console.error('Error componentes_consol', r ? r.msg : '');
+    $.post('orden_produccion_admin.php', payload, function (r) {
+      if (!r || r.ok === false) {
+        toast((r && r.msg) || 'Error al obtener consolidado');
+        return;
       }
-    }, 'json');
+
+      const data = r.data || [];
+
+      $('#infoCons').text(
+        'Consolidado generado con los filtros actuales (almacén, status, fechas, folio de importación y búsquedas).'
+      );
+
+      if (!dtCons) {
+        dtCons = $('#tblCons').DataTable({
+          paging: false,
+          searching: false,
+          info: false,
+          lengthChange: false,
+          order: [],
+          columns: [
+            {
+              data: null,
+              className: 'text-center',
+              render: function (data, type, row, meta) {
+                return meta.row + 1;
+              }
+            },
+            { data: 'componente' },
+            { data: 'descripcion' },
+            { data: 'uom' },
+            {
+              data: 'num_ots',
+              className: 'text-end'
+            },
+            {
+              data: 'total_ot',
+              className: 'text-end'
+            },
+            {
+              data: 'requerido_total',
+              className: 'text-end'
+            }
+          ]
+        });
+      }
+
+      dtCons.clear();
+      dtCons.rows.add(data);
+      dtCons.draw();
+
+      new bootstrap.Modal(document.getElementById('mdlConsolidado')).show();
+
+    }, 'json').fail(function () {
+      toast('Error de comunicación con el servidor (consolidado)');
+    });
+  }
+
+  // =============== INIT =================
+  $(function () {
+    // Fechas default: últimos 7 días
+    const hoy   = new Date();
+    const fin   = hoy.toISOString().substring(0,10);
+    const iniDt = new Date(hoy);
+    iniDt.setDate(iniDt.getDate() - 7);
+    const ini   = iniDt.toISOString().substring(0,10);
+    $('#fIni').val(ini);
+    $('#fFin').val(fin);
+
+    cargarAlmacenes();
+    cargarFolios();
+    buscar();
+
+    $('#btnBuscar').on('click', function (e) {
+      e.preventDefault();
+      buscar();
+    });
+
+    $('#btnLimpiar').on('click', function (e) {
+      e.preventDefault();
+      $('#cmbAlmacen').val('');
+      $('#cmbStatus').val('Todos');
+      $('#fBuscar').val('');
+      $('#fBuscarLP').val('');
+      $('#cmbFolioImport').val('Todos');
+      buscar();
+    });
+
+    $('#btnConsolidado').on('click', function (e) {
+      e.preventDefault();
+      cargarConsolidado();
+    });
+
+    $('#fBuscar,#fBuscarLP').on('keypress', function (e) {
+      if (e.which === 13) {
+        buscar();
+      }
+    });
+
+    // Delegación: siempre toma la fila correcta
+    $('#tblOT tbody').on('click', '.btn-comp', function () {
+      const row = dtOT.row($(this).closest('tr')).data();
+      cargarComponentes(row);
+    });
   });
-
-  const hoy = new Date().toISOString().substring(0,10);
-  $('#fIni').val(hoy);
-  $('#fFin').val(hoy);
-
-  cargarAlmacenes();
-  buscar();
 
 })();
 </script>
 
-</body>
-</html>
-<?php include __DIR__ . '/../bi/_menu_global_end.php'; ?>
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
