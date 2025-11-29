@@ -2,13 +2,14 @@
 // public/api/ingenieria_rutas_embarques.php
 header('Content-Type: application/json; charset=utf-8');
 
+require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
 try {
     $pdo = db_pdo();
 } catch (Throwable $e) {
     echo json_encode([
-        'ok'    => false,
+        'ok' => false,
         'error' => 'No existe la conexión PDO disponible ($pdo) en db.php: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
     exit;
@@ -40,13 +41,13 @@ try {
 
         default:
             echo json_encode([
-                'ok'    => false,
+                'ok' => false,
                 'error' => 'Acción no soportada en ingenieria_rutas_embarques.php: ' . $action
             ], JSON_UNESCAPED_UNICODE);
     }
 } catch (Throwable $e) {
     echo json_encode([
-        'ok'    => false,
+        'ok' => false,
         'error' => 'Error general en ingenieria_rutas_embarques.php: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
 }
@@ -104,17 +105,17 @@ function init_datos(PDO $pdo): void
 
     // Catálogo estático de status de embarque
     $status = [
-        ['id' => '',  'texto' => 'Todos'],
+        ['id' => '', 'texto' => 'Todos'],
         ['id' => 'T', 'texto' => 'En Ruta (T)'],
         ['id' => 'F', 'texto' => 'Entregado (F)'],
     ];
 
     echo json_encode([
-        'ok'           => true,
-        'almacenes'    => $almacenes,
-        'rutas'        => $rutas,
-        'transportes'  => $transportes,
-        'status_list'  => $status,
+        'ok' => true,
+        'almacenes' => $almacenes,
+        'rutas' => $rutas,
+        'transportes' => $transportes,
+        'status_list' => $status,
     ], JSON_UNESCAPED_UNICODE);
 }
 
@@ -125,12 +126,12 @@ function init_datos(PDO $pdo): void
 function listar_embarques(PDO $pdo): void
 {
     // Parámetros de filtro
-    $almacen   = trim($_POST['almacen'] ?? $_GET['almacen'] ?? '');
-    $ruta      = trim($_POST['ruta'] ?? $_GET['ruta'] ?? '');
-    $status    = trim($_POST['status'] ?? $_GET['status'] ?? '');
-    $fechaIni  = trim($_POST['fecha_ini'] ?? $_GET['fecha_ini'] ?? '');
-    $fechaFin  = trim($_POST['fecha_fin'] ?? $_GET['fecha_fin'] ?? '');
-    $busqueda  = trim($_POST['buscar'] ?? $_GET['buscar'] ?? '');
+    $almacen = trim($_POST['almacen'] ?? $_GET['almacen'] ?? '');
+    $ruta = trim($_POST['ruta'] ?? $_GET['ruta'] ?? '');
+    $status = trim($_POST['status'] ?? $_GET['status'] ?? '');
+    $fechaIni = trim($_POST['fecha_ini'] ?? $_GET['fecha_ini'] ?? '');
+    $fechaFin = trim($_POST['fecha_fin'] ?? $_GET['fecha_fin'] ?? '');
+    $busqueda = trim($_POST['buscar'] ?? $_GET['buscar'] ?? '');
 
     $params = [];
     $filtros = [];
@@ -165,7 +166,7 @@ function listar_embarques(PDO $pdo): void
     // Filtro por ruta
     if ($ruta !== '') {
         $filtros[] = "oe.Id_Ruta = :idruta";
-        $params[':idruta'] = (int)$ruta;
+        $params[':idruta'] = (int) $ruta;
     }
 
     // Búsqueda libre por folio o cliente
@@ -248,7 +249,7 @@ function listar_embarques(PDO $pdo): void
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode([
-        'ok'   => true,
+        'ok' => true,
         'rows' => $rows,
     ], JSON_UNESCAPED_UNICODE);
 }
@@ -259,12 +260,12 @@ function listar_embarques(PDO $pdo): void
  */
 function detalle_pedido(PDO $pdo): void
 {
-    $idOe = (int)($_POST['id_oembarque'] ?? $_GET['id_oembarque'] ?? 0);
+    $idOe = (int) ($_POST['id_oembarque'] ?? $_GET['id_oembarque'] ?? 0);
     $folio = trim($_POST['folio'] ?? $_GET['folio'] ?? '');
 
     if ($idOe <= 0 || $folio === '') {
         echo json_encode([
-            'ok'    => false,
+            'ok' => false,
             'error' => 'Parámetros insuficientes para detalle (id_oembarque / folio).'
         ], JSON_UNESCAPED_UNICODE);
         return;
@@ -330,7 +331,7 @@ function detalle_pedido(PDO $pdo): void
 
     if (!$header) {
         echo json_encode([
-            'ok'    => false,
+            'ok' => false,
             'error' => 'No se encontró información para el embarque/pedido solicitado.'
         ], JSON_UNESCAPED_UNICODE);
         return;
@@ -356,8 +357,8 @@ function detalle_pedido(PDO $pdo): void
     $detalles = $stDet->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode([
-        'ok'      => true,
-        'header'  => $header,
+        'ok' => true,
+        'header' => $header,
         'detalle' => $detalles,
     ], JSON_UNESCAPED_UNICODE);
 }
@@ -368,12 +369,12 @@ function detalle_pedido(PDO $pdo): void
  */
 function asignar_transporte(PDO $pdo): void
 {
-    $idOe = (int)($_POST['id_oembarque'] ?? 0);
+    $idOe = (int) ($_POST['id_oembarque'] ?? 0);
     $idTransporte = trim($_POST['id_transporte'] ?? '');
 
     if ($idOe <= 0 || $idTransporte === '') {
         echo json_encode([
-            'ok'    => false,
+            'ok' => false,
             'error' => 'Parámetros insuficientes para asignar transporte.'
         ], JSON_UNESCAPED_UNICODE);
         return;
@@ -388,11 +389,11 @@ function asignar_transporte(PDO $pdo): void
     $st = $pdo->prepare($sql);
     $st->execute([
         ':id_transporte' => $idTransporte,
-        ':id_oe'         => $idOe,
+        ':id_oe' => $idOe,
     ]);
 
     echo json_encode([
-        'ok'      => true,
+        'ok' => true,
         'mensaje' => 'Transporte actualizado correctamente.'
     ], JSON_UNESCAPED_UNICODE);
 }
@@ -403,12 +404,12 @@ function asignar_transporte(PDO $pdo): void
  */
 function actualizar_status(PDO $pdo): void
 {
-    $idOe = (int)($_POST['id_oembarque'] ?? 0);
+    $idOe = (int) ($_POST['id_oembarque'] ?? 0);
     $status = trim($_POST['status'] ?? '');
 
     if ($idOe <= 0 || !in_array($status, ['T', 'F'], true)) {
         echo json_encode([
-            'ok'    => false,
+            'ok' => false,
             'error' => 'Parámetros inválidos para actualizar status (use T o F).'
         ], JSON_UNESCAPED_UNICODE);
         return;
@@ -423,11 +424,11 @@ function actualizar_status(PDO $pdo): void
     $st = $pdo->prepare($sql);
     $st->execute([
         ':status' => $status,
-        ':id_oe'  => $idOe,
+        ':id_oe' => $idOe,
     ]);
 
     echo json_encode([
-        'ok'      => true,
+        'ok' => true,
         'mensaje' => 'Status de embarque actualizado correctamente.'
     ], JSON_UNESCAPED_UNICODE);
 }

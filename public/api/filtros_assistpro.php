@@ -2,13 +2,14 @@
 // public/api/filtros_assistpro.php
 header('Content-Type: application/json; charset=utf-8');
 
+require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
 try {
     $pdo = db_pdo();
 } catch (Throwable $e) {
     echo json_encode([
-        'ok'    => false,
+        'ok' => false,
         'error' => 'No existe la conexión PDO disponible ($pdo) en db.php: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
     exit;
@@ -21,13 +22,13 @@ try {
         init_filtros($pdo);
     } else {
         echo json_encode([
-            'ok'    => false,
+            'ok' => false,
             'error' => 'Acción no soportada en filtros_assistpro.php: ' . $action
         ], JSON_UNESCAPED_UNICODE);
     }
 } catch (Throwable $e) {
     echo json_encode([
-        'ok'    => false,
+        'ok' => false,
         'error' => 'Error general en filtros_assistpro.php: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
 }
@@ -41,7 +42,7 @@ function init_filtros(PDO $pdo): void
     // Parámetros opcionales para filtrar algunos catálogos (BL, LP, etc.)
     $empresa = trim($_GET['empresa'] ?? $_POST['empresa'] ?? '');
     $almacen = trim($_GET['almacen'] ?? $_POST['almacen'] ?? '');
-    $zona    = trim($_GET['zona']    ?? $_POST['zona']    ?? '');
+    $zona = trim($_GET['zona'] ?? $_POST['zona'] ?? '');
 
     // Secciones a cargar (coma separadas). Ej: empresas,almacenes,rutas
     $secciones_raw = trim($_GET['secciones'] ?? $_POST['secciones'] ?? '');
@@ -56,7 +57,7 @@ function init_filtros(PDO $pdo): void
     }
 
     // Helper: indica si se debe cargar una sección ('empresas', 'almacenes', 'rutas', etc.)
-    $useSection = function($name) use ($secciones) {
+    $useSection = function ($name) use ($secciones) {
         if (empty($secciones)) {
             // Si no se especifican secciones, cargamos todas (comportamiento original).
             return true;
@@ -65,41 +66,66 @@ function init_filtros(PDO $pdo): void
     };
 
     $data = [
-        'ok'               => true,
-        'empresas'         => [],
-        'almacenes'        => [],
-        'rutas'            => [],
-        'clientes'         => [],
-        'proveedores'      => [],
-        'vendedores'       => [],
-        'productos'        => [],
-        'bls'              => [],
-        'lps'              => [],
-        'zonas_recep'      => [],
-        'zonas_qa'         => [],
-        'zonas_emb'        => [],
+        'ok' => true,
+        'empresas' => [],
+        'almacenes' => [],
+        'rutas' => [],
+        'clientes' => [],
+        'proveedores' => [],
+        'vendedores' => [],
+        'productos' => [],
+        'bls' => [],
+        'lps' => [],
+        'zonas_recep' => [],
+        'zonas_qa' => [],
+        'zonas_emb' => [],
         'zonas_almacenaje' => [],
-        'proyectos'        => [],
-        'recetas'          => [],
+        'proyectos' => [],
+        'recetas' => [],
         'debug_params' => [
             'empresa' => $empresa,
             'almacen' => $almacen,
-            'zona'    => $zona,
+            'zona' => $zona,
         ],
     ];
 
     // ===================== EMPRESAS (c_compania) =====================
     if ($useSection('empresas')) {
         try {
-            $data['empresas'] = db_all("
-                SELECT
-                    cve_cia,
-                    des_cia,
-                    clave_empresa
-                FROM c_compania
-                WHERE IFNULL(Activo, 1) = 1
-                ORDER BY des_cia
-            ");
+            // Filtrar empresas según almacenes asignados al usuario
+            $user = $_SESSION['username'] ?? '';
+            $paramsEmp = [];
+            $whereEmp = ["IFNULL(c.Activo, 1) = 1"];
+
+            if ($user !== '') {
+                // Join con almacenes del usuario para ver qué empresas puede ver
+                // Asumiendo que c_almacenp tiene empresa_id o similar, o usando la lógica inversa
+                // Si no hay relación directa usuario-empresa, usamos la relación usuario-almacén-empresa
+                // Ajuste: Traer empresas que tengan al menos un almacén asignado al usuario
+                $sqlEmp = "
+                    SELECT DISTINCT
+                        c.cve_cia,
+                        c.des_cia,
+                        c.clave_empresa
+                    FROM c_compania c
+                    INNER JOIN c_almacenp a ON a.empresa_id = c.cve_cia
+                    LEFT JOIN trel_us_alm t ON t.cve_almac = a.clave
+                    LEFT JOIN t_usu_alm_pre p ON p.cve_almac = a.clave
+                    WHERE IFNULL(c.Activo, 1) = 1
+                      AND (
+                           (t.cve_usuario = :u1 AND IFNULL(t.Activo,'1') IN ('1','S','SI','TRUE'))
+                        OR (p.id_user = :u2)
+                      )
+                    ORDER BY c.des_cia
+                ";
+                $paramsEmp['u1'] = $user;
+                $paramsEmp['u2'] = $user;
+            } else {
+                // Fallback si no hay usuario (no debería pasar por auth_check)
+                $sqlEmp = "SELECT cve_cia, des_cia, clave_empresa FROM c_compania WHERE IFNULL(Activo, 1) = 1 ORDER BY des_cia";
+            }
+
+            $data['empresas'] = db_all($sqlEmp, $paramsEmp);
         } catch (Throwable $e) {
             $data['empresas_error'] = $e->getMessage();
         }
@@ -108,23 +134,38 @@ function init_filtros(PDO $pdo): void
     // ===================== ALMACENES (c_almacenp) =====================
     if ($useSection('almacenes')) {
         try {
+            $user = $_SESSION['username'] ?? '';
             $paramsAlm = [];
-            $whereAlm  = ["IFNULL(Activo,1) = 1"];
+            $whereAlm = ["IFNULL(a.Activo,1) = 1"];
 
             // Filtrar por empresa si viene parámetro
             if ($empresa !== '') {
-                $whereAlm[]              = "empresa_id = :empresa_id";
+                $whereAlm[] = "a.empresa_id = :empresa_id";
                 $paramsAlm['empresa_id'] = $empresa;
+            }
+
+            // Filtrar por usuario
+            if ($user !== '') {
+                $whereAlm[] = "
+                    (
+                        EXISTS (SELECT 1 FROM trel_us_alm t WHERE t.cve_almac = a.clave AND t.cve_usuario = :u1 AND IFNULL(t.Activo,'1') IN ('1','S','SI','TRUE'))
+                        OR
+                        EXISTS (SELECT 1 FROM t_usu_alm_pre p WHERE p.cve_almac = a.clave AND p.id_user = :u2)
+                    )
+                ";
+                $paramsAlm['u1'] = $user;
+                $paramsAlm['u2'] = $user;
             }
 
             $sqlAlm = "
                 SELECT 
-                    clave AS cve_almac,
-                    clave AS clave_almacen,
-                    clave AS des_almac
-                FROM c_almacenp
+                    a.clave AS cve_almac,
+                    a.clave AS clave_almacen,
+                    a.clave AS des_almac,
+                    a.nombre
+                FROM c_almacenp a
                 " . (count($whereAlm) ? 'WHERE ' . implode(' AND ', $whereAlm) : '') . "
-                ORDER BY clave
+                ORDER BY a.clave
             ";
 
             $data['almacenes'] = db_all($sqlAlm, $paramsAlm);
@@ -137,7 +178,7 @@ function init_filtros(PDO $pdo): void
     if ($useSection('rutas')) {
         try {
             $params = [];
-            $where  = ["IFNULL(Activo,1) = 1"];
+            $where = ["IFNULL(Activo,1) = 1"];
 
             // Más adelante, si quieres filtrar por almacén lógico, aquí podemos
             // mapear cve_almacenp contra c_almacenp, por ahora traemos todas.
@@ -165,7 +206,7 @@ function init_filtros(PDO $pdo): void
     if ($useSection('zonas_almacenaje')) {
         try {
             $params = [];
-            $where  = ["IFNULL(Activo,1) = 1"];
+            $where = ["IFNULL(Activo,1) = 1"];
 
             $sql = "
                 SELECT
@@ -272,11 +313,11 @@ function init_filtros(PDO $pdo): void
     if ($useSection('bls')) {
         try {
             $params = [];
-            $where  = ["IFNULL(Activo,1) = 1"];
+            $where = ["IFNULL(Activo,1) = 1"];
 
             if ($almacen !== '') {
-                $where[]             = "cve_almac = :almacen";
-                $params['almacen']   = $almacen;
+                $where[] = "cve_almac = :almacen";
+                $params['almacen'] = $almacen;
             }
 
             $sqlBl = "
@@ -392,7 +433,7 @@ function init_filtros(PDO $pdo): void
     if ($useSection('proyectos')) {
         try {
             $params = [];
-            $where  = ["IFNULL(Activo,1) = 1"];
+            $where = ["IFNULL(Activo,1) = 1"];
 
             $sqlProy = "
                 SELECT
@@ -430,12 +471,12 @@ function init_filtros(PDO $pdo): void
             $recetas = [];
             foreach ($rows as $r) {
                 $recetas[] = [
-                    'id'         => (int)$r['id'],
-                    'modulo'     => $r['modulo'],
-                    'nombre'     => $r['nombre'],
-                    'vista_sql'  => $r['vista_sql'],
-                    'es_default' => (int)($r['es_default'] ?? 0),
-                    'activo'     => (int)($r['activo'] ?? 1),
+                    'id' => (int) $r['id'],
+                    'modulo' => $r['modulo'],
+                    'nombre' => $r['nombre'],
+                    'vista_sql' => $r['vista_sql'],
+                    'es_default' => (int) ($r['es_default'] ?? 0),
+                    'activo' => (int) ($r['activo'] ?? 1),
                 ];
             }
             $data['recetas'] = $recetas;

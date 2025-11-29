@@ -33,7 +33,8 @@ const DB_DEFAULT = [
  * - app/db.local.ini (no versionado) o
  * - variables de entorno (DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_PORT, DB_CHARSET, DB_TIMEZONE)
  */
-function db_config(): array {
+function db_config(): array
+{
   $cfg = DB_DEFAULT;
 
   $ini = __DIR__ . '/db.local.ini';
@@ -55,7 +56,8 @@ function db_config(): array {
   ];
   foreach ($env as $E => $k) {
     $v = getenv($E);
-    if ($v !== false && $v !== '') $cfg[$k] = $v;
+    if ($v !== false && $v !== '')
+      $cfg[$k] = $v;
   }
 
   return $cfg;
@@ -64,7 +66,8 @@ function db_config(): array {
 /* =========================
  * Conexión PDO (singleton)
  * ========================= */
-function db_pdo(): PDO {
+function db_pdo(): PDO
+{
   static $pdo = null;
   if ($pdo instanceof PDO) {
     return $pdo;
@@ -73,13 +76,16 @@ function db_pdo(): PDO {
   $cfg = db_config();
   $dsn = sprintf(
     'mysql:host=%s;port=%d;dbname=%s;charset=%s',
-    $cfg['host'], (int)$cfg['port'], $cfg['name'], $cfg['charset']
+    $cfg['host'],
+    (int) $cfg['port'],
+    $cfg['name'],
+    $cfg['charset']
   );
 
   $pdo = new PDO(
     $dsn,
-    (string)$cfg['user'],
-    (string)$cfg['pass'],
+    (string) $cfg['user'],
+    (string) $cfg['pass'],
     [
       PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -92,8 +98,8 @@ function db_pdo(): PDO {
   $tz = $cfg['timezone'] ?: '+00:00';
   $pdo->exec("SET time_zone = '{$tz}'");
 
-$pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-$pdo->exec("SET collation_connection = 'utf8mb4_unicode_ci'");
+  $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+  $pdo->exec("SET collation_connection = 'utf8mb4_unicode_ci'");
 
   // Compatibilidad con código que espera $pdo global
   $GLOBALS['pdo'] = $pdo;
@@ -106,14 +112,16 @@ $pdo->exec("SET collation_connection = 'utf8mb4_unicode_ci'");
  * ========================= */
 
 /** Ejecuta SELECT y devuelve todas las filas. */
-function db_all(string $sql, array $params = []): array {
+function db_all(string $sql, array $params = []): array
+{
   $st = db_pdo()->prepare($sql);
   $st->execute($params);
   return $st->fetchAll();
 }
 
 /** Ejecuta SELECT y devuelve una sola fila (o null). */
-function db_row(string $sql, array $params = []): ?array {
+function db_row(string $sql, array $params = []): ?array
+{
   $st = db_pdo()->prepare($sql);
   $st->execute($params);
   $r = $st->fetch();
@@ -121,7 +129,8 @@ function db_row(string $sql, array $params = []): ?array {
 }
 
 /** Ejecuta SELECT y devuelve la primera columna de la primera fila (o $default). */
-function db_val(string $sql, array $params = [], $default = null) {
+function db_val(string $sql, array $params = [], $default = null)
+{
   $st = db_pdo()->prepare($sql);
   $st->execute($params);
   $v = $st->fetchColumn();
@@ -129,7 +138,8 @@ function db_val(string $sql, array $params = [], $default = null) {
 }
 
 /** Ejecuta INSERT/UPDATE/DELETE. Retorna rowCount(). */
-function dbq(string $sql, array $params = []): int {
+function dbq(string $sql, array $params = []): int
+{
   $st = db_pdo()->prepare($sql);
   $st->execute($params);
   return $st->rowCount();
@@ -138,9 +148,20 @@ function dbq(string $sql, array $params = []): int {
 /* =========================
  * Transacciones
  * ========================= */
-function db_begin(): void { db_pdo()->beginTransaction(); }
-function db_commit(): void { if (db_pdo()->inTransaction()) db_pdo()->commit(); }
-function db_rollback(): void{ if (db_pdo()->inTransaction()) db_pdo()->rollBack(); }
+function db_begin(): void
+{
+  db_pdo()->beginTransaction();
+}
+function db_commit(): void
+{
+  if (db_pdo()->inTransaction())
+    db_pdo()->commit();
+}
+function db_rollback(): void
+{
+  if (db_pdo()->inTransaction())
+    db_pdo()->rollBack();
+}
 
 /**
  * Ejecuta un callback dentro de una transacción con commit/rollback automático.
@@ -150,7 +171,8 @@ function db_rollback(): void{ if (db_pdo()->inTransaction()) db_pdo()->rollBack(
  * // ...
  * });
  */
-function db_tx(callable $fn) {
+function db_tx(callable $fn)
+{
   $pdo = db_pdo();
   $pdo->beginTransaction();
   try {
@@ -158,7 +180,8 @@ function db_tx(callable $fn) {
     $pdo->commit();
     return $res;
   } catch (Throwable $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
+    if ($pdo->inTransaction())
+      $pdo->rollBack();
     throw $e;
   }
 }
@@ -166,7 +189,8 @@ function db_tx(callable $fn) {
 /* =========================
  * Utilidades
  * ========================= */
-function db_table_exists(string $table): bool {
+function db_table_exists(string $table): bool
+{
   $db = db_val('SELECT DATABASE()');
   $sql = 'SELECT 1 FROM information_schema.tables WHERE table_schema=? AND table_name=?';
   return (bool) db_val($sql, [$db, $table], false);
@@ -178,31 +202,40 @@ function db_table_exists(string $table): bool {
 
 /** Algunos scripts esperaban db() para obtener el PDO. */
 if (!function_exists('db')) {
-  function db(): PDO { return db_pdo(); }
+  function db(): PDO
+  {
+    return db_pdo();
+  }
 }
 
 /** Alias legacy de "una fila". */
 if (!function_exists('db_one')) {
-  function db_one(string $sql, array $params = []): ?array {
+  function db_one(string $sql, array $params = []): ?array
+  {
     return db_row($sql, $params);
   }
 }
 
 /** Otro alias legacy de "una fila". */
 if (!function_exists('db_first')) {
-  function db_first(string $sql, array $params = []): ?array {
+  function db_first(string $sql, array $params = []): ?array
+  {
     return db_row($sql, $params);
   }
 }
 
 /** Alias legacy de "valor escalar". */
 if (!function_exists('db_scalar')) {
-  function db_scalar(string $sql, array $params = [], $default = null) {
+  function db_scalar(string $sql, array $params = [], $default = null)
+  {
     return db_val($sql, $params, $default);
   }
 }
 
 /** Alias legacy para obtener el PDO. */
 if (!function_exists('db_conn')) {
-  function db_conn(): PDO { return db_pdo(); }
+  function db_conn(): PDO
+  {
+    return db_pdo();
+  }
 }

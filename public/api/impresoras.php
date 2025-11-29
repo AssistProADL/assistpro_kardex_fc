@@ -2,6 +2,7 @@
 // public/api/impresoras.php
 header('Content-Type: application/json; charset=utf-8');
 
+require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
 try {
@@ -52,19 +53,19 @@ try {
 function api_list(PDO $pdo)
 {
     $id_almacen = $_GET['id_almacen'] ?? null;
-    $activo     = $_GET['activo'] ?? null;
+    $activo = $_GET['activo'] ?? null;
 
     $sql = "SELECT * FROM v_impresoras WHERE 1=1";
     $params = [];
 
     if ($id_almacen !== null && $id_almacen !== '') {
         $sql .= " AND id_almacen = :id_almacen";
-        $params[':id_almacen'] = (int)$id_almacen;
+        $params[':id_almacen'] = (int) $id_almacen;
     }
 
     if ($activo !== null && $activo !== '') {
         $sql .= " AND Activo = :activo";
-        $params[':activo'] = (int)$activo;
+        $params[':activo'] = (int) $activo;
     }
 
     $sql .= " ORDER BY almacen_clave, NOMBRE";
@@ -84,7 +85,7 @@ function api_list(PDO $pdo)
  */
 function api_get(PDO $pdo)
 {
-    $id = (int)($_GET['id'] ?? 0);
+    $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) {
         echo json_encode(['ok' => false, 'error' => 'ID inválido'], JSON_UNESCAPED_UNICODE);
         return;
@@ -109,18 +110,18 @@ function api_save(PDO $pdo)
 {
     $data = $_POST;
 
-    $id          = isset($data['id']) ? (int)$data['id'] : 0;
-    $id_almacen  = (int)($data['id_almacen'] ?? 0);
-    $IP          = trim($data['IP'] ?? '');
+    $id = isset($data['id']) ? (int) $data['id'] : 0;
+    $id_almacen = (int) ($data['id_almacen'] ?? 0);
+    $IP = trim($data['IP'] ?? '');
     $TIPO_IMPRESORA = $data['TIPO_IMPRESORA'] ?? 'ZPL';
-    $NOMBRE      = trim($data['NOMBRE'] ?? '');
-    $Marca       = trim($data['Marca'] ?? '');
-    $Modelo      = trim($data['Modelo'] ?? '');
-    $Densidad_Imp   = (int)($data['Densidad_Imp'] ?? 203);
-    $TIPO_CONEXION  = $data['TIPO_CONEXION'] ?? 'USB';
-    $PUERTO      = (int)($data['PUERTO'] ?? 0);
-    $TiempoEspera = (int)($data['TiempoEspera'] ?? 0);
-    $Activo      = (int)($data['Activo'] ?? 1);
+    $NOMBRE = trim($data['NOMBRE'] ?? '');
+    $Marca = trim($data['Marca'] ?? '');
+    $Modelo = trim($data['Modelo'] ?? '');
+    $Densidad_Imp = (int) ($data['Densidad_Imp'] ?? 203);
+    $TIPO_CONEXION = $data['TIPO_CONEXION'] ?? 'USB';
+    $PUERTO = (int) ($data['PUERTO'] ?? 0);
+    $TiempoEspera = (int) ($data['TiempoEspera'] ?? 0);
+    $Activo = (int) ($data['Activo'] ?? 1);
 
     if ($id_almacen <= 0) {
         echo json_encode(['ok' => false, 'error' => 'Almacén requerido'], JSON_UNESCAPED_UNICODE);
@@ -154,22 +155,22 @@ function api_save(PDO $pdo)
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
-        ':id_almacen'    => $id_almacen,
-        ':IP'            => $IP,
-        ':TIPO_IMPRESORA'=> $TIPO_IMPRESORA,
-        ':NOMBRE'        => $NOMBRE,
-        ':Marca'         => $Marca,
-        ':Modelo'        => $Modelo,
-        ':Densidad_Imp'  => $Densidad_Imp,
+        ':id_almacen' => $id_almacen,
+        ':IP' => $IP,
+        ':TIPO_IMPRESORA' => $TIPO_IMPRESORA,
+        ':NOMBRE' => $NOMBRE,
+        ':Marca' => $Marca,
+        ':Modelo' => $Modelo,
+        ':Densidad_Imp' => $Densidad_Imp,
         ':TIPO_CONEXION' => $TIPO_CONEXION,
-        ':PUERTO'        => $PUERTO,
-        ':TiempoEspera'  => $TiempoEspera,
-        ':Activo'        => $Activo,
-        ':id'            => $id
+        ':PUERTO' => $PUERTO,
+        ':TiempoEspera' => $TiempoEspera,
+        ':Activo' => $Activo,
+        ':id' => $id
     ]);
 
     if ($id === 0) {
-        $id = (int)$pdo->lastInsertId();
+        $id = (int) $pdo->lastInsertId();
     }
 
     echo json_encode(['ok' => true, 'id' => $id], JSON_UNESCAPED_UNICODE);
@@ -180,7 +181,7 @@ function api_save(PDO $pdo)
  */
 function api_delete(PDO $pdo)
 {
-    $id = (int)($_POST['id'] ?? 0);
+    $id = (int) ($_POST['id'] ?? 0);
     if ($id <= 0) {
         echo json_encode(['ok' => false, 'error' => 'ID inválido'], JSON_UNESCAPED_UNICODE);
         return;
@@ -197,7 +198,7 @@ function api_delete(PDO $pdo)
  */
 function api_test_print(PDO $pdo)
 {
-    $id = (int)($_POST['id'] ?? 0);
+    $id = (int) ($_POST['id'] ?? 0);
     if ($id <= 0) {
         echo json_encode(['ok' => false, 'error' => 'ID inválido'], JSON_UNESCAPED_UNICODE);
         return;
@@ -212,9 +213,9 @@ function api_test_print(PDO $pdo)
         return;
     }
 
-    $ip     = trim($imp['IP'] ?? '');
-    $puerto = (int)($imp['PUERTO'] ?? 0);
-    $tipo   = $imp['TIPO_IMPRESORA'] ?? 'ZPL';
+    $ip = trim($imp['IP'] ?? '');
+    $puerto = (int) ($imp['PUERTO'] ?? 0);
+    $tipo = $imp['TIPO_IMPRESORA'] ?? 'ZPL';
     $nombre = $imp['NOMBRE'] ?? '';
     $modelo = $imp['Modelo'] ?? '';
 

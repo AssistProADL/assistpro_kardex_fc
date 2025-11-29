@@ -6,36 +6,45 @@ header('Content-Type: application/json; charset=utf-8');
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
 
+require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
 $cfg = __DIR__ . '/../../config.php';
-if (file_exists($cfg)) require_once $cfg;
+if (file_exists($cfg))
+    require_once $cfg;
 
 /* ============================================================
    Helpers
 ============================================================= */
 
-function api_ok($data = [], array $extra = []): void {
+function api_ok($data = [], array $extra = []): void
+{
     echo json_encode(array_merge(['ok' => true, 'data' => $data], $extra));
     exit;
 }
 
-function api_error(string $msg, array $extra = []): void {
+function api_error(string $msg, array $extra = []): void
+{
     http_response_code(500);
     echo json_encode(array_merge(['ok' => false, 'error' => $msg], $extra));
     exit;
 }
 
-function param(string $name, $default = null) {
-    if (isset($_POST[$name])) return $_POST[$name];
-    if (isset($_GET[$name]))  return $_GET[$name];
+function param(string $name, $default = null)
+{
+    if (isset($_POST[$name]))
+        return $_POST[$name];
+    if (isset($_GET[$name]))
+        return $_GET[$name];
     return $default;
 }
 
-function ap_pdo(): PDO {
+function ap_pdo(): PDO
+{
     if (function_exists('db_pdo')) {
         $pdo = db_pdo();
-        if ($pdo instanceof PDO) return $pdo;
+        if ($pdo instanceof PDO)
+            return $pdo;
     }
     api_error("No existe conexión PDO");
 }
@@ -56,7 +65,7 @@ try {
     if ($action === 'ping') {
         api_ok([
             'message' => 'API Planeación Embarques OK',
-            'time'    => date('Y-m-d H:i:s'),
+            'time' => date('Y-m-d H:i:s'),
         ]);
     }
 
@@ -68,22 +77,22 @@ try {
         /* ================================
            Lectura de filtros
         ================================= */
-        $page     = max(1, (int) param('page', 1));
+        $page = max(1, (int) param('page', 1));
         $pageSize = max(1, (int) param('pageSize', 25));
-        $sinPag   = (param('sin_paginacion') == '1');
+        $sinPag = (param('sin_paginacion') == '1');
 
         $f = [
-            'empresa'     => trim((string) param('empresa', '')),
-            'almacen'     => trim((string) param('almacen', '')),
-            'ruta'        => trim((string) param('ruta', '')),
-            'cliente'     => trim((string) param('cliente', '')),
-            'isla'        => trim((string) param('isla', '')),
-            'colonia'     => trim((string) param('colonia', '')),
-            'cpostal'     => trim((string) param('cpostal', '')),
+            'empresa' => trim((string) param('empresa', '')),
+            'almacen' => trim((string) param('almacen', '')),
+            'ruta' => trim((string) param('ruta', '')),
+            'cliente' => trim((string) param('cliente', '')),
+            'isla' => trim((string) param('isla', '')),
+            'colonia' => trim((string) param('colonia', '')),
+            'cpostal' => trim((string) param('cpostal', '')),
             'fecha_desde' => trim((string) param('fecha_desde', '')),
             'fecha_hasta' => trim((string) param('fecha_hasta', '')),
-            'estatus'     => trim((string) param('estatus', '')),
-            'texto'       => trim((string) param('texto', '')),
+            'estatus' => trim((string) param('estatus', '')),
+            'texto' => trim((string) param('texto', '')),
         ];
 
         /* ================================
@@ -130,54 +139,54 @@ try {
 
         /* 3) Almacén */
         if ($idAlm !== null) {
-            $w[]        = "rel.cve_almac = :alm";
-            $p[':alm']  = $idAlm;
+            $w[] = "rel.cve_almac = :alm";
+            $p[':alm'] = $idAlm;
         }
 
         /* 4) Ruta */
         if ($f['ruta'] !== '') {
-            $w[]         = "rt.ID_Ruta = :ruta";
-            $p[':ruta']  = $f['ruta'];
+            $w[] = "rt.ID_Ruta = :ruta";
+            $p[':ruta'] = $f['ruta'];
         }
 
         /* 5) Cliente */
         if ($f['cliente'] !== '') {
-            $w[]        = "(cli.id_cliente = :cl OR des.id_destinatario = :cl)";
-            $p[':cl']   = $f['cliente'];
+            $w[] = "(cli.id_cliente = :cl OR des.id_destinatario = :cl)";
+            $p[':cl'] = $f['cliente'];
         }
 
         /* 6) Colonia */
         if ($f['colonia'] !== '') {
-            $w[]        = "(des.colonia = :col OR cli.Colonia = :col)";
-            $p[':col']  = $f['colonia'];
+            $w[] = "(des.colonia = :col OR cli.Colonia = :col)";
+            $p[':col'] = $f['colonia'];
         }
 
         /* 7) CP */
         if ($f['cpostal'] !== '') {
-            $w[]       = "(des.postal = :cp OR cli.CodigoPostal = :cp)";
-            $p[':cp']  = $f['cpostal'];
+            $w[] = "(des.postal = :cp OR cli.CodigoPostal = :cp)";
+            $p[':cp'] = $f['cpostal'];
         }
 
         /* 8) Isla */
         if ($f['isla'] !== '') {
-            $w[]        = "ue.ID_Embarque = :isla";
+            $w[] = "ue.ID_Embarque = :isla";
             $p[':isla'] = $f['isla'];
         }
 
         /* 9) Fechas */
         if ($f['fecha_desde'] !== '') {
-            $w[]       = "ped.Fec_Entrega >= :fd";
-            $p[':fd']  = $f['fecha_desde'] . ' 00:00:00';
+            $w[] = "ped.Fec_Entrega >= :fd";
+            $p[':fd'] = $f['fecha_desde'] . ' 00:00:00';
         }
 
         if ($f['fecha_hasta'] !== '') {
-            $w[]       = "ped.Fec_Entrega < :fh";
-            $p[':fh']  = date('Y-m-d', strtotime($f['fecha_hasta'] . ' +1 day')) . ' 00:00:00';
+            $w[] = "ped.Fec_Entrega < :fh";
+            $p[':fh'] = date('Y-m-d', strtotime($f['fecha_hasta'] . ' +1 day')) . ' 00:00:00';
         }
 
         /* 10) Estatus */
         if ($f['estatus'] !== '') {
-            $w[]       = "sub.status = :est";
+            $w[] = "sub.status = :est";
             $p[':est'] = $f['estatus'];
         }
 
@@ -228,7 +237,7 @@ try {
            Conteo
         ================================= */
         $sqlCount = "SELECT COUNT(DISTINCT sub.fol_folio) AS total $FROM $WHERE";
-        $total    = (int) db_val($sqlCount, $p);
+        $total = (int) db_val($sqlCount, $p);
 
         /* ================================
            SELECT principal
@@ -275,17 +284,17 @@ try {
         if (!$rows) {
             api_ok([], [
                 'pagination' => [
-                    'page'       => 1,
-                    'pageSize'   => 0,
-                    'totalRows'  => 0,
+                    'page' => 1,
+                    'pageSize' => 0,
+                    'totalRows' => 0,
                     'totalPages' => 0,
                 ],
                 'filters' => $f,
-                'kpis'    => [
+                'kpis' => [
                     'embarques_dia' => 0,
-                    'planeados_7d'  => 0,
-                    'en_ruta'       => 0,
-                    'retrasados'    => 0,
+                    'planeados_7d' => 0,
+                    'en_ruta' => 0,
+                    'retrasados' => 0,
                 ],
             ]);
         }
@@ -294,8 +303,8 @@ try {
            Normalizar colonia / CP
         ================================= */
         foreach ($rows as &$r) {
-            $r['colonia']       = $r['colonia_dest'] ?: $r['colonia_cliente'];
-            $r['codigo_postal'] = $r['cp_dest']      ?: $r['cp_cliente'];
+            $r['colonia'] = $r['colonia_dest'] ?: $r['colonia_cliente'];
+            $r['codigo_postal'] = $r['cp_dest'] ?: $r['cp_cliente'];
         }
         unset($r);
 
@@ -305,8 +314,8 @@ try {
         $folios = array_values(array_unique(array_column($rows, 'folio')));
 
         $agg_guias = [];
-        $agg_vol   = [];
-        $agg_pzas  = [];
+        $agg_vol = [];
+        $agg_pzas = [];
 
         if ($folios) {
 
@@ -327,7 +336,7 @@ try {
             foreach ($res1 as $x) {
                 $agg_guias[$x['folio']] = [
                     'total_guias' => (int) ($x['total_guias'] ?? 0),
-                    'peso_total'  => (float) ($x['peso_total']  ?? 0),
+                    'peso_total' => (float) ($x['peso_total'] ?? 0),
                     'total_cajas' => (int) ($x['total_cajas'] ?? 0),
                 ];
             }
@@ -372,15 +381,15 @@ try {
 
             $g = $agg_guias[$folio] ?? [
                 'total_guias' => 0,
-                'peso_total'  => 0,
+                'peso_total' => 0,
                 'total_cajas' => 0,
             ];
 
-            $r['total_guias']   = $g['total_guias'];
-            $r['peso_total']    = $g['peso_total'];
-            $r['total_cajas']   = $g['total_cajas'];
-            $r['volumen']       = $agg_vol[$folio]  ?? 0;
-            $r['piezas']        = $agg_pzas[$folio] ?? 0;
+            $r['total_guias'] = $g['total_guias'];
+            $r['peso_total'] = $g['peso_total'];
+            $r['total_cajas'] = $g['total_cajas'];
+            $r['volumen'] = $agg_vol[$folio] ?? 0;
+            $r['piezas'] = $agg_pzas[$folio] ?? 0;
             $r['total_pallets'] = 0;
         }
         unset($r);
@@ -403,20 +412,21 @@ try {
 
         $kpis = [
             'embarques_dia' => 0,
-            'planeados_7d'  => 0,
-            'en_ruta'       => 0,
-            'retrasados'    => 0,
+            'planeados_7d' => 0,
+            'en_ruta' => 0,
+            'retrasados' => 0,
         ];
 
         try {
             $k = db_one($sqlKpi, $p);
             if ($k) {
                 $kpis['embarques_dia'] = (int) ($k['embarques_dia'] ?? 0);
-                $kpis['planeados_7d']  = (int) ($k['planeados_7d']  ?? 0);
-                $kpis['en_ruta']       = (int) ($k['en_ruta']       ?? 0);
-                $kpis['retrasados']    = (int) ($k['retrasados']    ?? 0);
+                $kpis['planeados_7d'] = (int) ($k['planeados_7d'] ?? 0);
+                $kpis['en_ruta'] = (int) ($k['en_ruta'] ?? 0);
+                $kpis['retrasados'] = (int) ($k['retrasados'] ?? 0);
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) {
+        }
 
         /* ================================
            Respuesta final
@@ -427,13 +437,13 @@ try {
 
         api_ok($rows, [
             'pagination' => [
-                'page'       => $page,
-                'pageSize'   => $sinPag ? count($rows) : $pageSize,
-                'totalRows'  => $total,
+                'page' => $page,
+                'pageSize' => $sinPag ? count($rows) : $pageSize,
+                'totalRows' => $total,
                 'totalPages' => $totalPages,
             ],
             'filters' => $f,
-            'kpis'    => $kpis,
+            'kpis' => $kpis,
         ]);
     }
 

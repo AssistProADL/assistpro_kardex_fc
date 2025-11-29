@@ -4,6 +4,7 @@
 
 header('Content-Type: application/json; charset=utf-8');
 
+require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
 try {
@@ -53,7 +54,7 @@ function ss_parse_csv($tmpPath, &$error)
     $line = 1;
     while (($cols = fgetcsv($fh, 0, ',')) !== false) {
         $line++;
-        if (count(array_filter($cols, fn($v) => trim((string)$v) !== '')) === 0) {
+        if (count(array_filter($cols, fn($v) => trim((string) $v) !== '')) === 0) {
             continue; // fila completamente vacía
         }
 
@@ -65,14 +66,14 @@ function ss_parse_csv($tmpPath, &$error)
         }
 
         $rows[] = [
-            'line'          => $line,
+            'line' => $line,
             'almacen_clave' => strtoupper(trim($cols[0] ?? '')),
-            'clave_sec'     => trim($cols[1] ?? ''),
-            'nombre'        => trim($cols[2] ?? ''),
-            'tipo_sec'      => strtoupper(trim($cols[3] ?? '')),
-            'proceso'       => strtoupper(trim($cols[4] ?? '')),
-            'bl'            => trim($cols[5] ?? ''),
-            'orden'         => trim($cols[6] ?? ''),
+            'clave_sec' => trim($cols[1] ?? ''),
+            'nombre' => trim($cols[2] ?? ''),
+            'tipo_sec' => strtoupper(trim($cols[3] ?? '')),
+            'proceso' => strtoupper(trim($cols[4] ?? '')),
+            'bl' => trim($cols[5] ?? ''),
+            'orden' => trim($cols[6] ?? ''),
         ];
     }
 
@@ -95,19 +96,19 @@ try {
         }
 
         $almacen_clave = trim($data['almacen_clave'] ?? '');
-        $clave         = trim($data['clave_sec']      ?? '');
-        $nombre        = trim($data['nombre']         ?? '');
-        $tipo          = trim($data['tipo_sec']       ?? '');
-        $proceso       = trim($data['proceso']        ?? '');
+        $clave = trim($data['clave_sec'] ?? '');
+        $nombre = trim($data['nombre'] ?? '');
+        $tipo = trim($data['tipo_sec'] ?? '');
+        $proceso = trim($data['proceso'] ?? '');
 
         if ($almacen_clave === '' || $clave === '' || $nombre === '' || $tipo === '' || $proceso === '') {
             echo json_encode(['ok' => false, 'error' => 'Faltan datos obligatorios'], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
-        $procesoValido = ['VENTA','REABASTO','SURTIDO_INTERNO'];
+        $procesoValido = ['VENTA', 'REABASTO', 'SURTIDO_INTERNO'];
         if (!in_array(strtoupper($proceso), $procesoValido, true)) {
-            echo json_encode(['ok' => false, 'error' => 'Valor de proceso no permitido: '.$proceso], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => false, 'error' => 'Valor de proceso no permitido: ' . $proceso], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
@@ -128,16 +129,16 @@ try {
         ";
         $stmtIns = $pdo->prepare($sql);
         $stmtIns->execute([
-            ':clave'      => $clave,
-            ':nombre'     => $nombre,
-            ':tipo'       => $tipo,
-            ':proceso'    => $proceso,
+            ':clave' => $clave,
+            ':nombre' => $nombre,
+            ':tipo' => $tipo,
+            ':proceso' => $proceso,
             ':almacen_id' => $almId
         ]);
 
         echo json_encode([
-            'ok'      => true,
-            'sec_id'  => (int)$pdo->lastInsertId(),
+            'ok' => true,
+            'sec_id' => (int) $pdo->lastInsertId(),
             'mensaje' => 'Secuencia creada correctamente'
         ], JSON_UNESCAPED_UNICODE);
         exit;
@@ -156,10 +157,10 @@ try {
             exit;
         }
 
-        $secId   = (int)($data['sec_id'] ?? 0);
-        $clave   = trim($data['clave_sec'] ?? '');
-        $nombre  = trim($data['nombre'] ?? '');
-        $tipo    = trim($data['tipo_sec'] ?? '');
+        $secId = (int) ($data['sec_id'] ?? 0);
+        $clave = trim($data['clave_sec'] ?? '');
+        $nombre = trim($data['nombre'] ?? '');
+        $tipo = trim($data['tipo_sec'] ?? '');
         $proceso = trim($data['proceso'] ?? '');
 
         if ($secId <= 0 || $clave === '' || $nombre === '' || $tipo === '' || $proceso === '') {
@@ -167,9 +168,9 @@ try {
             exit;
         }
 
-        $procesoValido = ['VENTA','REABASTO','SURTIDO_INTERNO'];
+        $procesoValido = ['VENTA', 'REABASTO', 'SURTIDO_INTERNO'];
         if (!in_array(strtoupper($proceso), $procesoValido, true)) {
-            echo json_encode(['ok' => false, 'error' => 'Valor de proceso no permitido: '.$proceso], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => false, 'error' => 'Valor de proceso no permitido: ' . $proceso], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
@@ -184,15 +185,15 @@ try {
         ";
         $stmtUpd = $pdo->prepare($sql);
         $stmtUpd->execute([
-            ':clave'   => $clave,
-            ':nombre'  => $nombre,
-            ':tipo'    => $tipo,
+            ':clave' => $clave,
+            ':nombre' => $nombre,
+            ':tipo' => $tipo,
             ':proceso' => $proceso,
-            ':id'      => $secId
+            ':id' => $secId
         ]);
 
         echo json_encode([
-            'ok'      => true,
+            'ok' => true,
             'mensaje' => 'Secuencia actualizado correctamente'
         ], JSON_UNESCAPED_UNICODE);
         exit;
@@ -210,7 +211,7 @@ try {
             exit;
         }
 
-        $secId   = (int)($data['sec_id'] ?? 0);
+        $secId = (int) ($data['sec_id'] ?? 0);
         $detalle = $data['detalle'] ?? [];
 
         if ($secId <= 0) {
@@ -232,17 +233,17 @@ try {
             ");
 
             foreach ($detalle as $fila) {
-                $ubicacionId = (int)($fila['ubicacion_id'] ?? 0);
-                $orden       = (int)($fila['orden'] ?? 0);
+                $ubicacionId = (int) ($fila['ubicacion_id'] ?? 0);
+                $orden = (int) ($fila['orden'] ?? 0);
 
                 if ($ubicacionId <= 0 || $orden <= 0) {
                     continue;
                 }
 
                 $stmtIns->execute([
-                    ':sec_id'       => $secId,
+                    ':sec_id' => $secId,
                     ':ubicacion_id' => $ubicacionId,
-                    ':orden'        => $orden
+                    ':orden' => $orden
                 ]);
             }
         }
@@ -250,7 +251,7 @@ try {
         $pdo->commit();
 
         echo json_encode([
-            'ok'      => true,
+            'ok' => true,
             'mensaje' => 'Detalle guardado correctamente'
         ], JSON_UNESCAPED_UNICODE);
         exit;
@@ -261,7 +262,7 @@ try {
     // --------------------------------------------------
     if ($action === 'usuarios_data') {
 
-        $secId = (int)($_GET['sec_id'] ?? 0);
+        $secId = (int) ($_GET['sec_id'] ?? 0);
         if ($secId <= 0) {
             echo json_encode(['ok' => false, 'error' => 'ID de secuencia inválido'], JSON_UNESCAPED_UNICODE);
             exit;
@@ -287,8 +288,8 @@ try {
         $asignados = $stmtAsig->fetchAll(PDO::FETCH_COLUMN, 0);
 
         echo json_encode([
-            'ok'        => true,
-            'usuarios'  => $usuarios,
+            'ok' => true,
+            'usuarios' => $usuarios,
             'asignados' => array_map('intval', $asignados)
         ], JSON_UNESCAPED_UNICODE);
         exit;
@@ -306,7 +307,7 @@ try {
             exit;
         }
 
-        $secId    = (int)($data['sec_id'] ?? 0);
+        $secId = (int) ($data['sec_id'] ?? 0);
         $usuarios = $data['usuarios'] ?? [];
 
         if ($secId <= 0) {
@@ -328,11 +329,12 @@ try {
             ");
 
             foreach ($usuarios as $uid) {
-                $uid = (int)$uid;
-                if ($uid <= 0) continue;
+                $uid = (int) $uid;
+                if ($uid <= 0)
+                    continue;
 
                 $stmtIns->execute([
-                    ':sec_id'     => $secId,
+                    ':sec_id' => $secId,
                     ':usuario_id' => $uid
                 ]);
             }
@@ -341,7 +343,7 @@ try {
         $pdo->commit();
 
         echo json_encode([
-            'ok'      => true,
+            'ok' => true,
             'mensaje' => 'Usuarios asignados correctamente'
         ], JSON_UNESCAPED_UNICODE);
         exit;
@@ -366,11 +368,11 @@ try {
             exit;
         }
 
-        $procesoValido = ['VENTA','REABASTO','SURTIDO_INTERNO'];
-        $tipoValido    = ['PICKING','REABASTO','GLOBAL'];
+        $procesoValido = ['VENTA', 'REABASTO', 'SURTIDO_INTERNO'];
+        $tipoValido = ['PICKING', 'REABASTO', 'GLOBAL'];
 
         $cacheAlm = [];
-        $cacheUb  = [];
+        $cacheUb = [];
 
         $resultRows = [];
 
@@ -395,7 +397,7 @@ try {
             if ($r['bl'] === '') {
                 $obs[] = 'Falta BL';
             }
-            if ($r['orden'] === '' || !ctype_digit($r['orden']) || (int)$r['orden'] <= 0) {
+            if ($r['orden'] === '' || !ctype_digit($r['orden']) || (int) $r['orden'] <= 0) {
                 $obs[] = 'ORDEN inválido';
             }
 
@@ -418,7 +420,7 @@ try {
 
             // validar BL contra c_ubicacion
             if ($r['bl'] !== '' && $almId) {
-                $keyUb = $r['almacen_clave'].'|'.$r['bl'];
+                $keyUb = $r['almacen_clave'] . '|' . $r['bl'];
                 if (!isset($cacheUb[$keyUb])) {
                     $sqlUb = "
                         SELECT u.idy_ubica
@@ -440,20 +442,20 @@ try {
             }
 
             $resultRows[] = [
-                'line'          => $r['line'],
+                'line' => $r['line'],
                 'almacen_clave' => $r['almacen_clave'],
-                'clave_sec'     => $r['clave_sec'],
-                'nombre'        => $r['nombre'],
-                'tipo_sec'      => $r['tipo_sec'],
-                'proceso'       => $r['proceso'],
-                'bl'            => $r['bl'],
-                'orden'         => $r['orden'],
-                'observacion'   => empty($obs) ? 'OK' : implode('. ', $obs)
+                'clave_sec' => $r['clave_sec'],
+                'nombre' => $r['nombre'],
+                'tipo_sec' => $r['tipo_sec'],
+                'proceso' => $r['proceso'],
+                'bl' => $r['bl'],
+                'orden' => $r['orden'],
+                'observacion' => empty($obs) ? 'OK' : implode('. ', $obs)
             ];
         }
 
         echo json_encode([
-            'ok'   => true,
+            'ok' => true,
             'rows' => $resultRows
         ], JSON_UNESCAPED_UNICODE);
         exit;
@@ -478,25 +480,27 @@ try {
             exit;
         }
 
-        $procesoValido = ['VENTA','REABASTO','SURTIDO_INTERNO'];
-        $tipoValido    = ['PICKING','REABASTO','GLOBAL'];
+        $procesoValido = ['VENTA', 'REABASTO', 'SURTIDO_INTERNO'];
+        $tipoValido = ['PICKING', 'REABASTO', 'GLOBAL'];
 
         $cacheAlm = [];
-        $cacheUb  = [];
+        $cacheUb = [];
 
         $secuencias = [];  // key: almacen_clave|clave_sec
-        $errores    = [];
+        $errores = [];
 
         foreach ($rows as $r) {
             $obs = [];
 
-            if ($r['almacen_clave'] === '' ||
+            if (
+                $r['almacen_clave'] === '' ||
                 $r['clave_sec'] === '' ||
                 $r['nombre'] === '' ||
                 $r['tipo_sec'] === '' ||
                 $r['proceso'] === '' ||
                 $r['bl'] === '' ||
-                $r['orden'] === '') {
+                $r['orden'] === ''
+            ) {
                 $obs[] = 'Campos obligatorios incompletos';
             }
 
@@ -506,7 +510,7 @@ try {
             if (!in_array($r['proceso'], $procesoValido, true)) {
                 $obs[] = 'PROCESO inválido';
             }
-            if (!ctype_digit($r['orden']) || (int)$r['orden'] <= 0) {
+            if (!ctype_digit($r['orden']) || (int) $r['orden'] <= 0) {
                 $obs[] = 'ORDEN inválido';
             }
 
@@ -530,7 +534,7 @@ try {
             // validar BL contra c_ubicacion
             $ubId = null;
             if ($r['bl'] !== '' && $almId) {
-                $keyUb = $r['almacen_clave'].'|'.$r['bl'];
+                $keyUb = $r['almacen_clave'] . '|' . $r['bl'];
                 if (isset($cacheUb[$keyUb])) {
                     $ubId = $cacheUb[$keyUb];
                 } else {
@@ -554,34 +558,34 @@ try {
             }
 
             if (!empty($obs)) {
-                $errores[] = "Línea {$r['line']}: ".implode('. ', $obs);
+                $errores[] = "Línea {$r['line']}: " . implode('. ', $obs);
                 continue;
             }
 
-            $key = $r['almacen_clave'].'|'.$r['clave_sec'];
+            $key = $r['almacen_clave'] . '|' . $r['clave_sec'];
 
             if (!isset($secuencias[$key])) {
                 $secuencias[$key] = [
                     'almacen_clave' => $r['almacen_clave'],
-                    'almacen_id'    => $almId,
-                    'clave_sec'     => $r['clave_sec'],
-                    'nombre'        => $r['nombre'],
-                    'tipo_sec'      => $r['tipo_sec'],
-                    'proceso'       => $r['proceso'],
-                    'det'           => []
+                    'almacen_id' => $almId,
+                    'clave_sec' => $r['clave_sec'],
+                    'nombre' => $r['nombre'],
+                    'tipo_sec' => $r['tipo_sec'],
+                    'proceso' => $r['proceso'],
+                    'det' => []
                 ];
             }
 
             $secuencias[$key]['det'][] = [
-                'ubicacion_id' => (int)$ubId,
-                'orden'        => (int)$r['orden']
+                'ubicacion_id' => (int) $ubId,
+                'orden' => (int) $r['orden']
             ];
         }
 
         if (!empty($errores)) {
             echo json_encode([
-                'ok'      => false,
-                'error'   => 'Se encontraron errores en el archivo. No se realizó la importación.',
+                'ok' => false,
+                'error' => 'Se encontraron errores en el archivo. No se realizó la importación.',
                 'detalle' => $errores
             ], JSON_UNESCAPED_UNICODE);
             exit;
@@ -589,7 +593,7 @@ try {
 
         if (empty($secuencias)) {
             echo json_encode([
-                'ok'    => false,
+                'ok' => false,
                 'error' => 'El archivo no contiene registros válidos.'
             ], JSON_UNESCAPED_UNICODE);
             exit;
@@ -634,19 +638,19 @@ try {
                 // buscar o crear encabezado
                 $stmtBuscaSec->execute([
                     ':almacen_id' => $sec['almacen_id'],
-                    ':clave_sec'  => $sec['clave_sec']
+                    ':clave_sec' => $sec['clave_sec']
                 ]);
                 $secId = $stmtBuscaSec->fetchColumn();
 
                 if (!$secId) {
                     $stmtInsSec->execute([
-                        ':clave_sec'  => $sec['clave_sec'],
-                        ':nombre'     => $sec['nombre'],
-                        ':tipo_sec'   => $sec['tipo_sec'],
-                        ':proceso'    => $sec['proceso'],
+                        ':clave_sec' => $sec['clave_sec'],
+                        ':nombre' => $sec['nombre'],
+                        ':tipo_sec' => $sec['tipo_sec'],
+                        ':proceso' => $sec['proceso'],
                         ':almacen_id' => $sec['almacen_id']
                     ]);
-                    $secId = (int)$pdo->lastInsertId();
+                    $secId = (int) $pdo->lastInsertId();
                 }
 
                 // limpiar detalle previo y registrar nuevo
@@ -659,9 +663,9 @@ try {
                         continue;
                     }
                     $stmtInsDet->execute([
-                        ':sec_id'       => $secId,
+                        ':sec_id' => $secId,
                         ':ubicacion_id' => $d['ubicacion_id'],
-                        ':orden'        => $d['orden']
+                        ':orden' => $d['orden']
                     ]);
                 }
             }
@@ -669,7 +673,7 @@ try {
             $pdo->commit();
 
             echo json_encode([
-                'ok'      => true,
+                'ok' => true,
                 'mensaje' => 'Importación registrada correctamente.',
                 'secuencias' => count($secuencias)
             ], JSON_UNESCAPED_UNICODE);
@@ -678,8 +682,8 @@ try {
         } catch (Throwable $e) {
             $pdo->rollBack();
             echo json_encode([
-                'ok'    => false,
-                'error' => 'Error al registrar importación: '.$e->getMessage()
+                'ok' => false,
+                'error' => 'Error al registrar importación: ' . $e->getMessage()
             ], JSON_UNESCAPED_UNICODE);
             exit;
         }
@@ -689,7 +693,7 @@ try {
     // Acción desconocida
     // --------------------------------------------------
     echo json_encode([
-        'ok'    => false,
+        'ok' => false,
         'error' => 'Acción no reconocida: ' . $action
     ], JSON_UNESCAPED_UNICODE);
     exit;
@@ -700,7 +704,7 @@ try {
     }
 
     echo json_encode([
-        'ok'    => false,
+        'ok' => false,
         'error' => 'Error general: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
     exit;

@@ -1,10 +1,11 @@
 <?php
+require_once __DIR__ . '/../app/auth_check.php';
 require_once __DIR__ . '/../app/db.php';
 
 try {
     $pdo = db();
     $ver = $pdo->query("SELECT VERSION()")->fetchColumn();
-    $tz  = $pdo->query("SELECT @@time_zone")->fetchColumn();
+    $tz = $pdo->query("SELECT @@time_zone")->fetchColumn();
     $dbs = $pdo->query("SHOW DATABASES")->fetchAll(PDO::FETCH_COLUMN);
 
     echo "<h3>✅ Conexión exitosa</h3>";

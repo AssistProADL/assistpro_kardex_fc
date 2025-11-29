@@ -17,12 +17,22 @@ $pdo = db_pdo();
 // EMPRESAS (c_compania)
 $empresas = [];
 try {
-    $empresas = db_all("
-        SELECT cve_cia, des_cia
-        FROM c_compania
-        WHERE COALESCE(Activo,1) = 1
-        ORDER BY des_cia
-    ");
+    $user = $_SESSION['username'] ?? '';
+    if ($user) {
+        $empresas = db_all("
+            SELECT DISTINCT c.cve_cia, c.des_cia
+            FROM c_compania c
+            INNER JOIN c_almacenp a ON a.empresa_id = c.cve_cia
+            LEFT JOIN trel_us_alm t ON t.cve_almac = a.clave
+            LEFT JOIN t_usu_alm_pre p ON p.cve_almac = a.clave
+            WHERE COALESCE(c.Activo,1) = 1
+              AND (
+                   (t.cve_usuario = :u1 AND COALESCE(t.Activo,'1') IN ('1','S','SI','TRUE'))
+                OR (p.id_user = :u2)
+              )
+            ORDER BY c.des_cia
+        ", [':u1' => $user, ':u2' => $user]);
+    }
 } catch (Throwable $e) {
     $empresas = [];
 }
@@ -30,12 +40,20 @@ try {
 // ALMACENES (macro-almacén: c_almacenp)
 $almacenes = [];
 try {
-    $almacenes = db_all("
-        SELECT id, clave, nombre
-        FROM c_almacenp
-        WHERE COALESCE(Activo,'S') <> 'N'
-        ORDER BY clave, nombre
-    ");
+    $user = $_SESSION['username'] ?? '';
+    if ($user) {
+        $almacenes = db_all("
+            SELECT a.id, a.clave, a.nombre
+            FROM c_almacenp a
+            WHERE COALESCE(a.Activo,'S') <> 'N'
+              AND (
+                  EXISTS (SELECT 1 FROM trel_us_alm t WHERE t.cve_almac = a.clave AND t.cve_usuario = :u1 AND COALESCE(t.Activo,'1') IN ('1','S','SI','TRUE'))
+                  OR
+                  EXISTS (SELECT 1 FROM t_usu_alm_pre p WHERE p.cve_almac = a.clave AND p.id_user = :u2)
+              )
+            ORDER BY a.clave, a.nombre
+        ", [':u1' => $user, ':u2' => $user]);
+    }
 } catch (Throwable $e) {
     $almacenes = [];
 }
@@ -44,40 +62,40 @@ try {
 // 2. Valores seleccionados
 // =========================
 
-$empresaSel    = $_GET['empresa']    ?? '';
-$almacenSel    = $_GET['almacen']    ?? '';
-$zonaSel       = $_GET['zona']       ?? '';
-$blSel         = $_GET['bl']         ?? '';
-$rutaSel       = $_GET['ruta']       ?? '';
-$clienteSel    = $_GET['cliente']    ?? '';
-$lpSel         = $_GET['lp']         ?? '';
-$prodSel       = $_GET['producto']   ?? '';
-$loteSel       = $_GET['lote']       ?? '';
-$proveedorSel  = $_GET['proveedor']  ?? '';
-$vendedorSel   = $_GET['vendedor']   ?? '';
-$usuarioSel    = $_GET['usuario']    ?? '';
-$zonaRecepSel  = $_GET['zona_recep'] ?? '';
-$zonaQASel     = $_GET['zona_qa']    ?? '';
-$zonaEmbSel    = $_GET['zona_emb']   ?? '';
-$proyectoSel   = $_GET['proyecto']   ?? '';
+$empresaSel = $_GET['empresa'] ?? '';
+$almacenSel = $_GET['almacen'] ?? '';
+$zonaSel = $_GET['zona'] ?? '';
+$blSel = $_GET['bl'] ?? '';
+$rutaSel = $_GET['ruta'] ?? '';
+$clienteSel = $_GET['cliente'] ?? '';
+$lpSel = $_GET['lp'] ?? '';
+$prodSel = $_GET['producto'] ?? '';
+$loteSel = $_GET['lote'] ?? '';
+$proveedorSel = $_GET['proveedor'] ?? '';
+$vendedorSel = $_GET['vendedor'] ?? '';
+$usuarioSel = $_GET['usuario'] ?? '';
+$zonaRecepSel = $_GET['zona_recep'] ?? '';
+$zonaQASel = $_GET['zona_qa'] ?? '';
+$zonaEmbSel = $_GET['zona_emb'] ?? '';
+$proyectoSel = $_GET['proyecto'] ?? '';
 
 // checks de “usar en template”
-$useEmpresa    = isset($_GET['use_empresa'])    ? $_GET['use_empresa']    === '1' : true;
-$useAlmacen    = isset($_GET['use_almacen'])    ? $_GET['use_almacen']    === '1' : true;
-$useZona       = isset($_GET['use_zona'])       ? $_GET['use_zona']       === '1' : true;
-$useBL         = isset($_GET['use_bl'])         ? $_GET['use_bl']         === '1' : true;
-$useLP         = isset($_GET['use_lp'])         ? $_GET['use_lp']         === '1' : true;
-$useProd       = isset($_GET['use_producto'])   ? $_GET['use_producto']   === '1' : true;
-$useLote       = isset($_GET['use_lote'])       ? $_GET['use_lote']       === '1' : true;
-$useRuta       = isset($_GET['use_ruta'])       ? $_GET['use_ruta']       === '1' : true;
-$useCliente    = isset($_GET['use_cliente'])    ? $_GET['use_cliente']    === '1' : true;
-$useProv       = isset($_GET['use_proveedor'])  ? $_GET['use_proveedor']  === '1' : true;
-$useVend       = isset($_GET['use_vendedor'])   ? $_GET['use_vendedor']   === '1' : true;
-$useUsuario    = isset($_GET['use_usuario'])    ? $_GET['use_usuario']    === '1' : true;
-$useZonaRecep  = isset($_GET['use_zona_recep']) ? $_GET['use_zona_recep'] === '1' : true;
-$useZonaQA     = isset($_GET['use_zona_qa'])    ? $_GET['use_zona_qa']    === '1' : true;
-$useZonaEmb    = isset($_GET['use_zona_emb'])   ? $_GET['use_zona_emb']   === '1' : true;
-$useProyecto   = isset($_GET['use_proyecto'])   ? $_GET['use_proyecto']   === '1' : true;
+$useEmpresa = isset($_GET['use_empresa']) ? $_GET['use_empresa'] === '1' : true;
+$useAlmacen = isset($_GET['use_almacen']) ? $_GET['use_almacen'] === '1' : true;
+$useZona = isset($_GET['use_zona']) ? $_GET['use_zona'] === '1' : true;
+$useBL = isset($_GET['use_bl']) ? $_GET['use_bl'] === '1' : true;
+$useLP = isset($_GET['use_lp']) ? $_GET['use_lp'] === '1' : true;
+$useProd = isset($_GET['use_producto']) ? $_GET['use_producto'] === '1' : true;
+$useLote = isset($_GET['use_lote']) ? $_GET['use_lote'] === '1' : true;
+$useRuta = isset($_GET['use_ruta']) ? $_GET['use_ruta'] === '1' : true;
+$useCliente = isset($_GET['use_cliente']) ? $_GET['use_cliente'] === '1' : true;
+$useProv = isset($_GET['use_proveedor']) ? $_GET['use_proveedor'] === '1' : true;
+$useVend = isset($_GET['use_vendedor']) ? $_GET['use_vendedor'] === '1' : true;
+$useUsuario = isset($_GET['use_usuario']) ? $_GET['use_usuario'] === '1' : true;
+$useZonaRecep = isset($_GET['use_zona_recep']) ? $_GET['use_zona_recep'] === '1' : true;
+$useZonaQA = isset($_GET['use_zona_qa']) ? $_GET['use_zona_qa'] === '1' : true;
+$useZonaEmb = isset($_GET['use_zona_emb']) ? $_GET['use_zona_emb'] === '1' : true;
+$useProyecto = isset($_GET['use_proyecto']) ? $_GET['use_proyecto'] === '1' : true;
 
 // =========================
 // 3. Catálogos dependientes
@@ -273,58 +291,66 @@ try {
 }
 
 // Helper para options
-function ap_opt(string $value, string $label, string $selected): string {
+function ap_opt(string $value, string $label, string $selected): string
+{
     $sel = ($value === $selected) ? ' selected' : '';
-    return '<option value="'.htmlspecialchars($value, ENT_QUOTES, 'UTF-8').'"'.$sel.'>'.
-           htmlspecialchars($label, ENT_QUOTES, 'UTF-8').
-           '</option>';
+    return '<option value="' . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '"' . $sel . '>' .
+        htmlspecialchars($label, ENT_QUOTES, 'UTF-8') .
+        '</option>';
 }
 
 ?>
 <style>
     .ap-filtros-bar {
-        background:#0F5AAD;
-        color:#fff;
-        font-size:11px;
-        padding:6px 10px;
-        border-radius:4px 4px 0 0;
-        margin-bottom:0;
+        background: #0F5AAD;
+        color: #fff;
+        font-size: 11px;
+        padding: 6px 10px;
+        border-radius: 4px 4px 0 0;
+        margin-bottom: 0;
     }
+
     .ap-filtros-body {
-        background:#fff;
-        border:1px solid #d0d0d0;
-        border-top:none;
-        border-radius:0 0 4px 4px;
-        padding:8px 10px 6px 10px;
-        font-size:11px;
+        background: #fff;
+        border: 1px solid #d0d0d0;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        padding: 8px 10px 6px 10px;
+        font-size: 11px;
     }
+
     .ap-row {
-        display:flex;
-        flex-wrap:wrap;
-        gap:8px 16px;
-        margin-bottom:4px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        margin-bottom: 4px;
     }
+
     .ap-col {
-        min-width:230px;
+        min-width: 230px;
     }
+
     .ap-label {
-        font-weight:600;
-        margin-bottom:2px;
+        font-weight: 600;
+        margin-bottom: 2px;
     }
+
     .ap-select,
     .ap-input {
-        font-size:11px;
-        height:24px;
-        padding:2px 4px;
+        font-size: 11px;
+        height: 24px;
+        padding: 2px 4px;
     }
+
     .ap-btn {
-        font-size:11px;
-        height:24px;
-        padding:2px 8px;
+        font-size: 11px;
+        height: 24px;
+        padding: 2px 8px;
     }
+
     .ap-check-label {
-        font-weight:400;
-        margin-left:2px;
+        font-weight: 400;
+        margin-left: 2px;
     }
 </style>
 
@@ -345,13 +371,13 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Empresa -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_empresa" value="1" <?= $useEmpresa?'checked':''; ?>>
+                    <input type="checkbox" name="use_empresa" value="1" <?= $useEmpresa ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Empresa</span>
                 </div>
                 <select name="empresa" class="form-select ap-select">
                     <option value="">Todas</option>
                     <?php foreach ($empresas as $e): ?>
-                        <?= ap_opt((string)$e['cve_cia'], $e['des_cia'], (string)$empresaSel); ?>
+                        <?= ap_opt((string) $e['cve_cia'], $e['des_cia'], (string) $empresaSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -359,15 +385,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Almacén (macro) -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_almacen" value="1" <?= $useAlmacen?'checked':''; ?>>
+                    <input type="checkbox" name="use_almacen" value="1" <?= $useAlmacen ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Almacén</span>
                 </div>
                 <select name="almacen" class="form-select ap-select" onchange="this.form.submit()">
                     <option value="">Todos</option>
                     <?php foreach ($almacenes as $a):
-                        $txt = trim(($a['clave'] ?? '').' - '.($a['nombre'] ?? ''));
-                    ?>
-                        <?= ap_opt((string)$a['id'], $txt, (string)$almacenSel); ?>
+                        $txt = trim(($a['clave'] ?? '') . ' - ' . ($a['nombre'] ?? ''));
+                        ?>
+                        <?= ap_opt((string) $a['id'], $txt, (string) $almacenSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -375,15 +401,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Zona de almacenaje -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_zona" value="1" <?= $useZona?'checked':''; ?>>
+                    <input type="checkbox" name="use_zona" value="1" <?= $useZona ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Zona de almacenaje</span>
                 </div>
                 <select name="zona" class="form-select ap-select" onchange="this.form.submit()">
                     <option value="">Todas</option>
                     <?php foreach ($zonas as $z):
-                        $txt = trim($z['cve_almac'].' - '.$z['des_almac']);
-                    ?>
-                        <?= ap_opt((string)$z['cve_almac'], $txt, (string)$zonaSel); ?>
+                        $txt = trim($z['cve_almac'] . ' - ' . $z['des_almac']);
+                        ?>
+                        <?= ap_opt((string) $z['cve_almac'], $txt, (string) $zonaSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -391,13 +417,13 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- BL (Bin Location) -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_bl" value="1" <?= $useBL?'checked':''; ?>>
+                    <input type="checkbox" name="use_bl" value="1" <?= $useBL ? 'checked' : ''; ?>>
                     <span class="ap-check-label">BL (Bin Location)</span>
                 </div>
                 <select name="bl" class="form-select ap-select">
                     <option value="">Todos</option>
                     <?php foreach ($bls as $b): ?>
-                        <?= ap_opt((string)$b['CodigoCSD'], (string)$b['CodigoCSD'], (string)$blSel); ?>
+                        <?= ap_opt((string) $b['CodigoCSD'], (string) $b['CodigoCSD'], (string) $blSel); ?>
                     <?php endforeach; ?>
                 </select>
                 <small class="text-muted">Fuente: c_ubicacion.CodigoCSD</small>
@@ -411,13 +437,13 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- License Plate -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_lp" value="1" <?= $useLP?'checked':''; ?>>
+                    <input type="checkbox" name="use_lp" value="1" <?= $useLP ? 'checked' : ''; ?>>
                     <span class="ap-check-label">License Plate (LP)</span>
                 </div>
                 <select name="lp" class="form-select ap-select">
                     <option value="">Todos</option>
                     <?php foreach ($lps as $lp): ?>
-                        <?= ap_opt((string)$lp['CveLP'], (string)$lp['CveLP'], (string)$lpSel); ?>
+                        <?= ap_opt((string) $lp['CveLP'], (string) $lp['CveLP'], (string) $lpSel); ?>
                     <?php endforeach; ?>
                 </select>
                 <small class="text-muted">Fuente: c_charolas.CveLP</small>
@@ -426,15 +452,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Producto -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_producto" value="1" <?= $useProd?'checked':''; ?>>
+                    <input type="checkbox" name="use_producto" value="1" <?= $useProd ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Producto</span>
                 </div>
                 <select name="producto" class="form-select ap-select">
                     <option value="">Todos</option>
                     <?php foreach ($productos as $p):
-                        $txt = trim($p['cve_articulo'].' - '.$p['des_articulo']);
-                    ?>
-                        <?= ap_opt((string)$p['cve_articulo'], $txt, (string)$prodSel); ?>
+                        $txt = trim($p['cve_articulo'] . ' - ' . $p['des_articulo']);
+                        ?>
+                        <?= ap_opt((string) $p['cve_articulo'], $txt, (string) $prodSel); ?>
                     <?php endforeach; ?>
                 </select>
                 <small class="text-muted">Fuente: c_articulo</small>
@@ -443,14 +469,11 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Lote / Serie -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_lote" value="1" <?= $useLote?'checked':''; ?>>
+                    <input type="checkbox" name="use_lote" value="1" <?= $useLote ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Lote / Serie</span>
                 </div>
-                <input type="text"
-                       name="lote"
-                       value="<?= htmlspecialchars($loteSel, ENT_QUOTES, 'UTF-8'); ?>"
-                       class="form-control ap-input"
-                       placeholder="Lote o serie">
+                <input type="text" name="lote" value="<?= htmlspecialchars($loteSel, ENT_QUOTES, 'UTF-8'); ?>"
+                    class="form-control ap-input" placeholder="Lote o serie">
                 <small class="text-muted">Serie = S en c_lotes</small>
             </div>
 
@@ -462,15 +485,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Ruta -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_ruta" value="1" <?= $useRuta?'checked':''; ?>>
+                    <input type="checkbox" name="use_ruta" value="1" <?= $useRuta ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Ruta</span>
                 </div>
                 <select name="ruta" class="form-select ap-select">
                     <option value="">Todas</option>
                     <?php foreach ($rutas as $r):
-                        $txt = trim($r['cve_ruta'].' - '.$r['descripcion']);
-                    ?>
-                        <?= ap_opt((string)$r['ID_Ruta'], $txt, (string)$rutaSel); ?>
+                        $txt = trim($r['cve_ruta'] . ' - ' . $r['descripcion']);
+                        ?>
+                        <?= ap_opt((string) $r['ID_Ruta'], $txt, (string) $rutaSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -478,16 +501,16 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Cliente -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_cliente" value="1" <?= $useCliente?'checked':''; ?>>
+                    <input type="checkbox" name="use_cliente" value="1" <?= $useCliente ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Cliente</span>
                 </div>
                 <select name="cliente" class="form-select ap-select">
                     <option value="">Todos</option>
                     <?php foreach ($clientes as $c):
-                        $rs  = html_entity_decode((string)$c['RazonSocial'], ENT_QUOTES, 'UTF-8');
-                        $txt = trim(($c['Cve_Clte'] ?? '').' - '.$rs);
-                    ?>
-                        <?= ap_opt((string)$c['id_cliente'], $txt, (string)$clienteSel); ?>
+                        $rs = html_entity_decode((string) $c['RazonSocial'], ENT_QUOTES, 'UTF-8');
+                        $txt = trim(($c['Cve_Clte'] ?? '') . ' - ' . $rs);
+                        ?>
+                        <?= ap_opt((string) $c['id_cliente'], $txt, (string) $clienteSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -495,15 +518,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Proveedor -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_proveedor" value="1" <?= $useProv?'checked':''; ?>>
+                    <input type="checkbox" name="use_proveedor" value="1" <?= $useProv ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Proveedor</span>
                 </div>
                 <select name="proveedor" class="form-select ap-select">
                     <option value="">Todos</option>
                     <?php foreach ($proveedores as $p):
-                        $txt = trim(($p['cve_proveedor'] ?? '').' - '.($p['Nombre'] ?? ''));
-                    ?>
-                        <?= ap_opt((string)$p['ID_Proveedor'], $txt, (string)$proveedorSel); ?>
+                        $txt = trim(($p['cve_proveedor'] ?? '') . ' - ' . ($p['Nombre'] ?? ''));
+                        ?>
+                        <?= ap_opt((string) $p['ID_Proveedor'], $txt, (string) $proveedorSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -516,15 +539,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Vendedor -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_vendedor" value="1" <?= $useVend?'checked':''; ?>>
+                    <input type="checkbox" name="use_vendedor" value="1" <?= $useVend ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Vendedor</span>
                 </div>
                 <select name="vendedor" class="form-select ap-select">
                     <option value="">Todos</option>
                     <?php foreach ($vendedores as $v):
-                        $txt = trim(($v['cve_vendedor'] ?? '').' - '.($v['nombre'] ?? ''));
-                    ?>
-                        <?= ap_opt((string)$v['id_vendedor'], $txt, (string)$vendedorSel); ?>
+                        $txt = trim(($v['cve_vendedor'] ?? '') . ' - ' . ($v['nombre'] ?? ''));
+                        ?>
+                        <?= ap_opt((string) $v['id_vendedor'], $txt, (string) $vendedorSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -532,15 +555,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Usuario -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_usuario" value="1" <?= $useUsuario?'checked':''; ?>>
+                    <input type="checkbox" name="use_usuario" value="1" <?= $useUsuario ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Usuario</span>
                 </div>
                 <select name="usuario" class="form-select ap-select">
                     <option value="">Todos</option>
                     <?php foreach ($usuarios as $u):
-                        $txt = trim(($u['usuario'] ?? '').' - '.($u['nombre'] ?? ''));
-                    ?>
-                        <?= ap_opt((string)$u['id_usuario'], $txt, (string)$usuarioSel); ?>
+                        $txt = trim(($u['usuario'] ?? '') . ' - ' . ($u['nombre'] ?? ''));
+                        ?>
+                        <?= ap_opt((string) $u['id_usuario'], $txt, (string) $usuarioSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -548,15 +571,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Proyecto -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_proyecto" value="1" <?= $useProyecto?'checked':''; ?>>
+                    <input type="checkbox" name="use_proyecto" value="1" <?= $useProyecto ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Proyecto</span>
                 </div>
                 <select name="proyecto" class="form-select ap-select">
                     <option value="">Todos</option>
                     <?php foreach ($proyectos as $pr):
-                        $txt = trim(($pr['Cve_Proyecto'] ?? '').' - '.($pr['Des_Proyecto'] ?? ''));
-                    ?>
-                        <?= ap_opt((string)$pr['Id'], $txt, (string)$proyectoSel); ?>
+                        $txt = trim(($pr['Cve_Proyecto'] ?? '') . ' - ' . ($pr['Des_Proyecto'] ?? ''));
+                        ?>
+                        <?= ap_opt((string) $pr['Id'], $txt, (string) $proyectoSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -569,15 +592,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Zona recepción / retención -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_zona_recep" value="1" <?= $useZonaRecep?'checked':''; ?>>
+                    <input type="checkbox" name="use_zona_recep" value="1" <?= $useZonaRecep ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Zona recepción / retención</span>
                 </div>
                 <select name="zona_recep" class="form-select ap-select">
                     <option value="">Todas</option>
                     <?php foreach ($zonasRecep as $zr):
-                        $txt = trim(($zr['cve_ubicacion'] ?? '').' - '.($zr['desc_ubicacion'] ?? ''));
-                    ?>
-                        <?= ap_opt((string)$zr['id'], $txt, (string)$zonaRecepSel); ?>
+                        $txt = trim(($zr['cve_ubicacion'] ?? '') . ' - ' . ($zr['desc_ubicacion'] ?? ''));
+                        ?>
+                        <?= ap_opt((string) $zr['id'], $txt, (string) $zonaRecepSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -585,15 +608,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Zona QA / revisión -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_zona_qa" value="1" <?= $useZonaQA?'checked':''; ?>>
+                    <input type="checkbox" name="use_zona_qa" value="1" <?= $useZonaQA ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Zona QA / revisión</span>
                 </div>
                 <select name="zona_qa" class="form-select ap-select">
                     <option value="">Todas</option>
                     <?php foreach ($zonasQA as $zq):
-                        $txt = trim(($zq['cve_ubicacion'] ?? '').' - '.($zq['descripcion'] ?? ''));
-                    ?>
-                        <?= ap_opt((string)$zq['ID_URevision'], $txt, (string)$zonaQASel); ?>
+                        $txt = trim(($zq['cve_ubicacion'] ?? '') . ' - ' . ($zq['descripcion'] ?? ''));
+                        ?>
+                        <?= ap_opt((string) $zq['ID_URevision'], $txt, (string) $zonaQASel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -601,15 +624,15 @@ function ap_opt(string $value, string $label, string $selected): string {
             <!-- Zona embarques -->
             <div class="ap-col">
                 <div class="ap-label">
-                    <input type="checkbox" name="use_zona_emb" value="1" <?= $useZonaEmb?'checked':''; ?>>
+                    <input type="checkbox" name="use_zona_emb" value="1" <?= $useZonaEmb ? 'checked' : ''; ?>>
                     <span class="ap-check-label">Zona embarques</span>
                 </div>
                 <select name="zona_emb" class="form-select ap-select">
                     <option value="">Todas</option>
                     <?php foreach ($zonasEmb as $ze):
-                        $txt = trim(($ze['cve_ubicacion'] ?? '').' - '.($ze['descripcion'] ?? ''));
-                    ?>
-                        <?= ap_opt((string)$ze['ID_Embarque'], $txt, (string)$zonaEmbSel); ?>
+                        $txt = trim(($ze['cve_ubicacion'] ?? '') . ' - ' . ($ze['descripcion'] ?? ''));
+                        ?>
+                        <?= ap_opt((string) $ze['ID_Embarque'], $txt, (string) $zonaEmbSel); ?>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -620,22 +643,22 @@ function ap_opt(string $value, string $label, string $selected): string {
 </div>
 
 <script>
-function apFiltrosLimpiar() {
-    const form = document.getElementById('formFiltrosAssistpro');
-    if (!form) return;
+    function apFiltrosLimpiar() {
+        const form = document.getElementById('formFiltrosAssistpro');
+        if (!form) return;
 
-    for (const el of form.elements) {
-        if (!el.name) continue;
-        if (el.tagName === 'SELECT') {
-            el.selectedIndex = 0;
-        } else if (el.type === 'text') {
-            el.value = '';
-        } else if (el.type === 'checkbox') {
-            el.checked = true; // por defecto, todos los filtros activos en plantilla
+        for (const el of form.elements) {
+            if (!el.name) continue;
+            if (el.tagName === 'SELECT') {
+                el.selectedIndex = 0;
+            } else if (el.type === 'text') {
+                el.value = '';
+            } else if (el.type === 'checkbox') {
+                el.checked = true; // por defecto, todos los filtros activos en plantilla
+            }
         }
+        form.submit();
     }
-    form.submit();
-}
-require_once __DIR__ . '/../bi/_menu_global_end.php';
+require_once __DIR__. '/../bi/_menu_global_end.php';
 
 </script>

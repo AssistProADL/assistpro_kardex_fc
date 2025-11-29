@@ -1,5 +1,7 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) session_start();
+if (session_status() === PHP_SESSION_NONE)
+  session_start();
+require_once __DIR__ . '/../app/auth_check.php';
 require_once __DIR__ . '/../app/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
@@ -7,7 +9,10 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 
 $user = trim($_GET['user'] ?? '');
-if ($user === '') { echo json_encode([]); exit; }
+if ($user === '') {
+  echo json_encode([]);
+  exit;
+}
 
 try {
   $rows = db_all("
@@ -26,9 +31,10 @@ try {
     LEFT JOIN v_almacen_compat a 
       ON CONVERT(TRIM(a.clave) USING utf8mb4) = CONVERT(s.cve_almac USING utf8mb4)
     ORDER BY des_almac
-  ", [':u1'=>$user, ':u2'=>$user]);
+  ", [':u1' => $user, ':u2' => $user]);
 
-  if (!$rows || !is_array($rows)) $rows = [];
+  if (!$rows || !is_array($rows))
+    $rows = [];
   echo json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
 } catch (Throwable $e) {

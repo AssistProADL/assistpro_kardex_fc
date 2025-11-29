@@ -2,12 +2,13 @@
 // /public/api/ecommerce_articulos.php
 header('Content-Type: application/json; charset=utf-8');
 
+require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
 $action = $_GET['action'] ?? $_POST['action'] ?? 'list';
-$q       = trim($_GET['q'] ?? $_POST['q'] ?? '');
-$categ   = trim($_GET['categoria'] ?? $_POST['categoria'] ?? '');
-$id      = $_GET['id'] ?? $_POST['id'] ?? null;
+$q = trim($_GET['q'] ?? $_POST['q'] ?? '');
+$categ = trim($_GET['categoria'] ?? $_POST['categoria'] ?? '');
+$id = $_GET['id'] ?? $_POST['id'] ?? null;
 
 // TODO: Seguridad por token si deseas
 // $token = $_GET['token'] ?? '';

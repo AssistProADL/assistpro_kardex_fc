@@ -2,6 +2,7 @@
 // public/api/almacenes.php
 header('Content-Type: application/json; charset=utf-8');
 
+require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
 try {
@@ -38,7 +39,7 @@ function lista(PDO $pdo)
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         echo json_encode([
-            'ok'   => true,
+            'ok' => true,
             'data' => $rows
         ], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {

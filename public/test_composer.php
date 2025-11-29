@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../app/auth_check.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 
 echo class_exists('\PHPMailer\PHPMailer\PHPMailer') ? "PHPMailer OK<br>" : "PHPMailer FAIL<br>";
