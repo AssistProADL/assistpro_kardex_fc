@@ -97,3 +97,6 @@
 [2025-11-26 18:06:14] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
 [2025-11-26 18:07:23] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
 [2025-11-26 21:14:17] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-12-01 22:33:16] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-12-01 22:33:27] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}
+[2025-12-01 22:33:50] DEBUG: bootstrap cargado {"env":"local","db":"assistpro_etl_fc","host":"127.0.0.1"}

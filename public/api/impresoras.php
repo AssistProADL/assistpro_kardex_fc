@@ -5,83 +5,106 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
-try {
-    $pdo = db_pdo();
-} catch (Throwable $e) {
-    echo json_encode([
-        'ok' => false,
-        'error' => 'Error de conexión PDO: ' . $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
+if (function_exists('db')) {
+    $pdo = db();
+} else {
+    global $pdo;
+    if (!$pdo instanceof PDO) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'Sin conexión a BD']);
+        exit;
+    }
 }
 
-$action = $_GET['action'] ?? $_POST['action'] ?? 'list';
+$action = $_REQUEST['action'] ?? 'list';
 
 try {
     switch ($action) {
-        case 'list':
-            api_list($pdo);
-            break;
         case 'get':
             api_get($pdo);
             break;
         case 'save':
             api_save($pdo);
             break;
-        case 'delete':
-            api_delete($pdo);
-            break;
         case 'test':
-            api_test_print($pdo);
+            api_test($pdo);
             break;
+        case 'toggle_active':
+            api_toggle_active($pdo);
+            break;
+        case 'list':
         default:
-            echo json_encode([
-                'ok' => false,
-                'error' => 'Acción no soportada en impresoras.php: ' . $action
-            ], JSON_UNESCAPED_UNICODE);
+            api_list($pdo);
+            break;
     }
 } catch (Throwable $e) {
+    http_response_code(500);
     echo json_encode([
-        'ok' => false,
-        'error' => 'Error general en impresoras.php: ' . $e->getMessage()
+        'ok'    => false,
+        'error' => 'Error servidor: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
 }
 
 /**
- * Lista impresoras (con filtros simples opcionales)
+ * LISTAR IMPRESORAS
  */
 function api_list(PDO $pdo)
 {
-    $id_almacen = $_GET['id_almacen'] ?? null;
-    $activo = $_GET['activo'] ?? null;
+    $id_almacen_raw = $_GET['id_almacen'] ?? '';
+    $activo         = $_GET['activo'] ?? '';
 
-    $sql = "SELECT * FROM v_impresoras WHERE 1=1";
+    $sql = "SELECT 
+                i.id,
+                i.id_almacen,
+                a.clave   AS almacen_clave,
+                a.nombre  AS almacen_nombre,
+                i.IP,
+                i.TIPO_IMPRESORA,
+                i.NOMBRE,
+                i.Marca,
+                i.Modelo,
+                i.Densidad_Imp,
+                i.TIPO_CONEXION,
+                i.PUERTO,
+                i.TiempoEspera,
+                i.Activo
+            FROM s_impresoras i
+            JOIN c_almacenp a ON a.id = i.id_almacen
+            WHERE 1=1";
     $params = [];
 
-    if ($id_almacen !== null && $id_almacen !== '') {
-        $sql .= " AND id_almacen = :id_almacen";
-        $params[':id_almacen'] = (int) $id_almacen;
+    // Filtro por almacén (acepta ID o clave WHx)
+    if ($id_almacen_raw !== '') {
+        $id_almacen = (int)$id_almacen_raw;
+        if ($id_almacen <= 0) {
+            $stmtA = $pdo->prepare("SELECT id FROM c_almacenp WHERE clave = :clave LIMIT 1");
+            $stmtA->execute([':clave' => $id_almacen_raw]);
+            $rowA = $stmtA->fetch(PDO::FETCH_ASSOC);
+            $id_almacen = $rowA ? (int)$rowA['id'] : 0;
+        }
+        if ($id_almacen > 0) {
+            $sql .= " AND i.id_almacen = :id_almacen";
+            $params[':id_almacen'] = $id_almacen;
+        }
     }
 
-    if ($activo !== null && $activo !== '') {
-        $sql .= " AND Activo = :activo";
-        $params[':activo'] = (int) $activo;
+    // Filtro Activo
+    if ($activo !== '' && $activo !== null) {
+        $sql .= " AND i.Activo = :activo";
+        $params[':activo'] = (int)$activo;
     }
 
-    $sql .= " ORDER BY almacen_clave, NOMBRE";
+    $sql .= " ORDER BY a.clave, i.NOMBRE";
 
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
-        'ok' => true,
-        'data' => $rows
-    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => true, 'data' => $rows], JSON_UNESCAPED_UNICODE);
 }
 
 /**
- * Obtiene una impresora por id
+ * OBTENER UNA IMPRESORA
  */
 function api_get(PDO $pdo)
 {
@@ -91,12 +114,31 @@ function api_get(PDO $pdo)
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT * FROM s_impresoras WHERE id = :id");
-    $stmt->execute([':id' => $id]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $sql = "SELECT 
+                i.id,
+                i.id_almacen,
+                a.clave   AS almacen_clave,
+                a.nombre  AS almacen_nombre,
+                i.IP,
+                i.TIPO_IMPRESORA,
+                i.NOMBRE,
+                i.Marca,
+                i.Modelo,
+                i.Densidad_Imp,
+                i.TIPO_CONEXION,
+                i.PUERTO,
+                i.TiempoEspera,
+                i.Activo
+            FROM s_impresoras i
+            JOIN c_almacenp a ON a.id = i.id_almacen
+            WHERE i.id = :id
+            LIMIT 1";
+    $st = $pdo->prepare($sql);
+    $st->execute([':id' => $id]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
 
     if (!$row) {
-        echo json_encode(['ok' => false, 'error' => 'Impresora no encontrada'], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['ok' => false, 'error' => 'Registro no encontrado'], JSON_UNESCAPED_UNICODE);
         return;
     }
 
@@ -104,24 +146,37 @@ function api_get(PDO $pdo)
 }
 
 /**
- * Inserta / Actualiza impresora
+ * GUARDAR / ACTUALIZAR IMPRESORA
  */
 function api_save(PDO $pdo)
 {
     $data = $_POST;
 
-    $id = isset($data['id']) ? (int) $data['id'] : 0;
-    $id_almacen = (int) ($data['id_almacen'] ?? 0);
-    $IP = trim($data['IP'] ?? '');
+    $id = isset($data['id']) ? (int)$data['id'] : 0;
+
+    // id_almacen puede venir como ID numérico o como clave WHx
+    $id_almacen_raw = trim($data['id_almacen'] ?? '');
+    $id_almacen     = (int)$id_almacen_raw;
+
+    if ($id_almacen <= 0 && $id_almacen_raw !== '') {
+        $stmtAlm = $pdo->prepare("SELECT id FROM c_almacenp WHERE clave = :clave LIMIT 1");
+        $stmtAlm->execute([':clave' => $id_almacen_raw]);
+        $rowAlm = $stmtAlm->fetch(PDO::FETCH_ASSOC);
+        if ($rowAlm) {
+            $id_almacen = (int)$rowAlm['id'];
+        }
+    }
+
+    $IP             = trim($data['IP'] ?? '');
     $TIPO_IMPRESORA = $data['TIPO_IMPRESORA'] ?? 'ZPL';
-    $NOMBRE = trim($data['NOMBRE'] ?? '');
-    $Marca = trim($data['Marca'] ?? '');
-    $Modelo = trim($data['Modelo'] ?? '');
-    $Densidad_Imp = (int) ($data['Densidad_Imp'] ?? 203);
-    $TIPO_CONEXION = $data['TIPO_CONEXION'] ?? 'USB';
-    $PUERTO = (int) ($data['PUERTO'] ?? 0);
-    $TiempoEspera = (int) ($data['TiempoEspera'] ?? 0);
-    $Activo = (int) ($data['Activo'] ?? 1);
+    $NOMBRE         = trim($data['NOMBRE'] ?? '');
+    $Marca          = trim($data['Marca'] ?? '');
+    $Modelo         = trim($data['Modelo'] ?? '');
+    $Densidad_Imp   = (int)($data['Densidad_Imp'] ?? 203);
+    $TIPO_CONEXION  = $data['TIPO_CONEXION'] ?? 'USB';
+    $PUERTO         = (int)($data['PUERTO'] ?? 0);
+    $TiempoEspera   = (int)($data['TiempoEspera'] ?? 0);
+    $Activo         = (int)($data['Activo'] ?? 1);
 
     if ($id_almacen <= 0) {
         echo json_encode(['ok' => false, 'error' => 'Almacén requerido'], JSON_UNESCAPED_UNICODE);
@@ -129,57 +184,69 @@ function api_save(PDO $pdo)
     }
 
     if ($id > 0) {
-        // Update
-        $sql = "UPDATE s_impresoras
-                   SET id_almacen = :id_almacen,
-                       IP = :IP,
-                       TIPO_IMPRESORA = :TIPO_IMPRESORA,
-                       NOMBRE = :NOMBRE,
-                       Marca = :Marca,
-                       Modelo = :Modelo,
-                       Densidad_Imp = :Densidad_Imp,
-                       TIPO_CONEXION = :TIPO_CONEXION,
-                       PUERTO = :PUERTO,
-                       TiempoEspera = :TiempoEspera,
-                       Activo = :Activo
-                 WHERE id = :id";
+        $sql = "UPDATE s_impresoras SET
+                    id_almacen     = :id_almacen,
+                    IP             = :IP,
+                    TIPO_IMPRESORA = :TIPO_IMPRESORA,
+                    NOMBRE         = :NOMBRE,
+                    Marca          = :Marca,
+                    Modelo         = :Modelo,
+                    Densidad_Imp   = :Densidad_Imp,
+                    TIPO_CONEXION  = :TIPO_CONEXION,
+                    PUERTO         = :PUERTO,
+                    TiempoEspera   = :TiempoEspera,
+                    Activo         = :Activo
+                WHERE id = :id";
+        $params = [
+            ':id_almacen'     => $id_almacen,
+            ':IP'             => $IP,
+            ':TIPO_IMPRESORA' => $TIPO_IMPRESORA,
+            ':NOMBRE'         => $NOMBRE,
+            ':Marca'          => $Marca,
+            ':Modelo'         => $Modelo,
+            ':Densidad_Imp'   => $Densidad_Imp,
+            ':TIPO_CONEXION'  => $TIPO_CONEXION,
+            ':PUERTO'         => $PUERTO,
+            ':TiempoEspera'   => $TiempoEspera,
+            ':Activo'         => $Activo,
+            ':id'             => $id,
+        ];
     } else {
-        // Insert
         $sql = "INSERT INTO s_impresoras
-                (id_almacen, IP, TIPO_IMPRESORA, NOMBRE, Marca, Modelo,
-                 Densidad_Imp, TIPO_CONEXION, PUERTO, TiempoEspera, Activo)
+                    (id_almacen, IP, TIPO_IMPRESORA, NOMBRE, Marca, Modelo,
+                     Densidad_Imp, TIPO_CONEXION, PUERTO, TiempoEspera, Activo)
                 VALUES
-                (:id_almacen, :IP, :TIPO_IMPRESORA, :NOMBRE, :Marca, :Modelo,
-                 :Densidad_Imp, :TIPO_CONEXION, :PUERTO, :TiempoEspera, :Activo)";
+                    (:id_almacen, :IP, :TIPO_IMPRESORA, :NOMBRE, :Marca, :Modelo,
+                     :Densidad_Imp, :TIPO_CONEXION, :PUERTO, :TiempoEspera, :Activo)";
+        $params = [
+            ':id_almacen'     => $id_almacen,
+            ':IP'             => $IP,
+            ':TIPO_IMPRESORA' => $TIPO_IMPRESORA,
+            ':NOMBRE'         => $NOMBRE,
+            ':Marca'          => $Marca,
+            ':Modelo'         => $Modelo,
+            ':Densidad_Imp'   => $Densidad_Imp,
+            ':TIPO_CONEXION'  => $TIPO_CONEXION,
+            ':PUERTO'         => $PUERTO,
+            ':TiempoEspera'   => $TiempoEspera,
+            ':Activo'         => $Activo,
+        ];
     }
 
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':id_almacen' => $id_almacen,
-        ':IP' => $IP,
-        ':TIPO_IMPRESORA' => $TIPO_IMPRESORA,
-        ':NOMBRE' => $NOMBRE,
-        ':Marca' => $Marca,
-        ':Modelo' => $Modelo,
-        ':Densidad_Imp' => $Densidad_Imp,
-        ':TIPO_CONEXION' => $TIPO_CONEXION,
-        ':PUERTO' => $PUERTO,
-        ':TiempoEspera' => $TiempoEspera,
-        ':Activo' => $Activo,
-        ':id' => $id
-    ]);
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
 
-    if ($id === 0) {
-        $id = (int) $pdo->lastInsertId();
+    if ($id <= 0) {
+        $id = (int)$pdo->lastInsertId();
     }
 
     echo json_encode(['ok' => true, 'id' => $id], JSON_UNESCAPED_UNICODE);
 }
 
 /**
- * Baja lógica
+ * PROBAR IMPRESIÓN
  */
-function api_delete(PDO $pdo)
+function api_test(PDO $pdo)
 {
     $id = (int) ($_POST['id'] ?? 0);
     if ($id <= 0) {
@@ -187,26 +254,28 @@ function api_delete(PDO $pdo)
         return;
     }
 
-    $stmt = $pdo->prepare("UPDATE s_impresoras SET Activo = 0 WHERE id = :id");
-    $stmt->execute([':id' => $id]);
-
-    echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+    // Aquí iría el envío real de ZPL; por ahora sólo simulación
+    echo json_encode([
+        'ok'      => true,
+        'mensaje' => 'Prueba de impresión simulada para impresora ID ' . $id
+    ], JSON_UNESCAPED_UNICODE);
 }
 
 /**
- * Probar impresión: envía una etiqueta de prueba ZPL a la impresora
+ * ACTIVAR / DESACTIVAR (Eliminar / Recuperar)
  */
-function api_test_print(PDO $pdo)
+function api_toggle_active(PDO $pdo)
 {
-    $id = (int) ($_POST['id'] ?? 0);
+    $id     = (int)($_POST['id'] ?? 0);
+    $activo = (int)($_POST['activo'] ?? 0);
+
     if ($id <= 0) {
         echo json_encode(['ok' => false, 'error' => 'ID inválido'], JSON_UNESCAPED_UNICODE);
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT * FROM s_impresoras WHERE id = :id");
-    $stmt->execute([':id' => $id]);
-    $imp = $stmt->fetch(PDO::FETCH_ASSOC);
+    $st = $pdo->prepare("UPDATE s_impresoras SET Activo = :a WHERE id = :id");
+    $st->execute([':a' => $activo, ':id' => $id]);
 
     if (!$imp) {
         echo json_encode(['ok' => false, 'error' => 'Impresora no encontrada'], JSON_UNESCAPED_UNICODE);

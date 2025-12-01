@@ -5,72 +5,106 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
-try {
-    $pdo = db_pdo();
-} catch (Throwable $e) {
-    echo json_encode([
-        'ok' => false,
-        'error' => 'Error de conexión PDO: ' . $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
+if (function_exists('db')) {
+    $pdo = db();
+} else {
+    global $pdo;
+    if (!$pdo instanceof PDO) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'Sin conexión a BD']);
+        exit;
+    }
 }
 
-$action = $_GET['action'] ?? $_POST['action'] ?? 'list';
+$action = $_REQUEST['action'] ?? 'list';
 
 try {
     switch ($action) {
-        case 'list':
-            api_list($pdo);
-            break;
         case 'get':
             api_get($pdo);
             break;
         case 'save':
             api_save($pdo);
             break;
-        case 'delete':
-            api_delete($pdo);
+        case 'change_status':
+            api_change_status($pdo);
             break;
+        case 'list':
         default:
-            echo json_encode([
-                'ok' => false,
-                'error' => 'Acción no soportada en dispositivos.php: ' . $action
-            ], JSON_UNESCAPED_UNICODE);
+            api_list($pdo);
+            break;
     }
 } catch (Throwable $e) {
+    http_response_code(500);
     echo json_encode([
-        'ok' => false,
-        'error' => 'Error general en dispositivos.php: ' . $e->getMessage()
+        'ok'    => false,
+        'error' => 'Error servidor: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
 }
 
+/**
+ * LISTAR DISPOSITIVOS
+ */
 function api_list(PDO $pdo)
 {
-    $id_almacen = $_GET['id_almacen'] ?? null;
-    $estatus = $_GET['estatus'] ?? null;
+    $id_almacen_raw = $_GET['id_almacen'] ?? '';
+    $estatus        = $_GET['estatus'] ?? '';
 
-    $sql = "SELECT * FROM v_dispositivos WHERE 1=1";
+    $sql = "SELECT 
+                d.id,
+                d.id_almacen,
+                a.clave      AS almacen_clave,
+                a.nombre     AS almacen_nombre,
+                d.tipo,
+                d.marca,
+                d.modelo,
+                d.serie,
+                d.imei,
+                d.firmware_version,
+                d.mac_wifi,
+                d.mac_bt,
+                d.ip,
+                d.usuario_asignado,
+                d.estatus,
+                d.fecha_alta,
+                d.comentarios
+            FROM s_dispositivos d
+            JOIN c_almacenp a ON a.id = d.id_almacen
+            WHERE 1=1";
     $params = [];
 
-    if ($id_almacen !== null && $id_almacen !== '') {
-        $sql .= " AND id_almacen = :id_almacen";
-        $params[':id_almacen'] = (int) $id_almacen;
+    // Filtro por almacén (ID o WHx)
+    if ($id_almacen_raw !== '') {
+        $id_almacen = (int)$id_almacen_raw;
+        if ($id_almacen <= 0) {
+            $stmtA = $pdo->prepare("SELECT id FROM c_almacenp WHERE clave = :clave LIMIT 1");
+            $stmtA->execute([':clave' => $id_almacen_raw]);
+            $rowA = $stmtA->fetch(PDO::FETCH_ASSOC);
+            $id_almacen = $rowA ? (int)$rowA['id'] : 0;
+        }
+        if ($id_almacen > 0) {
+            $sql .= " AND d.id_almacen = :id_almacen";
+            $params[':id_almacen'] = $id_almacen;
+        }
     }
 
-    if ($estatus !== null && $estatus !== '') {
-        $sql .= " AND estatus = :estatus";
+    if ($estatus !== '') {
+        $sql .= " AND d.estatus = :estatus";
         $params[':estatus'] = $estatus;
     }
 
-    $sql .= " ORDER BY almacen_clave, tipo, marca, modelo";
+    $sql .= " ORDER BY a.clave, d.tipo, d.marca, d.modelo";
 
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode(['ok' => true, 'data' => $rows], JSON_UNESCAPED_UNICODE);
 }
 
+/**
+ * OBTENER UN DISPOSITIVO
+ */
 function api_get(PDO $pdo)
 {
     $id = (int) ($_GET['id'] ?? 0);
@@ -79,35 +113,74 @@ function api_get(PDO $pdo)
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT * FROM s_dispositivos WHERE id = :id");
-    $stmt->execute([':id' => $id]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $sql = "SELECT 
+                d.id,
+                d.id_almacen,
+                a.clave      AS almacen_clave,
+                a.nombre     AS almacen_nombre,
+                d.tipo,
+                d.marca,
+                d.modelo,
+                d.serie,
+                d.imei,
+                d.firmware_version,
+                d.mac_wifi,
+                d.mac_bt,
+                d.ip,
+                d.usuario_asignado,
+                d.estatus,
+                d.fecha_alta,
+                d.comentarios
+            FROM s_dispositivos d
+            JOIN c_almacenp a ON a.id = d.id_almacen
+            WHERE d.id = :id
+            LIMIT 1";
+    $st = $pdo->prepare($sql);
+    $st->execute([':id' => $id]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
 
     if (!$row) {
-        echo json_encode(['ok' => false, 'error' => 'Dispositivo no encontrado'], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['ok' => false, 'error' => 'Registro no encontrado'], JSON_UNESCAPED_UNICODE);
         return;
     }
 
     echo json_encode(['ok' => true, 'data' => $row], JSON_UNESCAPED_UNICODE);
 }
 
+/**
+ * GUARDAR / ACTUALIZAR DISPOSITIVO
+ */
 function api_save(PDO $pdo)
 {
     $data = $_POST;
 
-    $id = isset($data['id']) ? (int) $data['id'] : 0;
-    $id_almacen = (int) ($data['id_almacen'] ?? 0);
-    $tipo = $data['tipo'] ?? 'HANDHELD';
-    $marca = trim($data['marca'] ?? '');
-    $modelo = trim($data['modelo'] ?? '');
-    $serie = trim($data['serie'] ?? '');
-    $imei = trim($data['imei'] ?? '');
-    $mac_wifi = trim($data['mac_wifi'] ?? '');
-    $mac_bt = trim($data['mac_bt'] ?? '');
-    $ip = trim($data['ip'] ?? '');
+    $id = isset($data['id']) ? (int)$data['id'] : 0;
+
+    // id_almacen puede venir como ID numérico o clave WHx
+    $id_almacen_raw = trim($data['id_almacen'] ?? '');
+    $id_almacen     = (int)$id_almacen_raw;
+
+    if ($id_almacen <= 0 && $id_almacen_raw !== '') {
+        $stmtAlm = $pdo->prepare("SELECT id FROM c_almacenp WHERE clave = :clave LIMIT 1");
+        $stmtAlm->execute([':clave' => $id_almacen_raw]);
+        $rowAlm = $stmtAlm->fetch(PDO::FETCH_ASSOC);
+        if ($rowAlm) {
+            $id_almacen = (int)$rowAlm['id'];
+        }
+    }
+
+    $tipo             = $data['tipo'] ?? 'HANDHELD';
+    $marca            = trim($data['marca'] ?? '');
+    $modelo           = trim($data['modelo'] ?? '');
+    $serie            = trim($data['serie'] ?? '');
+    $imei             = trim($data['imei'] ?? '');
+    $firmware_version = trim($data['firmware_version'] ?? '');
+    $mac_wifi         = trim($data['mac_wifi'] ?? '');
+    $mac_bt           = trim($data['mac_bt'] ?? '');
+    $ip               = trim($data['ip'] ?? '');
     $usuario_asignado = trim($data['usuario_asignado'] ?? '');
-    $estatus = $data['estatus'] ?? 'ACTIVO';
-    $comentarios = trim($data['comentarios'] ?? '');
+    $estatus          = $data['estatus'] ?? 'ACTIVO';
+    $comentarios      = trim($data['comentarios'] ?? '');
 
     if ($id_almacen <= 0) {
         echo json_encode(['ok' => false, 'error' => 'Almacén requerido'], JSON_UNESCAPED_UNICODE);

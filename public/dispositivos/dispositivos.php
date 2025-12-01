@@ -63,8 +63,8 @@ $TITLE = 'Catálogo de Dispositivos Móviles';
                     <strong style="font-size:12px;">Dispositivos</strong>
                 </div>
                 <div class="card-body p-1">
-                    <div class="table-responsive" style="max-height:420px;overflow:auto;">
-                        <table id="tblDisp" class="table table-sm table-bordered table-striped" style="font-size:10px;white-space:nowrap;">
+                    <div class="table-responsive">
+                        <table id="tblDisp" class="table table-sm table-bordered table-striped" style="font-size:10px;white-space:nowrap;width:100%;">
                             <thead class="thead-light">
                                 <tr>
                                     <th>Id</th>
@@ -74,13 +74,14 @@ $TITLE = 'Catálogo de Dispositivos Móviles';
                                     <th>Modelo</th>
                                     <th>Serie</th>
                                     <th>IMEI</th>
+                                    <th>FW</th>
                                     <th>MAC WiFi</th>
                                     <th>MAC BT</th>
                                     <th>IP</th>
                                     <th>Usuario</th>
                                     <th>Estatus</th>
                                     <th>Alta</th>
-                                    <th>Acciones</th>
+                                    <th style="width:90px;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -147,6 +148,10 @@ $TITLE = 'Catálogo de Dispositivos Móviles';
 
         <div class="form-row">
           <div class="form-group col-md-3">
+            <label>Versión firmware</label>
+            <input type="text" name="firmware_version" id="firmware_version" class="form-control form-control-sm">
+          </div>
+          <div class="form-group col-md-3">
             <label>MAC WiFi</label>
             <input type="text" name="mac_wifi" id="mac_wifi" class="form-control form-control-sm">
           </div>
@@ -158,6 +163,9 @@ $TITLE = 'Catálogo de Dispositivos Móviles';
             <label>IP</label>
             <input type="text" name="ip" id="ip" class="form-control form-control-sm">
           </div>
+        </div>
+
+        <div class="form-row">
           <div class="form-group col-md-3">
             <label>Estatus</label>
             <select name="estatus" id="estatus" class="form-control form-control-sm">
@@ -167,10 +175,7 @@ $TITLE = 'Catálogo de Dispositivos Móviles';
               <option value="BAJA">Baja</option>
             </select>
           </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group col-md-12">
+          <div class="form-group col-md-9">
             <label>Comentarios</label>
             <textarea name="comentarios" id="comentarios" rows="2" class="form-control form-control-sm"></textarea>
           </div>
@@ -187,33 +192,31 @@ $TITLE = 'Catálogo de Dispositivos Móviles';
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
 
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>
+
 <script>
 $(function(){
-    // Almacenes desde filtros_assistpro.php
+
     function cargarAlmacenesSelect(selector, incluirTodos){
-        $.getJSON('../api/filtros_assistpro.php', {
-            action: 'init',
-            secciones: 'almacenes'
-        }, function(resp){
-            if (!resp) {
-                alert('Respuesta vacía de filtros_assistpro.php');
-                return;
-            }
-            if (resp.almacenes_error) {
-                alert('Error almacenes: ' + resp.almacenes_error);
+        $.getJSON('../api/filtros_assistpro.php', {action:'init'}, function(resp){
+            if (!resp || resp.ok === false) {
+                alert((resp && resp.error) ? resp.error : 'Error al cargar almacenes');
                 return;
             }
             var lista = resp.almacenes || [];
-            var sel = $(selector);
-            sel.empty();
+            var $sel = $(selector);
+            $sel.empty();
             if (incluirTodos){
-                sel.append('<option value="">[Todos]</option>');
+                $sel.append('<option value="">[Todos]</option>');
             } else {
-                sel.append('<option value="">[Seleccione]</option>');
+                $sel.append('<option value="">[Seleccione]</option>');
             }
             lista.forEach(function(a){
-                // cve_almac = clave; usamos clave como id_almacen lógico del filtro
-                sel.append('<option value="'+a.cve_almac+'">'+a.clave_almacen+' - '+a.des_almac+'</option>');
+                var value = a.cve_almac; // WH1, WH8, ...
+                var text  = a.clave_almacen + ' - ' + a.des_almac;
+                $sel.append('<option value="'+value+'">'+text+'</option>');
             });
         });
     }
@@ -221,26 +224,37 @@ $(function(){
     var tabla = $('#tblDisp').DataTable({
         paging:true,
         pageLength:25,
+        lengthChange:false,
         searching:false,
         ordering:true,
         info:true,
+        scrollY:'360px',
+        scrollX:true,
         language:{ url:'//cdn.datatables.net/plug-ins/1.13.4/i18n/es-MX.json' },
         columns:[
             {data:'id'},
-            {data:null, render:function(r){ return r.almacen_clave+' - '+r.almacen_nombre; }},
+            {data:null, render:r => r.almacen_clave+' - '+r.almacen_nombre},
             {data:'tipo'},
             {data:'marca'},
             {data:'modelo'},
             {data:'serie'},
             {data:'imei'},
+            {data:'firmware_version'},
             {data:'mac_wifi'},
             {data:'mac_bt'},
             {data:'ip'},
             {data:'usuario_asignado'},
             {data:'estatus'},
             {data:'fecha_alta'},
-            {data:null, render:function(r){
-                return '<button class="btn btn-xs btn-primary btn-edit" data-id="'+r.id+'"><i class="fa fa-edit"></i></button>';
+            {data:null, orderable:false, render:r => {
+                var btnEdit = '<button class="btn btn-xs btn-primary btn-edit mr-1" data-id="'+r.id+'"><i class="fa fa-edit"></i></button>';
+                var btnToggle;
+                if (r.estatus === 'BAJA') {
+                    btnToggle = '<button class="btn btn-xs btn-success btn-toggle" data-id="'+r.id+'" data-status="ACTIVO" title="Recuperar"><i class="fa fa-undo"></i></button>';
+                } else {
+                    btnToggle = '<button class="btn btn-xs btn-danger btn-toggle" data-id="'+r.id+'" data-status="BAJA" title="Dar de baja"><i class="fa fa-trash"></i></button>';
+                }
+                return btnEdit + btnToggle;
             }}
         ]
     });
@@ -254,10 +268,9 @@ $(function(){
         $.getJSON('../api/dispositivos.php', params, function(resp){
             if (!resp.ok){ alert(resp.error || 'Error'); return; }
             var data = resp.data || [];
-            // Si se filtró por tipo en UI, lo filtramos en front (API no tiene filtro "tipo")
             var tipoFiltro = $('#f_tipo').val();
             if (tipoFiltro){
-                data = data.filter(function(r){ return r.tipo === tipoFiltro; });
+                data = data.filter(r => r.tipo === tipoFiltro);
             }
             tabla.clear().rows.add(data).draw();
         });
@@ -268,6 +281,7 @@ $(function(){
     $('#btnNuevo').on('click', function(){
         $('#frmDisp')[0].reset();
         $('#id').val('');
+        $('#estatus').val('ACTIVO');
         $('#modalTitleDisp').text('Nuevo dispositivo');
         $('#modalDisp').modal('show');
     });
@@ -278,13 +292,14 @@ $(function(){
             if (!resp.ok){ alert(resp.error || 'Error'); return; }
             var d = resp.data;
             $('#id').val(d.id);
-            $('#id_almacen').val(d.id_almacen);
+            $('#id_almacen').val(d.almacen_clave);
             $('#tipo').val(d.tipo);
             $('#usuario_asignado').val(d.usuario_asignado);
             $('#marca').val(d.marca);
             $('#modelo').val(d.modelo);
             $('#serie').val(d.serie);
             $('#imei').val(d.imei);
+            $('#firmware_version').val(d.firmware_version);
             $('#mac_wifi').val(d.mac_wifi);
             $('#mac_bt').val(d.mac_bt);
             $('#ip').val(d.ip);
@@ -295,23 +310,46 @@ $(function(){
         });
     });
 
-    $('#frmDisp').on('submit', function(e){
-        e.preventDefault();
-        var data = $(this).serializeArray();
-        data.push({name:'action', value:'save'});
-        $.post('../api/dispositivos.php', data, function(resp){
-            try{ resp = JSON.parse(resp); }catch(e){ alert('Error JSON'); return; }
-            if (!resp.ok){ alert(resp.error || 'Error al guardar'); return; }
-            $('#modalDisp').modal('hide');
+    $('#tblDisp').on('click','.btn-toggle', function(){
+        var id     = $(this).data('id');
+        var status = $(this).data('status');
+        var msg = (status === 'BAJA') ? '¿Dar de baja el dispositivo?' : '¿Recuperar dispositivo?';
+        if (!confirm(msg)) return;
+
+        $.post('../api/dispositivos.php', {action:'change_status', id:id, estatus:status}, function(resp){
+            try { resp = JSON.parse(resp); } catch(e) { alert('Error API (debug): '+resp); return; }
+            if (!resp.ok){ alert(resp.error || 'Error'); return; }
             cargarDatos();
         });
     });
 
-    // combos de almacén desde filtros_assistpro
+    $('#frmDisp').on('submit', function(e){
+        e.preventDefault();
+        var data = $(this).serializeArray();
+        data.push({name:'action', value:'save'});
+
+        $.ajax({
+            url: '../api/dispositivos.php',
+            method: 'POST',
+            data: data,
+            dataType: 'json',
+            success: function(resp){
+                if (!resp.ok){
+                    alert(resp.error || 'Error al guardar');
+                    return;
+                }
+                $('#modalDisp').modal('hide');
+                cargarDatos();
+            },
+            error: function(xhr){
+                console.error('Respuesta cruda API dispositivos:', xhr.responseText);
+                alert('Error API dispositivos (debug): ' + xhr.responseText);
+            }
+        });
+    });
+
     cargarAlmacenesSelect('#f_id_almacen', true);
     cargarAlmacenesSelect('#id_almacen', false);
-
-    // carga inicial
     cargarDatos();
 });
 </script>

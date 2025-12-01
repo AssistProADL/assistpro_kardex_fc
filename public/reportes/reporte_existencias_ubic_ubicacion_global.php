@@ -14,10 +14,10 @@ $pdo = db_pdo();
 // ------------------------------
 // 1. Configuración de módulo / plantilla fija
 // ------------------------------
-$moduloPlantillas    = 'existencias_ubicacion';
-$nombrePlantillaFija = 'existencias_ubicacion';
+$moduloPlantillas   = 'existencias_ubicacion';
+$nombrePlantillaFija = 'existencias_ubicacion'; // nombre en ap_plantillas_filtros
 
-// Campos de filtros que nos interesan (para detectar si viene algo en GET)
+// Campos de filtros que nos interesan
 $filterNames = [
     'empresa','almacen','zona','bl',
     'lp','producto','lote',
@@ -42,7 +42,7 @@ foreach ($filterNames as $fn) {
 }
 
 // ------------------------------
-// 2. Aplicar plantilla FIJA y defaults empresa / almacén / zona
+// 2. Aplicar plantilla FIJA y defaults de empresa/almacén/zona
 // ------------------------------
 
 // 2.1 Aplicar plantilla fija solo si NO hay filtros en GET
@@ -89,13 +89,11 @@ if (!$hayFiltrosEnGet) {
     if ($tplAplicada) {
         $cfg = json_decode($tplAplicada['filtros_json'] ?? '', true);
         if (is_array($cfg)) {
-            // use_* (banderas de uso de filtros)
             if (!empty($cfg['use']) && is_array($cfg['use'])) {
                 foreach ($cfg['use'] as $k => $v) {
                     $_GET['use_'.$k] = $v ? '1' : '0';
                 }
             }
-            // defaults
             if (!empty($cfg['defaults']) && is_array($cfg['defaults'])) {
                 foreach ($cfg['defaults'] as $k => $v) {
                     if (!isset($_GET[$k]) || $_GET[$k] === '') {
@@ -263,13 +261,13 @@ try {
     $where  = " WHERE 1=1 ";
     $params = [];
 
-    // Empresa (c_compania / cve_cia / empresa_id)
+    // Filtro EMPRESA (c_compania / cve_cia / empresa_id)
     if ($useEmpresa && $empresaSel !== '' && $colEmpresa !== null) {
         $where   .= " AND `$colEmpresa` = ? ";
         $params[] = $empresaSel;
     }
 
-    // Zona (c_almacen / cve_almac)
+    // Filtro ZONA (c_almacen / cve_almac)
     if ($useZona && $zonaSel !== '' && $colZona !== null) {
         $where   .= " AND `$colZona` = ? ";
         $params[] = $zonaSel;
@@ -299,13 +297,11 @@ try {
         $params[] = $loteSel;
     }
 
-    // Proyecto
+    // Proyecto (si en algún momento se agrega)
     if ($useProyecto && $proyectoSel !== '' && $colProyecto !== null) {
         $where   .= " AND `$colProyecto` = ? ";
         $params[] = $proyectoSel;
     }
-
-    // (Si después decides usar zona_recep / qa / emb / ubica_mfg, aquí se integran)
 
     // 5.4. Ejecutar consulta (máx 100 filas)
     $sql = "
@@ -353,14 +349,6 @@ try {
 ?>
 <div class="container-fluid" style="font-size:11px;">
 
-    <style>
-        /* Ocultar visiblemente los checkboxes de uso (use_*) y sus labels */
-        input[type="checkbox"][name^="use_"],
-        label[for^="use_"] {
-            display: none !important;
-        }
-    </style>
-
     <!-- Título -->
     <div class="row mt-2">
         <div class="col-12">
@@ -372,13 +360,11 @@ try {
         </div>
     </div>
 
-    <!-- Panel maestro de filtros (usa filtros_assistpro.php) -->
+    <!-- Panel maestro de filtros -->
     <div class="row mb-2">
         <div class="col-12">
             <?php
-            // En este partial se dibujan los selects y, originalmente, los checks.
-            // Con el CSS de arriba, los checks ya no se muestran.
-            require_once __DIR__ . '/../partials/filtros_assistpro.php';
+            require_once __DIR__ . '/./partials/filtros_assistpro.php';
             ?>
         </div>
     </div>
@@ -432,7 +418,7 @@ try {
     </div>
 
     <!-- Error -->
-    <?php if (!empty($errorMsg)): ?>
+    <?php if ($errorMsg !== ''): ?>
         <div class="row mb-2">
             <div class="col-12">
                 <div class="alert alert-danger py-1" style="font-size:11px;">
@@ -474,7 +460,7 @@ try {
                                         break;
                                     }
                                     $i++;
-                                    ?>
+                                ?>
                                     <tr>
                                         <?php foreach ($campos as $c): ?>
                                             <td><?= htmlspecialchars((string)($r[$c] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>

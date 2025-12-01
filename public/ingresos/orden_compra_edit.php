@@ -68,161 +68,7 @@ function siguiente_folio_oc_demo(PDO $pdo, int $empresaId = 0, string $modulo = 
     }
 }
 
-
-/*----------- Carga de datos para EDICIÓN (si llega id_aduana) -----------*/
-$idAduanaEdit = isset($_GET['id_aduana']) ? (int)$_GET['id_aduana'] : 0;
-
-// Variables por defecto (modo CREAR)
-$folioVal       = '';
-$fechaOcVal     = date('Y-m-d');
-$empresaVal     = '';
-$almacenVal     = '';
-$proveedorVal   = '';
-$tipoOcVal      = '';
-$monedaVal      = 'MXN';
-$tipoCambioVal  = '1.0000';
-$folioErpVal    = '';
-$statusVal      = 'ABIERTA';
-$pedidoIdVal    = '';
-$fechaCompVal   = '';
-$fechaPrevVal   = '';
-$comentariosVal = '';
-$usuarioVal     = '';
-
-// Array para el detalle en JS
-$detalleJson = '[]';
-
-if ($idAduanaEdit > 0) {
-    try {
-        // 1. Encabezado
-        $stH = $pdo->prepare("
-            SELECT *
-            FROM th_aduana
-            WHERE ID_Aduana = :id
-            LIMIT 1
-        ");
-        $stH->execute([':id' => $idAduanaEdit]);
-        $rowH = $stH->fetch(PDO::FETCH_ASSOC);
-
-        if ($rowH) {
-            $folioVal       = $rowH['Pedimento'] ?? ''; // En th_aduana se guarda el folio en 'Pedimento' o 'Cve_Almac' según el insert? Revisando insert: Pedimento -> mb_substr($folio, 0, 100)
-            // OJO: En el INSERT original:
-            // Cve_Almac -> mb_substr($folio, 0, 100, 'UTF-8') ?? No, Cve_Almac es el almacén.
-            // Revisemos el INSERT línea 245: mb_substr($folio, 0, 100, 'UTF-8') se pasa al bind 12?
-            // Bind 12 corresponde a 'Pedimento' en la lista de values?
-            // VALUES (..., ?, NULL, NULL, ?, ?) -> Los últimos 3 son Pedimento, BlMaster, BlHouse?
-            // No, el INSERT tiene muchos campos.
-            // Revisando INSERT línea 229: ..., NULL, NULL, NULL, ?, NULL, NULL, ?, ?
-            // El antepenúltimo '?' es Pedimento.
-            // El penúltimo '?' es Tipo_Cambio.
-            // El último '?' es Id_moneda.
-            // El bind 12 (índice 11 si es 0-indexed, pero aquí es array directo)
-            // $stH->execute([ ... ])
-            // El array tiene 14 elementos.
-            // 12vo elemento (índice 11): mb_substr($folio, 0, 100, 'UTF-8') -> Corresponde a 'Pedimento' en la SQL?
-            // SQL: ... NULL, NULL, NULL, ?, NULL, NULL, ?, ?
-            // Contando placeholders... es difícil sin ver la estructura exacta, pero asumiremos que 'Pedimento' guarda el Folio OC.
-            
-            // Corrección: En el INSERT, 'Pedimento' recibe $folio.
-            $folioVal = $rowH['Pedimento'];
-
-            // Fechas
-            $fechaOcVal = $rowH['fech_pedimento'] ? date('Y-m-d', strtotime($rowH['fech_pedimento'])) : date('Y-m-d');
-            
-            $empresaVal   = ''; // No se guarda ID empresa directo en th_aduana estándar mostrada, salvo 'recurso'? 
-                                // En el INSERT: 'recurso' -> 1 (hardcoded en SQL? No, 'recurso' es NULL en values? No, Activo=1, recurso=NULL).
-                                // Espera, el INSERT no guarda empresa_id explícitamente en una columna obvia tipo 'id_empresa'.
-                                // Pero el form pide empresa.
-                                // Revisando INSERT: no veo que se guarde la empresa seleccionada ($empresaSel) en ningún campo de th_aduana,
-                                // salvo que sea parte de alguna lógica no vista o columna no listada.
-                                // Ah, el código original línea 96: $empresaSel = ...
-                                // Pero en $stH->execute no veo que se use $empresaSel.
-                                // ¡Parece que la empresa NO se está guardando en th_aduana en el código original!
-                                // Sin embargo, intentaremos cargar lo que haya.
-            
-            $almacenVal   = $rowH['Cve_Almac'];
-            $proveedorVal = $rowH['ID_Proveedor'];
-            $tipoOcVal    = $rowH['ID_Protocolo'];
-            
-            // Moneda
-            $idMon = (int)$rowH['Id_moneda'];
-            if ($idMon === 2) $monedaVal = 'USD';
-            else $monedaVal = 'MXN';
-
-            $tipoCambioVal = $rowH['Tipo_Cambio'];
-            $folioErpVal   = $rowH['Factura']; // En INSERT: Factura -> $folioErp
-            
-            $st = $rowH['status'];
-            $statusVal = ($st === 'C') ? 'CERRADA' : (($st === 'X') ? 'CANCELADA' : 'ABIERTA');
-
-            // pedido_id -> No se ve en INSERT explícito a columna 'pedido_id'.
-            // Quizás no se guarda o se guarda en otro lado. Asumiremos vacío si no hay columna obvia.
-            
-            $fechaCompVal = $rowH['fech_llegPed'] ? date('Y-m-d', strtotime($rowH['fech_llegPed'])) : '';
-            // fecha_recep_prev -> No veo columna obvia en INSERT.
-            
-            $comentariosVal = ''; // No veo columna comentarios en INSERT.
-            $usuarioVal     = $rowH['cve_usuario']; // Consec_protocolo -> mb_substr($usuarioSel...) NO, cve_usuario -> $usuarioSel
-        }
-
-        // 2. Detalle
-        // Necesitamos descripción y UOM de c_articulo
-        $stD = $pdo->prepare("
-            SELECT d.*, a.des_articulo, a.cve_umed
-            FROM td_aduana d
-            LEFT JOIN c_articulo a ON a.cve_articulo = d.cve_articulo
-            WHERE d.ID_Aduana = :id
-            ORDER BY d.Item ASC
-        ");
-        $stD->execute([':id' => $idAduanaEdit]);
-        $rowsD = $stD->fetchAll(PDO::FETCH_ASSOC);
-
-        $arrDet = [];
-        foreach ($rowsD as $r) {
-            // Reconstruir estructura JS
-            // { id, clave, producto, uom, cantidad, precio, ivaP, subtotal, iva, total }
-            
-            $cant   = (float)$r['cantidad'];
-            $costo  = (float)$r['costo']; // Precio unitario neto según INSERT (aunque se llame costo)
-            $ivaP   = (float)$r['IVA'];   // Porcentaje IVA según INSERT
-            
-            // Cálculos inversos para consistencia visual
-            // En INSERT: costo = precio (neto input), IVA = ivaP (input)
-            // Entonces:
-            $precio = $costo;
-            
-            $totalNetoLinea = $cant * $precio;
-            $base = $totalNetoLinea;
-            $montoIva = 0;
-            if ($ivaP > 0) {
-                $base = $totalNetoLinea / (1 + ($ivaP / 100));
-                $montoIva = $totalNetoLinea - $base;
-            }
-
-            $arrDet[] = [
-                'id'       => (float)$r['Id_DetAduana'], // ID único para borrar
-                'clave'    => $r['cve_articulo'],
-                'producto' => $r['des_articulo'] ?: $r['cve_articulo'],
-                'uom'      => $r['cve_umed'] ?: 'PZA',
-                'cantidad' => $cant,
-                'precio'   => $precio,
-                'ivaP'     => $ivaP,
-                'subtotal' => $base,
-                'iva'      => $montoIva,
-                'total'    => $totalNetoLinea
-            ];
-        }
-        $detalleJson = json_encode($arrDet, JSON_UNESCAPED_UNICODE);
-
-    } catch (Throwable $e) {
-        // Mostrar error para debug
-        echo '<!-- ERROR AL CARGAR DATOS: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . ' -->';
-        error_log('Error en orden_compra_edit.php carga: ' . $e->getMessage());
-    }
-} else {
-    // Si es nuevo, sugerir folio
-    $folioVal = siguiente_folio_oc_demo($pdo) ?? ('OC-' . date('Ymd-His'));
-}
+/*----------- AJAX: guardar en th_aduana / td_aduana -----------*/
 $ajax = $_GET['ajax'] ?? '';
 if ($ajax === 'guardar') {
     header('Content-Type: application/json; charset=utf-8');
@@ -237,10 +83,6 @@ if ($ajax === 'guardar') {
 
         $h       = $payload['encabezado'] ?? [];
         $detalle = $payload['detalle'] ?? [];
-        
-        // Detectar si es edición o creación
-        $idAduanaEdit = isset($h['id_aduana_edit']) ? (int)$h['id_aduana_edit'] : 0;
-        $modoEdicion = $idAduanaEdit > 0;
 
         if (!is_array($h) || !is_array($detalle)) {
             throw new RuntimeException('Estructura de datos inválida.');
@@ -300,288 +142,170 @@ if ($ajax === 'guardar') {
 
         $pdo->beginTransaction();
 
-        // --- MODO EDICIÓN: UPDATE ---
-        if ($modoEdicion) {
-            // Verificar que el registro existe
-            $stCheck = $pdo->prepare("SELECT ID_Aduana FROM th_aduana WHERE ID_Aduana = :id LIMIT 1");
-            $stCheck->execute([':id' => $idAduanaEdit]);
-            if (!$stCheck->fetch()) {
-                throw new RuntimeException("No existe la orden de compra con ID_Aduana = $idAduanaEdit");
-            }
+        // --- FOLIO de t_protocolo para el ID_Protocolo seleccionado ---
+        $stProt = $pdo->prepare("
+            SELECT id, ID_Protocolo, FOLIO
+            FROM t_protocolo
+            WHERE ID_Protocolo = :p AND Activo = 1
+            LIMIT 1
+        ");
+        $stProt->execute([':p' => $idProtocolo]);
+        $rowProt = $stProt->fetch(PDO::FETCH_ASSOC);
 
-            // Fechas con hora actual
-            $horaActual   = date('H:i:s');
-            $fechPedDT    = $fechaOc   ? ($fechaOc   . ' ' . $horaActual) : null;
-            $fechLlegDT   = $fechaComp ? ($fechaComp . ' ' . $horaActual) : null;
-
-            // UPDATE del encabezado
-            $stH = $pdo->prepare("
-                UPDATE th_aduana SET
-                    fech_pedimento = ?,
-                    Factura = ?,
-                    fech_llegPed = ?,
-                    status = ?,
-                    ID_Proveedor = ?,
-                    ID_Protocolo = ?,
-                    cve_usuario = ?,
-                    Cve_Almac = ?,
-                    Pedimento = ?,
-                    Tipo_Cambio = ?,
-                    Id_moneda = ?
-                WHERE ID_Aduana = ?
-            ");
-
-            $stH->execute([
-                $fechPedDT,
-                mb_substr($folioErp, 0, 50, 'UTF-8'),
-                $fechLlegDT,
-                ($statusOc === 'ABIERTA' ? 'A' : ($statusOc === 'CERRADA' ? 'C' : 'X')),
-                $proveedorId,
-                $idProtocolo,
-                mb_substr($usuarioSel, 0, 50, 'UTF-8'),
-                $almacenCve,
-                mb_substr($folio, 0, 100, 'UTF-8'),
-                $tipoCambio,
-                $idMoneda,
-                $idAduanaEdit
-            ]);
-
-            // Eliminar detalles anteriores
-            $stDelDet = $pdo->prepare("DELETE FROM td_aduana WHERE ID_Aduana = ?");
-            $stDelDet->execute([$idAduanaEdit]);
-
-            // Insertar nuevos detalles
-            $baseDet = (int)$pdo->query("SELECT COALESCE(MAX(Id_DetAduana),0)+1 FROM td_aduana")->fetchColumn();
-            $stD = $pdo->prepare("
-                INSERT INTO td_aduana (
-                    Id_DetAduana,
-                    ID_Aduana,
-                    cve_articulo,
-                    cantidad,
-                    Cve_Lote,
-                    caducidad,
-                    temperatura,
-                    num_orden,
-                    Ingresado,
-                    Activo,
-                    costo,
-                    IVA,
-                    Item,
-                    Id_UniMed,
-                    Fec_Entrega,
-                    Ref_Docto,
-                    Peso,
-                    MarcaNumTotBultos,
-                    Factura,
-                    Fec_Factura,
-                    Contenedores
-                ) VALUES (
-                    ?, ?, ?, ?, NULL, NULL, NULL, ?, 0, 1, ?, ?, ?, NULL,
-                    NULL, NULL, NULL, NULL, ?, NULL, NULL
-                )
-            ");
-
-            $linea = 0;
-            foreach ($detalle as $r) {
-                $linea++;
-                $idDet = $baseDet + $linea;
-                $clave    = (string)($r['clave'] ?? '');
-                $cantidad = (float)($r['cantidad'] ?? 0);
-                $precio   = (float)($r['precio'] ?? 0);
-                $ivaP     = (float)($r['ivaP'] ?? 0);
-
-                if ($clave === '' || $cantidad <= 0) {
-                    throw new RuntimeException("Partida $linea inválida (clave o cantidad).");
-                }
-                if (!is_numeric($precio) || $precio < 0) {
-                    throw new RuntimeException("Partida $linea: el precio debe ser mayor o igual a 0.");
-                }
-
-                $stD->execute([
-                    $idDet,
-                    $idAduanaEdit,
-                    $clave,
-                    $cantidad,
-                    $linea,
-                    $precio,
-                    $ivaP,
-                    (string)$linea,
-                    mb_substr($folioErp, 0, 120, 'UTF-8')
-                ]);
-            }
-
-            $idAduana = $idAduanaEdit;
-            $consecNum = 0; // No se actualiza el consecutivo en edición
-
-        } else {
-            // --- MODO CREACIÓN: INSERT ---
-            
-            // --- FOLIO de t_protocolo para el ID_Protocolo seleccionado ---
-            $stProt = $pdo->prepare("
-                SELECT id, ID_Protocolo, FOLIO
-                FROM t_protocolo
-                WHERE ID_Protocolo = :p AND Activo = 1
-                LIMIT 1
-            ");
-            $stProt->execute([':p' => $idProtocolo]);
-            $rowProt = $stProt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$rowProt) {
-                throw new RuntimeException("No existe configuración de protocolo para '$idProtocolo' en t_protocolo.");
-            }
-
-            $idProtRow   = (int)$rowProt['id'];
-            $folioActual = (int)$rowProt['FOLIO'];
-            $nuevoFolio  = $folioActual + 1;
-
-            $stUpdProt = $pdo->prepare("UPDATE t_protocolo SET FOLIO = :n WHERE id = :id");
-            $stUpdProt->execute([
-                ':n'  => $nuevoFolio,
-                ':id' => $idProtRow
-            ]);
-
-            // === consecutivo numérico por protocolo para num_pedimento / Consec_protocolo ===
-            $stCons = $pdo->prepare("
-                SELECT COALESCE(MAX(num_pedimento),0) + 1
-                FROM th_aduana
-                WHERE ID_Protocolo = :p
-            ");
-            $stCons->execute([':p' => $idProtocolo]);
-            $consecNum = (int)$stCons->fetchColumn();
-            if ($consecNum <= 0) {
-                $consecNum = 1;
-            }
-
-            // --- Nuevo ID_Aduana ---
-            $idAduana = (int)$pdo->query("SELECT COALESCE(MAX(ID_Aduana),0)+1 FROM th_aduana")->fetchColumn();
-
-            // Fechas con hora actual
-            $horaActual   = date('H:i:s');
-            $fechPedDT    = $fechaOc   ? ($fechaOc   . ' ' . $horaActual) : null;
-            $fechLlegDT   = $fechaComp ? ($fechaComp . ' ' . $horaActual) : null;
-
-            $stH = $pdo->prepare("
-                INSERT INTO th_aduana (
-                    ID_Aduana,
-                    num_pedimento,
-                    fech_pedimento,
-                    aduana,
-                    Factura,
-                    fech_llegPed,
-                    status,
-                    ID_Proveedor,
-                    ID_Protocolo,
-                    Consec_protocolo,
-                    cve_usuario,
-                    Cve_Almac,
-                    Activo,
-                    recurso,
-                    procedimiento,
-                    AduanaDespacho,
-                    dictamen,
-                    presupuesto,
-                    condicionesDePago,
-                    lugarDeEntrega,
-                    fechaDeFallo,
-                    plazoDeEntrega,
-                    Proyecto,
-                    areaSolicitante,
-                    numSuficiencia,
-                    fechaSuficiencia,
-                    fechaContrato,
-                    montoSuficiencia,
-                    numeroContrato,
-                    importeAlmacenado,
-                    Pedimento,
-                    BlMaster,
-                    BlHouse,
-                    Tipo_Cambio,
-                    Id_moneda
-                ) VALUES (
-                    ?, ?, ?, 'OC_WEB', ?, ?, ?, ?, ?, ?, ?, ?, 1,
-                    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                    NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, ?
-                )
-            ");
-
-            $stH->execute([
-                $idAduana,
-                $consecNum,                  // num_pedimento
-                $fechPedDT,                  // fech_pedimento
-                mb_substr($folioErp, 0, 50, 'UTF-8'), // Factura (por ahora folio ERP)
-                $fechLlegDT,                 // fech_llegPed
-                ($statusOc === 'ABIERTA' ? 'A' : 'C'),
-                $proveedorId,
-                $idProtocolo,
-                $consecNum,                  // Consec_protocolo
-                mb_substr($usuarioSel, 0, 50, 'UTF-8'),
-                $almacenCve,
-                mb_substr($folio, 0, 100, 'UTF-8'),
-                $tipoCambio,
-                $idMoneda
-            ]);
-
-            // --- Detalle ---
-            $baseDet = (int)$pdo->query("SELECT COALESCE(MAX(Id_DetAduana),0)+1 FROM td_aduana")->fetchColumn();
-            $stD = $pdo->prepare("
-                INSERT INTO td_aduana (
-                    Id_DetAduana,
-                    ID_Aduana,
-                    cve_articulo,
-                    cantidad,
-                    Cve_Lote,
-                    caducidad,
-                    temperatura,
-                    num_orden,
-                    Ingresado,
-                    Activo,
-                    costo,
-                    IVA,
-                    Item,
-                    Id_UniMed,
-                    Fec_Entrega,
-                    Ref_Docto,
-                    Peso,
-                    MarcaNumTotBultos,
-                    Factura,
-                    Fec_Factura,
-                    Contenedores
-                ) VALUES (
-                    ?, ?, ?, ?, NULL, NULL, NULL, ?, 0, 1, ?, ?, ?, NULL,
-                    NULL, NULL, NULL, NULL, ?, NULL, NULL
-                )
-            ");
-
-            $linea = 0;
-            foreach ($detalle as $r) {
-                $linea++;
-                $idDet = $baseDet + $linea;
-                $clave    = (string)($r['clave'] ?? '');
-                $cantidad = (float)($r['cantidad'] ?? 0);
-                $precio   = (float)($r['precio'] ?? 0);
-                $ivaP     = (float)($r['ivaP'] ?? 0);
-
-                if ($clave === '' || $cantidad <= 0) {
-                    throw new RuntimeException("Partida $linea inválida (clave o cantidad).");
-                }
-                if (!is_numeric($precio) || $precio < 0) {
-                    throw new RuntimeException("Partida $linea: el precio debe ser mayor o igual a 0.");
-                }
-
-                $stD->execute([
-                    $idDet,
-                    $idAduana,
-                    $clave,
-                    $cantidad,
-                    $linea,
-                    $precio,
-                    $ivaP,
-                    (string)$linea,
-                    mb_substr($folioErp, 0, 120, 'UTF-8')
-                ]);
-            }
+        if (!$rowProt) {
+            throw new RuntimeException("No existe configuración de protocolo para '$idProtocolo' en t_protocolo.");
         }
 
+        $idProtRow   = (int)$rowProt['id'];
+        $folioActual = (int)$rowProt['FOLIO'];
+        $nuevoFolio  = $folioActual + 1;
+
+        $stUpdProt = $pdo->prepare("UPDATE t_protocolo SET FOLIO = :n WHERE id = :id");
+        $stUpdProt->execute([
+            ':n'  => $nuevoFolio,
+            ':id' => $idProtRow
+        ]);
+
+        // === consecutivo numérico por protocolo para num_pedimento / Consec_protocolo ===
+        $stCons = $pdo->prepare("
+            SELECT COALESCE(MAX(num_pedimento),0) + 1
+            FROM th_aduana
+            WHERE ID_Protocolo = :p
+        ");
+        $stCons->execute([':p' => $idProtocolo]);
+        $consecNum = (int)$stCons->fetchColumn();
+        if ($consecNum <= 0) {
+            $consecNum = 1;
+        }
+
+        // --- Nuevo ID_Aduana ---
+        $idAduana = (int)$pdo->query("SELECT COALESCE(MAX(ID_Aduana),0)+1 FROM th_aduana")->fetchColumn();
+
+        // Fechas con hora actual
+        $horaActual   = date('H:i:s');
+        $fechPedDT    = $fechaOc   ? ($fechaOc   . ' ' . $horaActual) : null;
+        $fechLlegDT   = $fechaComp ? ($fechaComp . ' ' . $horaActual) : null;
+
+        $stH = $pdo->prepare("
+            INSERT INTO th_aduana (
+                ID_Aduana,
+                num_pedimento,
+                fech_pedimento,
+                aduana,
+                Factura,
+                fech_llegPed,
+                status,
+                ID_Proveedor,
+                ID_Protocolo,
+                Consec_protocolo,
+                cve_usuario,
+                Cve_Almac,
+                Activo,
+                recurso,
+                procedimiento,
+                AduanaDespacho,
+                dictamen,
+                presupuesto,
+                condicionesDePago,
+                lugarDeEntrega,
+                fechaDeFallo,
+                plazoDeEntrega,
+                Proyecto,
+                areaSolicitante,
+                numSuficiencia,
+                fechaSuficiencia,
+                fechaContrato,
+                montoSuficiencia,
+                numeroContrato,
+                importeAlmacenado,
+                Pedimento,
+                BlMaster,
+                BlHouse,
+                Tipo_Cambio,
+                Id_moneda
+            ) VALUES (
+                ?, ?, ?, 'OC_WEB', ?, ?, ?, ?, ?, ?, ?, ?, 1,
+                NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, ?
+            )
+        ");
+
+        $stH->execute([
+            $idAduana,
+            $consecNum,                  // num_pedimento
+            $fechPedDT,                  // fech_pedimento
+            mb_substr($folioErp, 0, 50, 'UTF-8'), // Factura (por ahora folio ERP)
+            $fechLlegDT,                 // fech_llegPed
+            ($statusOc === 'ABIERTA' ? 'A' : 'C'),
+            $proveedorId,
+            $idProtocolo,
+            $consecNum,                  // Consec_protocolo
+            mb_substr($usuarioSel, 0, 50, 'UTF-8'),
+            $almacenCve,
+            mb_substr($folio, 0, 100, 'UTF-8'),
+            $tipoCambio,
+            $idMoneda
+        ]);
+
+        // --- Detalle ---
+        $baseDet = (int)$pdo->query("SELECT COALESCE(MAX(Id_DetAduana),0)+1 FROM td_aduana")->fetchColumn();
+        $stD = $pdo->prepare("
+            INSERT INTO td_aduana (
+                Id_DetAduana,
+                ID_Aduana,
+                cve_articulo,
+                cantidad,
+                Cve_Lote,
+                caducidad,
+                temperatura,
+                num_orden,
+                Ingresado,
+                Activo,
+                costo,
+                IVA,
+                Item,
+                Id_UniMed,
+                Fec_Entrega,
+                Ref_Docto,
+                Peso,
+                MarcaNumTotBultos,
+                Factura,
+                Fec_Factura,
+                Contenedores
+            ) VALUES (
+                ?, ?, ?, ?, NULL, NULL, NULL, ?, 0, 1, ?, ?, ?, NULL,
+                NULL, NULL, NULL, NULL, ?, NULL, NULL
+            )
+        ");
+
+        $linea = 0;
+        foreach ($detalle as $r) {
+            $linea++;
+            $idDet = $baseDet + $linea;
+            $clave    = (string)($r['clave'] ?? '');
+            $cantidad = (float)($r['cantidad'] ?? 0);
+            $precio   = (float)($r['precio'] ?? 0);
+            $ivaP     = (float)($r['ivaP'] ?? 0);
+
+            if ($clave === '' || $cantidad <= 0) {
+                throw new RuntimeException("Partida $linea inválida (clave o cantidad).");
+            }
+            if (!is_numeric($precio) || $precio < 0) {
+                throw new RuntimeException("Partida $linea: el precio debe ser mayor o igual a 0.");
+            }
+
+            $stD->execute([
+                $idDet,
+                $idAduana,
+                $clave,
+                $cantidad,
+                $linea,
+                $precio,
+                $ivaP,
+                (string)$linea,
+                mb_substr($folioErp, 0, 120, 'UTF-8')
+            ]);
+        }
 
         $pdo->commit();
 
@@ -630,12 +354,18 @@ try {
     $productos = [];
 }
 
-// $folio_sugerido ya no se usa aquí abajo porque usamos $folioVal calculado arriba
-// $folio_sugerido = siguiente_folio_oc_demo($pdo) ?? ('OC-' . date('Ymd-His'));
-
-require_once __DIR__ . '/../bi/_menu_global.php';
+$folio_sugerido = siguiente_folio_oc_demo($pdo) ?? ('OC-' . date('Ymd-His'));
 ?>
-<style>
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>AssistPro SFA — Editar | Crear Orden de Compra</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
         body {
             background: #f5f7fb;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -743,6 +473,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             color: #0F5AAD;
         }
     </style>
+</head>
+<body>
+
+<?php require_once __DIR__ . '/../bi/_menu_global.php'; ?>
 
 <div class="container-fluid py-2">
     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -779,12 +513,11 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             <div class="col-md-2 col-sm-4">
                 <label class="ap-label">Folio</label>
                 <input type="text" class="form-control" id="folio"
-                       value="<?php echo htmlspecialchars($folioVal, ENT_QUOTES, 'UTF-8'); ?>">
+                       value="<?php echo htmlspecialchars($folio_sugerido, ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-md-2 col-sm-4">
                 <label class="ap-label">Fecha OC</label>
-                <input type="date" class="form-control" id="fecha_oc"
-                       value="<?php echo htmlspecialchars($fechaOcVal, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="date" class="form-control" id="fecha_oc">
             </div>
             <div class="col-md-3 col-sm-6">
                 <label class="ap-label">Empresa</label>
@@ -810,8 +543,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
                 <select class="form-select" id="tipo_oc">
                     <option value="">Seleccione...</option>
                     <?php foreach ($tiposOc as $t): ?>
-                        <?php $sel = ($t['ID_Protocolo'] == $tipoOcVal) ? 'selected' : ''; ?>
-                        <option value="<?php echo htmlspecialchars($t['ID_Protocolo'], ENT_QUOTES, 'UTF-8'); ?>" <?php echo $sel; ?>>
+                        <option value="<?php echo htmlspecialchars($t['ID_Protocolo'], ENT_QUOTES, 'UTF-8'); ?>">
                             <?php echo htmlspecialchars($t['descripcion'] . ' [' . $t['ID_Protocolo'] . ']', ENT_QUOTES, 'UTF-8'); ?>
                         </option>
                     <?php endforeach; ?>
@@ -821,26 +553,24 @@ require_once __DIR__ . '/../bi/_menu_global.php';
                 <label class="ap-label">Moneda</label>
                 <select class="form-select" id="moneda">
                     <option value="">Seleccione...</option>
-                    <option value="MXN" <?php echo ($monedaVal === 'MXN') ? 'selected' : ''; ?>>MXN - Pesos Mexicanos</option>
-                    <option value="USD" <?php echo ($monedaVal === 'USD') ? 'selected' : ''; ?>>USD - Dólares</option>
+                    <option value="MXN">MXN - Pesos Mexicanos</option>
+                    <option value="USD">USD - Dólares</option>
                 </select>
             </div>
             <div class="col-md-2 col-sm-4">
                 <label class="ap-label">Tipo de cambio</label>
-                <input type="number" step="0.0001" class="form-control" id="tipo_cambio"
-                       value="<?php echo htmlspecialchars((string)$tipoCambioVal, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="number" step="0.0001" class="form-control" id="tipo_cambio" value="1.0000">
             </div>
             <div class="col-md-2 col-sm-4">
                 <label class="ap-label">Folio ERP</label>
-                <input type="text" class="form-control" id="folio_erp" placeholder="Ej. OC-ERP-001"
-                       value="<?php echo htmlspecialchars($folioErpVal, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="text" class="form-control" id="folio_erp" placeholder="Ej. OC-ERP-001">
             </div>
             <div class="col-md-2 col-sm-4">
                 <label class="ap-label">Status</label>
                 <select class="form-select" id="status_oc">
-                    <option value="ABIERTA" <?php echo ($statusVal === 'ABIERTA') ? 'selected' : ''; ?>>ABIERTA</option>
-                    <option value="CERRADA" <?php echo ($statusVal === 'CERRADA') ? 'selected' : ''; ?>>CERRADA</option>
-                    <option value="CANCELADA" <?php echo ($statusVal === 'CANCELADA') ? 'selected' : ''; ?>>CANCELADA</option>
+                    <option value="ABIERTA">ABIERTA</option>
+                    <option value="CERRADA">CERRADA</option>
+                    <option value="CANCELADA">CANCELADA</option>
                 </select>
             </div>
 
@@ -850,8 +580,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             </div>
             <div class="col-md-3 col-sm-4">
                 <label class="ap-label">Fecha Compromiso</label>
-                <input type="date" class="form-control" id="fecha_compromiso"
-                       value="<?php echo htmlspecialchars($fechaCompVal, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="date" class="form-control" id="fecha_compromiso">
             </div>
             <div class="col-md-3 col-sm-4">
                 <label class="ap-label">Recepción Prevista</label>
@@ -862,8 +591,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
                 <select class="form-select" id="usuario">
                     <option value="">Seleccione usuario...</option>
                     <?php foreach ($usuarios as $u): ?>
-                        <?php $sel = ($u['cve_usuario'] == $usuarioVal) ? 'selected' : ''; ?>
-                        <option value="<?php echo htmlspecialchars($u['cve_usuario'], ENT_QUOTES, 'UTF-8'); ?>" <?php echo $sel; ?>>
+                        <option value="<?php echo htmlspecialchars($u['cve_usuario'], ENT_QUOTES, 'UTF-8'); ?>">
                             <?php
                                 $txt = $u['cve_usuario'];
                                 if (!empty($u['nombre_completo'])) {
@@ -988,29 +716,16 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     </div>
 </div>
 
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-console.log('=== INICIO SCRIPT ORDEN_COMPRA_EDIT ===');
 const API_FILTROS_URL = '../api/filtros_assistpro.php?action=init';
 const productosApi = <?php echo json_encode($productos, JSON_UNESCAPED_UNICODE); ?>;
-console.log('productosApi cargados:', productosApi ? productosApi.length : 0);
 
-// Variables de edición inyectadas desde PHP
-const editIdAduana  = <?php echo $idAduanaEdit; ?>;
-const editAlmacen   = "<?php echo htmlspecialchars($almacenVal, ENT_QUOTES, 'UTF-8'); ?>";
-const editProveedor = "<?php echo htmlspecialchars($proveedorVal, ENT_QUOTES, 'UTF-8'); ?>";
-const editEmpresa   = "<?php echo htmlspecialchars($empresaVal, ENT_QUOTES, 'UTF-8'); ?>"; // Probablemente vacío si no se guarda
-
-console.log('editIdAduana:', editIdAduana);
-console.log('editAlmacen:', editAlmacen);
-console.log('editProveedor:', editProveedor);
-
-var detalleOC = <?php echo $detalleJson; ?>;
-console.log('detalleOC:', detalleOC);
-console.log('detalleOC length:', detalleOC ? detalleOC.length : 0);
+let detalleOC = [];
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('=== DOMContentLoaded EJECUTADO ===');
     const hoy = new Date();
     const inpFechaOC = document.getElementById('fecha_oc');
     if (inpFechaOC && !inpFechaOC.value) {
@@ -1018,15 +733,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const selMoneda = document.getElementById('moneda');
-    // if (selMoneda) selMoneda.value = 'MXN'; // Quitamos esto para no sobrescribir valor PHP
+    if (selMoneda) selMoneda.value = 'MXN';
 
-    console.log('Llamando a cargarFiltrosDesdeApi()...');
     cargarFiltrosDesdeApi();
-    console.log('Llamando a inicializarEventos()...');
     inicializarEventos();
-    console.log('Llamando a renderDetalle()...');
-    renderDetalle(); // Renderizar detalle inicial si venía de PHP
-    console.log('=== DOMContentLoaded COMPLETADO ===');
 });
 
 function inicializarEventos() {
@@ -1122,10 +832,6 @@ async function cargarFiltrosDesdeApi() {
             if (data.empresas.length === 1 && selEmp) {
                 selEmp.value = data.empresas[0].cve_cia;
             }
-            // Si estamos editando y hay valor
-            if (editEmpresa && selEmp) {
-                selEmp.value = editEmpresa;
-            }
         } else {
             setSelectVacio(selEmp, 'Sin empresas');
         }
@@ -1137,9 +843,6 @@ async function cargarFiltrosDesdeApi() {
                 'cve_almac',
                 item => `${item.clave_almacen || item.cve_almac}`
             );
-            if (editAlmacen && selAlm) {
-                selAlm.value = editAlmacen;
-            }
         } else {
             setSelectVacio(selAlm, 'Sin almacenes');
         }
@@ -1151,9 +854,6 @@ async function cargarFiltrosDesdeApi() {
                 'ID_Proveedor',
                 item => `${item.Nombre} [${item.cve_proveedor || item.ID_Proveedor}]`
             );
-            if (editProveedor && selProv) {
-                selProv.value = editProveedor;
-            }
         } else {
             setSelectVacio(selProv, 'Sin proveedores');
         }
@@ -1293,20 +993,12 @@ function eliminarLineaDetalle(id) {
 }
 
 function renderDetalle() {
-    console.log('=== INICIO renderDetalle() ===');
-    console.log('detalleOC actual:', detalleOC);
     const tbody = document.getElementById('tbodyDetalle');
-    console.log('tbody encontrado:', tbody);
-    if (!tbody) {
-        console.error('ERROR: No se encontró el elemento tbodyDetalle');
-        return;
-    }
+    if (!tbody) return;
 
     tbody.innerHTML = '';
-    console.log('tbody limpiado');
 
     if (!detalleOC.length) {
-        console.log('No hay productos en detalleOC');
         const tr = document.createElement('tr');
         const td = document.createElement('td');
         td.colSpan = 9;
@@ -1315,11 +1007,9 @@ function renderDetalle() {
         tr.appendChild(td);
         tbody.appendChild(tr);
         actualizarTotales();
-        console.log('=== FIN renderDetalle() - Sin productos ===');
         return;
     }
 
-    console.log('Renderizando', detalleOC.length, 'productos...');
     detalleOC.forEach(r => {
         const tr = document.createElement('tr');
 
@@ -1372,9 +1062,7 @@ function renderDetalle() {
         tbody.appendChild(tr);
     });
 
-    console.log('Productos renderizados. Llamando a actualizarTotales()...');
     actualizarTotales();
-    console.log('=== FIN renderDetalle() - Completado ===');
 }
 
 function actualizarTotales() {
@@ -1438,7 +1126,6 @@ async function guardarOC() {
 
     const payload = {
         encabezado: {
-            id_aduana_edit: editIdAduana > 0 ? editIdAduana : 0,
             folio: document.getElementById('folio')?.value || '',
             fecha_oc: fechaOC,
             empresa: empresaSel,
@@ -1458,7 +1145,6 @@ async function guardarOC() {
         detalle: detalleOC
     };
 
-
     try {
         const res = await fetch('orden_compra_edit.php?ajax=guardar', {
             method: 'POST',
@@ -1471,20 +1157,13 @@ async function guardarOC() {
             return;
         }
 
-        const modoEdicion = editIdAduana > 0;
-        const mensaje = modoEdicion 
-            ? 'OC actualizada correctamente.\nID_Aduana: ' + data.id_aduana + '\nFolio: ' + data.folio
-            : 'OC registrada correctamente.\nID_Aduana: ' + data.id_aduana + '\nFolio: ' + data.folio + '\nConsecutivo: ' + data.consec;
-        
-        alert(mensaje);
-        
-        if (modoEdicion) {
-            // Recargar la misma página en modo edición
-            window.location.href = 'orden_compra_edit.php?id_aduana=' + data.id_aduana;
-        } else {
-            // Ir a la lista después de crear
-            window.location.href = 'orden_compra.php';
-        }
+        alert(
+            'OC registrada correctamente.\n' +
+            'ID_Aduana: ' + data.id_aduana + '\n' +
+            'Folio: ' + data.folio + '\n' +
+            'Consecutivo: ' + data.consec
+        );
+        window.location.href = 'orden_compra.php';
 
     } catch (e) {
         console.error(e);
@@ -1492,6 +1171,5 @@ async function guardarOC() {
     }
 }
 </script>
-
-<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
-
+</body>
+</html>

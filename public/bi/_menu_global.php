@@ -167,8 +167,6 @@ if (empty($_SESSION['username'])) {
                 ['titulo' => 'Inventario', 'url' => 'dashboard/inventario.php', 'icono' => 'fa-boxes-stacked'],
                 ['titulo' => 'Resumen Básico', 'url' => 'dashboard/resumen_basico.php', 'icono' => 'fa-chart-pie'],
                 ['titulo' => 'Dashboard Inventarios', 'url' => 'dashboard/adm_inventarios.php', 'icono' => 'fa-warehouse'],
-                ['titulo' => 'Cobranza – Cobro', 'url' => 'dashboard/cobranza_cobro.php', 'icono' => 'fa-money-bill-wave'],
-                ['titulo' => 'Cobranza – Analítico', 'url' => 'dashboard/cobranza_analitico.php', 'icono' => 'fa-chart-area'],
                 ['titulo' => 'Kardex Productividad', 'url' => 'dashboard/kardex_productividad_session.php', 'icono' => 'fa-chart-line'],
                 ['titulo' => 'Kardex Dashboard', 'url' => 'dashboard/kardex.php', 'icono' => 'fa-file-lines'],
             ],
@@ -231,7 +229,6 @@ if (empty($_SESSION['username'])) {
                 ['titulo' => 'Promociones', 'url' => 'sfa/promociones.php', 'icono' => 'fa-gift'],
                 ['titulo' => 'Grupo Promociones', 'url' => 'sfa/grupo_promociones.php', 'icono' => 'fa-layer-group'],
             ],
-
 
             // ADMINISTRACIÓN DE ALMACEN
             'Administración Almacen' => [
