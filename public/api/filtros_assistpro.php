@@ -108,7 +108,7 @@ function init_filtros(PDO $pdo): void
                         c.des_cia,
                         c.clave_empresa
                     FROM c_compania c
-                    INNER JOIN c_almacenp a ON a.empresa_id = c.cve_cia
+                    INNER JOIN c_almacenp a ON a.cve_cia = c.cve_cia
                     LEFT JOIN trel_us_alm t ON t.cve_almac = a.clave
                     LEFT JOIN t_usu_alm_pre p ON p.cve_almac = a.clave
                     WHERE IFNULL(c.Activo, 1) = 1
