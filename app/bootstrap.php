@@ -1,182 +1,130 @@
 <?php
-// app/bootstrap.php
-//
-// Punto de entrada común para AssistPro Kardex FC:
-// - Carga Composer
-// - Lee .env
-// - Inicializa PDO ($pdo)
-// - Inicializa logger Monolog
-// - Expone helpers db_* y app_logger()
 
+use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Events\Dispatcher;
+use Illuminate\Container\Container;
 use Dotenv\Dotenv;
-use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
-use Monolog\Formatter\LineFormatter;
 
-// ---------- 1) Composer autoload ----------
 require_once __DIR__ . '/../vendor/autoload.php';
 
-// ---------- 2) Cargar .env ----------
+// Load .env
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->safeLoad();
 
-// ---------- 3) Helper env() ----------
-if (!function_exists('env')) {
-    /**
-     * Obtiene variable de entorno con valor por defecto.
-     */
-    function env(string $key, $default = null)
+// Create Container
+$container = new Container;
+Container::setInstance($container);
+$container->instance(Container::class, $container);
+$container->instance('Illuminate\Container\Container', $container);
+
+// Create Dispatcher
+$events = new Dispatcher($container);
+$container->instance('Illuminate\Events\Dispatcher', $events);
+$container->instance('Illuminate\Contracts\Events\Dispatcher', $events);
+
+// Configure Eloquent
+$capsule = new Capsule;
+
+// Load existing DB configuration
+require_once __DIR__ . '/db.php';
+$dbConfig = db_config();
+
+$capsule->addConnection([
+    'driver' => 'mysql',
+    'host' => $dbConfig['host'],
+    'database' => $dbConfig['name'],
+    'username' => $dbConfig['user'],
+    'password' => $dbConfig['pass'],
+    'charset' => $dbConfig['charset'],
+    'collation' => 'utf8mb4_unicode_ci',
+    'prefix' => '',
+    'port' => $dbConfig['port'],
+]);
+
+$capsule->setEventDispatcher($events);
+$capsule->setAsGlobal();
+$capsule->bootEloquent();
+
+// Bind 'db' manager
+$container->singleton('db', function () use ($capsule) {
+    return $capsule->getDatabaseManager();
+});
+
+// Bind 'files' (Filesystem)
+$container->singleton('files', function () {
+    return new \Illuminate\Filesystem\Filesystem;
+});
+
+// Aliases
+$container->alias('Illuminate\Events\Dispatcher', 'events');
+$container->alias('Illuminate\Contracts\Events\Dispatcher', 'events');
+$container->alias('db', 'Illuminate\Database\DatabaseManager');
+$container->alias('files', 'Illuminate\Filesystem\Filesystem');
+
+// Bind Dispatchers for Routing
+$container->bind(
+    \Illuminate\Routing\Contracts\CallableDispatcher::class,
+    \Illuminate\Routing\CallableDispatcher::class
+);
+$container->bind(
+    \Illuminate\Routing\Contracts\ControllerDispatcher::class,
+    \Illuminate\Routing\ControllerDispatcher::class
+);
+
+// Configure Validator
+$container->singleton('validator', function ($container) {
+    $filesystem = $container['files'];
+    $loader = new \Illuminate\Translation\FileLoader($filesystem, __DIR__ . '/../resources/lang');
+    $loader->addNamespace('lang', __DIR__ . '/../resources/lang');
+
+    $translator = new \Illuminate\Translation\Translator($loader, 'es');
+
+    return new \Illuminate\Validation\Factory($translator, $container);
+});
+
+$container->alias('validator', 'Illuminate\Contracts\Validation\Factory');
+$container->alias('validator', 'Illuminate\Validation\Factory');
+
+// Configure View Factory
+$container->singleton('view', function ($container) {
+    $filesystem = $container['files'];
+    $eventDispatcher = $container['events'];
+
+    $viewPaths = [__DIR__ . '/../resources/views'];
+    $cachePath = __DIR__ . '/../storage/framework/views';
+
+    $bladeCompiler = new \Illuminate\View\Compilers\BladeCompiler($filesystem, $cachePath);
+
+    $engineResolver = new \Illuminate\View\Engines\EngineResolver;
+    $engineResolver->register('blade', function () use ($bladeCompiler) {
+        return new \Illuminate\View\Engines\CompilerEngine($bladeCompiler);
+    });
+    $engineResolver->register('php', function () use ($filesystem) {
+        return new \Illuminate\View\Engines\PhpEngine($filesystem);
+    });
+
+    $finder = new \Illuminate\View\FileViewFinder($filesystem, $viewPaths);
+    $factory = new \Illuminate\View\Factory($engineResolver, $finder, $eventDispatcher);
+
+    $factory->setContainer($container);
+    return $factory;
+});
+
+$container->alias('view', 'Illuminate\Contracts\View\Factory');
+
+// Helper function for views
+if (!function_exists('view')) {
+    function view($view = null, $data = [], $mergeData = [])
     {
-        if (array_key_exists($key, $_ENV)) {
-            return $_ENV[$key];
-        }
-        if (array_key_exists($key, $_SERVER)) {
-            return $_SERVER[$key];
-        }
-        return $default;
-    }
-}
+        $factory = \Illuminate\Container\Container::getInstance()->make('view');
 
-// ---------- 4) Configuración de errores ----------
-$appEnv   = env('APP_ENV', 'local');
-$appDebug = filter_var(env('APP_DEBUG', 'true'), FILTER_VALIDATE_BOOLEAN);
-
-if ($appEnv === 'local' && $appDebug) {
-    ini_set('display_errors', '1');
-    error_reporting(E_ALL);
-} else {
-    ini_set('display_errors', '0');
-    error_reporting(E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED);
-}
-
-// ---------- 5) Conexión PDO global ----------
-/** @var PDO $pdo */
-global $pdo;
-
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-    $dbHost = env('DB_HOST', '127.0.0.1');
-    $dbPort = env('DB_PORT', '3306');
-    $dbName = env('DB_NAME', 'assistpro_etl_fc');
-    $dbUser = env('DB_USER', 'root');
-    $dbPass = env('DB_PASS', '');
-
-    $dsn = "mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4";
-
-    try {
-        $pdo = new PDO($dsn, $dbUser, $dbPass, [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ]);
-    } catch (PDOException $e) {
-        // Si no hay logger aún, mostramos error simple
-        http_response_code(500);
-        echo "Error de conexión a base de datos. Verifique configuración.";
-        if ($appDebug) {
-            echo "<br><pre>" . htmlspecialchars($e->getMessage()) . "</pre>";
-        }
-        exit;
-    }
-}
-
-/**
- * Devuelve la instancia global de PDO.
- */
-if (!function_exists('db')) {
-    function db(): PDO
-    {
-        global $pdo;
-        return $pdo;
-    }
-}
-
-// ---------- 6) Helpers de BD (compatibles con tu estilo) ----------
-
-if (!function_exists('db_all')) {
-    function db_all(string $sql, array $params = []): array
-    {
-        $stmt = db()->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll();
-    }
-}
-
-if (!function_exists('db_one')) {
-    function db_one(string $sql, array $params = []): ?array
-    {
-        $stmt = db()->prepare($sql);
-        $stmt->execute($params);
-        $row = $stmt->fetch();
-        return $row === false ? null : $row;
-    }
-}
-
-if (!function_exists('db_val')) {
-    /**
-     * Devuelve el primer valor de la primera fila
-     */
-    function db_val(string $sql, array $params = [])
-    {
-        $stmt = db()->prepare($sql);
-        $stmt->execute($params);
-        $row = $stmt->fetch(PDO::FETCH_NUM);
-        return $row === false ? null : $row[0];
-    }
-}
-
-if (!function_exists('db_exec')) {
-    /**
-     * Ejecuta INSERT/UPDATE/DELETE y devuelve filas afectadas.
-     */
-    function db_exec(string $sql, array $params = []): int
-    {
-        $stmt = db()->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->rowCount();
-    }
-}
-
-// ---------- 7) Logger Monolog compartido ----------
-
-if (!function_exists('app_logger')) {
-    /**
-     * Logger global para el proyecto.
-     */
-    function app_logger(): Logger
-    {
-        static $logger = null;
-        if ($logger instanceof Logger) {
-            return $logger;
+        if (func_num_args() === 0) {
+            return $factory;
         }
 
-        $channel = env('APP_LOG_CHANNEL', 'assistpro');
-        $logger  = new Logger($channel);
-
-        $logDir  = __DIR__ . '/../logs';
-        if (!is_dir($logDir)) {
-            @mkdir($logDir, 0777, true);
-        }
-
-        $logFile = $logDir . '/app.log';
-
-        // Formato: [fecha] nivel: mensaje {contexto}
-        $output  = "[%datetime%] %level_name%: %message% %context%\n";
-        $formatter = new LineFormatter($output, 'Y-m-d H:i:s', true, true);
-
-        $handler = new StreamHandler($logFile, Logger::DEBUG);
-        $handler->setFormatter($formatter);
-
-        $logger->pushHandler($handler);
-
-        return $logger;
+        return $factory->make($view, $data, $mergeData);
     }
 }
 
-// ---------- 8) Log básico de arranque (opcional) ----------
-if ($appDebug) {
-    app_logger()->debug('bootstrap cargado', [
-        'env'   => $appEnv,
-        'db'    => env('DB_NAME', 'assistpro_etl_fc'),
-        'host'  => env('DB_HOST', '127.0.0.1'),
-    ]);
-}
+// Return the container (useful for the router)
+return $container;

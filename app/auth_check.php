@@ -5,39 +5,21 @@
  * Incluir al inicio de cualquier script protegido.
  */
 
-// Configuración de tiempo de vida de la sesión (15 minutos = 900 segundos)
-$timeout_duration = 900;
-
-if (session_status() === PHP_SESSION_NONE) {
-    // Asegurar que la cookie de sesión dure lo suficiente
-    ini_set('session.gc_maxlifetime', (string) $timeout_duration);
-    session_set_cookie_params($timeout_duration, '/');
-    session_start();
+// Cargar autoloader si no está cargado
+if (!class_exists('\AssistPro\Helpers\SessionManager')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
 }
 
-// Verificar timeout por inactividad
-if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY']) > $timeout_duration) {
-    // Sesión expirada
-    session_unset();     // liberar variables
-    session_destroy();   // destruir datos de sesión
+// Iniciar sesión unificada (maneja timeout automáticamente)
+\AssistPro\Helpers\SessionManager::init();
 
-    // Redirigir al login con mensaje
-    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
-        header('HTTP/1.1 401 Unauthorized');
-        exit;
-    }
-    header("Location: /assistpro_kardex_fc/public/login.php?err=" . urlencode("Tu sesión ha expirado por inactividad."));
-    exit;
-}
-
-// Actualizar tiempo de última actividad (regenerar/extender sesión)
-$_SESSION['LAST_ACTIVITY'] = time();
-
-// Verificar si existe la variable de sesión 'username'
-if (empty($_SESSION['username'])) {
+// Verificar si el usuario está autenticado
+if (!\AssistPro\Helpers\SessionManager::isAuthenticated()) {
     // Si es una petición AJAX, devolver 401
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
         header('HTTP/1.1 401 Unauthorized');
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'No autenticado', 'message' => 'Debes iniciar sesión.']);
         exit;
     }
 
@@ -46,3 +28,5 @@ if (empty($_SESSION['username'])) {
     exit;
 }
 
+// Verificar si la sesión expiró por timeout (SessionManager lo maneja automáticamente)
+// Si llegamos aquí, la sesión es válida

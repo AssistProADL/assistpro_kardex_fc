@@ -1,0 +1,82 @@
+#!/usr/bin/env php
+<?php
+
+use Illuminate\Console\Application;
+use Illuminate\Container\Container;
+use Illuminate\Events\Dispatcher;
+use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Database\Migrations\DatabaseMigrationRepository;
+use Illuminate\Database\Migrations\Migrator;
+use Illuminate\Database\Migrations\MigrationCreator;
+use Illuminate\Support\Composer;
+use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Facades\Facade;
+
+require __DIR__ . '/vendor/autoload.php';
+
+// Bootstrap
+$container = require __DIR__ . '/app/bootstrap.php';
+
+// Set Container for Facades (Optional, but good if Facades are used)
+Facade::setFacadeApplication($container);
+
+// Create Console App
+// Constructor: Container $laravel, Dispatcher $events, string $version
+$app = new Application($container, $container['events'], '1.0');
+$app->setName('AssistPro Console');
+
+// Register Migration Repository
+$container->singleton('migration.repository', function ($app) {
+    $table = 'migrations';
+    return new DatabaseMigrationRepository($app['db'], $table);
+});
+
+// Register Migrator
+$container->singleton('migrator', function ($app) {
+    return new Migrator($app['migration.repository'], $app['db'], $app['files'], $app['events']);
+});
+
+// Register Migration Creator
+$container->singleton('migration.creator', function ($app) {
+    return new MigrationCreator($app['files'], __DIR__ . '/stubs');
+});
+
+// Register Composer
+$container->singleton('composer', function ($app) {
+    return new Composer($app['files'], __DIR__);
+});
+
+// Register Migration Commands
+// Note: Dependencies vary by version. Assuming Illuminate v10/v11/v12 structure.
+// If specific versions differ, we might need to adjust.
+// MigrateCommand: (Migrator $migrator, Dispatcher $dispatcher)
+$app->add(new \Illuminate\Database\Console\Migrations\MigrateCommand($container['migrator'], $container['events']));
+
+// InstallCommand: (MigrationRepositoryInterface $repository)
+$app->add(new \Illuminate\Database\Console\Migrations\InstallCommand($container['migration.repository']));
+
+// RollbackCommand: (Migrator $migrator)
+$app->add(new \Illuminate\Database\Console\Migrations\RollbackCommand($container['migrator']));
+
+// ResetCommand: (Migrator $migrator)
+$app->add(new \Illuminate\Database\Console\Migrations\ResetCommand($container['migrator']));
+
+// RefreshCommand: (Migrator $migrator)
+$app->add(new \Illuminate\Database\Console\Migrations\RefreshCommand($container['migrator']));
+
+// FreshCommand: (Migrator $migrator)
+$app->add(new \Illuminate\Database\Console\Migrations\FreshCommand($container['migrator']));
+
+// StatusCommand: (Migrator $migrator)
+$app->add(new \Illuminate\Database\Console\Migrations\StatusCommand($container['migrator']));
+
+// MigrateMakeCommand: (MigrationCreator $creator, Composer $composer)
+$app->add(new \Illuminate\Database\Console\Migrations\MigrateMakeCommand($container['migration.creator'], $container['composer']));
+
+// Register Custom Commands
+$app->add(new \AssistPro\Console\Commands\MakeModelCommand($container['files']));
+$app->add(new \AssistPro\Console\Commands\MakeControllerCommand($container['files']));
+$app->add(new \AssistPro\Console\Commands\GenerateMigrationsCommand($container['files']));
+
+// Run
+$app->run();

@@ -1,11 +1,7 @@
 <?php
 // _menu_global.php
 require_once __DIR__ . '/../../app/auth_check.php';
-//validamos la sesion si no existe redirigimos al login
-if (empty($_SESSION['username'])) {
-    header("Location: /assistpro_kardex_fc/public/login.php");
-    exit;
-}
+
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -17,61 +13,134 @@ if (empty($_SESSION['username'])) {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-            --sidebar-width: 230px;
-            --sidebar-bg: #0F5AAD;
-            --sidebar-text: #dbe3f4;
-            --sidebar-text-muted: #a9c3ec;
+            /* Colores Institucionales - Manual de Identidad */
+            --adl-primary: #000F9F;
+            /* Azul Principal - PANTONE 072C */
+            --adl-secondary: #DCE3EB;
+            /* Gris Secundario - PANTONE 656C */
+            --adl-accent: #95E1BF;
+            /* Verde Menta Acento - PANTONE 656C */
+            --adl-aux-blue: #3639A4;
+            /* Azul Auxiliar */
+            --adl-aux-black: #191817;
+            /* Negro Auxiliar */
+            --adl-white: #FFFFFF;
+            /* Sidebar - Más compacto */
+            --sidebar-width: 240px;
+            --sidebar-bg: var(--adl-primary);
+            --sidebar-text: rgba(255, 255, 255, 0.95);
+            --sidebar-text-muted: rgba(255, 255, 255, 0.65);
+            --sidebar-hover-bg: rgba(149, 225, 191, 0.15);
+            /* Fondo verde menta al hacer hover */
+            --sidebar-hover-text: #FFFFFF;
+            /* Texto blanco al hacer hover */
+            /* Shadows & Effects */
+            --shadow-sm: 0 2px 8px rgba(0, 15, 159, 0.08);
+            --shadow-md: 0 4px 16px rgba(0, 15, 159, 0.12);
+            --shadow-lg: 0 8px 24px rgba(0, 15, 159, 0.16);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 10px;
-            background-color: #f5f6fa;
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            font-weight: 400;
+            background-color: #F8F9FA;
+            color: var(--adl-aux-black);
             margin: 0;
             padding-left: var(--sidebar-width);
-            /* reserva espacio para el menú */
+            transition: padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        /* === SIDEBAR PRINCIPAL === */
         .sidebar {
             position: fixed;
             top: 0;
             left: 0;
             width: var(--sidebar-width);
             height: 100vh;
-            background-color: #0F5AAD;
-            color: #fff;
+            background: linear-gradient(180deg, var(--adl-primary) 0%, #000C7A 100%);
+            color: var(--sidebar-text);
             overflow-y: auto;
-            box-shadow: 2px 0 6px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
+            overflow-x: hidden;
+            box-shadow: var(--shadow-lg);
+            z-index: 1050;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        /* Scrollbar personalizado */
+        .sidebar::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* === LOGO SECTION === */
         .sidebar .logo {
             text-align: center;
-            padding: 14px 10px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 16px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.15);
             font-size: 11px;
-            letter-spacing: 0.5px;
             font-weight: 600;
+            letter-spacing: 0.5px;
         }
 
         .sidebar .logo img {
-            max-width: 150px;
+            max-width: 160px;
+            height: auto;
             display: block;
-            margin: 0 auto 4px auto;
+            margin: 0 auto 6px auto;
+            filter: brightness(0) invert(1);
+            transition: transform 0.3s ease;
         }
 
+        .sidebar .logo:hover img {
+            transform: scale(1.05);
+        }
+
+        /* === MENU HEADERS === */
         .sidebar .menu-header {
-            padding: 8px 14px;
-            font-weight: 600;
+            padding: 8px 12px;
+            font-weight: 700;
             font-size: 10px;
             text-transform: uppercase;
+            letter-spacing: 0.8px;
             color: var(--sidebar-text-muted);
-            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
             display: flex;
             align-items: center;
             justify-content: space-between;
             cursor: pointer;
             user-select: none;
+            transition: all 0.2s ease;
+            margin-top: 4px;
+        }
+
+        .sidebar .menu-header:first-of-type {
+            margin-top: 0;
+            border-top: none;
+        }
+
+        .sidebar .menu-header:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--sidebar-text);
         }
 
         .sidebar .menu-header .left {
@@ -81,66 +150,240 @@ if (empty($_SESSION['username'])) {
         }
 
         .sidebar .menu-header i.fa-folder-open {
-            font-size: 11px;
+            font-size: 10px;
+            opacity: 0.8;
         }
 
         .sidebar .menu-header .chevron {
-            font-size: 10px;
-            transition: transform 0.2s ease;
+            font-size: 9px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0.7;
         }
 
         .sidebar .menu-header.collapsed .chevron {
             transform: rotate(-90deg);
         }
 
+        /* === MENU ITEMS === */
         .sidebar a {
             text-decoration: none;
             color: var(--sidebar-text);
-            display: block;
-            padding: 7px 14px;
-            transition: all 0.15s ease;
-            font-size: 10px;
-            white-space: nowrap;
-            text-overflow: ellipsis;
-            overflow: hidden;
+            display: flex;
+            align-items: center;
+            padding: 7px 12px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 12px;
+            font-weight: 400;
+            position: relative;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar a::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: var(--adl-accent);
+            transform: scaleY(0);
+            transition: transform 0.2s ease;
         }
 
         .sidebar a i {
-            width: 14px;
-            margin-right: 6px;
-            font-size: 10px;
+            width: 18px;
+            margin-right: 10px;
+            font-size: 12px;
+            text-align: center;
+            opacity: 0.9;
+            transition: all 0.2s ease;
         }
 
+        /* Hover Effect: Fondo Verde Menta, Texto Blanco */
         .sidebar a:hover {
-            background-color: rgba(255, 255, 255, 0.14);
-            color: #fff;
+            background: var(--sidebar-hover-bg);
+            color: var(--sidebar-hover-text);
+            padding-left: 16px;
+            font-weight: 500;
+        }
+
+        .sidebar a:hover::before {
+            transform: scaleY(1);
+            background: var(--adl-accent);
+        }
+
+        .sidebar a:hover i {
+            opacity: 1;
+            transform: scale(1.08);
+            color: var(--sidebar-hover-text);
+        }
+
+        /* === SUBMENU === */
+        .submenu {
+            max-height: 1000px;
+            overflow: hidden;
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .submenu.collapsed {
-            display: none;
+            max-height: 0;
         }
 
         .submenu a {
-            padding-left: 26px;
-            border-left: 2px solid transparent;
+            padding-left: 38px;
+            font-size: 11px;
+            background: rgba(0, 0, 0, 0.1);
         }
 
         .submenu a:hover {
-            border-left-color: rgba(255, 255, 255, 0.5);
+            padding-left: 42px;
+            background: rgba(149, 225, 191, 0.12);
+            color: var(--adl-white);
         }
 
+        /* === LOGOUT BUTTON (Footer) === */
+        .sidebar-footer {
+            position: sticky;
+            bottom: 0;
+            background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.3) 100%);
+            padding: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-logout {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: var(--sidebar-text);
+            font-size: 12px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .btn-logout:hover {
+            background: rgba(149, 225, 191, 0.2);
+            color: var(--adl-white);
+            border-color: var(--adl-accent);
+            transform: translateY(-2px);
+        }
+
+        /* === MOBILE HAMBURGER === */
+        .mobile-header {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            background: var(--adl-white);
+            box-shadow: var(--shadow-sm);
+            z-index: 1040;
+            padding: 0 16px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .mobile-logo img {
+            height: 28px;
+            width: auto;
+        }
+
+        .hamburger {
+            width: 38px;
+            height: 38px;
+            border: none;
+            background: var(--adl-primary);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .hamburger span {
+            width: 18px;
+            height: 2px;
+            background: white;
+            border-radius: 2px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .hamburger.active span:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+
+        .hamburger.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .hamburger.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(5px, -5px);
+        }
+
+        /* Overlay para cerrar menú en mobile */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1045;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.show {
+            opacity: 1;
+        }
+
+        /* === RESPONSIVE === */
         @media (max-width: 991.98px) {
             body {
                 padding-left: 0;
+                padding-top: 56px;
+            }
+
+            .mobile-header {
+                display: flex;
             }
 
             .sidebar {
                 transform: translateX(-100%);
-                transition: transform 0.25s ease;
             }
 
             .sidebar.sidebar-show {
                 transform: translateX(0);
+            }
+
+            .sidebar-overlay {
+                display: block;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .sidebar {
+                width: 260px;
+            }
+
+            .sidebar .logo {
+                padding: 14px 10px;
+            }
+
+            .sidebar .logo img {
+                max-width: 130px;
             }
         }
     </style>
@@ -243,6 +486,7 @@ if (empty($_SESSION['username'])) {
                 ['titulo' => 'Control de Incidencias (PQRS)', 'url' => 'procesos/incidencias.php', 'icono' => 'fa-flag'],
                 ['titulo' => 'Control de Activos', 'url' => 'procesos/control_activos.php', 'icono' => 'fa-screwdriver-wrench'],
                 ['titulo' => 'Logística Inversa', 'url' => 'procesos/logistica_inversa.php', 'icono' => 'fa-rotate-left'],
+                ['titulo' => 'Ajuste de Existencias', 'url' => 'procesos/ajuste_existencias', 'icono' => 'fa-rotate-left'],
             ],
 
             // INGRESOS
