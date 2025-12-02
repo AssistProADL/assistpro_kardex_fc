@@ -1,6 +1,6 @@
 <?php
 // public/pedido_edit.php
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
+if (session_status() === PHP_SESSION_NONE) { //@session_start(); }
 header('Content-Type: text/html; charset=utf-8');
 ?>
 <!DOCTYPE html>

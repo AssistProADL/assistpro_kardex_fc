@@ -1,6 +1,6 @@
 <?php
 // public/config/correo_jobs.php
-session_start();
+//@session_start();
 
 // Menú global (ajusta si tu _menu_global.php vive en otra ruta)
 require_once __DIR__ . '/../bi/_menu_global.php';

@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../../app/db.php';
 
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    //@session_start();
 }
 require_once __DIR__ . '/../../bi/_menu_global.php';
 
@@ -18,20 +18,22 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 // Parámetros de filtro (GET)
 // =======================
 
-$f_almacen  = trim($_GET['almacen']  ?? '');
-$f_status   = trim($_GET['status']   ?? '');
-$f_motivo   = trim($_GET['motivo']   ?? '');
-$f_cliente  = trim($_GET['cliente']  ?? '');
+$f_almacen = trim($_GET['almacen'] ?? '');
+$f_status = trim($_GET['status'] ?? '');
+$f_motivo = trim($_GET['motivo'] ?? '');
+$f_cliente = trim($_GET['cliente'] ?? '');
 $f_articulo = trim($_GET['articulo'] ?? '');
-$f_serie    = trim($_GET['serie']    ?? '');
-$f_usuario  = trim($_GET['usuario']  ?? '');
-$f_fi       = trim($_GET['fi']       ?? '');
-$f_ff       = trim($_GET['ff']       ?? '');
+$f_serie = trim($_GET['serie'] ?? '');
+$f_usuario = trim($_GET['usuario'] ?? '');
+$f_fi = trim($_GET['fi'] ?? '');
+$f_ff = trim($_GET['ff'] ?? '');
 
 // Normalizar fechas: si vienen dd/mm/yyyy las convertimos a yyyy-mm-dd
-function parse_fecha(string $d): ?string {
+function parse_fecha(string $d): ?string
+{
     $d = trim($d);
-    if ($d === '') return null;
+    if ($d === '')
+        return null;
     if (preg_match('~^(\d{2})/(\d{2})/(\d{4})$~', $d, $m)) {
         return "{$m[3]}-{$m[2]}-{$m[1]}";
     }
@@ -65,7 +67,7 @@ if ($f_motivo !== '') {
 }
 if ($f_cliente !== '') {
     $where[] = '(c.id_cliente = :cliente_id OR c.RazonSocial LIKE :cliente_txt OR c.Cve_Clte LIKE :cliente_txt)';
-    $params[':cliente_id'] = (int)$f_cliente;
+    $params[':cliente_id'] = (int) $f_cliente;
     $params[':cliente_txt'] = '%' . $f_cliente . '%';
 }
 if ($f_articulo !== '') {
@@ -107,7 +109,7 @@ $sqlResumen = "
 $stRes = $pdo->prepare($sqlResumen);
 $stRes->execute($params);
 $resumen = $stRes->fetch(PDO::FETCH_ASSOC) ?: [
-    'total_casos'    => 0,
+    'total_casos' => 0,
     'total_abiertos' => 0,
     'total_garantia' => 0,
     'total_servicio' => 0,
@@ -171,7 +173,7 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
                 <div class="card-body py-2" style="font-size:0.85rem;">
                     <div class="text-muted">Total casos</div>
                     <div class="fw-bold" style="font-size:1.2rem;">
-                        <?= (int)$resumen['total_casos'] ?>
+                        <?= (int) $resumen['total_casos'] ?>
                     </div>
                 </div>
             </div>
@@ -181,7 +183,7 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
                 <div class="card-body py-2" style="font-size:0.85rem;">
                     <div class="text-muted">Casos abiertos</div>
                     <div class="fw-bold" style="font-size:1.2rem;">
-                        <?= (int)$resumen['total_abiertos'] ?>
+                        <?= (int) $resumen['total_abiertos'] ?>
                     </div>
                 </div>
             </div>
@@ -191,7 +193,7 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
                 <div class="card-body py-2" style="font-size:0.85rem;">
                     <div class="text-muted">Garantía</div>
                     <div class="fw-bold" style="font-size:1.2rem;">
-                        <?= (int)$resumen['total_garantia'] ?>
+                        <?= (int) $resumen['total_garantia'] ?>
                     </div>
                 </div>
             </div>
@@ -201,7 +203,7 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
                 <div class="card-body py-2" style="font-size:0.85rem;">
                     <div class="text-muted">Servicio con cobro</div>
                     <div class="fw-bold" style="font-size:1.2rem;">
-                        <?= (int)$resumen['total_servicio'] ?>
+                        <?= (int) $resumen['total_servicio'] ?>
                     </div>
                 </div>
             </div>
@@ -247,33 +249,33 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
                 <div class="col-md-2">
                     <label class="form-label mb-1">Cliente (ID / nombre / clave)</label>
                     <input type="text" name="cliente" value="<?= htmlspecialchars($f_cliente) ?>"
-                           class="form-control form-control-sm">
+                        class="form-control form-control-sm">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label mb-1">Artículo</label>
                     <input type="text" name="articulo" value="<?= htmlspecialchars($f_articulo) ?>"
-                           class="form-control form-control-sm">
+                        class="form-control form-control-sm">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label mb-1">Serie</label>
                     <input type="text" name="serie" value="<?= htmlspecialchars($f_serie) ?>"
-                           class="form-control form-control-sm">
+                        class="form-control form-control-sm">
                 </div>
 
                 <div class="col-md-2">
                     <label class="form-label mb-1">Usuario</label>
                     <input type="text" name="usuario" value="<?= htmlspecialchars($f_usuario) ?>"
-                           class="form-control form-control-sm">
+                        class="form-control form-control-sm">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label mb-1">Fecha inicio</label>
                     <input type="text" name="fi" value="<?= htmlspecialchars($f_fi) ?>"
-                           class="form-control form-control-sm" placeholder="dd/mm/aaaa">
+                        class="form-control form-control-sm" placeholder="dd/mm/aaaa">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label mb-1">Fecha fin</label>
                     <input type="text" name="ff" value="<?= htmlspecialchars($f_ff) ?>"
-                           class="form-control form-control-sm" placeholder="dd/mm/aaaa">
+                        class="form-control form-control-sm" placeholder="dd/mm/aaaa">
                 </div>
 
                 <div class="col-md-3 d-flex align-items-end">
@@ -325,13 +327,13 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
                                     <td><?= htmlspecialchars($c['des_almac'] ?? '') ?></td>
                                     <td>
                                         <?= '[' . htmlspecialchars($c['cliente_clave'] ?? '') . '] ' .
-                                             htmlspecialchars($c['cliente_nombre'] ?? '') ?>
+                                            htmlspecialchars($c['cliente_nombre'] ?? '') ?>
                                     </td>
                                     <td><?= htmlspecialchars($c['articulo']) ?></td>
                                     <td><?= htmlspecialchars($c['serie']) ?></td>
                                     <td><?= htmlspecialchars($c['motivo']) ?></td>
                                     <td>
-                                        <?php if ((int)$c['es_garantia'] === 1): ?>
+                                        <?php if ((int) $c['es_garantia'] === 1): ?>
                                             <span class="badge bg-success">Sí</span>
                                         <?php else: ?>
                                             <span class="badge bg-secondary">No</span>
@@ -340,15 +342,14 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
                                     <td><?= htmlspecialchars($c['status']) ?></td>
                                     <td><?= htmlspecialchars($c['created_by']) ?></td>
                                     <td>
-                                        <a href="servicio_ingreso_pdf.php?id=<?= (int)$c['id'] ?>"
-                                           class="btn btn-outline-primary btn-sm btn-icon"
-                                           title="Ver ingreso PDF" target="_blank">
+                                        <a href="servicio_ingreso_pdf.php?id=<?= (int) $c['id'] ?>"
+                                            class="btn btn-outline-primary btn-sm btn-icon" title="Ver ingreso PDF"
+                                            target="_blank">
                                             PDF
                                         </a>
                                         <?php if (isset($c['motivo']) && strtoupper($c['motivo']) === 'SERVICIO'): ?>
-                                            <a href="servicio_generar_cotizacion.php?id=<?= (int)$c['id'] ?>"
-                                               class="btn btn-warning btn-sm btn-icon mt-1"
-                                               title="Generar cotización CRM">
+                                            <a href="servicio_generar_cotizacion.php?id=<?= (int) $c['id'] ?>"
+                                                class="btn btn-warning btn-sm btn-icon mt-1" title="Generar cotización CRM">
                                                 Cotizar
                                             </a>
                                         <?php endif; ?>
@@ -364,38 +365,38 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
 </div>
 
 <script>
-// Cargar catálogo de almacenes desde el mismo API de filtros
-document.addEventListener('DOMContentLoaded', function () {
-    const apiUrl = '../../api/filtros_assistpro.php?action=init';
-    const valorActual = '<?= htmlspecialchars($f_almacen, ENT_QUOTES) ?>';
+    // Cargar catálogo de almacenes desde el mismo API de filtros
+    document.addEventListener('DOMContentLoaded', function () {
+        const apiUrl = '../../api/filtros_assistpro.php?action=init';
+        const valorActual = '<?= htmlspecialchars($f_almacen, ENT_QUOTES) ?>';
 
-    fetch(apiUrl, { method: 'GET' })
-        .then(resp => resp.json())
-        .then(data => {
-            if (!data || data.ok === false) {
-                console.error('Error filtros_assistpro:', data && data.error);
-                return;
-            }
-            const sel = document.getElementById('filtroAlmacen');
-            if (!sel) return;
+        fetch(apiUrl, { method: 'GET' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data || data.ok === false) {
+                    console.error('Error filtros_assistpro:', data && data.error);
+                    return;
+                }
+                const sel = document.getElementById('filtroAlmacen');
+                if (!sel) return;
 
-            const valorTodos = sel.querySelector('option[value=""]').outerHTML;
-            sel.innerHTML = valorTodos;
+                const valorTodos = sel.querySelector('option[value=""]').outerHTML;
+                sel.innerHTML = valorTodos;
 
-            if (Array.isArray(data.almacenes)) {
-                data.almacenes.forEach(a => {
-                    const opt = document.createElement('option');
-                    opt.value = a.cve_almac;
-                    opt.textContent = a.des_almac || a.clave_almacen || a.cve_almac;
-                    if (valorActual !== '' && valorActual === opt.value) {
-                        opt.selected = true;
-                    }
-                    sel.appendChild(opt);
-                });
-            }
-        })
-        .catch(err => console.error('Error cargando almacenes:', err));
-});
+                if (Array.isArray(data.almacenes)) {
+                    data.almacenes.forEach(a => {
+                        const opt = document.createElement('option');
+                        opt.value = a.cve_almac;
+                        opt.textContent = a.des_almac || a.clave_almacen || a.cve_almac;
+                        if (valorActual !== '' && valorActual === opt.value) {
+                            opt.selected = true;
+                        }
+                        sel.appendChild(opt);
+                    });
+                }
+            })
+            .catch(err => console.error('Error cargando almacenes:', err));
+    });
 </script>
 
 <?php

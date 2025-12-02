@@ -5,19 +5,19 @@
    =========================================================== */
 
 require_once __DIR__ . '/../../app/db.php';
-session_start();
+//@session_start();
 
 /* ================= Frame (menú global) =================== */
 $activeSection = 'operaciones';
-$activeItem    = 'putaway_traslado'; // ajusta al id real de tu menú
-$pageTitle     = 'PutAway · Traslado entre BL (mismo almacén)';
+$activeItem = 'putaway_traslado'; // ajusta al id real de tu menú
+$pageTitle = 'PutAway · Traslado entre BL (mismo almacén)';
 include __DIR__ . '/../bi/_menu_global.php';
 
 /* ================= Parámetros =================== */
-$cve_usuario       = $_SESSION['cve_usuario'] ?? ($_SESSION['username'] ?? 'SISTEMA');
-$almacen_sel       = isset($_GET['almacen'])      ? trim($_GET['almacen'])      : '';
-$bl_origen_sel     = isset($_GET['bl_origen'])    ? trim($_GET['bl_origen'])    : '';
-$bl_destino_pref   = isset($_GET['bl_destino'])   ? trim($_GET['bl_destino'])   : '';
+$cve_usuario = $_SESSION['cve_usuario'] ?? ($_SESSION['username'] ?? 'SISTEMA');
+$almacen_sel = isset($_GET['almacen']) ? trim($_GET['almacen']) : '';
+$bl_origen_sel = isset($_GET['bl_origen']) ? trim($_GET['bl_origen']) : '';
+$bl_destino_pref = isset($_GET['bl_destino']) ? trim($_GET['bl_destino']) : '';
 
 $api_debug = '';
 
@@ -26,164 +26,165 @@ $api_debug = '';
    =========================================================== */
 function api_filtros_init_traslado(?string $almacen, ?string &$error = null): ?array
 {
-    $almacen = $almacen ?? '';
+  $almacen = $almacen ?? '';
 
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        ? 'https' : 'http';
-    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $script = $_SERVER['SCRIPT_NAME'] ?? '';
+  $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    ? 'https' : 'http';
+  $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+  $script = $_SERVER['SCRIPT_NAME'] ?? '';
 
-    $pos = strpos($script, '/public/');
-    if ($pos === false) {
-        $error = 'No se encontró /public/ en SCRIPT_NAME para armar URL del API.';
-        return null;
-    }
+  $pos = strpos($script, '/public/');
+  if ($pos === false) {
+    $error = 'No se encontró /public/ en SCRIPT_NAME para armar URL del API.';
+    return null;
+  }
 
-    $publicRoot = substr($script, 0, $pos + 8); // incluye "/public/"
-    $apiPath    = $publicRoot . 'api/filtros_assistpro.php';
+  $publicRoot = substr($script, 0, $pos + 8); // incluye "/public/"
+  $apiPath = $publicRoot . 'api/filtros_assistpro.php';
 
-    $url = $scheme . '://' . $host . $apiPath
-         . '?action=init&almacen=' . urlencode($almacen);
+  $url = $scheme . '://' . $host . $apiPath
+    . '?action=init&almacen=' . urlencode($almacen);
 
-    $ctx = stream_context_create([
-        'http' => [
-            'method'  => 'GET',
-            'timeout' => 5,
-        ]
-    ]);
+  $ctx = stream_context_create([
+    'http' => [
+      'method' => 'GET',
+      'timeout' => 5,
+    ]
+  ]);
 
-    $json = @file_get_contents($url, false, $ctx);
-    if ($json === false) {
-        $error = "No se pudo llamar al API filtros_assistpro ($url)";
-        return null;
-    }
+  $json = @file_get_contents($url, false, $ctx);
+  if ($json === false) {
+    $error = "No se pudo llamar al API filtros_assistpro ($url)";
+    return null;
+  }
 
-    $data = json_decode($json, true);
-    if (!is_array($data)) {
-        $error = 'Respuesta JSON inválida desde filtros_assistpro.';
-        return null;
-    }
+  $data = json_decode($json, true);
+  if (!is_array($data)) {
+    $error = 'Respuesta JSON inválida desde filtros_assistpro.';
+    return null;
+  }
 
-    if (isset($data['ok']) && $data['ok'] === false) {
-        $error = 'API devolvió error: ' . ($data['error'] ?? 'Error desconocido');
-        return null;
-    }
+  if (isset($data['ok']) && $data['ok'] === false) {
+    $error = 'API devolvió error: ' . ($data['error'] ?? 'Error desconocido');
+    return null;
+  }
 
-    return $data;
+  return $data;
 }
 
 /* ===========================================================
    CATÁLOGOS (API + FALLBACK)
    =========================================================== */
 
-$cat_almac  = [];
-$cat_bls    = [];
+$cat_almac = [];
+$cat_bls = [];
 
 $api_error = null;
-$api_data  = api_filtros_init_traslado($almacen_sel, $api_error);
+$api_data = api_filtros_init_traslado($almacen_sel, $api_error);
 
 if ($api_data !== null) {
-    $api_debug = 'Catálogos desde filtros_assistpro.php';
+  $api_debug = 'Catálogos desde filtros_assistpro.php';
 
-    foreach ($api_data['almacenes'] ?? [] as $a) {
-        $cat_almac[] = [
-            'clave'  => trim($a['cve_almac'] ?? ''),
-            'nombre' => trim($a['des_almac'] ?? ''),
-        ];
-    }
+  foreach ($api_data['almacenes'] ?? [] as $a) {
+    $cat_almac[] = [
+      'clave' => trim($a['cve_almac'] ?? ''),
+      'nombre' => trim($a['des_almac'] ?? ''),
+    ];
+  }
 
-    foreach ($api_data['bls'] ?? [] as $b) {
-        $bl = trim($b['bl'] ?? '');
-        if ($bl !== '') {
-            $cat_bls[] = ['CodigoCSD' => $bl];
-        }
+  foreach ($api_data['bls'] ?? [] as $b) {
+    $bl = trim($b['bl'] ?? '');
+    if ($bl !== '') {
+      $cat_bls[] = ['CodigoCSD' => $bl];
     }
+  }
 
 } else {
-    $api_debug = $api_error ?: 'Error al llamar API; usando consultas locales.';
+  $api_debug = $api_error ?: 'Error al llamar API; usando consultas locales.';
 
-    $cat_almac = db_all("
+  $cat_almac = db_all("
         SELECT clave AS clave, clave AS nombre
         FROM c_almacenp
         WHERE COALESCE(Activo,1)=1
         ORDER BY clave
     ");
 
-    $paramsBL = [];
-    $whereBL  = ["COALESCE(Activo,1)=1", "IFNULL(CodigoCSD,'')<>''"];
-    if ($almacen_sel !== '') {
-        $whereBL[]            = 'cve_almac = :alm';
-        $paramsBL['alm']      = $almacen_sel;
-    }
+  $paramsBL = [];
+  $whereBL = ["COALESCE(Activo,1)=1", "IFNULL(CodigoCSD,'')<>''"];
+  if ($almacen_sel !== '') {
+    $whereBL[] = 'cve_almac = :alm';
+    $paramsBL['alm'] = $almacen_sel;
+  }
 
-    $sqlBL = "
+  $sqlBL = "
         SELECT CodigoCSD
         FROM c_ubicacion
         WHERE " . implode(' AND ', $whereBL) . "
         ORDER BY CodigoCSD
     ";
-    $cat_bls = db_all($sqlBL, $paramsBL);
+  $cat_bls = db_all($sqlBL, $paramsBL);
 }
 
 /* ===========================================================
    HELPERS COMBOS
    =========================================================== */
-function optAlmacenTraslado(array $rows, string $sel): string {
-    $h = '<option value="">Seleccione</option>';
-    foreach ($rows as $r) {
-        $v = trim($r['clave'] ?? '');
-        if ($v === '') continue;
-        $t = trim($r['nombre'] ?? $v);
-        $s = ($v === $sel) ? ' selected' : '';
-        $h .= '<option value="'.htmlspecialchars($v).'"'.$s.'>'
-            . htmlspecialchars($v.' - '.$t).'</option>';
-    }
-    return $h;
+function optAlmacenTraslado(array $rows, string $sel): string
+{
+  $h = '<option value="">Seleccione</option>';
+  foreach ($rows as $r) {
+    $v = trim($r['clave'] ?? '');
+    if ($v === '')
+      continue;
+    $t = trim($r['nombre'] ?? $v);
+    $s = ($v === $sel) ? ' selected' : '';
+    $h .= '<option value="' . htmlspecialchars($v) . '"' . $s . '>'
+      . htmlspecialchars($v . ' - ' . $t) . '</option>';
+  }
+  return $h;
 }
 
-function optBLTraslado(array $rows, string $sel): string {
-    $h = '<option value="">Seleccione</option>';
-    foreach ($rows as $r) {
-        $v = trim($r['CodigoCSD'] ?? '');
-        if ($v === '') continue;
-        $s = ($v === $sel) ? ' selected' : '';
-        $h .= '<option value="'.htmlspecialchars($v).'"'.$s.'>'
-            . htmlspecialchars($v).'</option>';
-    }
-    return $h;
+function optBLTraslado(array $rows, string $sel): string
+{
+  $h = '<option value="">Seleccione</option>';
+  foreach ($rows as $r) {
+    $v = trim($r['CodigoCSD'] ?? '');
+    if ($v === '')
+      continue;
+    $s = ($v === $sel) ? ' selected' : '';
+    $h .= '<option value="' . htmlspecialchars($v) . '"' . $s . '>'
+      . htmlspecialchars($v) . '</option>';
+  }
+  return $h;
 }
 
 /* ===========================================================
    POST: REGISTRO DE TRASLADO BL->BL
    =========================================================== */
-$mensaje_ok  = '';
+$mensaje_ok = '';
 $mensaje_err = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'trasladar') {
 
-    $cve_almac    = trim($_POST['cve_almac'] ?? '');
-    $cve_articulo = trim($_POST['cve_articulo'] ?? '');
-    $cve_lote     = trim($_POST['cve_lote'] ?? '');
-    $bl_origen    = trim($_POST['bl_origen'] ?? '');
-    $bl_destino   = trim($_POST['bl_destino'] ?? '');
-    $existencia   = (float)($_POST['existencia'] ?? 0);
-    $cantidad     = (float)($_POST['cantidad_mover'] ?? 0);
+  $cve_almac = trim($_POST['cve_almac'] ?? '');
+  $cve_articulo = trim($_POST['cve_articulo'] ?? '');
+  $cve_lote = trim($_POST['cve_lote'] ?? '');
+  $bl_origen = trim($_POST['bl_origen'] ?? '');
+  $bl_destino = trim($_POST['bl_destino'] ?? '');
+  $existencia = (float) ($_POST['existencia'] ?? 0);
+  $cantidad = (float) ($_POST['cantidad_mover'] ?? 0);
 
-    if ($cve_almac === '' || $cve_articulo === '' || $bl_origen === '' || $bl_destino === '' || $cantidad <= 0) {
-        $mensaje_err = 'Datos incompletos para registrar el traslado.';
-    } elseif ($cantidad > $existencia) {
-        $mensaje_err = 'La cantidad a trasladar no puede ser mayor a la existencia.';
-    } else {
-        try {
-            db_tx(function() use ($cve_almac,$cve_articulo,$cve_lote,
-                                  $bl_origen,$bl_destino,
-                                  $existencia,$cantidad,
-                                  $cve_usuario,&$mensaje_ok) {
+  if ($cve_almac === '' || $cve_articulo === '' || $bl_origen === '' || $bl_destino === '' || $cantidad <= 0) {
+    $mensaje_err = 'Datos incompletos para registrar el traslado.';
+  } elseif ($cantidad > $existencia) {
+    $mensaje_err = 'La cantidad a trasladar no puede ser mayor a la existencia.';
+  } else {
+    try {
+      db_tx(function () use ($cve_almac, $cve_articulo, $cve_lote, $bl_origen, $bl_destino, $existencia, $cantidad, $cve_usuario, &$mensaje_ok) {
 
-                // Id_TipoMovimiento para TRASLADO BL->BL (ajusta al id real)
-                $id_tipo = 3;
+        // Id_TipoMovimiento para TRASLADO BL->BL (ajusta al id real)
+        $id_tipo = 3;
 
-                dbq("
+        dbq("
                     INSERT INTO t_cardex
                     (cve_articulo,cve_lote,fecha,origen,destino,
                      stockinicial,cantidad,ajuste,id_TipoMovimiento,
@@ -193,48 +194,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'trasl
                      :s,:c,0,:t,
                      :u,:alm,1)
                 ", [
-                    ':a'   => $cve_articulo,
-                    ':l'   => ($cve_lote === '' ? null : $cve_lote),
-                    ':o'   => $bl_origen,
-                    ':d'   => $bl_destino,
-                    ':s'   => $existencia,
-                    ':c'   => $cantidad,
-                    ':t'   => $id_tipo,
-                    ':u'   => $cve_usuario,
-                    ':alm' => $cve_almac,
-                ]);
+          ':a' => $cve_articulo,
+          ':l' => ($cve_lote === '' ? null : $cve_lote),
+          ':o' => $bl_origen,
+          ':d' => $bl_destino,
+          ':s' => $existencia,
+          ':c' => $cantidad,
+          ':t' => $id_tipo,
+          ':u' => $cve_usuario,
+          ':alm' => $cve_almac,
+        ]);
 
-                // Aquí, cuando definas la lógica final, actualizas ts_existenciatarima/ts_existenciapiezas
-                // moviendo las existencias de BL origen a BL destino.
+        // Aquí, cuando definas la lógica final, actualizas ts_existenciatarima/ts_existenciapiezas
+        // moviendo las existencias de BL origen a BL destino.
 
-                $mensaje_ok = 'Traslado registrado correctamente en Kardex.';
-            });
+        $mensaje_ok = 'Traslado registrado correctamente en Kardex.';
+      });
 
-        } catch (Throwable $e) {
-            $mensaje_err = 'Error al registrar el traslado: ' . $e->getMessage();
-        }
+    } catch (Throwable $e) {
+      $mensaje_err = 'Error al registrar el traslado: ' . $e->getMessage();
     }
+  }
 
-    $params = $_GET;
-    if ($mensaje_ok)  $params['msg_ok']  = urlencode($mensaje_ok);
-    if ($mensaje_err) $params['msg_err'] = urlencode($mensaje_err);
-    header('Location: traslado.php?' . http_build_query($params));
-    exit;
+  $params = $_GET;
+  if ($mensaje_ok)
+    $params['msg_ok'] = urlencode($mensaje_ok);
+  if ($mensaje_err)
+    $params['msg_err'] = urlencode($mensaje_err);
+  header('Location: traslado.php?' . http_build_query($params));
+  exit;
 }
 
-$mensaje_ok  = $_GET['msg_ok']  ?? $mensaje_ok;
+$mensaje_ok = $_GET['msg_ok'] ?? $mensaje_ok;
 $mensaje_err = $_GET['msg_err'] ?? $mensaje_err;
 
 /* ===========================================================
    CONSULTA DE EXISTENCIAS EN BL ORIGEN
    =========================================================== */
-$lineas         = [];
-$total_lineas   = 0;
+$lineas = [];
+$total_lineas = 0;
 $total_unidades = 0.0;
 
 if ($almacen_sel !== '' && $bl_origen_sel !== '') {
 
-    $sql = "
+  $sql = "
         SELECT
             src.tipo_existencia,
             src.cve_almac,
@@ -278,15 +281,15 @@ if ($almacen_sel !== '' && $bl_origen_sel !== '') {
         ORDER BY a.des_articulo, src.tipo_existencia, src.nTarima
     ";
 
-    $lineas = db_all($sql, [
-        ':almac' => $almacen_sel,
-        ':bl'    => $bl_origen_sel,
-    ]);
+  $lineas = db_all($sql, [
+    ':almac' => $almacen_sel,
+    ':bl' => $bl_origen_sel,
+  ]);
 
-    $total_lineas = count($lineas);
-    foreach ($lineas as $r) {
-        $total_unidades += (float)$r['Existencia'];
-    }
+  $total_lineas = count($lineas);
+  foreach ($lineas as $r) {
+    $total_unidades += (float) $r['Existencia'];
+  }
 }
 ?>
 <div class="container-fluid" style="font-size:10px;">
@@ -386,48 +389,44 @@ if ($almacen_sel !== '' && $bl_origen_sel !== '') {
         </tr>
       </thead>
       <tbody>
-      <?php foreach ($lineas as $row): ?>
-        <tr>
-          <td><?= htmlspecialchars($row['tipo_existencia']) ?></td>
-          <td><?= htmlspecialchars($row['nTarima']) ?></td>
-          <td><?= htmlspecialchars($row['cve_articulo']) ?></td>
-          <td><?= htmlspecialchars($row['des_articulo']) ?></td>
-          <td><?= htmlspecialchars($row['cve_lote']) ?></td>
-          <td><?= htmlspecialchars($row['bl_origen']) ?></td>
-          <td class="text-end"><?= number_format($row['Existencia'], 2) ?></td>
+        <?php foreach ($lineas as $row): ?>
+          <tr>
+            <td><?= htmlspecialchars($row['tipo_existencia']) ?></td>
+            <td><?= htmlspecialchars($row['nTarima']) ?></td>
+            <td><?= htmlspecialchars($row['cve_articulo']) ?></td>
+            <td><?= htmlspecialchars($row['des_articulo']) ?></td>
+            <td><?= htmlspecialchars($row['cve_lote']) ?></td>
+            <td><?= htmlspecialchars($row['bl_origen']) ?></td>
+            <td class="text-end"><?= number_format($row['Existencia'], 2) ?></td>
 
-          <td style="min-width:120px;">
-            <form method="post" class="d-flex align-items-center gap-1">
-              <input type="hidden" name="accion"       value="trasladar">
-              <input type="hidden" name="cve_almac"    value="<?= htmlspecialchars($row['cve_almac']) ?>">
-              <input type="hidden" name="cve_articulo" value="<?= htmlspecialchars($row['cve_articulo']) ?>">
-              <input type="hidden" name="cve_lote"     value="<?= htmlspecialchars($row['cve_lote']) ?>">
-              <input type="hidden" name="bl_origen"    value="<?= htmlspecialchars($row['bl_origen']) ?>">
-              <input type="hidden" name="existencia"   value="<?= htmlspecialchars($row['Existencia']) ?>">
+            <td style="min-width:120px;">
+              <form method="post" class="d-flex align-items-center gap-1">
+                <input type="hidden" name="accion" value="trasladar">
+                <input type="hidden" name="cve_almac" value="<?= htmlspecialchars($row['cve_almac']) ?>">
+                <input type="hidden" name="cve_articulo" value="<?= htmlspecialchars($row['cve_articulo']) ?>">
+                <input type="hidden" name="cve_lote" value="<?= htmlspecialchars($row['cve_lote']) ?>">
+                <input type="hidden" name="bl_origen" value="<?= htmlspecialchars($row['bl_origen']) ?>">
+                <input type="hidden" name="existencia" value="<?= htmlspecialchars($row['Existencia']) ?>">
 
-              <input type="number"
-                     name="cantidad_mover"
-                     class="form-control form-control-sm text-end"
-                     step="0.0001"
-                     min="0.0001"
-                     max="<?= htmlspecialchars($row['Existencia']) ?>"
-                     value="<?= htmlspecialchars($row['Existencia']) ?>">
-          </td>
+                <input type="number" name="cantidad_mover" class="form-control form-control-sm text-end" step="0.0001"
+                  min="0.0001" max="<?= htmlspecialchars($row['Existencia']) ?>"
+                  value="<?= htmlspecialchars($row['Existencia']) ?>">
+            </td>
 
-          <td style="min-width:150px;">
+            <td style="min-width:150px;">
               <select name="bl_destino" class="form-select form-select-sm">
                 <?= optBLTraslado($cat_bls, $bl_destino_pref) ?>
               </select>
-          </td>
+            </td>
 
-          <td>
+            <td>
               <button type="submit" class="btn btn-success btn-sm">
                 Trasladar
               </button>
-            </form>
-          </td>
-        </tr>
-      <?php endforeach; ?>
+              </form>
+            </td>
+          </tr>
+        <?php endforeach; ?>
       </tbody>
     </table>
   </div>
@@ -441,20 +440,20 @@ if ($almacen_sel !== '' && $bl_origen_sel !== '') {
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-  $('#tblTrasladoBL').DataTable({
-    pageLength: 25,
-    lengthChange: false,
-    searching: true,
-    ordering: true,
-    info: true,
-    scrollX: true,
-    scrollY: '50vh',
-    language: {
-      url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-MX.json'
-    }
+  document.addEventListener('DOMContentLoaded', function () {
+    $('#tblTrasladoBL').DataTable({
+      pageLength: 25,
+      lengthChange: false,
+      searching: true,
+      ordering: true,
+      info: true,
+      scrollX: true,
+      scrollY: '50vh',
+      language: {
+        url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-MX.json'
+      }
+    });
   });
-});
 </script>
 
 <?php

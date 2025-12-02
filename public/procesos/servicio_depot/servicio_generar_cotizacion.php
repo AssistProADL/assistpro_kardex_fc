@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../../app/db.php';
 
 try {
     if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+        //@session_start();
     }
 
     $pdo = db_pdo();
@@ -14,7 +14,7 @@ try {
 
     $usuarioActual = $_SESSION['usuario'] ?? 'SYSTEM';
 
-    $servicioId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+    $servicioId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
     if ($servicioId <= 0) {
         throw new Exception('ID de servicio inválido.');
     }
@@ -42,8 +42,8 @@ try {
         throw new Exception('El caso está marcado como GARANTÍA; normalmente no genera cotización.');
     }
 
-    $id_cliente = (int)($servicio['id_cliente'] ?? 0);
-    $cve_clte   = $servicio['Cve_Clte'] ?? null;
+    $id_cliente = (int) ($servicio['id_cliente'] ?? 0);
+    $cve_clte = $servicio['Cve_Clte'] ?? null;
 
     if ($id_cliente <= 0) {
         throw new Exception('El caso no tiene un cliente válido ligado; no se puede generar cotización.');
@@ -69,7 +69,7 @@ try {
     // 3) Armar lista única de artículos
     $articulos = [];
     foreach ($partes as $p) {
-        $cve = trim((string)$p['cve_articulo']);
+        $cve = trim((string) $p['cve_articulo']);
         if ($cve !== '') {
             $articulos[$cve] = true;
         }
@@ -105,7 +105,7 @@ try {
     $stEx->execute($keys);
     $existencias = [];
     while ($row = $stEx->fetch(PDO::FETCH_ASSOC)) {
-        $existencias[$row['cve_articulo']] = (float)$row['ExistenciaTotal'];
+        $existencias[$row['cve_articulo']] = (float) $row['ExistenciaTotal'];
     }
 
     // 6) Construir items (similares a cotizaciones.php)
@@ -113,28 +113,28 @@ try {
     $total = 0.0;
 
     foreach ($partes as $p) {
-        $cve = trim((string)$p['cve_articulo']);
-        $cant = (float)$p['cantidad'];
+        $cve = trim((string) $p['cve_articulo']);
+        $cant = (float) $p['cantidad'];
 
         if ($cve === '' || $cant <= 0) {
             continue;
         }
 
         $art = $infoArt[$cve] ?? null;
-        $desc   = $art['des_articulo'] ?? $cve;
-        $precio = isset($art['PrecioVenta']) ? (float)$art['PrecioVenta'] : 0.0;
-        $exist  = $existencias[$cve] ?? 0.0;
+        $desc = $art['des_articulo'] ?? $cve;
+        $precio = isset($art['PrecioVenta']) ? (float) $art['PrecioVenta'] : 0.0;
+        $exist = $existencias[$cve] ?? 0.0;
 
         $subtotal = $cant * $precio;
         $total += $subtotal;
 
         $items[] = [
-            'cve_articulo'    => $cve,
-            'descripcion'     => $desc,
-            'cantidad'        => $cant,
+            'cve_articulo' => $cve,
+            'descripcion' => $desc,
+            'cantidad' => $cant,
             'precio_unitario' => $precio,
-            'existencia'      => $exist,
-            'subtotal'        => $subtotal,
+            'existencia' => $exist,
+            'subtotal' => $subtotal,
         ];
     }
 
@@ -171,19 +171,19 @@ try {
     $stmtHead = $pdo->prepare($sqlInsHead);
 
     // fuente_id lo dejamos NULL por ahora; fuente_detalle amarra al servicio
-    $fuente_id      = null;
+    $fuente_id = null;
     $fuente_detalle = 'Servicio/Garantía folio ' . ($servicio['folio'] ?? ('SRV-' . $servicioId));
 
     $stmtHead->execute([
-        ':folio'          => $folio_cotizacion,
-        ':id_cliente'     => $id_cliente ?: null,
-        ':cve_clte'       => $cve_clte ?: null,
-        ':fuente_id'      => $fuente_id,
+        ':folio' => $folio_cotizacion,
+        ':id_cliente' => $id_cliente ?: null,
+        ':cve_clte' => $cve_clte ?: null,
+        ':fuente_id' => $fuente_id,
         ':fuente_detalle' => $fuente_detalle,
-        ':total'          => $total,
+        ':total' => $total,
     ]);
 
-    $cotizacion_id = (int)$pdo->lastInsertId();
+    $cotizacion_id = (int) $pdo->lastInsertId();
 
     $sqlInsDet = "
         INSERT INTO crm_cotizacion_det (
@@ -208,13 +208,13 @@ try {
 
     foreach ($items as $it) {
         $stmtDet->execute([
-            ':cotizacion_id'   => $cotizacion_id,
-            ':cve_articulo'    => $it['cve_articulo'],
-            ':descripcion'     => $it['descripcion'],
-            ':cantidad'        => $it['cantidad'],
+            ':cotizacion_id' => $cotizacion_id,
+            ':cve_articulo' => $it['cve_articulo'],
+            ':descripcion' => $it['descripcion'],
+            ':cantidad' => $it['cantidad'],
             ':precio_unitario' => $it['precio_unitario'],
-            ':subtotal'        => $it['subtotal'],
-            ':existencia'      => $it['existencia'],
+            ':subtotal' => $it['subtotal'],
+            ':existencia' => $it['existencia'],
         ]);
     }
 
@@ -233,8 +233,8 @@ try {
     // Desde /public/procesos/servicio_depot/ subimos dos niveles a /public/crm/cotizaciones.php
     $qs = http_build_query([
         'from_servicio' => 1,
-        'cot_id'        => $cotizacion_id,
-        'folio'         => $folio_cotizacion,
+        'cot_id' => $cotizacion_id,
+        'folio' => $folio_cotizacion,
     ]);
     header('Location: ../../crm/cotizaciones.php?' . $qs);
     exit;

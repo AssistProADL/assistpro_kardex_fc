@@ -5,7 +5,7 @@
 require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../bi/_menu_global.php';
 
-session_start();
+//@session_start();
 
 // --------- CATALOGOS PARA FILTROS ---------
 
@@ -23,11 +23,11 @@ $proveedores = db_all("
 
 // --------- FILTROS ---------
 $f_proveedor = $_GET['proveedor'] ?? '';
-$f_articulo  = $_GET['articulo']  ?? '';
-$f_lote      = $_GET['lote']      ?? '';
-$f_ubica     = $_GET['ubica']     ?? '';
+$f_articulo = $_GET['articulo'] ?? '';
+$f_lote = $_GET['lote'] ?? '';
+$f_ubica = $_GET['ubica'] ?? '';
 
-$where  = "1 = 1";
+$where = "1 = 1";
 $params = [];
 
 // proveedor
@@ -89,17 +89,18 @@ $sql = "
 $rows = db_all($sql, $params);
 
 // --------- KPI ---------
-$total_lineas    = count($rows);
+$total_lineas = count($rows);
 $total_pendiente = 0.0;
 
 foreach ($rows as $r) {
-    $total_pendiente += (float)$r['CantPendiente'];
+    $total_pendiente += (float) $r['CantPendiente'];
 }
 ?>
 <style>
     #rtm-table {
         font-size: 10px;
     }
+
     .kpi-card {
         border-radius: 6px;
         padding: 8px 12px;
@@ -107,18 +108,21 @@ foreach ($rows as $r) {
         background: #f8fafc;
         border-left: 4px solid #0F5AAD;
     }
+
     .kpi-title {
         font-size: 10px;
         text-transform: uppercase;
         color: #666;
         margin-bottom: 2px;
     }
+
     .kpi-value {
         font-size: 18px;
         font-weight: 600;
         color: #0F5AAD;
         line-height: 1.1;
     }
+
     .kpi-sub {
         font-size: 9px;
         color: #999;
@@ -131,10 +135,10 @@ foreach ($rows as $r) {
         <div class="col-lg-12">
             <h3>RTM – Producto pendiente de acomodo</h3>
             <small>
-                Vista administrativa basada en <strong>v_pendientesacomodo</strong>. 
+                Vista administrativa basada en <strong>v_pendientesacomodo</strong>.
                 Sólo muestra producto pendiente en zona de recibo / staging. No realiza movimientos.
             </small>
-            <hr/>
+            <hr />
         </div>
     </div>
 
@@ -171,7 +175,7 @@ foreach ($rows as $r) {
                                 <option value="">[Todos]</option>
                                 <?php foreach ($proveedores as $p): ?>
                                     <option value="<?= htmlspecialchars($p['ID_Proveedor']) ?>"
-                                        <?= $f_proveedor === (string)$p['ID_Proveedor'] ? 'selected' : '' ?>>
+                                        <?= $f_proveedor === (string) $p['ID_Proveedor'] ? 'selected' : '' ?>>
                                         (<?= htmlspecialchars($p['cve_proveedor']) ?>)
                                         <?= htmlspecialchars($p['proveedor']) ?>
                                     </option>
@@ -182,25 +186,20 @@ foreach ($rows as $r) {
                         <div class="form-group m-r-sm">
                             <label for="articulo">Artículo:&nbsp;</label>
                             <input type="text" name="articulo" id="articulo"
-                                   value="<?= htmlspecialchars($f_articulo) ?>"
-                                   class="form-control input-sm"
-                                   placeholder="Clave o descripción">
+                                value="<?= htmlspecialchars($f_articulo) ?>" class="form-control input-sm"
+                                placeholder="Clave o descripción">
                         </div>
 
                         <div class="form-group m-r-sm">
                             <label for="lote">Lote:&nbsp;</label>
-                            <input type="text" name="lote" id="lote"
-                                   value="<?= htmlspecialchars($f_lote) ?>"
-                                   class="form-control input-sm"
-                                   placeholder="Lote">
+                            <input type="text" name="lote" id="lote" value="<?= htmlspecialchars($f_lote) ?>"
+                                class="form-control input-sm" placeholder="Lote">
                         </div>
 
                         <div class="form-group m-r-sm">
                             <label for="ubica">Ubicación/Zona:&nbsp;</label>
-                            <input type="text" name="ubica" id="ubica"
-                                   value="<?= htmlspecialchars($f_ubica) ?>"
-                                   class="form-control input-sm"
-                                   placeholder="Zona recibo / staging">
+                            <input type="text" name="ubica" id="ubica" value="<?= htmlspecialchars($f_ubica) ?>"
+                                class="form-control input-sm" placeholder="Zona recibo / staging">
                         </div>
 
                         <button type="submit" class="btn btn-primary btn-sm m-l-sm">
@@ -226,32 +225,32 @@ foreach ($rows as $r) {
                     <div class="table-responsive">
                         <table id="rtm-table" class="table table-striped table-bordered table-hover" style="width:100%">
                             <thead>
-                            <tr>
-                                <th>Proveedor</th>
-                                <th>Artículo</th>
-                                <th>Descripción</th>
-                                <th>Lote</th>
-                                <th>Caducidad</th>
-                                <th>Ubicación / Zona</th>
-                                <th>Cantidad pendiente</th>
-                            </tr>
+                                <tr>
+                                    <th>Proveedor</th>
+                                    <th>Artículo</th>
+                                    <th>Descripción</th>
+                                    <th>Lote</th>
+                                    <th>Caducidad</th>
+                                    <th>Ubicación / Zona</th>
+                                    <th>Cantidad pendiente</th>
+                                </tr>
                             </thead>
                             <tbody>
-                            <?php foreach ($rows as $r): ?>
-                                <tr>
-                                    <td>
-                                        <?= htmlspecialchars($r['cve_proveedor']) ?>
-                                        -
-                                        <?= htmlspecialchars($r['proveedor']) ?>
-                                    </td>
-                                    <td><?= htmlspecialchars($r['cve_articulo']) ?></td>
-                                    <td><?= htmlspecialchars($r['des_articulo']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_lote']) ?></td>
-                                    <td><?= htmlspecialchars($r['caducidad']) ?></td>
-                                    <td><?= htmlspecialchars($r['cve_ubicacion']) ?></td>
-                                    <td style="text-align:right;"><?= number_format($r['CantPendiente'], 3) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
+                                <?php foreach ($rows as $r): ?>
+                                    <tr>
+                                        <td>
+                                            <?= htmlspecialchars($r['cve_proveedor']) ?>
+                                            -
+                                            <?= htmlspecialchars($r['proveedor']) ?>
+                                        </td>
+                                        <td><?= htmlspecialchars($r['cve_articulo']) ?></td>
+                                        <td><?= htmlspecialchars($r['des_articulo']) ?></td>
+                                        <td><?= htmlspecialchars($r['cve_lote']) ?></td>
+                                        <td><?= htmlspecialchars($r['caducidad']) ?></td>
+                                        <td><?= htmlspecialchars($r['cve_ubicacion']) ?></td>
+                                        <td style="text-align:right;"><?= number_format($r['CantPendiente'], 3) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
                             </tbody>
                         </table>
                         <small>* Fuente: v_pendientesacomodo. Solo lectura, sin acomodo ni traslado.</small>
@@ -264,25 +263,25 @@ foreach ($rows as $r) {
 </div>
 
 <script>
-$(function() {
-    if ($.fn.DataTable) {
-        $('#rtm-table').DataTable({
-            pageLength: 25,
-            order: [[0, 'asc'], [1, 'asc']],
-            scrollX: true,
-            scrollY: '50vh',
-            dom: 'Bfrtip',
-            buttons: [
-                { extend: 'excel', text: 'Excel' },
-                { extend: 'pdf',   text: 'PDF' },
-                { extend: 'print', text: 'Imprimir' }
-            ]
-        });
+    $(function () {
+        if ($.fn.DataTable) {
+            $('#rtm-table').DataTable({
+                pageLength: 25,
+                order: [[0, 'asc'], [1, 'asc']],
+                scrollX: true,
+                scrollY: '50vh',
+                dom: 'Bfrtip',
+                buttons: [
+                    { extend: 'excel', text: 'Excel' },
+                    { extend: 'pdf', text: 'PDF' },
+                    { extend: 'print', text: 'Imprimir' }
+                ]
+            });
 
-        // Ajuste de clases a estilo AssistPro
-        $('.dt-button').addClass('btn btn-sm').removeClass('dt-button');
-    }
-});
+            // Ajuste de clases a estilo AssistPro
+            $('.dt-button').addClass('btn btn-sm').removeClass('dt-button');
+        }
+    });
 </script>
 
 <?php

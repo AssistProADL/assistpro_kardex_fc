@@ -1,7 +1,7 @@
 <?php
 // public/pedido.php
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    //@session_start();
 }
 
 // Frame general con menús globales
@@ -9,77 +9,114 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
 
 <style>
-    :root{
-        --ap-primary:#0F5AAD;
-        --ap-primary-light:#00A3E0;
-        --ap-danger:#F05252;
-        --ap-bg:#F5F7FB;
-        --ap-card:#FFFFFF;
-        --ap-border:#E5E7EB;
-        --ap-text:#111827;
-        --ap-muted:#6B7280;
+    :root {
+        --ap-primary: #0F5AAD;
+        --ap-primary-light: #00A3E0;
+        --ap-danger: #F05252;
+        --ap-bg: #F5F7FB;
+        --ap-card: #FFFFFF;
+        --ap-border: #E5E7EB;
+        --ap-text: #111827;
+        --ap-muted: #6B7280;
     }
 
-    body{
-        background-color:var(--ap-bg);
+    body {
+        background-color: var(--ap-bg);
     }
 
-    .ap-page-wrapper{
-        padding:16px 24px 40px 24px;
+    .ap-page-wrapper {
+        padding: 16px 24px 40px 24px;
     }
 
-    .ap-title{
-        font-size:20px;
-        font-weight:700;
-        margin:0 0 12px 0;
-        color:var(--ap-primary);
+    .ap-title {
+        font-size: 20px;
+        font-weight: 700;
+        margin: 0 0 12px 0;
+        color: var(--ap-primary);
     }
 
-    .ap-card{
-        background:var(--ap-card);
-        border-radius:10px;
-        border:1px solid var(--ap-border);
-        padding:16px 18px;
-        margin-bottom:14px;
+    .ap-card {
+        background: var(--ap-card);
+        border-radius: 10px;
+        border: 1px solid var(--ap-border);
+        padding: 16px 18px;
+        margin-bottom: 14px;
     }
 
-    .ap-section-title{
-        font-size:15px;
-        margin:0 0 12px 0;
-        font-weight:600;
-        color:#374151;
+    .ap-section-title {
+        font-size: 15px;
+        margin: 0 0 12px 0;
+        font-weight: 600;
+        color: #374151;
     }
 
-    .ap-grid{
-        display:grid;
-        grid-template-columns:repeat(12,minmax(0,1fr));
-        gap:10px 14px;
-    }
-    .ap-col-2{grid-column:span 2;}
-    .ap-col-3{grid-column:span 3;}
-    .ap-col-4{grid-column:span 4;}
-    .ap-col-6{grid-column:span 6;}
-    .ap-col-8{grid-column:span 8;}
-    .ap-col-12{grid-column:span 12;}
-
-    @media (max-width:1200px){
-        .ap-col-2,.ap-col-3,.ap-col-4,.ap-col-6,.ap-col-8{grid-column:span 6;}
-    }
-    @media (max-width:768px){
-        .ap-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
-        .ap-col-2,.ap-col-3,.ap-col-4,.ap-col-6,.ap-col-8,.ap-col-12{grid-column:span 2;}
+    .ap-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 10px 14px;
     }
 
-    label{
-        display:block;
-        font-size:11px;
-        color:var(--ap-muted);
-        margin-bottom:3px;
+    .ap-col-2 {
+        grid-column: span 2;
     }
-    .ap-required::after{
-        content:"*";
-        color:#DC2626;
-        margin-left:3px;
+
+    .ap-col-3 {
+        grid-column: span 3;
+    }
+
+    .ap-col-4 {
+        grid-column: span 4;
+    }
+
+    .ap-col-6 {
+        grid-column: span 6;
+    }
+
+    .ap-col-8 {
+        grid-column: span 8;
+    }
+
+    .ap-col-12 {
+        grid-column: span 12;
+    }
+
+    @media (max-width:1200px) {
+
+        .ap-col-2,
+        .ap-col-3,
+        .ap-col-4,
+        .ap-col-6,
+        .ap-col-8 {
+            grid-column: span 6;
+        }
+    }
+
+    @media (max-width:768px) {
+        .ap-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .ap-col-2,
+        .ap-col-3,
+        .ap-col-4,
+        .ap-col-6,
+        .ap-col-8,
+        .ap-col-12 {
+            grid-column: span 2;
+        }
+    }
+
+    label {
+        display: block;
+        font-size: 11px;
+        color: var(--ap-muted);
+        margin-bottom: 3px;
+    }
+
+    .ap-required::after {
+        content: "*";
+        color: #DC2626;
+        margin-left: 3px;
     }
 
     input[type="text"],
@@ -87,153 +124,198 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     input[type="date"],
     input[type="time"],
     select,
-    textarea{
-        width:100%;
-        padding:7px 8px;
-        font-size:12px;
-        border-radius:8px;
-        border:1px solid var(--ap-border);
-        background:#FFFFFF;
-    }
-    input[readonly], textarea[readonly], .ap-ro{
-        background:#F3F4F6;
-        color:#4B5563;
-    }
-    textarea{
-        resize:vertical;
-        min-height:60px;
+    textarea {
+        width: 100%;
+        padding: 7px 8px;
+        font-size: 12px;
+        border-radius: 8px;
+        border: 1px solid var(--ap-border);
+        background: #FFFFFF;
     }
 
-    .ap-inline-options{
-        display:flex;
-        flex-wrap:wrap;
-        gap:10px 24px;
-        font-size:12px;
-    }
-    .ap-inline-options label{
-        margin-bottom:0;
-        display:flex;
-        align-items:center;
-        gap:4px;
-        cursor:pointer;
-        font-size:12px;
-        color:#374151;
+    input[readonly],
+    textarea[readonly],
+    .ap-ro {
+        background: #F3F4F6;
+        color: #4B5563;
     }
 
-    .ap-btn{
-        border:0;
-        border-radius:8px;
-        padding:7px 14px;
-        font-size:12px;
-        font-weight:600;
-        cursor:pointer;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        gap:6px;
-        white-space:nowrap;
-    }
-    .ap-btn-primary{
-        background:var(--ap-primary);
-        color:white;
-    }
-    .ap-btn-secondary{
-        background:#E5E7EB;
-        color:#111827;
-    }
-    .ap-btn-danger{
-        background:var(--ap-danger);
-        color:#FFFFFF;
-    }
-    .ap-btn-sm{
-        padding:5px 10px;
-        font-size:11px;
-    }
-    .ap-btn-lg{
-        padding:9px 18px;
-        font-size:13px;
+    textarea {
+        resize: vertical;
+        min-height: 60px;
     }
 
-    .ap-flex{display:flex;}
-    .ap-flex-between{display:flex;align-items:center;justify-content:space-between;}
-    .ap-gap-8{gap:8px;}
-    .ap-gap-12{gap:12px;}
-    .ap-mt-8{margin-top:8px;}
-    .ap-mt-12{margin-top:12px;}
-    .ap-mt-16{margin-top:16px;}
-    .ap-text-right{text-align:right;}
+    .ap-inline-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 24px;
+        font-size: 12px;
+    }
+
+    .ap-inline-options label {
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        color: #374151;
+    }
+
+    .ap-btn {
+        border: 0;
+        border-radius: 8px;
+        padding: 7px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+    .ap-btn-primary {
+        background: var(--ap-primary);
+        color: white;
+    }
+
+    .ap-btn-secondary {
+        background: #E5E7EB;
+        color: #111827;
+    }
+
+    .ap-btn-danger {
+        background: var(--ap-danger);
+        color: #FFFFFF;
+    }
+
+    .ap-btn-sm {
+        padding: 5px 10px;
+        font-size: 11px;
+    }
+
+    .ap-btn-lg {
+        padding: 9px 18px;
+        font-size: 13px;
+    }
+
+    .ap-flex {
+        display: flex;
+    }
+
+    .ap-flex-between {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .ap-gap-8 {
+        gap: 8px;
+    }
+
+    .ap-gap-12 {
+        gap: 12px;
+    }
+
+    .ap-mt-8 {
+        margin-top: 8px;
+    }
+
+    .ap-mt-12 {
+        margin-top: 12px;
+    }
+
+    .ap-mt-16 {
+        margin-top: 16px;
+    }
+
+    .ap-text-right {
+        text-align: right;
+    }
 
     /* Detalle */
-    .ap-detail-card{
-        border-radius:10px;
-        border:1px solid var(--ap-border);
-        background:#F9FAFB;
-        padding:14px 16px;
+    .ap-detail-card {
+        border-radius: 10px;
+        border: 1px solid var(--ap-border);
+        background: #F9FAFB;
+        padding: 14px 16px;
     }
 
-    .ap-table-wrapper{
-        width:100%;
-        overflow-x:auto;
+    .ap-table-wrapper {
+        width: 100%;
+        overflow-x: auto;
     }
-    table.ap-table{
-        width:100%;
-        border-collapse:collapse;
-        font-size:11px;
-        min-width:960px;
+
+    table.ap-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+        min-width: 960px;
     }
+
     .ap-table th,
-    .ap-table td{
-        border-bottom:1px solid #E5E7EB;
-        padding:6px 8px;
-        white-space:nowrap;
-    }
-    .ap-table th{
-        font-weight:600;
-        color:#6B7280;
-        background:#F9FAFB;
-        text-align:left;
-    }
-    .ap-table tr:nth-child(even) td{
-        background:#FDFDFE;
+    .ap-table td {
+        border-bottom: 1px solid #E5E7EB;
+        padding: 6px 8px;
+        white-space: nowrap;
     }
 
-    .ap-totals{
-        display:grid;
-        grid-template-columns:repeat(12,minmax(0,1fr));
-        gap:12px;
-        margin-top:14px;
-    }
-    .ap-total-box{
-        grid-column:span 4;
-        background:#F9FAFB;
-        border-radius:10px;
-        border:1px solid #E5E7EB;
-        padding:10px 12px;
-        font-size:12px;
-    }
-    .ap-total-label{
-        color:#6B7280;
-        margin-bottom:3px;
-    }
-    .ap-total-value{
-        font-size:14px;
-        font-weight:700;
-        color:#111827;
-    }
-    @media (max-width:900px){
-        .ap-total-box{grid-column:span 12;}
+    .ap-table th {
+        font-weight: 600;
+        color: #6B7280;
+        background: #F9FAFB;
+        text-align: left;
     }
 
-    .ap-footer-actions{
-        margin-top:18px;
-        display:flex;
-        justify-content:flex-end;
+    .ap-table tr:nth-child(even) td {
+        background: #FDFDFE;
     }
 
-    .ap-help-text{
-        font-size:11px;
-        color:#9CA3AF;
-        margin-top:4px;
+    .ap-totals {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+    }
+
+    .ap-total-box {
+        grid-column: span 4;
+        background: #F9FAFB;
+        border-radius: 10px;
+        border: 1px solid #E5E7EB;
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+
+    .ap-total-label {
+        color: #6B7280;
+        margin-bottom: 3px;
+    }
+
+    .ap-total-value {
+        font-size: 14px;
+        font-weight: 700;
+        color: #111827;
+    }
+
+    @media (max-width:900px) {
+        .ap-total-box {
+            grid-column: span 12;
+        }
+    }
+
+    .ap-footer-actions {
+        margin-top: 18px;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .ap-help-text {
+        font-size: 11px;
+        color: #9CA3AF;
+        margin-top: 4px;
     }
 </style>
 
@@ -469,7 +551,8 @@ require_once __DIR__ . '/../bi/_menu_global.php';
                     Capture la partida y presione <strong>Agregar</strong> para registrarla en la grilla.
                 </div>
                 <div class="ap-flex ap-gap-8">
-                    <button type="button" class="ap-btn ap-btn-primary ap-btn-sm" onclick="apAgregarPartida()">Agregar</button>
+                    <button type="button" class="ap-btn ap-btn-primary ap-btn-sm"
+                        onclick="apAgregarPartida()">Agregar</button>
                     <button type="button" class="ap-btn ap-btn-secondary ap-btn-sm">Excel</button>
                     <button type="button" class="ap-btn ap-btn-danger ap-btn-sm">Imprimir Venta</button>
                 </div>
@@ -480,32 +563,33 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         <div class="ap-table-wrapper ap-mt-16">
             <table class="ap-table" id="tblDetalle">
                 <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Proyecto</th>
-                    <th>Contenedor</th>
-                    <th>Pallet</th>
-                    <th>Artículo</th>
-                    <th>UOM</th>
-                    <th>Lote|Serie</th>
-                    <th>Lote|Serie Alterno</th>
-                    <th>Cantidad</th>
-                    <th>Precio Unitario</th>
-                    <th>Descto %</th>
-                    <th>Descto $</th>
-                    <th>IVA</th>
-                    <th>Total</th>
-                    <th>Acciones</th>
-                </tr>
+                    <tr>
+                        <th>#</th>
+                        <th>Proyecto</th>
+                        <th>Contenedor</th>
+                        <th>Pallet</th>
+                        <th>Artículo</th>
+                        <th>UOM</th>
+                        <th>Lote|Serie</th>
+                        <th>Lote|Serie Alterno</th>
+                        <th>Cantidad</th>
+                        <th>Precio Unitario</th>
+                        <th>Descto %</th>
+                        <th>Descto $</th>
+                        <th>IVA</th>
+                        <th>Total</th>
+                        <th>Acciones</th>
+                    </tr>
                 </thead>
                 <tbody>
-                <!-- se llena vía JS -->
+                    <!-- se llena vía JS -->
                 </tbody>
             </table>
         </div>
 
         <div class="ap-help-text ap-mt-8">
-            Grilla ordenada y limitada a 25 registros por página, con scroll horizontal y vertical según estándar AssistPro.
+            Grilla ordenada y limitada a 25 registros por página, con scroll horizontal y vertical según estándar
+            AssistPro.
         </div>
 
         <div class="ap-totals">
@@ -551,7 +635,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         document.getElementById('importe').value = total.toFixed(2);
     }
 
-    ['precio','cantidad','descuento_monto','descuento_pct','iva'].forEach(id=>{
+    ['precio', 'cantidad', 'descuento_monto', 'descuento_pct', 'iva'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', apCalcImportesPartida);
     });
@@ -583,8 +667,8 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         apRenderPartidas();
     }
 
-    function apEliminarPartida(idx){
-        apPartidas.splice(idx,1);
+    function apEliminarPartida(idx) {
+        apPartidas.splice(idx, 1);
         apRenderPartidas();
     }
 

@@ -1,5 +1,5 @@
 <?php
-//@session_start();
+//@//@session_start();
 require_once __DIR__ . '/../../app/db.php';
 $pdo = db_pdo();
 
@@ -221,7 +221,8 @@ if ($op) {
           <div>
             <h2>BOM — <?php echo htmlspecialchars($padre); ?></h2>
             <div class="muted"><?php echo htmlspecialchars($producto['des_articulo'] ?? ''); ?> | UMed:
-              <?php echo htmlspecialchars($producto['unidadMedida'] ?? ''); ?></div>
+              <?php echo htmlspecialchars($producto['unidadMedida'] ?? ''); ?>
+            </div>
             <div class="muted">Generado: <?php echo date('Y-m-d H:i:s'); ?></div>
           </div>
         </div>

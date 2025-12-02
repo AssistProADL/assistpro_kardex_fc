@@ -1,6 +1,6 @@
 <?php
 // public/manufactura/ot_importar.php
-//@session_start();
+//@//@session_start();
 
 require_once __DIR__ . '/../../app/db.php';
 

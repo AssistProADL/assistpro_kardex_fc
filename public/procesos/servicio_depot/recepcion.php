@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../../app/db.php';
 
 // Iniciar sesión ANTES de cualquier salida (evita warning)
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    //@session_start();
 }
 
 require_once __DIR__ . '/../../bi/_menu_global.php';
@@ -18,7 +18,7 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 $usuarioActual = $_SESSION['usuario'] ?? 'SYSTEM';
 
-$mensajeOk  = null;
+$mensajeOk = null;
 $mensajeError = null;
 $linkPdfIngreso = null;
 
@@ -52,13 +52,13 @@ try {
 // =======================
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear_caso') {
-    $origen_almacen_id = isset($_POST['origen_almacen_id']) ? trim((string)$_POST['origen_almacen_id']) : '';
-    $cliente_id        = isset($_POST['cliente_id']) ? (int)$_POST['cliente_id'] : 0;
-    $articulo          = trim($_POST['articulo'] ?? '');
-    $serie             = trim($_POST['serie'] ?? '');
-    $motivo            = $_POST['motivo'] ?? 'GARANTIA';
-    $servicio_id       = isset($_POST['servicio_id']) ? (int)$_POST['servicio_id'] : null;
-    $observacion       = trim($_POST['observacion_inicial'] ?? '');
+    $origen_almacen_id = isset($_POST['origen_almacen_id']) ? trim((string) $_POST['origen_almacen_id']) : '';
+    $cliente_id = isset($_POST['cliente_id']) ? (int) $_POST['cliente_id'] : 0;
+    $articulo = trim($_POST['articulo'] ?? '');
+    $serie = trim($_POST['serie'] ?? '');
+    $motivo = $_POST['motivo'] ?? 'GARANTIA';
+    $servicio_id = isset($_POST['servicio_id']) ? (int) $_POST['servicio_id'] : null;
+    $observacion = trim($_POST['observacion_inicial'] ?? '');
 
     $es_garantia = ($motivo === 'GARANTIA') ? 1 : 0;
 
@@ -105,19 +105,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
 
             $st = $pdo->prepare($sqlIns);
             $st->execute([
-                ':folio'              => $folio,
-                ':origen_almacen_id'  => $origen_almacen_id,
-                ':cliente_id'         => $cliente_id,
-                ':articulo'           => $articulo,
-                ':serie'              => $serie,
-                ':motivo'             => $motivo,
-                ':es_garantia'        => $es_garantia,
-                ':servicio_id'        => $servicio_id ?: null,
-                ':observacion_inicial'=> $observacion ?: null,
-                ':created_by'         => $usuarioActual,
+                ':folio' => $folio,
+                ':origen_almacen_id' => $origen_almacen_id,
+                ':cliente_id' => $cliente_id,
+                ':articulo' => $articulo,
+                ':serie' => $serie,
+                ':motivo' => $motivo,
+                ':es_garantia' => $es_garantia,
+                ':servicio_id' => $servicio_id ?: null,
+                ':observacion_inicial' => $observacion ?: null,
+                ':created_by' => $usuarioActual,
             ]);
 
-            $servicioId = (int)$pdo->lastInsertId();
+            $servicioId = (int) $pdo->lastInsertId();
 
             // Primer registro en bitácora
             $sqlLog = "INSERT INTO td_servicio_caso_log (
@@ -130,9 +130,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
             $detalle = 'Caso creado en Depot con folio ' . $folio;
             $stLog->execute([
                 ':servicio_id' => $servicioId,
-                ':usuario'     => $usuarioActual,
-                ':detalle'     => $detalle,
-                ':created_by'  => $usuarioActual,
+                ':usuario' => $usuarioActual,
+                ':detalle' => $detalle,
+                ':created_by' => $usuarioActual,
             ]);
 
             $pdo->commit();
@@ -146,9 +146,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
 
                 $fileCount = count($_FILES['fotos']['name']);
                 for ($i = 0; $i < $fileCount; $i++) {
-                    $name     = $_FILES['fotos']['name'][$i] ?? '';
-                    $tmpName  = $_FILES['fotos']['tmp_name'][$i] ?? '';
-                    $error    = $_FILES['fotos']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
+                    $name = $_FILES['fotos']['name'][$i] ?? '';
+                    $tmpName = $_FILES['fotos']['tmp_name'][$i] ?? '';
+                    $error = $_FILES['fotos']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
 
                     if ($error !== UPLOAD_ERR_OK || $tmpName === '') {
                         continue;
@@ -170,8 +170,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
                         $stFoto = $pdo->prepare($sqlFoto);
                         $stFoto->execute([
                             ':servicio_id' => $servicioId,
-                            ':ruta'        => $rutaRel,
-                            ':created_by'  => $usuarioActual,
+                            ':ruta' => $rutaRel,
+                            ':created_by' => $usuarioActual,
                         ]);
 
                         $sqlLogFoto = "INSERT INTO td_servicio_caso_log (
@@ -184,9 +184,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
                         $detalleFoto = 'Foto de entrada registrada: ' . $fileName;
                         $stLogFoto->execute([
                             ':servicio_id' => $servicioId,
-                            ':usuario'     => $usuarioActual,
-                            ':detalle'     => $detalleFoto,
-                            ':created_by'  => $usuarioActual,
+                            ':usuario' => $usuarioActual,
+                            ':detalle' => $detalleFoto,
+                            ':created_by' => $usuarioActual,
                         ]);
                     }
                 }
@@ -194,13 +194,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
 
             // Link al PDF de ingreso (vista Dompdf que ya tienes)
             $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-            $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-            $base   = rtrim(dirname($_SERVER['REQUEST_URI']), '/\\');
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $base = rtrim(dirname($_SERVER['REQUEST_URI']), '/\\');
             $linkPdfIngreso = $scheme . $host . $base . '/servicio_ingreso_pdf.php?id=' . $servicioId;
 
             $mensajeOk = "Caso creado correctamente con folio <strong>{$folio}</strong>. "
-                       . "Puedes imprimir el ingreso en PDF "
-                       . "<a href=\"{$linkPdfIngreso}\" target=\"_blank\">aquí</a>.";
+                . "Puedes imprimir el ingreso en PDF "
+                . "<a href=\"{$linkPdfIngreso}\" target=\"_blank\">aquí</a>.";
 
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -254,24 +254,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
 
                         <div class="mb-2">
                             <label class="form-label mb-1">Almacén (Depot)</label>
-                            <select id="selAlmacenDepot" name="origen_almacen_id"
-                                    class="form-select form-select-sm" required>
+                            <select id="selAlmacenDepot" name="origen_almacen_id" class="form-select form-select-sm"
+                                required>
                                 <option value="">Cargando almacenes...</option>
                             </select>
                         </div>
 
                         <div class="mb-2">
                             <label class="form-label mb-1">Cliente</label>
-                            <select id="selCliente" name="cliente_id"
-                                    class="form-select form-select-sm" required>
+                            <select id="selCliente" name="cliente_id" class="form-select form-select-sm" required>
                                 <option value="">Cargando clientes...</option>
                             </select>
                         </div>
 
                         <div class="mb-2">
                             <label class="form-label mb-1">Artículo</label>
-                            <select id="selArticulo" name="articulo"
-                                    class="form-select form-select-sm" required>
+                            <select id="selArticulo" name="articulo" class="form-select form-select-sm" required>
                                 <option value="">Cargando productos...</option>
                             </select>
                             <small class="text-muted">
@@ -281,20 +279,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
 
                         <div class="mb-2">
                             <label class="form-label mb-1">Número de serie</label>
-                            <input type="text" name="serie" class="form-control form-control-sm"
-                                   maxlength="100" required>
+                            <input type="text" name="serie" class="form-control form-control-sm" maxlength="100"
+                                required>
                         </div>
 
                         <div class="mb-2">
                             <label class="form-label mb-1 d-block">Motivo</label>
                             <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio"
-                                       name="motivo" id="motivo_gar" value="GARANTIA" checked>
+                                <input class="form-check-input" type="radio" name="motivo" id="motivo_gar"
+                                    value="GARANTIA" checked>
                                 <label class="form-check-label" for="motivo_gar">Garantía</label>
                             </div>
                             <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio"
-                                       name="motivo" id="motivo_srv" value="SERVICIO">
+                                <input class="form-check-input" type="radio" name="motivo" id="motivo_srv"
+                                    value="SERVICIO">
                                 <label class="form-check-label" for="motivo_srv">Servicio con cobro</label>
                             </div>
                         </div>
@@ -304,7 +302,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
                             <select name="servicio_id" class="form-select form-select-sm">
                                 <option value="">-- Seleccione --</option>
                                 <?php foreach ($servicios as $srv): ?>
-                                    <option value="<?= (int)$srv['id'] ?>">
+                                    <option value="<?= (int) $srv['id'] ?>">
                                         <?= htmlspecialchars($srv['descripcion']) ?>
                                         (<?= htmlspecialchars($srv['clave']) ?>)
                                     </option>
@@ -315,13 +313,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
                         <div class="mb-2">
                             <label class="form-label mb-1">Observaciones iniciales</label>
                             <textarea name="observacion_inicial" rows="3"
-                                      class="form-control form-control-sm"></textarea>
+                                class="form-control form-control-sm"></textarea>
                         </div>
 
                         <div class="mb-2">
                             <label class="form-label mb-1">Fotos de entrada</label>
-                            <input type="file" name="fotos[]" class="form-control form-control-sm"
-                                   accept="image/*" multiple>
+                            <input type="file" name="fotos[]" class="form-control form-control-sm" accept="image/*"
+                                multiple>
                             <small class="text-muted">
                                 Puedes adjuntar una o varias fotos como evidencia de recepción.
                             </small>
@@ -364,64 +362,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
 </div>
 
 <script>
-// Cargar almacenes, clientes y productos desde public/api/filtros_assistpro.php
-document.addEventListener('DOMContentLoaded', function () {
-    const apiUrl = '../../api/filtros_assistpro.php?action=init';
+    // Cargar almacenes, clientes y productos desde public/api/filtros_assistpro.php
+    document.addEventListener('DOMContentLoaded', function () {
+        const apiUrl = '../../api/filtros_assistpro.php?action=init';
 
-    fetch(apiUrl, { method: 'GET' })
-        .then(resp => resp.json())
-        .then(data => {
-            if (!data || data.ok === false) {
-                console.error('Error en filtros_assistpro:', data && data.error);
-                return;
-            }
-
-            // Almacenes
-            const selAlm = document.getElementById('selAlmacenDepot');
-            if (selAlm) {
-                selAlm.innerHTML = '<option value="">-- Seleccione --</option>';
-                if (Array.isArray(data.almacenes)) {
-                    data.almacenes.forEach(a => {
-                        const opt = document.createElement('option');
-                        opt.value = a.cve_almac;
-                        opt.textContent = a.des_almac || a.clave_almacen || a.cve_almac;
-                        selAlm.appendChild(opt);
-                    });
+        fetch(apiUrl, { method: 'GET' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data || data.ok === false) {
+                    console.error('Error en filtros_assistpro:', data && data.error);
+                    return;
                 }
-            }
 
-            // Clientes
-            const selCli = document.getElementById('selCliente');
-            if (selCli) {
-                selCli.innerHTML = '<option value="">-- Seleccione --</option>';
-                if (Array.isArray(data.clientes)) {
-                    data.clientes.forEach(c => {
-                        const opt = document.createElement('option');
-                        opt.value = c.id_cliente;
-                        opt.textContent = '[' + c.Cve_Clte + '] ' + c.RazonSocial;
-                        selCli.appendChild(opt);
-                    });
+                // Almacenes
+                const selAlm = document.getElementById('selAlmacenDepot');
+                if (selAlm) {
+                    selAlm.innerHTML = '<option value="">-- Seleccione --</option>';
+                    if (Array.isArray(data.almacenes)) {
+                        data.almacenes.forEach(a => {
+                            const opt = document.createElement('option');
+                            opt.value = a.cve_almac;
+                            opt.textContent = a.des_almac || a.clave_almacen || a.cve_almac;
+                            selAlm.appendChild(opt);
+                        });
+                    }
                 }
-            }
 
-            // Productos
-            const selArt = document.getElementById('selArticulo');
-            if (selArt) {
-                selArt.innerHTML = '<option value="">-- Seleccione --</option>';
-                if (Array.isArray(data.productos)) {
-                    data.productos.forEach(p => {
-                        const opt = document.createElement('option');
-                        opt.value = p.cve_articulo;
-                        opt.textContent = '[' + p.cve_articulo + '] ' + p.des_articulo;
-                        selArt.appendChild(opt);
-                    });
+                // Clientes
+                const selCli = document.getElementById('selCliente');
+                if (selCli) {
+                    selCli.innerHTML = '<option value="">-- Seleccione --</option>';
+                    if (Array.isArray(data.clientes)) {
+                        data.clientes.forEach(c => {
+                            const opt = document.createElement('option');
+                            opt.value = c.id_cliente;
+                            opt.textContent = '[' + c.Cve_Clte + '] ' + c.RazonSocial;
+                            selCli.appendChild(opt);
+                        });
+                    }
                 }
-            }
-        })
-        .catch(err => {
-            console.error('Error cargando filtros_assistpro:', err);
-        });
-});
+
+                // Productos
+                const selArt = document.getElementById('selArticulo');
+                if (selArt) {
+                    selArt.innerHTML = '<option value="">-- Seleccione --</option>';
+                    if (Array.isArray(data.productos)) {
+                        data.productos.forEach(p => {
+                            const opt = document.createElement('option');
+                            opt.value = p.cve_articulo;
+                            opt.textContent = '[' + p.cve_articulo + '] ' + p.des_articulo;
+                            selArt.appendChild(opt);
+                        });
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Error cargando filtros_assistpro:', err);
+            });
+    });
 </script>
 
 <?php

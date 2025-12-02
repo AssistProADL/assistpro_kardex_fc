@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../../app/db.php';
 
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    //@session_start();
 }
 require_once __DIR__ . '/../../bi/_menu_global.php';
 
@@ -16,14 +16,15 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 $usuarioActual = $_SESSION['usuario'] ?? 'SYSTEM';
 
-$mensajeOk  = null;
+$mensajeOk = null;
 $mensajeErr = null;
 
 // =======================
 // Utilidades
 // =======================
 
-function get_servicio_by_id(PDO $pdo, int $id): ?array {
+function get_servicio_by_id(PDO $pdo, int $id): ?array
+{
     $sql = "SELECT s.*, a.des_almac,
                    c.RazonSocial AS cliente_nombre,
                    c.Cve_Clte    AS cliente_clave
@@ -37,7 +38,8 @@ function get_servicio_by_id(PDO $pdo, int $id): ?array {
     return $row ?: null;
 }
 
-function get_diagnostico(PDO $pdo, int $servicioId): ?array {
+function get_diagnostico(PDO $pdo, int $servicioId): ?array
+{
     $sql = "SELECT * FROM t_servicio_diagnostico WHERE servicio_id = :id";
     $st = $pdo->prepare($sql);
     $st->execute([':id' => $servicioId]);
@@ -46,9 +48,11 @@ function get_diagnostico(PDO $pdo, int $servicioId): ?array {
 }
 
 // convertir dd/mm/yyyy → yyyy-mm-dd
-function parse_fecha_dmy(?string $d): ?string {
-    $d = trim((string)$d);
-    if ($d === '') return null;
+function parse_fecha_dmy(?string $d): ?string
+{
+    $d = trim((string) $d);
+    if ($d === '')
+        return null;
     if (preg_match('~^(\d{2})/(\d{2})/(\d{4})$~', $d, $m)) {
         return "{$m[3]}-{$m[2]}-{$m[1]}";
     }
@@ -58,8 +62,10 @@ function parse_fecha_dmy(?string $d): ?string {
     return null;
 }
 
-function fecha_a_dmy(?string $d): string {
-    if (!$d) return '';
+function fecha_a_dmy(?string $d): string
+{
+    if (!$d)
+        return '';
     if (preg_match('~^(\d{4})-(\d{2})-(\d{2})$~', $d, $m)) {
         return "{$m[3]}/{$m[2]}/{$m[1]}";
     }
@@ -70,7 +76,7 @@ function fecha_a_dmy(?string $d): string {
 // Parámetro principal
 // =======================
 
-$servicioIdSel = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$servicioIdSel = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 // =======================
 // POST acciones
@@ -80,22 +86,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'guardar_diag') {
-        $servicioId   = (int)($_POST['servicio_id'] ?? 0);
-        $diagTxt      = trim($_POST['diagnostico'] ?? '');
-        $causaTxt     = trim($_POST['causa_raiz'] ?? '');
-        $tiempoEst    = (float)($_POST['tiempo_estimado_horas'] ?? 0);
-        $tiempoReal   = (float)($_POST['tiempo_real_horas'] ?? 0);
-        $fechaEstStr  = $_POST['fecha_estim_entrega'] ?? '';
+        $servicioId = (int) ($_POST['servicio_id'] ?? 0);
+        $diagTxt = trim($_POST['diagnostico'] ?? '');
+        $causaTxt = trim($_POST['causa_raiz'] ?? '');
+        $tiempoEst = (float) ($_POST['tiempo_estimado_horas'] ?? 0);
+        $tiempoReal = (float) ($_POST['tiempo_real_horas'] ?? 0);
+        $fechaEstStr = $_POST['fecha_estim_entrega'] ?? '';
         $fechaRealStr = $_POST['fecha_real_entrega'] ?? '';
-        $costoMO      = (float)($_POST['costo_mano_obra'] ?? 0);
-        $costoMat     = (float)($_POST['costo_materiales'] ?? 0);
-        $costoTot     = $costoMO + $costoMat;
+        $costoMO = (float) ($_POST['costo_mano_obra'] ?? 0);
+        $costoMat = (float) ($_POST['costo_materiales'] ?? 0);
+        $costoTot = $costoMO + $costoMat;
 
         if ($servicioId <= 0) {
             $mensajeErr = 'ID de servicio inválido.';
         } else {
             try {
-                $fechaEst  = parse_fecha_dmy($fechaEstStr);
+                $fechaEst = parse_fecha_dmy($fechaEstStr);
                 $fechaReal = parse_fecha_dmy($fechaRealStr);
 
                 $pdo->beginTransaction();
@@ -117,17 +123,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                WHERE id = :id";
                     $stUpd = $pdo->prepare($sqlUpd);
                     $stUpd->execute([
-                        ':diag'   => $diagTxt ?: null,
-                        ':causa'  => $causaTxt ?: null,
-                        ':test'   => $tiempoEst ?: null,
-                        ':treal'  => $tiempoReal ?: null,
-                        ':fest'   => $fechaEst,
-                        ':freal'  => $fechaReal,
-                        ':cmo'    => $costoMO,
-                        ':cmat'   => $costoMat,
-                        ':ctot'   => $costoTot,
-                        ':updby'  => $usuarioActual,
-                        ':id'     => (int)$exist['id'],
+                        ':diag' => $diagTxt ?: null,
+                        ':causa' => $causaTxt ?: null,
+                        ':test' => $tiempoEst ?: null,
+                        ':treal' => $tiempoReal ?: null,
+                        ':fest' => $fechaEst,
+                        ':freal' => $fechaReal,
+                        ':cmo' => $costoMO,
+                        ':cmat' => $costoMat,
+                        ':ctot' => $costoTot,
+                        ':updby' => $usuarioActual,
+                        ':id' => (int) $exist['id'],
                     ]);
                 } else {
                     $sqlIns = "INSERT INTO t_servicio_diagnostico (
@@ -148,16 +154,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stIns = $pdo->prepare($sqlIns);
                     $stIns->execute([
                         ':servicio_id' => $servicioId,
-                        ':diag'        => $diagTxt ?: null,
-                        ':causa'       => $causaTxt ?: null,
-                        ':test'        => $tiempoEst ?: null,
-                        ':treal'       => $tiempoReal ?: null,
-                        ':fest'        => $fechaEst,
-                        ':freal'       => $fechaReal,
-                        ':cmo'         => $costoMO,
-                        ':cmat'        => $costoMat,
-                        ':ctot'        => $costoTot,
-                        ':created_by'  => $usuarioActual,
+                        ':diag' => $diagTxt ?: null,
+                        ':causa' => $causaTxt ?: null,
+                        ':test' => $tiempoEst ?: null,
+                        ':treal' => $tiempoReal ?: null,
+                        ':fest' => $fechaEst,
+                        ':freal' => $fechaReal,
+                        ':cmo' => $costoMO,
+                        ':cmat' => $costoMat,
+                        ':ctot' => $costoTot,
+                        ':created_by' => $usuarioActual,
                     ]);
                 }
 
@@ -172,12 +178,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif ($action === 'agregar_mat') {
-        $servicioId  = (int)($_POST['servicio_id'] ?? 0);
-        $diagId      = (int)($_POST['diagnostico_id'] ?? 0);
-        $cveArt      = trim($_POST['cve_articulo'] ?? '');
-        $cant        = (float)($_POST['cantidad'] ?? 0);
-        $costoUnit   = (float)($_POST['costo_unitario'] ?? 0);
-        $costoTot    = $cant * $costoUnit;
+        $servicioId = (int) ($_POST['servicio_id'] ?? 0);
+        $diagId = (int) ($_POST['diagnostico_id'] ?? 0);
+        $cveArt = trim($_POST['cve_articulo'] ?? '');
+        $cant = (float) ($_POST['cantidad'] ?? 0);
+        $costoUnit = (float) ($_POST['costo_unitario'] ?? 0);
+        $costoTot = $cant * $costoUnit;
 
         if ($servicioId <= 0 || $diagId <= 0) {
             $mensajeErr = 'Servicio o diagnóstico inválido.';
@@ -195,11 +201,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $st->execute([
                     ':diag_id' => $diagId,
                     ':serv_id' => $servicioId,
-                    ':art'     => $cveArt,
-                    ':cant'    => $cant,
-                    ':cu'      => $costoUnit,
-                    ':ctot'    => $costoTot,
-                    ':cb'      => $usuarioActual,
+                    ':art' => $cveArt,
+                    ':cant' => $cant,
+                    ':cu' => $costoUnit,
+                    ':ctot' => $costoTot,
+                    ':cb' => $usuarioActual,
                 ]);
                 $mensajeOk = 'Material agregado al diagnóstico.';
                 $servicioIdSel = $servicioId;
@@ -208,12 +214,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif ($action === 'agregar_mo') {
-        $servicioId = (int)($_POST['servicio_id'] ?? 0);
-        $diagId     = (int)($_POST['diagnostico_id'] ?? 0);
-        $tecnico    = trim($_POST['tecnico'] ?? '');
-        $horas      = (float)($_POST['horas'] ?? 0);
-        $costoHora  = (float)($_POST['costo_hora'] ?? 0);
-        $costoTot   = $horas * $costoHora;
+        $servicioId = (int) ($_POST['servicio_id'] ?? 0);
+        $diagId = (int) ($_POST['diagnostico_id'] ?? 0);
+        $tecnico = trim($_POST['tecnico'] ?? '');
+        $horas = (float) ($_POST['horas'] ?? 0);
+        $costoHora = (float) ($_POST['costo_hora'] ?? 0);
+        $costoTot = $horas * $costoHora;
 
         if ($servicioId <= 0 || $diagId <= 0) {
             $mensajeErr = 'Servicio o diagnóstico inválido.';
@@ -231,11 +237,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $st->execute([
                     ':diag_id' => $diagId,
                     ':serv_id' => $servicioId,
-                    ':tec'     => $tecnico,
-                    ':hrs'     => $horas,
-                    ':ch'      => $costoHora,
-                    ':ctot'    => $costoTot,
-                    ':cb'      => $usuarioActual,
+                    ':tec' => $tecnico,
+                    ':hrs' => $horas,
+                    ':ch' => $costoHora,
+                    ':ctot' => $costoTot,
+                    ':cb' => $usuarioActual,
                 ]);
                 $mensajeOk = 'Mano de obra agregada al diagnóstico.';
                 $servicioIdSel = $servicioId;
@@ -268,9 +274,9 @@ $casos = $pdo->query($sqlLista)->fetchAll(PDO::FETCH_ASSOC);
 // =======================
 
 $servicioSel = null;
-$diag        = null;
-$materiales  = [];
-$manoObra    = [];
+$diag = null;
+$materiales = [];
+$manoObra = [];
 
 if ($servicioIdSel > 0) {
     $servicioSel = get_servicio_by_id($pdo, $servicioIdSel);
@@ -282,14 +288,14 @@ if ($servicioIdSel > 0) {
                        WHERE diagnostico_id = :id
                        ORDER BY created_at ASC, id ASC";
             $stM = $pdo->prepare($sqlMat);
-            $stM->execute([':id' => (int)$diag['id']]);
+            $stM->execute([':id' => (int) $diag['id']]);
             $materiales = $stM->fetchAll(PDO::FETCH_ASSOC);
 
             $sqlMO = "SELECT * FROM t_servicio_diagnostico_manoobra
                       WHERE diagnostico_id = :id
                       ORDER BY created_at ASC, id ASC";
             $stMO = $pdo->prepare($sqlMO);
-            $stMO->execute([':id' => (int)$diag['id']]);
+            $stMO->execute([':id' => (int) $diag['id']]);
             $manoObra = $stMO->fetchAll(PDO::FETCH_ASSOC);
         }
     }
@@ -352,18 +358,18 @@ if ($servicioIdSel > 0) {
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($casos as $c): ?>
-                                        <tr <?= ($servicioIdSel === (int)$c['id']) ? 'class="table-primary"' : '' ?>>
+                                        <tr <?= ($servicioIdSel === (int) $c['id']) ? 'class="table-primary"' : '' ?>>
                                             <td><?= htmlspecialchars($c['folio']) ?></td>
                                             <td><?= htmlspecialchars($c['fecha_alta']) ?></td>
                                             <td>
                                                 <?= '[' . htmlspecialchars($c['cliente_clave'] ?? '') . '] ' .
-                                                     htmlspecialchars($c['cliente_nombre'] ?? '') ?>
+                                                    htmlspecialchars($c['cliente_nombre'] ?? '') ?>
                                             </td>
                                             <td><?= htmlspecialchars($c['articulo']) ?></td>
                                             <td><?= htmlspecialchars($c['serie']) ?></td>
                                             <td>
-                                                <a href="reporte_diagnostico.php?id=<?= (int)$c['id'] ?>"
-                                                   class="btn btn-outline-primary btn-sm btn-icon">
+                                                <a href="reporte_diagnostico.php?id=<?= (int) $c['id'] ?>"
+                                                    class="btn btn-outline-primary btn-sm btn-icon">
                                                     Ver
                                                 </a>
                                             </td>
@@ -400,9 +406,8 @@ if ($servicioIdSel > 0) {
                         </div>
                         <div>
                             <?php if (isset($servicioSel['motivo']) && strtoupper($servicioSel['motivo']) === 'SERVICIO'): ?>
-                                <a href="servicio_generar_cotizacion.php?id=<?= (int)$servicioSel['id'] ?>"
-                                   class="btn btn-warning btn-sm"
-                                   style="font-size:0.75rem;">
+                                <a href="servicio_generar_cotizacion.php?id=<?= (int) $servicioSel['id'] ?>"
+                                    class="btn btn-warning btn-sm" style="font-size:0.75rem;">
                                     Generar Cotización CRM
                                 </a>
                             <?php endif; ?>
@@ -414,7 +419,7 @@ if ($servicioIdSel > 0) {
                                 <div><strong>Cliente:</strong></div>
                                 <div>
                                     <?= '[' . htmlspecialchars($servicioSel['cliente_clave'] ?? '') . '] ' .
-                                         htmlspecialchars($servicioSel['cliente_nombre'] ?? '') ?>
+                                        htmlspecialchars($servicioSel['cliente_nombre'] ?? '') ?>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -438,74 +443,65 @@ if ($servicioIdSel > 0) {
                         <!-- Form principal de diagnóstico -->
                         <form method="post" class="mb-3">
                             <input type="hidden" name="action" value="guardar_diag">
-                            <input type="hidden" name="servicio_id" value="<?= (int)$servicioSel['id'] ?>">
+                            <input type="hidden" name="servicio_id" value="<?= (int) $servicioSel['id'] ?>">
 
                             <div class="mb-2">
                                 <label class="form-label mb-1">Diagnóstico técnico</label>
-                                <textarea name="diagnostico" rows="3"
-                                          class="form-control form-control-sm"
-                                          placeholder="Descripción técnica de la falla, hallazgos, condiciones de prueba..."><?= htmlspecialchars($diag['diagnostico'] ?? '') ?></textarea>
+                                <textarea name="diagnostico" rows="3" class="form-control form-control-sm"
+                                    placeholder="Descripción técnica de la falla, hallazgos, condiciones de prueba..."><?= htmlspecialchars($diag['diagnostico'] ?? '') ?></textarea>
                             </div>
 
                             <div class="mb-2">
                                 <label class="form-label mb-1">Causa raíz</label>
-                                <textarea name="causa_raiz" rows="2"
-                                          class="form-control form-control-sm"
-                                          placeholder="Causa raíz identificada (componente defectuoso, condiciones de uso, etc.)"><?= htmlspecialchars($diag['causa_raiz'] ?? '') ?></textarea>
+                                <textarea name="causa_raiz" rows="2" class="form-control form-control-sm"
+                                    placeholder="Causa raíz identificada (componente defectuoso, condiciones de uso, etc.)"><?= htmlspecialchars($diag['causa_raiz'] ?? '') ?></textarea>
                             </div>
 
                             <div class="row mb-2">
                                 <div class="col-md-3">
                                     <label class="form-label mb-1">Tiempo estimado (hrs)</label>
-                                    <input type="number" step="0.1" min="0"
-                                           name="tiempo_estimado_horas"
-                                           class="form-control form-control-sm"
-                                           value="<?= htmlspecialchars((string)($diag['tiempo_estimado_horas'] ?? '')) ?>">
+                                    <input type="number" step="0.1" min="0" name="tiempo_estimado_horas"
+                                        class="form-control form-control-sm"
+                                        value="<?= htmlspecialchars((string) ($diag['tiempo_estimado_horas'] ?? '')) ?>">
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label mb-1">Tiempo real (hrs)</label>
-                                    <input type="number" step="0.1" min="0"
-                                           name="tiempo_real_horas"
-                                           class="form-control form-control-sm"
-                                           value="<?= htmlspecialchars((string)($diag['tiempo_real_horas'] ?? '')) ?>">
+                                    <input type="number" step="0.1" min="0" name="tiempo_real_horas"
+                                        class="form-control form-control-sm"
+                                        value="<?= htmlspecialchars((string) ($diag['tiempo_real_horas'] ?? '')) ?>">
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label mb-1">Fecha estimada devolución</label>
-                                    <input type="text" name="fecha_estim_entrega"
-                                           class="form-control form-control-sm"
-                                           placeholder="dd/mm/aaaa"
-                                           value="<?= htmlspecialchars(fecha_a_dmy($diag['fecha_estim_entrega'] ?? null)) ?>">
+                                    <input type="text" name="fecha_estim_entrega" class="form-control form-control-sm"
+                                        placeholder="dd/mm/aaaa"
+                                        value="<?= htmlspecialchars(fecha_a_dmy($diag['fecha_estim_entrega'] ?? null)) ?>">
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label mb-1">Fecha real devolución</label>
-                                    <input type="text" name="fecha_real_entrega"
-                                           class="form-control form-control-sm"
-                                           placeholder="dd/mm/aaaa"
-                                           value="<?= htmlspecialchars(fecha_a_dmy($diag['fecha_real_entrega'] ?? null)) ?>">
+                                    <input type="text" name="fecha_real_entrega" class="form-control form-control-sm"
+                                        placeholder="dd/mm/aaaa"
+                                        value="<?= htmlspecialchars(fecha_a_dmy($diag['fecha_real_entrega'] ?? null)) ?>">
                                 </div>
                             </div>
 
                             <div class="row mb-2">
                                 <div class="col-md-4">
                                     <label class="form-label mb-1">Costo mano de obra</label>
-                                    <input type="number" step="0.01" min="0"
-                                           name="costo_mano_obra"
-                                           class="form-control form-control-sm"
-                                           value="<?= htmlspecialchars((string)($diag['costo_mano_obra'] ?? '0')) ?>">
+                                    <input type="number" step="0.01" min="0" name="costo_mano_obra"
+                                        class="form-control form-control-sm"
+                                        value="<?= htmlspecialchars((string) ($diag['costo_mano_obra'] ?? '0')) ?>">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label mb-1">Costo materiales</label>
-                                    <input type="number" step="0.01" min="0"
-                                           name="costo_materiales"
-                                           class="form-control form-control-sm"
-                                           value="<?= htmlspecialchars((string)($diag['costo_materiales'] ?? '0')) ?>">
+                                    <input type="number" step="0.01" min="0" name="costo_materiales"
+                                        class="form-control form-control-sm"
+                                        value="<?= htmlspecialchars((string) ($diag['costo_materiales'] ?? '0')) ?>">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label mb-1">Costo total</label>
-                                    <input type="text"
-                                           class="form-control form-control-sm"
-                                           value="<?= htmlspecialchars(number_format((float)($diag['costo_total'] ?? 0), 2)) ?>"
-                                           readonly>
+                                    <input type="text" class="form-control form-control-sm"
+                                        value="<?= htmlspecialchars(number_format((float) ($diag['costo_total'] ?? 0), 2)) ?>"
+                                        readonly>
                                 </div>
                             </div>
 
@@ -525,28 +521,26 @@ if ($servicioIdSel > 0) {
                                     <h6 class="mb-1">Materiales del diagnóstico</h6>
                                     <form method="post" class="border rounded p-2 bg-light mb-2">
                                         <input type="hidden" name="action" value="agregar_mat">
-                                        <input type="hidden" name="servicio_id" value="<?= (int)$servicioSel['id'] ?>">
-                                        <input type="hidden" name="diagnostico_id" value="<?= (int)$diag['id'] ?>">
+                                        <input type="hidden" name="servicio_id" value="<?= (int) $servicioSel['id'] ?>">
+                                        <input type="hidden" name="diagnostico_id" value="<?= (int) $diag['id'] ?>">
 
                                         <div class="mb-2">
                                             <label class="form-label mb-1">Artículo</label>
-                                            <input type="text" name="cve_articulo"
-                                                   class="form-control form-control-sm"
-                                                   placeholder="Clave de artículo (o integrarlo a combo en siguiente fase)" required>
+                                            <input type="text" name="cve_articulo" class="form-control form-control-sm"
+                                                placeholder="Clave de artículo (o integrarlo a combo en siguiente fase)"
+                                                required>
                                         </div>
 
                                         <div class="mb-2">
                                             <label class="form-label mb-1">Cantidad</label>
-                                            <input type="number" step="0.01" min="0"
-                                                   name="cantidad"
-                                                   class="form-control form-control-sm" required>
+                                            <input type="number" step="0.01" min="0" name="cantidad"
+                                                class="form-control form-control-sm" required>
                                         </div>
 
                                         <div class="mb-2">
                                             <label class="form-label mb-1">Costo unitario</label>
-                                            <input type="number" step="0.01" min="0"
-                                                   name="costo_unitario"
-                                                   class="form-control form-control-sm">
+                                            <input type="number" step="0.01" min="0" name="costo_unitario"
+                                                class="form-control form-control-sm">
                                         </div>
 
                                         <div class="d-grid">
@@ -580,8 +574,9 @@ if ($servicioIdSel > 0) {
                                                             <td><?= htmlspecialchars($m['created_at']) ?></td>
                                                             <td><?= htmlspecialchars($m['cve_articulo']) ?></td>
                                                             <td><?= htmlspecialchars($m['cantidad']) ?></td>
-                                                            <td><?= htmlspecialchars(number_format((float)$m['costo_unitario'], 2)) ?></td>
-                                                            <td><?= htmlspecialchars(number_format((float)$m['costo_total'], 2)) ?></td>
+                                                            <td><?= htmlspecialchars(number_format((float) $m['costo_unitario'], 2)) ?>
+                                                            </td>
+                                                            <td><?= htmlspecialchars(number_format((float) $m['costo_total'], 2)) ?></td>
                                                         </tr>
                                                     <?php endforeach; ?>
                                                 <?php endif; ?>
@@ -595,27 +590,24 @@ if ($servicioIdSel > 0) {
                                     <h6 class="mb-1">Mano de obra</h6>
                                     <form method="post" class="border rounded p-2 bg-light mb-2">
                                         <input type="hidden" name="action" value="agregar_mo">
-                                        <input type="hidden" name="servicio_id" value="<?= (int)$servicioSel['id'] ?>">
-                                        <input type="hidden" name="diagnostico_id" value="<?= (int)$diag['id'] ?>">
+                                        <input type="hidden" name="servicio_id" value="<?= (int) $servicioSel['id'] ?>">
+                                        <input type="hidden" name="diagnostico_id" value="<?= (int) $diag['id'] ?>">
 
                                         <div class="mb-2">
                                             <label class="form-label mb-1">Técnico</label>
-                                            <input type="text" name="tecnico"
-                                                   class="form-control form-control-sm" required>
+                                            <input type="text" name="tecnico" class="form-control form-control-sm" required>
                                         </div>
 
                                         <div class="mb-2">
                                             <label class="form-label mb-1">Horas</label>
-                                            <input type="number" step="0.1" min="0"
-                                                   name="horas"
-                                                   class="form-control form-control-sm" required>
+                                            <input type="number" step="0.1" min="0" name="horas"
+                                                class="form-control form-control-sm" required>
                                         </div>
 
                                         <div class="mb-2">
                                             <label class="form-label mb-1">Costo por hora</label>
-                                            <input type="number" step="0.01" min="0"
-                                                   name="costo_hora"
-                                                   class="form-control form-control-sm">
+                                            <input type="number" step="0.01" min="0" name="costo_hora"
+                                                class="form-control form-control-sm">
                                         </div>
 
                                         <div class="d-grid">
@@ -649,8 +641,9 @@ if ($servicioIdSel > 0) {
                                                             <td><?= htmlspecialchars($mo['created_at']) ?></td>
                                                             <td><?= htmlspecialchars($mo['tecnico']) ?></td>
                                                             <td><?= htmlspecialchars($mo['horas']) ?></td>
-                                                            <td><?= htmlspecialchars(number_format((float)$mo['costo_hora'], 2)) ?></td>
-                                                            <td><?= htmlspecialchars(number_format((float)$mo['costo_total'], 2)) ?></td>
+                                                            <td><?= htmlspecialchars(number_format((float) $mo['costo_hora'], 2)) ?></td>
+                                                            <td><?= htmlspecialchars(number_format((float) $mo['costo_total'], 2)) ?>
+                                                            </td>
                                                         </tr>
                                                     <?php endforeach; ?>
                                                 <?php endif; ?>

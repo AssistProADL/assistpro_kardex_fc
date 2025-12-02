@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../../app/db.php';
 
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    //@session_start();
 }
 require_once __DIR__ . '/../../bi/_menu_global.php';
 
@@ -16,14 +16,15 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 $usuarioActual = $_SESSION['usuario'] ?? 'SYSTEM';
 
-$mensajeOk   = null;
-$mensajeErr  = null;
+$mensajeOk = null;
+$mensajeErr = null;
 
 // =======================
 // Utilidades
 // =======================
 
-function get_servicio_by_id(PDO $pdo, int $id): ?array {
+function get_servicio_by_id(PDO $pdo, int $id): ?array
+{
     $sql = "SELECT s.*, a.des_almac,
                    c.RazonSocial AS cliente_nombre,
                    c.Cve_Clte    AS cliente_clave
@@ -37,7 +38,8 @@ function get_servicio_by_id(PDO $pdo, int $id): ?array {
     return $row ?: null;
 }
 
-function get_log_last_detail(PDO $pdo, int $servicioId, string $evento): ?string {
+function get_log_last_detail(PDO $pdo, int $servicioId, string $evento): ?string
+{
     $sql = "SELECT detalle
             FROM td_servicio_caso_log
             WHERE servicio_id = :id AND evento = :evento
@@ -45,18 +47,18 @@ function get_log_last_detail(PDO $pdo, int $servicioId, string $evento): ?string
             LIMIT 1";
     $st = $pdo->prepare($sql);
     $st->execute([
-        ':id'     => $servicioId,
+        ':id' => $servicioId,
         ':evento' => $evento,
     ]);
     $row = $st->fetch(PDO::FETCH_ASSOC);
-    return $row ? (string)$row['detalle'] : null;
+    return $row ? (string) $row['detalle'] : null;
 }
 
 // =======================
 // Parámetros
 // =======================
 
-$servicioIdSel = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$servicioIdSel = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 // =======================
 // POST: Acciones de laboratorio
@@ -66,9 +68,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'actualizar_laboratorio') {
-        $servicioId   = (int)($_POST['servicio_id'] ?? 0);
-        $statusNuevo  = trim($_POST['status_lab'] ?? '');
-        $diagTexto    = trim($_POST['diagnostico'] ?? '');
+        $servicioId = (int) ($_POST['servicio_id'] ?? 0);
+        $statusNuevo = trim($_POST['status_lab'] ?? '');
+        $diagTexto = trim($_POST['diagnostico'] ?? '');
         $trabajoTexto = trim($_POST['trabajo_realizado'] ?? '');
 
         if ($servicioId <= 0) {
@@ -85,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stUpd = $pdo->prepare($sqlUpd);
                     $stUpd->execute([
                         ':status' => $statusNuevo,
-                        ':id'     => $servicioId,
+                        ':id' => $servicioId,
                     ]);
 
                     // Log cambio de status
@@ -97,9 +99,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stLog = $pdo->prepare($sqlLog);
                     $stLog->execute([
                         ':servicio_id' => $servicioId,
-                        ':usuario'     => $usuarioActual,
-                        ':detalle'     => 'Cambio de status en laboratorio a: ' . $statusNuevo,
-                        ':created_by'  => $usuarioActual,
+                        ':usuario' => $usuarioActual,
+                        ':detalle' => 'Cambio de status en laboratorio a: ' . $statusNuevo,
+                        ':created_by' => $usuarioActual,
                     ]);
                 }
 
@@ -113,9 +115,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stLog = $pdo->prepare($sqlLog);
                     $stLog->execute([
                         ':servicio_id' => $servicioId,
-                        ':usuario'     => $usuarioActual,
-                        ':detalle'     => $diagTexto,
-                        ':created_by'  => $usuarioActual,
+                        ':usuario' => $usuarioActual,
+                        ':detalle' => $diagTexto,
+                        ':created_by' => $usuarioActual,
                     ]);
                 }
 
@@ -129,9 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stLog = $pdo->prepare($sqlLog);
                     $stLog->execute([
                         ':servicio_id' => $servicioId,
-                        ':usuario'     => $usuarioActual,
-                        ':detalle'     => $trabajoTexto,
-                        ':created_by'  => $usuarioActual,
+                        ':usuario' => $usuarioActual,
+                        ':detalle' => $trabajoTexto,
+                        ':created_by' => $usuarioActual,
                     ]);
                 }
 
@@ -146,11 +148,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif ($action === 'agregar_parte') {
-        $servicioId  = (int)($_POST['servicio_id'] ?? 0);
+        $servicioId = (int) ($_POST['servicio_id'] ?? 0);
         $cveArticulo = trim($_POST['parte_articulo'] ?? '');
-        $cantidad    = (float)($_POST['parte_cantidad'] ?? 0);
-        $almacenOri  = trim($_POST['parte_almacen'] ?? '');
-        $nota        = trim($_POST['parte_nota'] ?? '');
+        $cantidad = (float) ($_POST['parte_cantidad'] ?? 0);
+        $almacenOri = trim($_POST['parte_almacen'] ?? '');
+        $nota = trim($_POST['parte_nota'] ?? '');
 
         if ($servicioId <= 0) {
             $mensajeErr = 'ID de servicio inválido.';
@@ -171,11 +173,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stIns = $pdo->prepare($sqlIns);
                 $stIns->execute([
                     ':servicio_id' => $servicioId,
-                    ':articulo'    => $cveArticulo,
-                    ':cantidad'    => $cantidad,
-                    ':almacen'     => $almacenOri ?: null,
-                    ':nota'        => $nota ?: null,
-                    ':created_by'  => $usuarioActual,
+                    ':articulo' => $cveArticulo,
+                    ':cantidad' => $cantidad,
+                    ':almacen' => $almacenOri ?: null,
+                    ':nota' => $nota ?: null,
+                    ':created_by' => $usuarioActual,
                 ]);
 
                 // Log
@@ -186,12 +188,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             :detalle, NOW(), :created_by)";
                 $stLog = $pdo->prepare($sqlLog);
                 $detalle = "Parte requerida: {$cveArticulo} x {$cantidad}" .
-                           ($almacenOri ? " desde almacén {$almacenOri}" : '');
+                    ($almacenOri ? " desde almacén {$almacenOri}" : '');
                 $stLog->execute([
                     ':servicio_id' => $servicioId,
-                    ':usuario'     => $usuarioActual,
-                    ':detalle'     => $detalle,
-                    ':created_by'  => $usuarioActual,
+                    ':usuario' => $usuarioActual,
+                    ':detalle' => $detalle,
+                    ':created_by' => $usuarioActual,
                 ]);
 
                 $pdo->commit();
@@ -229,9 +231,9 @@ $casosLab = $pdo->query($sqlLista)->fetchAll(PDO::FETCH_ASSOC);
 // =======================
 
 $servicioSel = null;
-$diagActual  = null;
-$trabActual  = null;
-$partes      = [];
+$diagActual = null;
+$trabActual = null;
+$partes = [];
 
 if ($servicioIdSel > 0) {
     $servicioSel = get_servicio_by_id($pdo, $servicioIdSel);
@@ -307,19 +309,19 @@ if ($servicioIdSel > 0) {
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($casosLab as $c): ?>
-                                        <tr <?= ($servicioIdSel === (int)$c['id']) ? 'class="table-primary"' : '' ?>>
+                                        <tr <?= ($servicioIdSel === (int) $c['id']) ? 'class="table-primary"' : '' ?>>
                                             <td><?= htmlspecialchars($c['folio']) ?></td>
                                             <td><?= htmlspecialchars($c['fecha_alta']) ?></td>
                                             <td>
                                                 <?= '[' . htmlspecialchars($c['cliente_clave'] ?? '') . '] ' .
-                                                     htmlspecialchars($c['cliente_nombre'] ?? '') ?>
+                                                    htmlspecialchars($c['cliente_nombre'] ?? '') ?>
                                             </td>
                                             <td><?= htmlspecialchars($c['articulo']) ?></td>
                                             <td><?= htmlspecialchars($c['serie']) ?></td>
                                             <td><?= htmlspecialchars($c['status']) ?></td>
                                             <td>
-                                                <a href="laboratorio_servicio.php?id=<?= (int)$c['id'] ?>"
-                                                   class="btn btn-outline-primary btn-sm btn-icon">
+                                                <a href="laboratorio_servicio.php?id=<?= (int) $c['id'] ?>"
+                                                    class="btn btn-outline-primary btn-sm btn-icon">
                                                     Ver
                                                 </a>
                                             </td>
@@ -330,7 +332,8 @@ if ($servicioIdSel > 0) {
                         </table>
                     </div>
                     <small class="text-muted d-block mt-1">
-                        * Se muestran hasta 200 casos. En siguiente fase agregamos filtros por laboratorio, rango de fechas y usuario.
+                        * Se muestran hasta 200 casos. En siguiente fase agregamos filtros por laboratorio, rango de
+                        fechas y usuario.
                     </small>
                 </div>
             </div>
@@ -359,10 +362,9 @@ if ($servicioIdSel > 0) {
                             <?php
                             // botón de cotización solo para SERVICIO (no garantía)
                             if (isset($servicioSel['motivo']) && strtoupper($servicioSel['motivo']) === 'SERVICIO'):
-                            ?>
-                                <a href="servicio_generar_cotizacion.php?id=<?= (int)$servicioSel['id'] ?>"
-                                   class="btn btn-warning btn-sm"
-                                   style="font-size:0.75rem;">
+                                ?>
+                                <a href="servicio_generar_cotizacion.php?id=<?= (int) $servicioSel['id'] ?>"
+                                    class="btn btn-warning btn-sm" style="font-size:0.75rem;">
                                     Generar Cotización CRM
                                 </a>
                             <?php endif; ?>
@@ -374,7 +376,7 @@ if ($servicioIdSel > 0) {
                                 <div><strong>Cliente:</strong></div>
                                 <div>
                                     <?= '[' . htmlspecialchars($servicioSel['cliente_clave'] ?? '') . '] ' .
-                                         htmlspecialchars($servicioSel['cliente_nombre'] ?? '') ?>
+                                        htmlspecialchars($servicioSel['cliente_nombre'] ?? '') ?>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -400,7 +402,7 @@ if ($servicioIdSel > 0) {
                             <div class="col-md-4">
                                 <div><strong>Garantía:</strong></div>
                                 <div>
-                                    <?php if ((int)$servicioSel['es_garantia'] === 1): ?>
+                                    <?php if ((int) $servicioSel['es_garantia'] === 1): ?>
                                         <span class="badge bg-success">Sí</span>
                                     <?php else: ?>
                                         <span class="badge bg-secondary">No</span>
@@ -418,7 +420,7 @@ if ($servicioIdSel > 0) {
                         <!-- Form de laboratorio -->
                         <form method="post" class="mb-3">
                             <input type="hidden" name="action" value="actualizar_laboratorio">
-                            <input type="hidden" name="servicio_id" value="<?= (int)$servicioSel['id'] ?>">
+                            <input type="hidden" name="servicio_id" value="<?= (int) $servicioSel['id'] ?>">
 
                             <div class="row">
                                 <div class="col-md-4 mb-2">
@@ -427,16 +429,15 @@ if ($servicioIdSel > 0) {
                                         <option value="">[Sin cambio]</option>
                                         <?php
                                         $statusOpc = [
-                                            'EN_LAB'        => 'En laboratorio',
-                                            'EN_DIAGNOSTICO'=> 'En diagnóstico',
+                                            'EN_LAB' => 'En laboratorio',
+                                            'EN_DIAGNOSTICO' => 'En diagnóstico',
                                             'EN_REPARACION' => 'En reparación',
-                                            'EN_PRUEBAS'    => 'En pruebas',
+                                            'EN_PRUEBAS' => 'En pruebas',
                                             'LISTO_ENTREGA' => 'Listo para entrega / envío',
                                         ];
                                         foreach ($statusOpc as $val => $txt):
-                                        ?>
-                                            <option value="<?= $val ?>"
-                                                <?= ($servicioSel['status'] === $val ? 'selected' : '') ?>>
+                                            ?>
+                                            <option value="<?= $val ?>" <?= ($servicioSel['status'] === $val ? 'selected' : '') ?>>
                                                 <?= $txt ?>
                                             </option>
                                         <?php endforeach; ?>
@@ -446,9 +447,8 @@ if ($servicioIdSel > 0) {
 
                             <div class="mb-2">
                                 <label class="form-label mb-1">Diagnóstico de laboratorio</label>
-                                <textarea name="diagnostico" rows="3"
-                                          class="form-control form-control-sm"
-                                          placeholder="Descripción técnica de la falla detectada..."><?= htmlspecialchars($diagActual ?? '') ?></textarea>
+                                <textarea name="diagnostico" rows="3" class="form-control form-control-sm"
+                                    placeholder="Descripción técnica de la falla detectada..."><?= htmlspecialchars($diagActual ?? '') ?></textarea>
                                 <small class="text-muted">
                                     Se guarda en la bitácora como evento <code>LAB_DIAGNOSTICO</code>.
                                 </small>
@@ -456,9 +456,8 @@ if ($servicioIdSel > 0) {
 
                             <div class="mb-2">
                                 <label class="form-label mb-1">Trabajo realizado / acciones correctivas</label>
-                                <textarea name="trabajo_realizado" rows="3"
-                                          class="form-control form-control-sm"
-                                          placeholder="Componentes reemplazados, procedimientos realizados, ajustes, etc."><?= htmlspecialchars($trabActual ?? '') ?></textarea>
+                                <textarea name="trabajo_realizado" rows="3" class="form-control form-control-sm"
+                                    placeholder="Componentes reemplazados, procedimientos realizados, ajustes, etc."><?= htmlspecialchars($trabActual ?? '') ?></textarea>
                                 <small class="text-muted">
                                     Se guarda en la bitácora como evento <code>LAB_TRABAJO</code>.
                                 </small>
@@ -479,20 +478,19 @@ if ($servicioIdSel > 0) {
                                 <h6 class="mb-1">Partes / refacciones requeridas</h6>
                                 <form method="post" class="border rounded p-2 bg-light">
                                     <input type="hidden" name="action" value="agregar_parte">
-                                    <input type="hidden" name="servicio_id" value="<?= (int)$servicioSel['id'] ?>">
+                                    <input type="hidden" name="servicio_id" value="<?= (int) $servicioSel['id'] ?>">
 
                                     <div class="mb-2">
                                         <label class="form-label mb-1">Almacén origen</label>
-                                        <select id="selAlmacenLab" name="parte_almacen"
-                                                class="form-select form-select-sm">
+                                        <select id="selAlmacenLab" name="parte_almacen" class="form-select form-select-sm">
                                             <option value="">[Selecciona almacén]</option>
                                         </select>
                                     </div>
 
                                     <div class="mb-2">
                                         <label class="form-label mb-1">Artículo</label>
-                                        <select id="selArticuloLab" name="parte_articulo"
-                                                class="form-select form-select-sm" required>
+                                        <select id="selArticuloLab" name="parte_articulo" class="form-select form-select-sm"
+                                            required>
                                             <option value="">[Selecciona producto]</option>
                                         </select>
                                     </div>
@@ -500,13 +498,12 @@ if ($servicioIdSel > 0) {
                                     <div class="mb-2">
                                         <label class="form-label mb-1">Cantidad</label>
                                         <input type="number" name="parte_cantidad" step="0.01" min="0"
-                                               class="form-control form-control-sm" required>
+                                            class="form-control form-control-sm" required>
                                     </div>
 
                                     <div class="mb-2">
                                         <label class="form-label mb-1">Nota (opcional)</label>
-                                        <input type="text" name="parte_nota"
-                                               class="form-control form-control-sm">
+                                        <input type="text" name="parte_nota" class="form-control form-control-sm">
                                     </div>
 
                                     <div class="d-grid">
@@ -569,52 +566,52 @@ if ($servicioIdSel > 0) {
 </div>
 
 <script>
-// Cargar almacenes y productos desde public/api/filtros_assistpro.php
-document.addEventListener('DOMContentLoaded', function () {
-    const apiUrl = '../../api/filtros_assistpro.php?action=init';
+    // Cargar almacenes y productos desde public/api/filtros_assistpro.php
+    document.addEventListener('DOMContentLoaded', function () {
+        const apiUrl = '../../api/filtros_assistpro.php?action=init';
 
-    fetch(apiUrl, { method: 'GET' })
-        .then(resp => resp.json())
-        .then(data => {
-            if (!data || data.ok === false) {
-                console.error('Error en filtros_assistpro:', data && data.error);
-                return;
-            }
+        fetch(apiUrl, { method: 'GET' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data || data.ok === false) {
+                    console.error('Error en filtros_assistpro:', data && data.error);
+                    return;
+                }
 
-            // Almacenes para laboratorio
-            const selAlm = document.getElementById('selAlmacenLab');
-            if (selAlm) {
-                if (!selAlm.options.length) {
-                    selAlm.innerHTML = '<option value="">[Selecciona almacén]</option>';
+                // Almacenes para laboratorio
+                const selAlm = document.getElementById('selAlmacenLab');
+                if (selAlm) {
+                    if (!selAlm.options.length) {
+                        selAlm.innerHTML = '<option value="">[Selecciona almacén]</option>';
+                    }
+                    if (Array.isArray(data.almacenes)) {
+                        data.almacenes.forEach(a => {
+                            const opt = document.createElement('option');
+                            opt.value = a.cve_almac;
+                            opt.textContent = a.des_almac || a.clave_almacen || a.cve_almac;
+                            selAlm.appendChild(opt);
+                        });
+                    }
                 }
-                if (Array.isArray(data.almacenes)) {
-                    data.almacenes.forEach(a => {
-                        const opt = document.createElement('option');
-                        opt.value = a.cve_almac;
-                        opt.textContent = a.des_almac || a.clave_almacen || a.cve_almac;
-                        selAlm.appendChild(opt);
-                    });
-                }
-            }
 
-            // Productos para partes
-            const selArt = document.getElementById('selArticuloLab');
-            if (selArt) {
-                selArt.innerHTML = '<option value="">[Selecciona producto]</option>';
-                if (Array.isArray(data.productos)) {
-                    data.productos.forEach(p => {
-                        const opt = document.createElement('option');
-                        opt.value = p.cve_articulo;
-                        opt.textContent = '[' + p.cve_articulo + '] ' + p.des_articulo;
-                        selArt.appendChild(opt);
-                    });
+                // Productos para partes
+                const selArt = document.getElementById('selArticuloLab');
+                if (selArt) {
+                    selArt.innerHTML = '<option value="">[Selecciona producto]</option>';
+                    if (Array.isArray(data.productos)) {
+                        data.productos.forEach(p => {
+                            const opt = document.createElement('option');
+                            opt.value = p.cve_articulo;
+                            opt.textContent = '[' + p.cve_articulo + '] ' + p.des_articulo;
+                            selArt.appendChild(opt);
+                        });
+                    }
                 }
-            }
-        })
-        .catch(err => {
-            console.error('Error cargando filtros_assistpro:', err);
-        });
-});
+            })
+            .catch(err => {
+                console.error('Error cargando filtros_assistpro:', err);
+            });
+    });
 </script>
 
 <?php

@@ -1,6 +1,6 @@
 <?php
 // public/Ingresos/importador_ingresos.php
-session_start();
+//@session_start();
 
 require_once __DIR__ . '/../bi/_menu_global.php';
 require_once __DIR__ . '/../../app/db.php';
@@ -11,10 +11,11 @@ $TITLE = 'Importador de Ingresos';
     .ap-card {
         background: #ffffff;
         border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
         border: 1px solid #e1e5eb;
         margin-bottom: 15px;
     }
+
     .ap-card-header {
         background: #0F5AAD;
         color: #ffffff;
@@ -23,25 +24,31 @@ $TITLE = 'Importador de Ingresos';
         font-weight: 600;
         border-radius: 8px 8px 0 0;
     }
+
     .ap-card-body {
         padding: 12px;
         font-size: 11px;
     }
+
     .ap-form-control {
         font-size: 11px;
         height: 28px;
         padding: 2px 6px;
     }
+
     .ap-label {
         font-size: 11px;
         font-weight: 600;
         margin-bottom: 2px;
     }
-    .table-sm th, .table-sm td {
+
+    .table-sm th,
+    .table-sm td {
         font-size: 10px;
         padding: 4px 6px;
         white-space: nowrap;
     }
+
     .scroll-table {
         max-height: 340px;
         overflow-x: auto;
@@ -86,7 +93,8 @@ $TITLE = 'Importador de Ingresos';
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" value="1" id="chk_acomodo_auto" name="acomodo_auto">
+                            <input class="form-check-input" type="checkbox" value="1" id="chk_acomodo_auto"
+                                name="acomodo_auto">
                             <label class="form-check-label" for="chk_acomodo_auto" style="font-size:11px;">
                                 Acomodo automático (cuando aplique)
                             </label>
@@ -132,7 +140,9 @@ $TITLE = 'Importador de Ingresos';
                 </div>
                 <div class="col-md-9">
                     <span class="ap-label">Mensajes</span>
-                    <div id="mensajes-importador" style="font-size:11px; max-height:80px; overflow-y:auto; border:1px solid #eee; padding:4px;"></div>
+                    <div id="mensajes-importador"
+                        style="font-size:11px; max-height:80px; overflow-y:auto; border:1px solid #eee; padding:4px;">
+                    </div>
                 </div>
             </div>
 
@@ -168,106 +178,106 @@ $TITLE = 'Importador de Ingresos';
 </div>
 
 <script>
-// ================== CARGA DE EMPRESA / ALMACÉN DESDE filtros_assistpro.php ==================
+    // ================== CARGA DE EMPRESA / ALMACÉN DESDE filtros_assistpro.php ==================
 
-function cargarEmpresasYAlmacenes() {
-    const selEmpresa = document.getElementById('empresa_id');
-    const selAlmacen = document.getElementById('almacen_id');
+    function cargarEmpresasYAlmacenes() {
+        const selEmpresa = document.getElementById('empresa_id');
+        const selAlmacen = document.getElementById('almacen_id');
 
-    if (!selEmpresa || !selAlmacen) {
-        return;
-    }
-
-    fetch('../api/filtros_assistpro.php?action=init')
-        .then(r => r.json())
-        .then(data => {
-            if (!data || data.ok === false) {
-                console.error('Error en filtros_assistpro:', data && data.error);
-                return;
-            }
-
-            // EMPRESAS
-            if (Array.isArray(data.empresas)) {
-                selEmpresa.innerHTML = '<option value="">[Seleccione]</option>';
-                data.empresas.forEach(emp => {
-                    // cve_cia y des_cia vienen del SELECT actual en filtros_assistpro.php
-                    const opt = document.createElement('option');
-                    opt.value = emp.cve_cia;
-                    opt.textContent = '[' + emp.cve_cia + '] ' + (emp.des_cia || '');
-                    selEmpresa.appendChild(opt);
-                });
-            }
-
-            // ALMACENES (no filtrados por empresa, porque el API actual no incluye cve_cia en c_almacenp)
-            if (Array.isArray(data.almacenes)) {
-                selAlmacen.innerHTML = '<option value="">[Seleccione]</option>';
-                data.almacenes.forEach(alm => {
-                    const clave = alm.cve_almac || alm.clave_almacen || '';
-                    const desc  = alm.des_almac || clave;
-                    const opt   = document.createElement('option');
-                    opt.value = clave;
-                    opt.textContent = (clave ? '[' + clave + '] ' : '') + desc;
-                    selAlmacen.appendChild(opt);
-                });
-            }
-        })
-        .catch(err => {
-            console.error('Error de comunicación con filtros_assistpro:', err);
-        });
-}
-
-// ================== LÓGICA DEL IMPORTADOR ==================
-
-document.addEventListener('DOMContentLoaded', function () {
-    const selEmpresa = document.getElementById('empresa_id');
-    const selAlmacen = document.getElementById('almacen_id');
-
-    // Cargar empresas/almacenes con el API global ya existente
-    cargarEmpresasYAlmacenes();
-
-    // Si más adelante quieres filtrar almacenes por empresa sin tocar el API,
-    // aquí podríamos hacerlo en front, pero hoy el JSON de almacenes no trae cve_cia.
-
-    // Botón: Descargar layout
-    document.getElementById('btn-descargar-layout').addEventListener('click', function () {
-        const tipo = document.getElementById('tipo_ingreso').value;
-        if (!tipo) {
-            alert('Seleccione primero el tipo de ingreso.');
+        if (!selEmpresa || !selAlmacen) {
             return;
         }
-        // El API de layouts lo manejamos en importador_ingresos.php (API)
-        window.location.href = '../api/importador_ingresos.php?action=layout&tipo_ingreso=' + encodeURIComponent(tipo);
-    });
 
-    // Botón: Previsualizar
-    document.getElementById('btn-previsualizar').addEventListener('click', function () {
-        const form = document.getElementById('form-importador');
-        const fd = new FormData(form);
-        fd.append('action', 'previsualizar');
+        fetch('../api/filtros_assistpro.php?action=init')
+            .then(r => r.json())
+            .then(data => {
+                if (!data || data.ok === false) {
+                    console.error('Error en filtros_assistpro:', data && data.error);
+                    return;
+                }
 
-        fetch('../api/importador_ingresos.php', {
-            method: 'POST',
-            body: fd
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (!data.ok) {
-                document.getElementById('mensajes-importador').innerText = data.error || 'Error desconocido';
+                // EMPRESAS
+                if (Array.isArray(data.empresas)) {
+                    selEmpresa.innerHTML = '<option value="">[Seleccione]</option>';
+                    data.empresas.forEach(emp => {
+                        // cve_cia y des_cia vienen del SELECT actual en filtros_assistpro.php
+                        const opt = document.createElement('option');
+                        opt.value = emp.cve_cia;
+                        opt.textContent = '[' + emp.cve_cia + '] ' + (emp.des_cia || '');
+                        selEmpresa.appendChild(opt);
+                    });
+                }
+
+                // ALMACENES (no filtrados por empresa, porque el API actual no incluye cve_cia en c_almacenp)
+                if (Array.isArray(data.almacenes)) {
+                    selAlmacen.innerHTML = '<option value="">[Seleccione]</option>';
+                    data.almacenes.forEach(alm => {
+                        const clave = alm.cve_almac || alm.clave_almacen || '';
+                        const desc = alm.des_almac || clave;
+                        const opt = document.createElement('option');
+                        opt.value = clave;
+                        opt.textContent = (clave ? '[' + clave + '] ' : '') + desc;
+                        selAlmacen.appendChild(opt);
+                    });
+                }
+            })
+            .catch(err => {
+                console.error('Error de comunicación con filtros_assistpro:', err);
+            });
+    }
+
+    // ================== LÓGICA DEL IMPORTADOR ==================
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const selEmpresa = document.getElementById('empresa_id');
+        const selAlmacen = document.getElementById('almacen_id');
+
+        // Cargar empresas/almacenes con el API global ya existente
+        cargarEmpresasYAlmacenes();
+
+        // Si más adelante quieres filtrar almacenes por empresa sin tocar el API,
+        // aquí podríamos hacerlo en front, pero hoy el JSON de almacenes no trae cve_cia.
+
+        // Botón: Descargar layout
+        document.getElementById('btn-descargar-layout').addEventListener('click', function () {
+            const tipo = document.getElementById('tipo_ingreso').value;
+            if (!tipo) {
+                alert('Seleccione primero el tipo de ingreso.');
                 return;
             }
+            // El API de layouts lo manejamos en importador_ingresos.php (API)
+            window.location.href = '../api/importador_ingresos.php?action=layout&tipo_ingreso=' + encodeURIComponent(tipo);
+        });
 
-            // Resumen totales
-            document.getElementById('resumen-totales').innerText =
-                'Líneas: ' + (data.total || 0) +
-                ' | OK: ' + (data.total_ok || 0) +
-                ' | Error: ' + (data.total_err || 0);
+        // Botón: Previsualizar
+        document.getElementById('btn-previsualizar').addEventListener('click', function () {
+            const form = document.getElementById('form-importador');
+            const fd = new FormData(form);
+            fd.append('action', 'previsualizar');
 
-            // Llenar tabla
-            const tbody = document.querySelector('#tabla-previsualizacion tbody');
-            tbody.innerHTML = '';
-            (data.filas || []).forEach((row, idx) => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
+            fetch('../api/importador_ingresos.php', {
+                method: 'POST',
+                body: fd
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.ok) {
+                        document.getElementById('mensajes-importador').innerText = data.error || 'Error desconocido';
+                        return;
+                    }
+
+                    // Resumen totales
+                    document.getElementById('resumen-totales').innerText =
+                        'Líneas: ' + (data.total || 0) +
+                        ' | OK: ' + (data.total_ok || 0) +
+                        ' | Error: ' + (data.total_err || 0);
+
+                    // Llenar tabla
+                    const tbody = document.querySelector('#tabla-previsualizacion tbody');
+                    tbody.innerHTML = '';
+                    (data.filas || []).forEach((row, idx) => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
                     <td>${idx + 1}</td>
                     <td>${row.estado || ''}</td>
                     <td>${row.mensaje || ''}</td>
@@ -285,48 +295,48 @@ document.addEventListener('DOMContentLoaded', function () {
                     <td>${row.lote || ''}</td>
                     <td>${row.caducidad || ''}</td>
                 `;
-                tbody.appendChild(tr);
-            });
+                        tbody.appendChild(tr);
+                    });
 
-            document.getElementById('mensajes-importador').innerText = data.mensaje_global || 'Previsualización generada.';
-            document.getElementById('btn-procesar').disabled = (data.total_ok || 0) === 0;
-        })
-        .catch(err => {
-            document.getElementById('mensajes-importador').innerText = 'Error de comunicación: ' + err;
+                    document.getElementById('mensajes-importador').innerText = data.mensaje_global || 'Previsualización generada.';
+                    document.getElementById('btn-procesar').disabled = (data.total_ok || 0) === 0;
+                })
+                .catch(err => {
+                    document.getElementById('mensajes-importador').innerText = 'Error de comunicación: ' + err;
+                });
+        });
+
+        // Botón: Procesar
+        document.getElementById('btn-procesar').addEventListener('click', function () {
+            if (!confirm('¿Desea procesar los ingresos?')) return;
+
+            const form = document.getElementById('form-importador');
+            const fd = new FormData(form);
+            fd.append('action', 'procesar');
+
+            fetch('../api/importador_ingresos.php', {
+                method: 'POST',
+                body: fd
+            })
+                .then(r => r.json())
+                .then(data => {
+                    let msg = data.mensaje || (data.ok ? 'Procesado.' : 'Error al procesar.');
+
+                    // Si el API ya devuelve un folio_importacion, lo mostramos
+                    if (data.ok && data.folio_importacion) {
+                        msg += ' | Folio importación: ' + data.folio_importacion;
+                    }
+
+                    document.getElementById('mensajes-importador').innerText = msg;
+                    if (data.ok) {
+                        document.getElementById('btn-procesar').disabled = true;
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('mensajes-importador').innerText = 'Error de comunicación: ' + err;
+                });
         });
     });
-
-    // Botón: Procesar
-    document.getElementById('btn-procesar').addEventListener('click', function () {
-        if (!confirm('¿Desea procesar los ingresos?')) return;
-
-        const form = document.getElementById('form-importador');
-        const fd = new FormData(form);
-        fd.append('action', 'procesar');
-
-        fetch('../api/importador_ingresos.php', {
-            method: 'POST',
-            body: fd
-        })
-        .then(r => r.json())
-        .then(data => {
-            let msg = data.mensaje || (data.ok ? 'Procesado.' : 'Error al procesar.');
-
-            // Si el API ya devuelve un folio_importacion, lo mostramos
-            if (data.ok && data.folio_importacion) {
-                msg += ' | Folio importación: ' + data.folio_importacion;
-            }
-
-            document.getElementById('mensajes-importador').innerText = msg;
-            if (data.ok) {
-                document.getElementById('btn-procesar').disabled = true;
-            }
-        })
-        .catch(err => {
-            document.getElementById('mensajes-importador').innerText = 'Error de comunicación: ' + err;
-        });
-    });
-});
 </script>
 
 <?php
