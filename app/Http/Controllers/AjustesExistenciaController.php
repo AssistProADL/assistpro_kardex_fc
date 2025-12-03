@@ -76,7 +76,7 @@ class AjustesExistenciaController
 
             // Filtros Dinámicos
             if ($almacen) {
-                $query->where('ve.cve_almac', $almacen);
+                $query->where('p.id', $almacen);
             }
 
             if ($almacenaje) {
@@ -467,7 +467,7 @@ class AjustesExistenciaController
                 ->distinct();
 
             if ($almacen) {
-                $query->where('ve.cve_almac', $almacen);
+                $query->where('p.id', $almacen);
             }
 
             if ($almacenaje) {
@@ -525,7 +525,7 @@ class AjustesExistenciaController
 
             // Aplicar filtros
             if ($almacen) {
-                $baseQuery->where('ve.cve_almac', $almacen);
+                $baseQuery->where('p.id', $almacen);
             }
 
             if ($almacenaje) {
