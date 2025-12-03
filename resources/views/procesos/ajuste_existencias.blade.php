@@ -168,6 +168,26 @@
                                         </select>
                                     </div>
                                     <div>
+                                        <label for="estado" class="ap-label">
+                                            <i class="fa fa-battery-half"></i> Estado
+                                        </label>
+                                        <select class="form-select ap-form-control select2" id="estado">
+                                            <option value="">Todos</option>
+                                            <option value="vacio">Vacío</option>
+                                            <option value="ocupado">Ocupado</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="activo" class="ap-label">
+                                            <i class="fa fa-power-off"></i> Activo
+                                        </label>
+                                        <select class="form-select ap-form-control select2" id="activo">
+                                            <option value="">Todos</option>
+                                            <option value="1">Si</option>
+                                            <option value="0">No</option>
+                                        </select>
+                                    </div>
+                                    <div>
                                         <label for="articulo" class="ap-label">
                                             <i class="fa fa-cube"></i> Artículo
                                         </label>
@@ -205,9 +225,13 @@
                     <thead>
                         <tr>
                             <th>Acción</th>
+                            <th style="width: 50px;"></th> <!-- Icono -->
                             <th>Almacén / Zona</th>
+                            <th>Tipo</th>
+                            <th>Estado</th>
                             <th>BL</th>
                             <th>Zona de Almacenaje</th>
+                            <th>Activo</th>
                             <th>Peso%</th>
                             <th>Volumen%</th>
                             <th>Dimensiones (Alt. X Anc. X Lar. )</th>

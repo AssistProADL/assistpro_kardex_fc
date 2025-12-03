@@ -32,7 +32,9 @@ $(document).ready(function () {
                     page: params.page || 1,
                     almacen: $('#almacen').val(),
                     almacenaje: $('#zona').val(),
-                    tipo: $('#tipo').val()
+                    tipo: $('#tipo').val(),
+                    estado: $('#estado').val(),
+                    activo: $('#activo').val()
                 };
             },
             processResults: function (data, params) {
@@ -57,11 +59,25 @@ $(document).ready(function () {
     });
 
     // Eventos de filtros
-    $('#almacen, #zona, #tipo, #articulo').on('change', function () {
+    $('#almacen, #zona, #tipo, #estado, #activo, #articulo').on('change', function () {
         // Si cambia el almacén, limpiar artículo ya que depende del almacén
         if (this.id === 'almacen') {
             $('#articulo').val(null).trigger('change');
         }
+
+        // Actualizar currentFilters SIEMPRE que cambie un filtro
+        currentFilters = {
+            almacen: $('#almacen').val(),
+            almacenaje: $('#zona').val(),
+            tipo: $('#tipo').val(),
+            estado: $('#estado').val(),
+            activo: $('#activo').val(),
+            articulo: $('#articulo').val(),
+            search: $('#buscar_bl').val()
+        };
+
+        // Recargar KPIs y tabla automáticamente
+        loadKPIs();
         if (table) table.ajax.reload();
     });
     let table;
@@ -118,6 +134,8 @@ $(document).ready(function () {
             almacen: $('#almacen').val(),
             almacenaje: $('#zona').val(),
             tipo: $('#tipo').val(),
+            estado: $('#estado').val(),
+            activo: $('#activo').val(),
             articulo: $('#articulo').val(),
             search: $('#buscar_bl').val()
         };
@@ -142,7 +160,7 @@ $(document).ready(function () {
 
     // Limpiar filtros
     function clearFilters() {
-        $('#almacen, #zona, #tipo, #articulo, #buscar_bl').val('');
+        $('#almacen, #zona, #tipo, #estado, #activo, #articulo, #buscar_bl').val('');
         $('#zona').prop('disabled', true);
         currentFilters = {};
         applyFilters();
@@ -258,20 +276,89 @@ $(document).ready(function () {
                     `;
                     }
                 },
+                {
+                    data: null,
+                    width: '50px',
+                    className: 'text-center',
+                    render: (d) => {
+                        let icon = 'fa-box';
+                        let color = 'text-secondary';
+                        if (d.tipo_ubicacion === 'Libre') { icon = 'fa-check-circle'; color = 'text-success'; }
+                        if (d.tipo_ubicacion === 'Restringida') { icon = 'fa-exclamation-triangle'; color = 'text-warning'; }
+                        if (d.tipo_ubicacion === 'Cuarentena') { icon = 'fa-ban'; color = 'text-danger'; }
+                        return `<div class="avatar-sm bg-light rounded p-2"><i class="fa ${icon} ${color} fa-lg"></i></div>`;
+                    }
+                },
                 { data: 'almacen_zona', width: '200px' },
+                { data: 'tipo_ubicacion', width: '100px' },
+                {
+                    data: 'estado_ubicacion',
+                    width: '100px',
+                    render: function (data) {
+                        if (data === 'Ocupado') {
+                            return '<span class="badge bg-success">Ocupado</span>';
+                        } else {
+                            return '<span class="badge bg-secondary">Vacío</span>';
+                        }
+                    }
+                },
                 { data: 'BL', width: '70px' },
                 { data: 'zona_almacenaje', width: '210px' },
                 {
-                    data: null,
-                    width: '100px',
-                    className: 'text-end',
-                    render: (d) => ''
+                    data: 'Activo',
+                    width: '80px',
+                    className: 'text-center',
+                    render: function (data) {
+                        return data == 1
+                            ? '<span class="badge bg-success"><i class="fa fa-check"></i> Activo</span>'
+                            : '<span class="badge bg-danger"><i class="fa fa-times"></i> Inactivo</span>';
+                    }
                 },
                 {
                     data: null,
-                    width: '110px',
-                    className: 'text-end',
-                    render: (d) => ''
+                    width: '150px',
+                    className: 'text-center',
+                    render: (d) => {
+                        const occupied = parseFloat(d.peso_ocupado || 0);
+                        const max = parseFloat(d.PesoMax || 0);
+                        const percent = max > 0 ? Math.min(100, (occupied / max) * 100).toFixed(1) : 0;
+                        let color = 'bg-success';
+                        if (percent > 80) color = 'bg-warning';
+                        if (percent > 95) color = 'bg-danger';
+
+                        return `
+                            <div class="d-flex align-items-center">
+                                <div class="progress flex-grow-1" style="height: 6px;">
+                                    <div class="progress-bar ${color}" role="progressbar" style="width: ${percent}%" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <span class="ms-2 small fw-bold">${percent}%</span>
+                            </div>
+                            <div class="small text-muted" style="font-size: 0.75rem;">${occupied.toFixed(2)} / ${max} Kg</div>
+                        `;
+                    }
+                },
+                {
+                    data: null,
+                    width: '150px',
+                    className: 'text-center',
+                    render: (d) => {
+                        const occupied = parseFloat(d.volumen_ocupado || 0);
+                        const max = parseFloat(d.volumen_m3 || 0);
+                        const percent = max > 0 ? Math.min(100, (occupied / max) * 100).toFixed(1) : 0;
+                        let color = 'bg-info';
+                        if (percent > 80) color = 'bg-warning';
+                        if (percent > 95) color = 'bg-danger';
+
+                        return `
+                            <div class="d-flex align-items-center">
+                                <div class="progress flex-grow-1" style="height: 6px;">
+                                    <div class="progress-bar ${color}" role="progressbar" style="width: ${percent}%" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <span class="ms-2 small fw-bold">${percent}%</span>
+                            </div>
+                            <div class="small text-muted" style="font-size: 0.75rem;">${occupied.toFixed(2)} / ${max} m³</div>
+                        `;
+                    }
                 },
                 {
                     data: null,

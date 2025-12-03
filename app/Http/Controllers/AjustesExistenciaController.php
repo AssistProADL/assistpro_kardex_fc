@@ -19,10 +19,12 @@ class AjustesExistenciaController
             $almacenaje = $request->input('almacenaje'); // Zona
             $search = $request->input('search');
             $tipo = $request->input('tipo');
+            $estado = $request->input('estado');
+            $activo = $request->input('activo');
             $articulo = $request->input('articulo');
             $limit = $request->input('limit', 100);
             $offset = $request->input('offset', 0);
-
+            $order = $request->input('order', 'ASC');
             $query = DB::table('c_ubicacion as u')
                 ->leftJoin('c_almacen as a', 'a.cve_almac', '=', 'u.cve_almac')
                 ->leftJoin('c_almacenp as p', 'a.cve_almacenp', '=', 'p.id')
@@ -30,6 +32,7 @@ class AjustesExistenciaController
                     $join->on('ve.cve_ubicacion', '=', 'u.idy_ubica')
                         ->on('ve.cve_almac', '=', 'a.cve_almacenp');
                 })
+                ->leftJoin('c_articulo as art', 'art.cve_articulo', '=', 've.cve_articulo')
                 ->leftJoin('c_charolas as ch', 'ch.clave_contenedor', '=', 've.Cve_Contenedor')
                 ->select([
                     'u.idy_ubica',
@@ -59,14 +62,17 @@ class AjustesExistenciaController
                         WHEN u.Tipo = 'Q' THEN 'Cuarentena'
                         ELSE '--'
                     END) as tipo_ubicacion"),
+                    DB::raw("(CASE WHEN SUM(IFNULL(ve.Existencia, 0)) > 0 THEN 'Ocupado' ELSE 'Vacío' END) as estado_ubicacion"),
+                    DB::raw("SUM(ve.Existencia * IFNULL(art.peso, 0)) as peso_ocupado"),
+                    DB::raw("SUM(ve.Existencia * ((art.alto * art.ancho * art.fondo)/1000000000)) as volumen_ocupado"),
+                    'u.Activo',
                     DB::raw("IFNULL(TRUNCATE((u.num_ancho / 1000) * (u.num_alto / 1000) * (u.num_largo / 1000), 2), 0) as volumen_m3"),
                     DB::raw("IFNULL(u.orden_secuencia, '--') as surtido"),
                     DB::raw("if(u.TECNOLOGIA='PTL','S','N') as Ptl"),
                     DB::raw("if(u.Tipo='L','S','N') as li"),
                     DB::raw("if(u.Tipo='R','S','N') as re"),
                     DB::raw("if(u.Tipo='Q','S','N') as cu")
-                ])
-                ->where('ve.Existencia', '>', 0);
+                ]);
 
             // Filtros Dinámicos
             if ($almacen) {
@@ -93,7 +99,40 @@ class AjustesExistenciaController
                 $query->where('ve.cve_articulo', $articulo);
             }
 
-            $query->groupBy('u.CodigoCSD');
+            // Group by ubicación completa
+            $query->groupBy([
+                'u.idy_ubica',
+                'u.cve_almac',
+                'a.cve_almacenp',
+                'u.PesoMaximo',
+                'a.des_almac',
+                'p.nombre',
+                'u.cve_pasillo',
+                'u.cve_rack',
+                'u.cve_nivel',
+                'u.Seccion',
+                'u.Ubicacion',
+                'u.CodigoCSD',
+                'u.num_alto',
+                'u.num_ancho',
+                'u.num_largo',
+                'u.AcomodoMixto',
+                'u.AreaProduccion',
+                'u.picking',
+                'u.TECNOLOGIA',
+                'u.Tipo',
+                'u.Activo',
+                'u.orden_secuencia'
+            ]);
+
+            // Aplicar filtro de estado DESPUÉS del GROUP BY usando HAVING
+            if ($estado) {
+                if ($estado === 'ocupado') {
+                    $query->havingRaw('SUM(IFNULL(ve.Existencia, 0)) > 0');
+                } elseif ($estado === 'vacio') {
+                    $query->havingRaw('SUM(IFNULL(ve.Existencia, 0)) = 0');
+                }
+            }
 
             // Calcular página actual basada en offset y limit
             $page = ($limit > 0) ? floor($offset / $limit) + 1 : 1;
@@ -469,20 +508,22 @@ class AjustesExistenciaController
             $almacen = $request->input('almacen');
             $almacenaje = $request->input('almacenaje');
             $tipo = $request->input('tipo');
-            $articulo = $request->input('articulo');
-            $search = $request->input('search');
+            $estado = $request->input('estado');
+            $activo = $request->input('activo');
 
-            // Query base IDÉNTICA a index() - solo ubicaciones con existencia
+            // Query base para contar ubicaciones
             $baseQuery = DB::table('c_ubicacion as u')
                 ->leftJoin('c_almacen as a', 'a.cve_almac', '=', 'u.cve_almac')
+                ->leftJoin('c_almacenp as p', 'a.cve_almacenp', '=', 'p.id')
                 ->leftJoin('V_ExistenciaGralProduccion as ve', function ($join) {
                     $join->on('ve.cve_ubicacion', '=', 'u.idy_ubica')
                         ->on('ve.cve_almac', '=', 'a.cve_almacenp');
                 })
+                ->leftJoin('c_articulo as art', 'art.cve_articulo', '=', 've.cve_articulo')
                 ->leftJoin('c_charolas as ch', 'ch.clave_contenedor', '=', 've.Cve_Contenedor')
-                ->where('ve.Existencia', '>', 0);
+                ->select('u.idy_ubica'); // Solo seleccionar el ID único
 
-            // Aplicar MISMOS filtros que index()
+            // Aplicar filtros
             if ($almacen) {
                 $baseQuery->where('ve.cve_almac', $almacen);
             }
@@ -495,30 +536,71 @@ class AjustesExistenciaController
                 $baseQuery->where('u.Tipo', $tipo);
             }
 
-            if ($articulo) {
-                $baseQuery->where('ve.cve_articulo', $articulo);
+            if ($activo !== null && $activo !== '') {
+                $baseQuery->where('u.Activo', $activo);
             }
 
-            // DataTables envía search como array, extraer el valor
-            if ($search) {
-                $searchValue = is_array($search) ? ($search['value'] ?? '') : $search;
-                if ($searchValue) {
-                    $baseQuery->where('u.CodigoCSD', 'like', "%{$searchValue}%");
+            // Agrupar por ubicación
+            $baseQuery->groupBy([
+                'u.idy_ubica',
+                'u.cve_almac',
+                'a.cve_almacenp',
+                'u.PesoMaximo',
+                'a.des_almac',
+                'p.nombre',
+                'u.cve_pasillo',
+                'u.cve_rack',
+                'u.cve_nivel',
+                'u.Seccion',
+                'u.Ubicacion',
+                'u.CodigoCSD',
+                'u.num_alto',
+                'u.num_ancho',
+                'u.num_largo',
+                'u.AcomodoMixto',
+                'u.AreaProduccion',
+                'u.picking',
+                'u.TECNOLOGIA',
+                'u.Tipo',
+                'u.Activo',
+                'u.orden_secuencia'
+            ]);
+
+            // Clonar queries ANTES de aplicar filtros de estado
+            $queryTotal = clone $baseQuery;
+            $queryOcupadas = clone $baseQuery;
+
+            // Total: aplicar filtro de estado si existe
+            if ($estado) {
+                if ($estado === 'ocupado') {
+                    $queryTotal->havingRaw('SUM(IFNULL(ve.Existencia, 0)) > 0');
+                } elseif ($estado === 'vacio') {
+                    $queryTotal->havingRaw('SUM(IFNULL(ve.Existencia, 0)) = 0');
                 }
             }
 
-            // Contar ubicaciones únicas (mismo GROUP BY que index)
-            // Usamos una subquery para contar el resultado del GROUP BY
-            $countQuery = DB::table(DB::raw("({$baseQuery->select('u.CodigoCSD')->groupBy('u.CodigoCSD')->toSql()}) as sub"))
-                ->mergeBindings($baseQuery);
+            // Ocupadas: siempre con existencia > 0
+            $queryOcupadas->havingRaw('SUM(IFNULL(ve.Existencia, 0)) > 0');
 
-            $totalUbicaciones = $countQuery->count();
+            // Contar usando subqueries para contar correctamente después del GROUP BY
+            $totalUbicaciones = DB::table(DB::raw("({$queryTotal->toSql()}) as sub"))
+                ->mergeBindings($queryTotal)
+                ->count();
 
-            // Para este módulo, todas las ubicaciones que aparecen están "ocupadas"
-            // porque solo mostramos las que tienen Existencia > 0
-            $ocupadas = $totalUbicaciones;
-            $vacias = 0;
-            $porcentajeOcupacion = 100;
+            $ocupadas = DB::table(DB::raw("({$queryOcupadas->toSql()}) as sub"))
+                ->mergeBindings($queryOcupadas)
+                ->count();
+
+            // Calcular vacías
+            $vacias = $totalUbicaciones - $ocupadas;
+            if ($vacias < 0)
+                $vacias = 0;
+
+            // Calcular porcentaje
+            $porcentajeOcupacion = 0;
+            if ($totalUbicaciones > 0) {
+                $porcentajeOcupacion = round(($ocupadas / $totalUbicaciones) * 100, 2);
+            }
 
             return ApiResponse::success([
                 'total_ubicaciones' => $totalUbicaciones,
@@ -528,7 +610,8 @@ class AjustesExistenciaController
             ]);
 
         } catch (\Exception $e) {
-            return ApiResponse::serverError('Error al calcular KPIs', $e->getMessage());
+            return ApiResponse::serverError('Error al obtener KPIs', $e->getMessage());
         }
     }
+
 }

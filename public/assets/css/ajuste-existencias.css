@@ -21,7 +21,7 @@
     --ap-gray-200: #DCE3EB;
     /* Fondo claro PANTONE 656C */
     --ap-gray-100: #f0f2f5;
-    --ap-gray-50: #95E1BF;
+    --ap-gray-50: #ffffff;
     /* Color auxiliar */
 
     /* Sombras */
@@ -35,9 +35,7 @@
 }
 
 
-body {
-    background: var(--ap-gray-50);
-}
+
 
 /* Cards con glassmorphism sutil */
 .ap-card {
@@ -135,7 +133,7 @@ body {
 }
 
 .ap-form-control:disabled {
-    background: var(--ap-gray-50);
+    /* background: var(--ap-gray-50); */
     cursor: not-allowed;
 }
 
@@ -326,7 +324,7 @@ table.dataTable thead th {
     letter-spacing: 0.5px;
     color: var(--ap-gray-900);
     background: var(--ap-gray-50);
-    border-bottom: 2px solid var(--ap-gray-200);
+    /* border-bottom: 2px solid var(--ap-gray-200); */
     padding: 14px 12px;
     white-space: nowrap;
 }
@@ -335,7 +333,7 @@ table.dataTable tbody td {
     font-size: 13px;
     padding: 12px;
     vertical-align: middle;
-    border-bottom: 1px solid var(--ap-gray-100);
+    /* border-bottom: 1px solid var(--ap-gray-100); */
 }
 
 table.dataTable tbody tr {
