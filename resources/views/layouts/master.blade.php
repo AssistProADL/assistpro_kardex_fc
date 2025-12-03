@@ -29,6 +29,7 @@
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 
+
 <!-- Sección para Scripts Personalizados -->
 @yield('scripts')
 

@@ -173,4 +173,5 @@ class ReportesController
             return ApiResponse::serverError('Error al generar reporte', $e->getMessage());
         }
     }
+
 }

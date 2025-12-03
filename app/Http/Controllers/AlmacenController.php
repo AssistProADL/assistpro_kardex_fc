@@ -30,11 +30,11 @@ class AlmacenController
 
             if (!$almacenId) {
                 //si no tiene, traemos todos los almacenes
-                $almacenes = DB::table('c_almacen')->get();
+                $almacenes = DB::table('c_almacenp')->where('activo', '1')->get();
                 return ApiResponse::success($almacenes);
             }
 
-            $almacen = DB::table('c_almacen')->where('cve_almac', $almacenId)->get();
+            $almacen = DB::table('c_almacenp')->where('clave', $almacenId)->where('activo', '1')->get();
 
             if (count($almacen) == 0) {
                 return ApiResponse::notFound('Almacén no encontrado');

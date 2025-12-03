@@ -38,7 +38,12 @@ require_once __DIR__ . '/../app/routes.php';
 try {
     $response = $router->dispatch($request);
     $response->send();
+} catch (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e) {
+    // Ruta no encontrada - mostrar página 404 personalizada
+    header('HTTP/1.1 404 Not Found');
+    echo view('errors.404')->render();
 } catch (\Exception $e) {
+    // Otros errores - mostrar error 500
     header('HTTP/1.1 500 Internal Server Error');
     echo "Error: " . $e->getMessage();
 }

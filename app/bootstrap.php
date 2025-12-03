@@ -1,5 +1,8 @@
 <?php
 
+// Cargar helpers globales
+require_once __DIR__ . '/helpers.php';
+
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;

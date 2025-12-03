@@ -19,16 +19,25 @@ class AjustesExistenciaController
             $almacenaje = $request->input('almacenaje'); // Zona
             $search = $request->input('search');
             $tipo = $request->input('tipo');
-            $articulo = $request->input('articulo'); // Nuevo filtro sugerido
-
+            $articulo = $request->input('articulo');
             $limit = $request->input('limit', 100);
             $offset = $request->input('offset', 0);
 
             $query = DB::table('c_ubicacion as u')
+                ->leftJoin('c_almacen as a', 'a.cve_almac', '=', 'u.cve_almac')
+                ->leftJoin('c_almacenp as p', 'a.cve_almacenp', '=', 'p.id')
+                ->leftJoin('V_ExistenciaGralProduccion as ve', function ($join) {
+                    $join->on('ve.cve_ubicacion', '=', 'u.idy_ubica')
+                        ->on('ve.cve_almac', '=', 'a.cve_almacenp');
+                })
+                ->leftJoin('c_charolas as ch', 'ch.clave_contenedor', '=', 've.Cve_Contenedor')
                 ->select([
                     'u.idy_ubica',
+                    'u.cve_almac', // Added for details
+                    'a.cve_almacenp', // Parent Warehouse ID for details
                     'u.PesoMaximo as PesoMax',
                     'a.des_almac as zona_almacenaje',
+                    DB::raw("CONCAT(COALESCE(p.nombre, 'N/A'), ' / ', a.des_almac) as almacen_zona"),
                     'u.cve_pasillo as pasillo',
                     'u.cve_rack as rack',
                     'u.cve_nivel as nivel',
@@ -57,12 +66,6 @@ class AjustesExistenciaController
                     DB::raw("if(u.Tipo='R','S','N') as re"),
                     DB::raw("if(u.Tipo='Q','S','N') as cu")
                 ])
-                ->leftJoin('c_almacen as a', 'a.cve_almac', '=', 'u.cve_almac')
-                ->leftJoin('V_ExistenciaGralProduccion as ve', function ($join) {
-                    $join->on('ve.cve_ubicacion', '=', 'u.idy_ubica')
-                        ->on('ve.cve_almac', '=', 'a.cve_almacenp');
-                })
-                ->leftJoin('c_charolas as ch', 'ch.clave_contenedor', '=', 've.Cve_Contenedor')
                 ->where('ve.Existencia', '>', 0);
 
             // Filtros Dinámicos
@@ -74,8 +77,12 @@ class AjustesExistenciaController
                 $query->where('u.cve_almac', $almacenaje);
             }
 
+            // DataTables envía search como array, extraer el valor
             if ($search) {
-                $query->where('u.CodigoCSD', 'like', "%{$search}%");
+                $searchValue = is_array($search) ? ($search['value'] ?? '') : $search;
+                if ($searchValue) {
+                    $query->where('u.CodigoCSD', 'like', "%{$searchValue}%");
+                }
             }
 
             if ($tipo) {
@@ -93,7 +100,13 @@ class AjustesExistenciaController
 
             $paginator = $query->paginate($limit, ['*'], 'page', $page);
 
-            return ApiResponse::paginated($paginator);
+            // Formato compatible con DataTables
+            return new \Illuminate\Http\JsonResponse([
+                'draw' => $request->input('draw', 1),
+                'recordsTotal' => $paginator->total(),
+                'recordsFiltered' => $paginator->total(),
+                'data' => $paginator->items()
+            ]);
 
         } catch (\Exception $e) {
             return ApiResponse::serverError('Error al cargar grid', $e->getMessage());
@@ -111,8 +124,22 @@ class AjustesExistenciaController
             $almacen = $request->input('almacen');
             $areaProduccion = $request->input('areaProduccion');
 
-            if (!$ubicacion || !$almacen) {
-                return ApiResponse::error('Ubicación y Almacén requeridos', null, 400);
+            if (!$ubicacion) {
+                return ApiResponse::error('Ubicación requerida', null, 400);
+            }
+
+            // Si no viene almacén, obtenerlo de la ubicación
+            if (!$almacen) {
+                $ubicacionData = DB::table('c_ubicacion')
+                    ->where('idy_ubica', $ubicacion)
+                    ->select('cve_almac')
+                    ->first();
+
+                if ($ubicacionData) {
+                    $almacen = $ubicacionData->cve_almac;
+                } else {
+                    return ApiResponse::error('Ubicación no encontrada', null, 404);
+                }
             }
 
             $table = ($areaProduccion === 'S') ? 'V_ExistenciaGralProduccion' : 'V_ExistenciaGral';
@@ -153,17 +180,60 @@ class AjustesExistenciaController
                 ->where('v.cve_almac', $almacen)
                 ->whereNotNull('v.Existencia');
 
-            // Condición extra de producción
-            if ($areaProduccion === 'S') {
-                $query->whereRaw("v.cve_articulo = c_articulo.cve_articulo AND IFNULL(v.cve_lote, '') = IFNULL(c_lotes.Lote, '')");
-            }
+            // Condiciones Legacy eliminadas para coincidir con la consulta del usuario
+            // $query->whereRaw("v.cve_articulo = c_articulo.cve_articulo");
+            // $query->whereRaw("IFNULL(v.cve_lote, '') = IFNULL(c_lotes.Lote, '')");
 
             $query->groupBy('v.cve_articulo', 'v.cve_lote', 'v.Cve_Contenedor', 'id_proveedor')
                 ->orderBy('descripcion');
 
-            $items = $query->get();
+            // Clonar para totales
+            $queryTotales = clone $query;
+            $itemsAll = $queryTotales->get();
 
-            return ApiResponse::success($items);
+            $pesoTotal = 0;
+            $volumenTotal = 0;
+            foreach ($itemsAll as $item) {
+                $pesoTotal += floatval($item->peso_total ?? 0);
+                $volumenTotal += floatval($item->volumen_total ?? 0);
+            }
+
+            // Paginación
+            $limit = $request->input('length', 10);
+            $start = $request->input('start', 0);
+            $page = ($limit > 0) ? ($start / $limit) + 1 : 1;
+
+            $paginator = $query->paginate($limit, ['*'], 'page', $page);
+
+            // Codificar caracteres especiales en el nombre del proveedor
+            $items = $paginator->items();
+            foreach ($items as $item) {
+                if (isset($item->proveedor)) {
+                    $item->proveedor = mb_convert_encoding($item->proveedor, 'UTF-8', 'ISO-8859-1');
+                }
+            }
+
+            // Obtener datos de ubicación para el header
+            $ubicacionInfo = DB::table('c_ubicacion')
+                ->where('idy_ubica', $ubicacion)
+                ->select(
+                    'PesoMaximo',
+                    'num_volumenDisp as VolumenMaximo',
+                    'CodigoCSD'
+                )
+                ->first();
+
+            return new \Illuminate\Http\JsonResponse([
+                'draw' => intval($request->input('draw')),
+                'recordsTotal' => $paginator->total(),
+                'recordsFiltered' => $paginator->total(),
+                'data' => $items,
+                'extra_data' => [
+                    'peso_total' => $pesoTotal,
+                    'volumen_total' => $volumenTotal,
+                    'ubicacion' => $ubicacionInfo
+                ]
+            ]);
 
         } catch (\Exception $e) {
             return ApiResponse::serverError('Error al cargar detalles', $e->getMessage());
@@ -178,153 +248,187 @@ class AjustesExistenciaController
     {
         DB::beginTransaction();
         try {
-            $existencia = $request->input('existencia');
-            $id_almacen = $request->input('id_almacen');
-            $id_ubica = $request->input('id_ubica');
-            $clave = $request->input('clave'); // cve_articulo
-            $lote = $request->input('lote');
-            $id_proveedor = $request->input('id_proveedor');
-            $contenedor = $request->input('contenedor');
-
-            // Datos adicionales para Kardex
-            $cve_usuario = $request->input('cve_usuario', 'SYSTEM'); // Debería venir de sesión
+            $items = $request->input('items', []);
             $motivos = $request->input('motivos');
-            $existencia_actual = $request->input('existencia_actual');
-            $nueva_existencia = $existencia; // Alias
-            $folio = $request->input('folio', uniqid('AJ')); // Generar folio si no viene
-            $costo_promedio = 0; // Asumido 0 si no se calcula
+            $cve_usuario = $request->input('cve_usuario', 'SYSTEM'); // Debería venir de sesión
+            $folio = $request->input('folio', uniqid('AJ')); // Generar folio único para el lote de ajustes
 
-            // 1. Actualizar Existencia Física (Tarima)
-            // Subquery para ntarima
-            $ntarima = DB::table('c_charolas')
-                ->where('clave_contenedor', $contenedor)
-                ->value('IDContenedor');
-
-            if ($ntarima) {
-                DB::table('ts_existenciatarima')
-                    ->where('cve_almac', $id_almacen)
-                    ->where('idy_ubica', $id_ubica)
-                    ->where('cve_articulo', $clave)
-                    ->where('lote', $lote)
-                    ->where('ID_Proveedor', $id_proveedor)
-                    ->where('ntarima', $ntarima)
-                    ->update(['existencia' => $existencia]);
+            // Validar que haya items
+            if (empty($items)) {
+                return ApiResponse::error('No se recibieron items para ajustar', null, 400);
             }
 
-            // 2. Actualizar Existencia Física (Cajas)
-            DB::table('ts_existenciacajas')
-                ->where('cve_almac', $id_almacen)
-                ->where('idy_ubica', $id_ubica)
-                ->where('cve_articulo', $clave)
-                ->where('cve_lote', $lote)
-                ->update(['Existencia' => $existencia]);
+            // Registrar Histórico (Cabecera) una sola vez por lote
+            if (!DB::table('th_ajusteexist')->where('fol_folio', $folio)->exists()) {
+                // Obtener almacén del primer item (asumiendo todos son del mismo almacén por ahora, o validar)
+                $firstItem = $items[0];
+                $id_almacen_header = $firstItem['id_almacen'] ?? null;
 
-            // 3. Actualizar Existencia Física (Piezas)
-            DB::table('ts_existenciapiezas')
-                ->where('cve_almac', $id_almacen)
-                ->where('idy_ubica', $id_ubica)
-                ->where('cve_articulo', $clave)
-                ->where('cve_lote', $lote)
-                ->where('ID_Proveedor', $id_proveedor)
-                ->update(['Existencia' => $existencia]);
-
-            // 4. Registrar Kardex
-            $cantidad_diff = abs($existencia_actual - $nueva_existencia);
-            $tipo_mov = ($existencia_actual > $nueva_existencia) ? 10 : 9; // 10: Salida (Ajuste -), 9: Entrada (Ajuste +)
-
-            DB::table('t_cardex')->insert([
-                'cve_articulo' => $clave,
-                'cve_lote' => $lote,
-                'fecha' => DB::raw('now()'),
-                'origen' => $id_ubica,
-                'destino' => $id_ubica,
-                'cantidad' => $cantidad_diff,
-                'id_TipoMovimiento' => $tipo_mov,
-                'cve_usuario' => $cve_usuario,
-                'Cve_Almac' => $id_almacen,
-                'Activo' => '1',
-                'Fec_Ingreso' => DB::raw('now()'),
-                'Id_Motivo' => $motivos
-            ]);
-
-            // 5. Registrar Histórico (Cabecera)
-            // Verificar si ya existe el folio para no duplicar cabecera en ajustes masivos
-            if (!DB::table('th_ajusteexist')->where('Folio', $folio)->exists()) {
                 DB::table('th_ajusteexist')->insert([
-                    'Folio' => $folio,
-                    'Cve_Almac' => $id_almacen,
-                    'Fecha' => DB::raw('now()'),
-                    'Id_Usuario' => $cve_usuario,
-                    'Observaciones' => '',
-                    'Estatus' => '1'
+                    'fol_folio' => $folio,
+                    'cve_almac' => $id_almacen_header,
+                    'fec_ajuste' => DB::raw('now()'),
+                    'cve_usuario' => $cve_usuario,
+                    'des_observ' => 'Ajuste masivo desde web',
+                    'Activo' => 1
                 ]);
             }
 
-            // 6. Registrar Histórico (Detalle)
-            // Usamos updateOrInsert o raw query para ON DUPLICATE KEY UPDATE
-            // Eloquent updateOrInsert no soporta ON DUPLICATE KEY UPDATE con lógica de suma/reemplazo custom facilmente
-            // Usaremos DB::statement para ser fieles al original
+            foreach ($items as $item) {
+                $existencia = $item['existencia'];
 
-            $sql = "INSERT INTO td_ajusteexist (Folio, Cve_Almac, Id_Ubicacion, Cve_Articulo, Lote, Cant_Sistema, Cant_Fisica, Costo_Promedio, Id_Motivo, Tipo, Cve_Contenedor) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'A', ?) 
-                    ON DUPLICATE KEY UPDATE num_cantant=?";
+                // Validar que la existencia no sea negativa
+                if ($existencia < 0) {
+                    throw new \Exception("La existencia no puede ser negativa para el artículo {$item['clave']}");
+                }
 
-            DB::statement($sql, [
-                $folio,
-                $id_almacen,
-                $id_ubica,
-                $clave,
-                $lote,
-                $existencia_actual,
-                $nueva_existencia,
-                $costo_promedio,
-                $motivos,
-                $contenedor,
-                $existencia // num_cantant update value
-            ]);
+                $id_almacen = $item['id_almacen'];
+                $id_ubica = $item['id_ubica'];
+                $clave = $item['clave']; // cve_articulo
+                $lote = $item['lote'];
+                $id_proveedor = $item['id_proveedor'];
+                $contenedor = $item['contenedor'];
+                $existencia_actual = $item['existencia_actual'];
 
-            // 7. Limpieza
+                $nueva_existencia = $existencia;
+                $costo_promedio = 0;
+
+                // 1. Actualizar Existencia Física (Tarima)
+                $ntarima = DB::table('c_charolas')
+                    ->where('Clave_Contenedor', $contenedor)
+                    ->value('IDContenedor');
+
+                if ($ntarima) {
+                    DB::table('ts_existenciatarima')
+                        ->where('cve_almac', $id_almacen)
+                        ->where('idy_ubica', $id_ubica)
+                        ->where('cve_articulo', $clave)
+                        ->where('lote', $lote)
+                        ->where('ID_Proveedor', $id_proveedor)
+                        ->where('ntarima', $ntarima)
+                        ->update(['existencia' => $existencia]);
+                }
+
+                // 2. Actualizar Existencia Física (Cajas)
+                // DB::table('ts_existenciacajas')
+                //     ->where('cve_almac', $id_almacen)
+                //     ->where('idy_ubica', $id_ubica)
+                //     ->where('cve_articulo', $clave)
+                //     ->where('cve_lote', $lote)
+                //     ->update(['Existencia' => $existencia]);
+
+                // // 3. Actualizar Existencia Física (Piezas)
+                // DB::table('ts_existenciapiezas')
+                //     ->where('cve_almac', $id_almacen)
+                //     ->where('idy_ubica', $id_ubica)
+                //     ->where('cve_articulo', $clave)
+                //     ->where('cve_lote', $lote)
+                //     ->where('ID_Proveedor', $id_proveedor)
+                //     ->update(['Existencia' => $existencia]);
+
+                // 4. Registrar Kardex
+                $cantidad_diff = abs($existencia_actual - $nueva_existencia);
+                $tipo_mov = ($existencia_actual > $nueva_existencia) ? 10 : 9; // 10: Salida, 9: Entrada
+
+                DB::table('t_cardex')->insert([
+                    'cve_articulo' => $clave,
+                    'cve_lote' => $lote,
+                    'fecha' => DB::raw('now()'),
+                    'origen' => $id_ubica,
+                    'destino' => $id_ubica,
+                    'cantidad' => $cantidad_diff,
+                    'id_TipoMovimiento' => $tipo_mov,
+                    'cve_usuario' => $cve_usuario,
+                    'Cve_Almac' => $id_almacen,
+                    'Activo' => '1',
+                    'Fec_Ingreso' => DB::raw('now()'),
+                    'Id_Motivo' => $motivos
+                ]);
+
+                // 6. Registrar Histórico (Detalle)
+                // 6. Registrar Histórico (Detalle)
+                $sql = "INSERT INTO td_ajusteexist (fol_folio, cve_almac, Idy_ubica, cve_articulo, cve_lote, num_cantant, num_cantnva, imp_cosprom, Id_Motivo, Tipo_Cat, ntarima) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'A', ?) 
+                        ON DUPLICATE KEY UPDATE num_cantant=?";
+
+                DB::statement($sql, [
+                    $folio,
+                    $id_almacen,
+                    $id_ubica,
+                    $clave,
+                    $lote,
+                    $existencia_actual,
+                    $nueva_existencia,
+                    $costo_promedio,
+                    $motivos,
+                    $ntarima,
+                    $existencia
+                ]);
+            }
+
+            // 7. Limpieza General
             DB::table('ts_existenciapiezas')->where('existencia', '<=', 0)->delete();
             DB::table('ts_existenciatarima')->where('existencia', '<=', 0)->delete();
 
-            // 8. Desactivar Contenedor si está vacío
-            if ($ntarima) {
-                $remainingItems = DB::table('ts_existenciatarima')
-                    ->where('ntarima', $ntarima)
-                    ->count();
+            // 8. Desactivar Contenedores vacíos
+            // Obtener contenedores únicos afectados
+            $contenedoresAfectados = collect($items)->pluck('contenedor')->unique()->filter();
 
-                if ($remainingItems == 0) {
-                    DB::table('c_charolas')
-                        ->where('IDContenedor', $ntarima)
-                        ->update(['Activo' => '0']);
+            foreach ($contenedoresAfectados as $contenedor) {
+                // Obtener IDContenedor (ntarima)
+                $ntarima = DB::table('c_charolas')
+                    ->where('clave_contenedor', $contenedor)
+                    ->value('IDContenedor');
+
+                if ($ntarima) {
+                    // Verificar si quedan items en este contenedor en CUALQUIER tabla de existencia
+                    // Usamos V_ExistenciaGral para una verificación completa
+                    $remainingItems = DB::table('V_ExistenciaGral')
+                        ->where('Cve_Contenedor', $contenedor)
+                        ->where('Existencia', '>', 0)
+                        ->count();
+
+                    if ($remainingItems == 0) {
+                        // Si no quedan items, desactivar la charola/contenedor
+                        DB::table('c_charolas')
+                            ->where('IDContenedor', $ntarima)
+                            ->update(['Activo' => '0']);
+                    }
                 }
             }
 
             DB::commit();
-            return ApiResponse::success(null, 'Ajuste realizado correctamente');
+            return ApiResponse::success(['folio' => $folio], 'Existencias actualizadas correctamente');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return ApiResponse::serverError('Error al realizar ajuste', $e->getMessage());
+            return ApiResponse::serverError('Error al actualizar existencias', $e->getMessage());
         }
     }
+
     /**
-     * Obtener KPIs
+     * Buscar artículos con existencia
+     * Equivalente a carga diferida para select2
      */
-    public function kpis(Request $request)
+    public function searchArticulos(Request $request)
     {
         try {
+            $search = $request->input('q');
             $almacen = $request->input('almacen');
             $almacenaje = $request->input('almacenaje');
             $tipo = $request->input('tipo');
+            $page = $request->input('page', 1);
+            $limit = 20;
 
-            // Query base para Ubicaciones
-            $query = DB::table('c_ubicacion as u')
-                ->leftJoin('c_almacen as a', 'a.cve_almac', '=', 'u.cve_almac');
+            $query = DB::table('V_ExistenciaGral as ve')
+                ->join('c_ubicacion as u', 'u.idy_ubica', '=', 've.cve_ubicacion')
+                ->join('c_articulo as a', 'a.cve_articulo', '=', 've.cve_articulo')
+                ->select('ve.cve_articulo as id', DB::raw("CONCAT(ve.cve_articulo, ' - ', a.des_articulo) as text"))
+                ->where('ve.Existencia', '>', 0)
+                ->distinct();
 
             if ($almacen) {
-                // Filtrar por almacén padre (a.cve_almacenp = $almacen)
-                $query->where('a.cve_almacenp', $almacen);
+                $query->where('ve.cve_almac', $almacen);
             }
 
             if ($almacenaje) {
@@ -335,25 +439,86 @@ class AjustesExistenciaController
                 $query->where('u.Tipo', $tipo);
             }
 
-            // Total Ubicaciones
-            $totalUbicaciones = $query->count();
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('ve.cve_articulo', 'like', "%{$search}%")
+                        ->orWhere('a.des_articulo', 'like', "%{$search}%");
+                });
+            }
 
-            // Ubicaciones Ocupadas (Existencia > 0)
-            // Necesitamos unir con V_ExistenciaGralProduccion para saber si tiene stock
-            // Pero ojo, V_ExistenciaGralProduccion puede tener múltiples registros por ubicación (varios productos)
-            // Así que contamos distinct idy_ubica
-            $ocupadasQuery = clone $query;
-            $ocupadas = $ocupadasQuery
-                ->join('V_ExistenciaGralProduccion as ve', function ($join) {
+            $paginator = $query->paginate($limit, ['*'], 'page', $page);
+
+            return new \Illuminate\Http\JsonResponse([
+                'results' => $paginator->items(),
+                'pagination' => [
+                    'more' => $paginator->hasMorePages()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return ApiResponse::serverError('Error al buscar artículos', $e->getMessage());
+        }
+    }
+
+    /**
+     * Obtener KPIs
+     */
+    public function kpis(Request $request)
+    {
+        try {
+            $almacen = $request->input('almacen');
+            $almacenaje = $request->input('almacenaje');
+            $tipo = $request->input('tipo');
+            $articulo = $request->input('articulo');
+            $search = $request->input('search');
+
+            // Query base IDÉNTICA a index() - solo ubicaciones con existencia
+            $baseQuery = DB::table('c_ubicacion as u')
+                ->leftJoin('c_almacen as a', 'a.cve_almac', '=', 'u.cve_almac')
+                ->leftJoin('V_ExistenciaGralProduccion as ve', function ($join) {
                     $join->on('ve.cve_ubicacion', '=', 'u.idy_ubica')
                         ->on('ve.cve_almac', '=', 'a.cve_almacenp');
                 })
-                ->where('ve.Existencia', '>', 0)
-                ->distinct('u.idy_ubica')
-                ->count('u.idy_ubica');
+                ->leftJoin('c_charolas as ch', 'ch.clave_contenedor', '=', 've.Cve_Contenedor')
+                ->where('ve.Existencia', '>', 0);
 
-            $vacias = $totalUbicaciones - $ocupadas;
-            $porcentajeOcupacion = ($totalUbicaciones > 0) ? round(($ocupadas / $totalUbicaciones) * 100, 2) : 0;
+            // Aplicar MISMOS filtros que index()
+            if ($almacen) {
+                $baseQuery->where('ve.cve_almac', $almacen);
+            }
+
+            if ($almacenaje) {
+                $baseQuery->where('u.cve_almac', $almacenaje);
+            }
+
+            if ($tipo) {
+                $baseQuery->where('u.Tipo', $tipo);
+            }
+
+            if ($articulo) {
+                $baseQuery->where('ve.cve_articulo', $articulo);
+            }
+
+            // DataTables envía search como array, extraer el valor
+            if ($search) {
+                $searchValue = is_array($search) ? ($search['value'] ?? '') : $search;
+                if ($searchValue) {
+                    $baseQuery->where('u.CodigoCSD', 'like', "%{$searchValue}%");
+                }
+            }
+
+            // Contar ubicaciones únicas (mismo GROUP BY que index)
+            // Usamos una subquery para contar el resultado del GROUP BY
+            $countQuery = DB::table(DB::raw("({$baseQuery->select('u.CodigoCSD')->groupBy('u.CodigoCSD')->toSql()}) as sub"))
+                ->mergeBindings($baseQuery);
+
+            $totalUbicaciones = $countQuery->count();
+
+            // Para este módulo, todas las ubicaciones que aparecen están "ocupadas"
+            // porque solo mostramos las que tienen Existencia > 0
+            $ocupadas = $totalUbicaciones;
+            $vacias = 0;
+            $porcentajeOcupacion = 100;
 
             return ApiResponse::success([
                 'total_ubicaciones' => $totalUbicaciones,
