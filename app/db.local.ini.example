@@ -1,0 +1,11 @@
+; app/db.local.ini
+; Configuración de base de datos para desarrollo local con Docker
+; Este archivo NO debe versionarse (está en .gitignore)
+
+host = mysql
+port = 3306
+name = assistpro_etl_fc
+user = root
+pass = root
+charset = utf8mb4
+timezone = -06:00
