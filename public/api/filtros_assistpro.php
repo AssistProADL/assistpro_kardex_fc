@@ -2,7 +2,7 @@
 // public/api/filtros_assistpro.php
 header('Content-Type: application/json; charset=utf-8');
 
-require_once __DIR__ . '/../../app/auth_check.php';
+//require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
 try {
@@ -140,7 +140,7 @@ function init_filtros(PDO $pdo): void
 
             // Filtrar por empresa si viene parámetro
             if ($empresa !== '') {
-                $whereAlm[] = "a.empresa_id = :empresa_id";
+                $whereAlm[] = "a.cve_cia = :empresa_id";
                 $paramsAlm['empresa_id'] = $empresa;
             }
 
@@ -285,29 +285,36 @@ function init_filtros(PDO $pdo): void
     }
 
     // ===================== PRODUCTOS (c_articulo) =====================
-    if ($useSection('productos')) {
-        try {
-            $params = [];
-            $where = ["IFNULL(Activo,1) = 1"];
+if ($useSection('productos')) {
+    try {
+        $params = [];
+        $where  = ["IFNULL(Activo,1) = 1"];
 
-            $sqlProd = "
-                SELECT
-                    id_articulo,
-                    cve_articulo,
-                    descripcion,
-                    sku_cliente,
-                    IFNULL(Activo,1) AS Activo
-                FROM c_articulo
-                " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
-                ORDER BY descripcion
-                LIMIT 5000
-            ";
+        $sqlProd = "
+            SELECT
+                id_articulo,
+                cve_articulo,
+                descripcion,          -- descripción comercial
+                sku_cliente,
+                UM,                   -- unidad de medida
+                -- banderas de control de lote / serie / caducidad
+                B_Lote,
+                B_Serie,
+                B_Caducidad,
+                IFNULL(Activo,1) AS Activo
+            FROM c_articulo
+            " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
+            ORDER BY descripcion
+            LIMIT 5000
+        ";
 
-            $data['productos'] = db_all($sqlProd, $params);
-        } catch (Throwable $e) {
-            $data['productos_error'] = $e->getMessage();
-        }
+        $data['productos'] = db_all($sqlProd, $params);
+    } catch (Throwable $e) {
+        $data['productos_error'] = $e->getMessage();
     }
+}
+
+
 
     // ===================== BL / BIN LOCATIONS (c_ubicacion) =====================
     if ($useSection('bls')) {
@@ -373,23 +380,24 @@ function init_filtros(PDO $pdo): void
     }
 
     // ===================== ZONA RECEPCIÓN / RETENCIÓN (tubicacionesretencion) =====================
-    if ($useSection('zonas_recep')) {
-        try {
-            $data['zonas_recep'] = db_all("
-                SELECT
-                    ID_URecepcion,
-                    cve_almac,
-                    cve_ubicacion,
-                    descripcion,
-                    AreaStagging
-                FROM tubicacionesretencion
-                WHERE IFNULL(Activo,1) = 1
-                ORDER BY descripcion
-            ");
-        } catch (Throwable $e) {
-            $data['zonas_recep_error'] = $e->getMessage();
-        }
+if ($useSection('zonas_recep')) {
+    try {
+        $data['zonas_recep'] = db_all("
+            SELECT
+                id             AS ID_URecepcion,
+                cve_almacp     AS cve_almac,
+                cve_ubicacion,
+                desc_ubicacion AS descripcion,
+                AreaStagging
+            FROM tubicacionesretencion
+            WHERE IFNULL(Activo,1) = 1
+            ORDER BY desc_ubicacion
+        ");
+    } catch (Throwable $e) {
+        $data['zonas_recep_error'] = $e->getMessage();
     }
+}
+
 
     // ===================== ZONA QA / REVISIÓN (t_ubicaciones_revision) =====================
     if ($useSection('zonas_qa')) {

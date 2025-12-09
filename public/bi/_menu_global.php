@@ -410,7 +410,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Inventario', 'url' => 'dashboard/inventario.php', 'icono' => 'fa-boxes-stacked'],
                 ['titulo' => 'Resumen Básico', 'url' => 'dashboard/resumen_basico.php', 'icono' => 'fa-chart-pie'],
                 ['titulo' => 'Dashboard Inventarios', 'url' => 'dashboard/adm_inventarios.php', 'icono' => 'fa-warehouse'],
-                ['titulo' => 'Kardex Productividad', 'url' => 'dashboard/kardex_productividad_session.php', 'icono' => 'fa-chart-line'],
+                ['titulo' => 'Ocupación Almacén', 'url' => 'dashboard/ocupacion_almacen.php', 'icono' => 'fa-chart-line'],
                 ['titulo' => 'Kardex Dashboard', 'url' => 'dashboard/kardex.php', 'icono' => 'fa-file-lines'],
             ],
 
@@ -428,7 +428,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'License Plate', 'url' => 'catalogos/catalogos/cat_c_licenseplate.php', 'icono' => 'fa-circle'],
                 ['titulo' => 'Motivo No Ventas', 'url' => 'catalogos/catalogos/cat_c_motivosnoventas.php', 'icono' => 'fa-circle'],
                 ['titulo' => 'Motivo de Devolución', 'url' => 'catalogos/catalogos/cat_c_motivodevolucion.php', 'icono' => 'fa-circle'],
-                ['titulo' => 'Pallet y Contenedores', 'url' => 'catalogos/catalogos/cat_c_contenedores.php', 'icono' => 'fa-box-open'],
+                ['titulo' => 'Pallet y Contenedores', 'url' => 'catalogos/catalogos/cat_c_charolas.php', 'icono' => 'fa-box-open'],
                 ['titulo' => 'Rutas / Destinatarios', 'url' => 'catalogos/catalogos/cat_c_destinatarios.php', 'icono' => 'fa-route'],
                 ['titulo' => 'Protocolos de Entrada', 'url' => 'catalogos/catalogos/cat_c_protocolos.php', 'icono' => 'fa-clipboard-check'],
                 ['titulo' => 'Proveedores', 'url' => 'catalogos/catalogos/cat_c_proveedores.php', 'icono' => 'fa-truck-field'],
@@ -439,7 +439,14 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Formas de Pago', 'url' => 'sfa/formas_pago.php', 'icono' => 'fa-credit-card'],
             ],
 
-            // CRM
+            // E-Commerce
+            'E-Commerce' => [
+                ['titulo' => 'Catálogo digital',     'url' => 'portal_clientes/catalogo.php',              'icono' => 'fa-building'],
+                ['titulo' => 'Mantenimiento',        'url' => 'portal_admin_imagenes/subir_imagen.php',    'icono' => 'fa-building'],
+                           ],
+
+
+           // CRM
             'CRM' => [
                 ['titulo' => 'Cotizaciones', 'url' => 'crm/cotizaciones.php', 'icono' => 'fa-building'],
                 ['titulo' => 'Actividades', 'url' => 'crm/actividades.php', 'icono' => 'fa-building'],
@@ -469,9 +476,13 @@ require_once __DIR__ . '/../../app/auth_check.php';
             'TMS' => [
                 ['titulo' => 'Mantenimiento', 'url' => 'tms/mto_transportes.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Ordenes de Servicio', 'url' => 'tms/mto_ordenes.php', 'icono' => 'fa-percent'],
-                ['titulo' => 'Promociones', 'url' => 'sfa/promociones.php', 'icono' => 'fa-gift'],
-                ['titulo' => 'Grupo Promociones', 'url' => 'sfa/grupo_promociones.php', 'icono' => 'fa-layer-group'],
-            ],
+                     ],
+            // TMS
+            'YMS' => [
+                ['titulo' => 'YMS Control de Patios',   'url' => 'control_patios/patios_admin.php',    'icono' => 'fa-tags'],
+                ['titulo' => 'Planeación',              'url' => 'control_patios/planeacion.php',      'icono' => 'fa-percent'],
+                     ],
+
 
             // ADMINISTRACIÓN DE ALMACEN
             'Administración Almacen' => [
@@ -482,7 +493,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // PROCESOS
             'Procesos' => [
-                ['titulo' => 'Existencias', 'url' => 'procesos/existencias.php', 'icono' => 'fa-cubes'],
+                ['titulo' => 'Diagnostico', 'url' => 'procesos/reporte_diagnostico.php', 'icono' => 'fa-cubes'],
                 ['titulo' => 'Control de Incidencias (PQRS)', 'url' => 'procesos/incidencias.php', 'icono' => 'fa-flag'],
                 ['titulo' => 'Control de Activos', 'url' => 'procesos/control_activos.php', 'icono' => 'fa-screwdriver-wrench'],
                 ['titulo' => 'Logística Inversa', 'url' => 'procesos/logistica_inversa.php', 'icono' => 'fa-rotate-left'],

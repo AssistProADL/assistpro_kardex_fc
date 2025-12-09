@@ -1,257 +1,220 @@
 <?php
-declare(strict_types=1);
-
-// =============================================================
-// AssistPro Kardex – Editar / Crear Orden de Compra
-// Encabezado + detalle, guardando en th_aduana / td_aduana
-// =============================================================
+// public/ingresos/orden_compra_edit.php
+// Crear / Editar Orden de Compra (th_aduana / td_aduana)
 
 require_once __DIR__ . '/../../app/db.php';
 
-$pdo = db_pdo();
-$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-/*----------- Helper folios desde c_folios -----------*/
-function siguiente_folio_oc_demo(PDO $pdo, int $empresaId = 0, string $modulo = 'OC'): ?string
-{
-    try {
-        $sql = "SELECT * FROM c_folios WHERE activo = 1 AND modulo = :modulo";
-        if ($empresaId > 0) {
-            $sql .= " AND empresa_id = :empresa";
-        }
-        $sql .= " ORDER BY empresa_id, serie LIMIT 1";
-        $st = $pdo->prepare($sql);
-        $st->bindValue(':modulo', $modulo, PDO::PARAM_STR);
-        if ($empresaId > 0) {
-            $st->bindValue(':empresa', $empresaId, PDO::PARAM_INT);
-        }
-        $st->execute();
-        $row = $st->fetch(PDO::FETCH_ASSOC);
-
-        if (!$row) {
-            $sql2 = "SELECT * FROM c_folios WHERE activo = 1";
-            if ($empresaId > 0) {
-                $sql2 .= " AND empresa_id = :empresa";
-            }
-            $sql2 .= " ORDER BY empresa_id, modulo, serie LIMIT 1";
-            $st2 = $pdo->prepare($sql2);
-            if ($empresaId > 0) {
-                $st2->bindValue(':empresa', $empresaId, PDO::PARAM_INT);
-            }
-            $st2->execute();
-            $row = $st2->fetch(PDO::FETCH_ASSOC);
-        }
-
-        if (!$row) {
-            return null;
-        }
-
-        $num = (int)($row['folio_actual'] ?: $row['folio_inicial']);
-        $num++;
-        $numStr = (string)$num;
-
-        if (!empty($row['rellenar_ceros']) && (int)$row['rellenar_ceros'] === 1) {
-            $numStr = str_pad(
-                $numStr,
-                (int)($row['longitud_num'] ?: 0),
-                '0',
-                STR_PAD_LEFT
-            );
-        }
-
-        $prefijo = (string)($row['prefijo'] ?? '');
-        $sufijo  = (string)($row['sufijo'] ?? '');
-
-        return $prefijo . $numStr . $sufijo;
-    } catch (Throwable $e) {
-        return null;
-    }
+function e(string $v): string {
+    return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
 }
 
-/*----------- AJAX: guardar en th_aduana / td_aduana -----------*/
-$ajax = $_GET['ajax'] ?? '';
-if ($ajax === 'guardar') {
-    header('Content-Type: application/json; charset=utf-8');
+try {
+    $pdo = db_pdo();
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (Throwable $e) {
+    die('Error de conexión a BD: ' . e($e->getMessage()));
+}
 
+// =========================
+// MODO / ID OC
+// =========================
+$idAduana  = isset($_GET['id_aduana']) ? (int)$_GET['id_aduana'] : 0;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $idAduana = isset($_POST['id_aduana']) ? (int)$_POST['id_aduana'] : 0;
+}
+$esEdicion = $idAduana > 0;
+
+$encabezado = null;
+$detalle    = [];
+
+// =========================
+// CARGA DE CATÁLOGOS
+// =========================
+try {
+    $proveedores = $pdo->query("
+        SELECT ID_Proveedor, Nombre
+        FROM c_proveedores
+        WHERE COALESCE(Activo,1) = 1
+        ORDER BY Nombre
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    $proveedores = [];
+}
+
+try {
+    $almacenes = $pdo->query("
+        SELECT 
+            clave,
+            nombre,
+            cve_cia
+        FROM c_almacenp
+        ORDER BY clave
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    $almacenes = [];
+}
+
+try {
+    $protocolos = $pdo->query("
+        SELECT ID_Protocolo, descripcion
+        FROM t_protocolo
+        WHERE COALESCE(Activo,1) = 1
+        ORDER BY ID_Protocolo
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    $protocolos = [];
+}
+
+// =========================
+// CARGAR ENCABEZADO/DETALLE EN EDICIÓN
+// =========================
+if ($esEdicion && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $sqlH = "
+        SELECT *
+        FROM th_aduana
+        WHERE ID_Aduana = :id
+    ";
+    $sth = $pdo->prepare($sqlH);
+    $sth->execute([':id' => $idAduana]);
+    $encabezado = $sth->fetch(PDO::FETCH_ASSOC);
+
+    if (!$encabezado) {
+        die('Orden de compra no encontrada.');
+    }
+
+    $sqlD = "
+        SELECT 
+            d.*,
+            a.des_articulo,
+            u.des_umed
+        FROM td_aduana d
+        LEFT JOIN c_articulo a ON a.cve_articulo = d.cve_articulo
+        LEFT JOIN c_unimed  u ON u.id_umed     = d.Id_UniMed
+        WHERE d.ID_Aduana = :id
+        ORDER BY d.num_orden, d.Item
+    ";
+    $std = $pdo->prepare($sqlD);
+    $std->execute([':id' => $idAduana]);
+    $detalle = $std->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// =========================
+// GUARDAR (POST)
+// =========================
+$mensajeError = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        $raw = file_get_contents('php://input');
-        $payload = json_decode($raw, true);
-
-        if (!is_array($payload)) {
-            throw new RuntimeException('JSON inválido.');
-        }
-
-        $h       = $payload['encabezado'] ?? [];
-        $detalle = $payload['detalle'] ?? [];
-
-        if (!is_array($h) || !is_array($detalle)) {
-            throw new RuntimeException('Estructura de datos inválida.');
-        }
-        if (!count($detalle)) {
-            throw new RuntimeException('Debe capturar al menos una partida de producto.');
-        }
-
-        $folio        = trim((string)($h['folio'] ?? ''));
-        $fechaOc      = (string)($h['fecha_oc'] ?? date('Y-m-d'));
-        $empresaSel   = (string)($h['empresa'] ?? '');
-        $almacenCve   = (string)($h['almacen_cve'] ?? '');
-        $proveedorId  = (int)($h['proveedor_id'] ?? 0);
-        $idProtocolo  = (string)($h['tipo_oc'] ?? '');
-        $moneda       = (string)($h['moneda'] ?? 'MXN');
-        $tipoCambio   = (float)($h['tipo_cambio'] ?? 1);
-        $folioErp     = (string)($h['folio_erp'] ?? '');
-        $statusOc     = (string)($h['status'] ?? 'ABIERTA');
-        $pedidoId     = $h['pedido_id'] !== '' ? (int)$h['pedido_id'] : null;
-        $fechaComp    = (string)($h['fecha_compromiso'] ?? '');
-        $fechaPrev    = (string)($h['fecha_recep_prev'] ?? '');
-        $comentarios  = (string)($h['comentarios'] ?? '');
-        $usuarioSel   = (string)($h['usuario'] ?? '');
-
-        if ($almacenCve === '') {
-            throw new RuntimeException('Debe seleccionar un almacén.');
-        }
-        if ($proveedorId <= 0) {
-            throw new RuntimeException('Debe seleccionar un proveedor.');
-        }
-        if ($idProtocolo === '') {
-            throw new RuntimeException('Debe seleccionar el tipo de OC (protocolo).');
-        }
-        if ($usuarioSel === '') {
-            throw new RuntimeException('Debe seleccionar el usuario.');
-        }
-
-        // Validación de fechas contra Fecha OC
-        if ($fechaComp !== '' && $fechaComp < $fechaOc) {
-            throw new RuntimeException('La Fecha Compromiso no puede ser menor que la Fecha de la OC.');
-        }
-        if ($fechaPrev !== '' && $fechaPrev < $fechaOc) {
-            throw new RuntimeException('La Recepción Prevista no puede ser menor que la Fecha de la OC.');
-        }
-
-        if ($folio === '') {
-            $folio = siguiente_folio_oc_demo($pdo) ?? ('OC-' . date('Ymd-His'));
-        }
-
-        // Moneda -> Id_moneda demo
-        $idMoneda = null;
-        if ($moneda === 'MXN') {
-            $idMoneda = 1;
-        } elseif ($moneda === 'USD') {
-            $idMoneda = 2;
-        }
-
         $pdo->beginTransaction();
 
-        // --- FOLIO de t_protocolo para el ID_Protocolo seleccionado ---
-        $stProt = $pdo->prepare("
-            SELECT id, ID_Protocolo, FOLIO
-            FROM t_protocolo
-            WHERE ID_Protocolo = :p AND Activo = 1
-            LIMIT 1
-        ");
-        $stProt->execute([':p' => $idProtocolo]);
-        $rowProt = $stProt->fetch(PDO::FETCH_ASSOC);
+        $usuarioSesion = $_SESSION['username'] ?? 'SYSTEM';
 
-        if (!$rowProt) {
-            throw new RuntimeException("No existe configuración de protocolo para '$idProtocolo' en t_protocolo.");
+        // Campos de encabezado desde POST (solo para nueva OC)
+        $idProveedor = isset($_POST['ID_Proveedor']) ? (int)$_POST['ID_Proveedor'] : 0;
+        $cveAlmac    = trim($_POST['Cve_Almac'] ?? '');
+        $tipoOc      = trim($_POST['tipo_oc'] ?? 'OCN'); // OCN / OCI
+        $idProtocolo = trim($_POST['ID_Protocolo'] ?? '');
+        $proyecto    = trim($_POST['Proyecto'] ?? '');
+        $moneda      = (int)($_POST['Id_moneda'] ?? 1); // 1=MXN,2=USD
+        $tipoCambio  = (float)($_POST['Tipo_Cambio'] ?? 1.0);
+        $fechaOc     = trim($_POST['fech_pedimento'] ?? '');
+        $folioOc     = trim($_POST['Pedimento'] ?? '');
+
+        if (!$esEdicion) {
+            if ($idProveedor <= 0) {
+                throw new RuntimeException('Debe seleccionar un proveedor.');
+            }
+
+            if ($fechaOc === '') {
+                $fechaOc = date('Y-m-d');
+            }
+
+            // Aduana en función del tipo OC
+            $aduana = ($tipoOc === 'OCI') ? 'IMPORTACION' : 'NACIONAL';
+
+            // Si no se capturó folio, generamos sencillo
+            if ($folioOc === '') {
+                $folioOc = $tipoOc . '-' . date('Ymd-His');
+            }
+
+            $sqlInsH = "
+                INSERT INTO th_aduana (
+                    num_pedimento,
+                    fech_pedimento,
+                    aduana,
+                    Factura,
+                    fech_llegPed,
+                    status,
+                    ID_Proveedor,
+                    ID_Protocolo,
+                    cve_usuario,
+                    Cve_Almac,
+                    Activo,
+                    recurso,
+                    Proyecto,
+                    Tipo_Cambio,
+                    Id_moneda,
+                    Pedimento
+                ) VALUES (
+                    NULL,
+                    :fech_pedimento,
+                    :aduana,
+                    :factura,
+                    :fech_llegPed,
+                    'A',
+                    :id_prov,
+                    :id_prot,
+                    :usuario,
+                    :cve_almac,
+                    1,
+                    :recurso,
+                    :proyecto,
+                    :tc,
+                    :moneda,
+                    :pedimento
+                )
+            ";
+            $sth = $pdo->prepare($sqlInsH);
+            $sth->execute([
+                ':fech_pedimento' => $fechaOc . ' 00:00:00',
+                ':aduana'         => $aduana,
+                ':factura'        => $folioOc,
+                ':fech_llegPed'   => $fechaOc . ' 00:00:00',
+                ':id_prov'        => $idProveedor,
+                ':id_prot'        => $idProtocolo !== '' ? $idProtocolo : null,
+                ':usuario'        => $usuarioSesion,
+                ':cve_almac'      => $cveAlmac !== '' ? $cveAlmac : null,
+                ':recurso'        => $tipoOc,
+                ':proyecto'       => $proyecto !== '' ? $proyecto : null,
+                ':tc'             => $tipoCambio ?: 1.0,
+                ':moneda'         => $moneda ?: 1,
+                ':pedimento'      => $folioOc,
+            ]);
+            $idAduana  = (int)$pdo->lastInsertId();
+            $esEdicion = true;
+        } else {
+            // En edición NO tocamos encabezado (solo detalle), según instrucción.
+            if ($idAduana <= 0) {
+                throw new RuntimeException('OC inválida para edición.');
+            }
         }
 
-        $idProtRow   = (int)$rowProt['id'];
-        $folioActual = (int)$rowProt['FOLIO'];
-        $nuevoFolio  = $folioActual + 1;
+        // =========================
+        // GUARDAR DETALLE (REEMPLAZO TOTAL)
+        // =========================
+        // Borramos todas las partidas actuales
+        $pdo->prepare("DELETE FROM td_aduana WHERE ID_Aduana = :id")
+            ->execute([':id' => $idAduana]);
 
-        $stUpdProt = $pdo->prepare("UPDATE t_protocolo SET FOLIO = :n WHERE id = :id");
-        $stUpdProt->execute([
-            ':n'  => $nuevoFolio,
-            ':id' => $idProtRow
-        ]);
+        $articulos  = $_POST['cve_articulo'] ?? [];
+        $cantidades = $_POST['cantidad']     ?? [];
+        $costos     = $_POST['costo']        ?? [];
+        $ivas       = $_POST['iva']          ?? [];
+        $lotes      = $_POST['Cve_Lote']     ?? [];
+        $caducidades= $_POST['caducidad']    ?? [];
+        $umedIds    = $_POST['Id_UniMed']    ?? [];
 
-        // === consecutivo numérico por protocolo para num_pedimento / Consec_protocolo ===
-        $stCons = $pdo->prepare("
-            SELECT COALESCE(MAX(num_pedimento),0) + 1
-            FROM th_aduana
-            WHERE ID_Protocolo = :p
-        ");
-        $stCons->execute([':p' => $idProtocolo]);
-        $consecNum = (int)$stCons->fetchColumn();
-        if ($consecNum <= 0) {
-            $consecNum = 1;
-        }
-
-        // --- Nuevo ID_Aduana ---
-        $idAduana = (int)$pdo->query("SELECT COALESCE(MAX(ID_Aduana),0)+1 FROM th_aduana")->fetchColumn();
-
-        // Fechas con hora actual
-        $horaActual   = date('H:i:s');
-        $fechPedDT    = $fechaOc   ? ($fechaOc   . ' ' . $horaActual) : null;
-        $fechLlegDT   = $fechaComp ? ($fechaComp . ' ' . $horaActual) : null;
-
-        $stH = $pdo->prepare("
-            INSERT INTO th_aduana (
-                ID_Aduana,
-                num_pedimento,
-                fech_pedimento,
-                aduana,
-                Factura,
-                fech_llegPed,
-                status,
-                ID_Proveedor,
-                ID_Protocolo,
-                Consec_protocolo,
-                cve_usuario,
-                Cve_Almac,
-                Activo,
-                recurso,
-                procedimiento,
-                AduanaDespacho,
-                dictamen,
-                presupuesto,
-                condicionesDePago,
-                lugarDeEntrega,
-                fechaDeFallo,
-                plazoDeEntrega,
-                Proyecto,
-                areaSolicitante,
-                numSuficiencia,
-                fechaSuficiencia,
-                fechaContrato,
-                montoSuficiencia,
-                numeroContrato,
-                importeAlmacenado,
-                Pedimento,
-                BlMaster,
-                BlHouse,
-                Tipo_Cambio,
-                Id_moneda
-            ) VALUES (
-                ?, ?, ?, 'OC_WEB', ?, ?, ?, ?, ?, ?, ?, ?, 1,
-                NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, ?
-            )
-        ");
-
-        $stH->execute([
-            $idAduana,
-            $consecNum,                  // num_pedimento
-            $fechPedDT,                  // fech_pedimento
-            mb_substr($folioErp, 0, 50, 'UTF-8'), // Factura (por ahora folio ERP)
-            $fechLlegDT,                 // fech_llegPed
-            ($statusOc === 'ABIERTA' ? 'A' : 'C'),
-            $proveedorId,
-            $idProtocolo,
-            $consecNum,                  // Consec_protocolo
-            mb_substr($usuarioSel, 0, 50, 'UTF-8'),
-            $almacenCve,
-            mb_substr($folio, 0, 100, 'UTF-8'),
-            $tipoCambio,
-            $idMoneda
-        ]);
-
-        // --- Detalle ---
-        $baseDet = (int)$pdo->query("SELECT COALESCE(MAX(Id_DetAduana),0)+1 FROM td_aduana")->fetchColumn();
-        $stD = $pdo->prepare("
+        $sqlInsD = "
             INSERT INTO td_aduana (
-                Id_DetAduana,
                 ID_Aduana,
                 cve_articulo,
                 cantidad,
@@ -273,903 +236,520 @@ if ($ajax === 'guardar') {
                 Fec_Factura,
                 Contenedores
             ) VALUES (
-                ?, ?, ?, ?, NULL, NULL, NULL, ?, 0, 1, ?, ?, ?, NULL,
-                NULL, NULL, NULL, NULL, ?, NULL, NULL
+                :id_aduana,
+                :cve_articulo,
+                :cantidad,
+                :cve_lote,
+                :caducidad,
+                NULL,
+                :num_orden,
+                0,
+                1,
+                :costo,
+                :iva,
+                :item,
+                :id_umed,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                :factura,
+                NULL,
+                NULL
             )
-        ");
+        ";
+        $stmtDet = $pdo->prepare($sqlInsD);
 
         $linea = 0;
-        foreach ($detalle as $r) {
+        foreach ($articulos as $idx => $art) {
+            $art   = trim((string)$art);
+            $cant  = (float)($cantidades[$idx] ?? 0);
+            $costo = (float)($costos[$idx] ?? 0);
+            $iva   = $ivas[$idx] !== '' ? (float)$ivas[$idx] : 0.0;
+
+            if ($art === '' || $cant <= 0 || $costo <= 0) {
+                continue; // línea vacía / inválida
+            }
+
             $linea++;
-            $idDet = $baseDet + $linea;
-            $clave    = (string)($r['clave'] ?? '');
-            $cantidad = (float)($r['cantidad'] ?? 0);
-            $precio   = (float)($r['precio'] ?? 0);
-            $ivaP     = (float)($r['ivaP'] ?? 0);
 
-            if ($clave === '' || $cantidad <= 0) {
-                throw new RuntimeException("Partida $linea inválida (clave o cantidad).");
-            }
-            if (!is_numeric($precio) || $precio < 0) {
-                throw new RuntimeException("Partida $linea: el precio debe ser mayor o igual a 0.");
+            $lote   = trim((string)($lotes[$idx] ?? ''));
+            $cad    = trim((string)($caducidades[$idx] ?? ''));
+            $idUmed = $umedIds[$idx] !== '' ? (int)$umedIds[$idx] : 0;
+
+            // Si no hay UM, buscamos en c_articulo.cve_umed
+            if ($idUmed <= 0) {
+                $qU = $pdo->prepare("SELECT cve_umed FROM c_articulo WHERE cve_articulo = :art LIMIT 1");
+                $qU->execute([':art' => $art]);
+                $idUmed = (int)$qU->fetchColumn();
+                if ($idUmed <= 0) {
+                    $idUmed = null;
+                }
             }
 
-            $stD->execute([
-                $idDet,
-                $idAduana,
-                $clave,
-                $cantidad,
-                $linea,
-                $precio,
-                $ivaP,
-                (string)$linea,
-                mb_substr($folioErp, 0, 120, 'UTF-8')
+            $stmtDet->execute([
+                ':id_aduana'   => $idAduana,
+                ':cve_articulo'=> $art,
+                ':cantidad'    => $cant,
+                ':cve_lote'    => $lote !== '' ? $lote : null,
+                ':caducidad'   => $cad !== '' ? $cad . ' 00:00:00' : null,
+                ':num_orden'   => $linea,
+                ':costo'       => $costo,   // PRECIO TOTAL (CON IVA)
+                ':iva'         => $iva,     // PORCENTAJE (ej. 16)
+                ':item'        => 'ITM-' . str_pad((string)$linea, 3, '0', STR_PAD_LEFT),
+                ':id_umed'     => $idUmed,
+                ':factura'     => $folioOc !== '' ? $folioOc : null,
             ]);
+        }
+
+        if ($linea === 0) {
+            throw new RuntimeException('Debe capturar al menos una partida válida.');
         }
 
         $pdo->commit();
 
-        echo json_encode([
-            'ok'        => true,
-            'id_aduana' => $idAduana,
-            'folio'     => $folio,
-            'consec'    => $consecNum
-        ], JSON_UNESCAPED_UNICODE);
+        // Redirige a listado
+        header('Location: orden_compra.php');
+        exit;
+
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
+        $pdo->rollBack();
+        $mensajeError = $e->getMessage();
+
+        // Si hubo error, cargamos de nuevo encabezado y detalle para mostrar lo que había
+        if ($esEdicion) {
+            $sth = $pdo->prepare("SELECT * FROM th_aduana WHERE ID_Aduana = :id");
+            $sth->execute([':id' => $idAduana]);
+            $encabezado = $sth->fetch(PDO::FETCH_ASSOC);
+
+            $std = $pdo->prepare("
+                SELECT d.*, a.des_articulo, u.des_umed
+                FROM td_aduana d
+                LEFT JOIN c_articulo a ON a.cve_articulo = d.cve_articulo
+                LEFT JOIN c_unimed  u ON u.id_umed     = d.Id_UniMed
+                WHERE d.ID_Aduana = :id
+                ORDER BY d.num_orden, d.Item
+            ");
+            $std->execute([':id' => $idAduana]);
+            $detalle = $std->fetchAll(PDO::FETCH_ASSOC);
         }
-        echo json_encode([
-            'ok'    => false,
-            'error' => $e->getMessage()
-        ], JSON_UNESCAPED_UNICODE);
     }
-    exit;
 }
 
-/*----------- Catálogos: tipos de OC, usuarios, productos -----------*/
-$tiposOc = [];
-try {
-    $sqlTOC = "SELECT id, ID_Protocolo, descripcion FROM t_protocolo WHERE id IN (4,5) AND Activo = 1 ORDER BY id";
-    $tiposOc = $pdo->query($sqlTOC)->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) {
-    $tiposOc = [];
+// =========================
+// VALORES POR OMISIÓN ENCABEZADO (para nueva OC)
+// =========================
+if (!$esEdicion) {
+    $encabezado = [
+        'ID_Aduana'      => 0,
+        'Pedimento'      => '',
+        'Factura'        => '',
+        'fech_pedimento' => date('Y-m-d') . ' 00:00:00',
+        'ID_Proveedor'   => 0,
+        'Cve_Almac'      => '',
+        'ID_Protocolo'   => '',
+        'recurso'        => 'OCN',
+        'Proyecto'       => '',
+        'Tipo_Cambio'    => 1.0,
+        'Id_moneda'      => 1,
+        'status'         => 'A',
+    ];
 }
 
-$usuarios = [];
-try {
-    // Estructura: cve_usuario, nombre_completo, Activo
-    $sqlU = "SELECT cve_usuario, nombre_completo FROM c_usuario WHERE Activo = 1 OR Activo IS NULL ORDER BY nombre_completo";
-    $usuarios = $pdo->query($sqlU)->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) {
-    $usuarios = [];
-}
+// =========================
+// LAYOUT
+// =========================
+$TITLE = $esEdicion ? 'Editar Orden de Compra' : 'Nueva Orden de Compra';
+require_once __DIR__ . '/../bi/_menu_global.php';
 
-$productos = [];
-try {
-    // Estructura: cve_articulo, des_articulo, cve_umed
-    $sqlP = "SELECT cve_articulo, des_articulo, cve_umed FROM c_articulo ORDER BY cve_articulo";
-    $productos = $pdo->query($sqlP)->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) {
-    $productos = [];
-}
+$fechaOcIso = $encabezado['fech_pedimento']
+    ? substr($encabezado['fech_pedimento'], 0, 10)
+    : date('Y-m-d');
 
-$folio_sugerido = siguiente_folio_oc_demo($pdo) ?? ('OC-' . date('Ymd-His'));
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <title>AssistPro SFA — Editar | Crear Orden de Compra</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <style>
-        body {
-            background: #f5f7fb;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            font-size: 10px;
-        }
-        .ap-card {
-            background: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(15, 90, 173, 0.08);
-            border: 1px solid #eef1f7;
-            padding: 8px 10px;
-            margin-bottom: 8px;
-        }
-        .ap-title,
-        .ap-section-title,
-        .ap-subtitle,
-        .ap-label,
-        .form-control,
-        .form-select,
-        .btn,
-        table,
-        table th,
-        table td {
-            font-size: 10px !important;
-        }
-        .ap-title {
-            font-weight: 700;
-            color: #0F5AAD;
-        }
-        .ap-subtitle {
-            color: #6c757d;
-            margin-bottom: 0;
-        }
-        .ap-section-title {
-            font-weight: 700;
-            color: #0F5AAD;
-        }
-        .ap-label {
-            font-weight: 600;
-            color: #4a5568;
-            margin-bottom: 2px;
-        }
-        .form-control,
-        .form-select {
-            border-radius: 8px;
-            padding-top: 1px;
-            padding-bottom: 1px;
-            line-height: 1.2;
-        }
-        .form-control:focus,
-        .form-select:focus {
-            border-color: #0F5AAD;
-            box-shadow: 0 0 0 0.12rem rgba(15, 90, 173, .25);
-        }
-        table.table-sm th,
-        table.table-sm td {
-            vertical-align: middle;
-            white-space: nowrap;
-        }
-       
-/* Botón corporativo AssistPro */
-.btn-ap-primary {
-    background: linear-gradient(135deg, #0F5AAD, #135fb8);
-    border-color: #0F5AAD;
-    color: #ffffff !important;
-    border-radius: 999px;
-    padding-inline: 16px;
-    padding-block: 4px;
-    box-shadow: 0 4px 10px rgba(15, 90, 173, 0.35);
-    font-weight: 600;
-}
-
-/* Asegurar letra blanca en TODOS los estados */
-.btn-ap-primary:visited,
-.btn-ap-primary:active,
-.btn-ap-primary:focus,
-.btn-ap-primary:hover {
-    color: #ffffff !important;
-    background: linear-gradient(135deg, #0d4f9a, #104c94);
-    border-color: #0d4f9a;
-}
-
-
- 
-        .btn-ap-primary:hover {
-            background: linear-gradient(135deg, #0c4a8d, #0f5aad);
-            border-color: #0c4a8d;
-        }
-        .btn-ap-link {
-            border-radius: 999px;
-        }
-        .badge-status {
-            border-radius: 999px;
-            padding: 3px 10px;
-        }
-        #tablaDetalleWrapper {
-            max-height: 420px;
-            overflow-y: auto;
-            overflow-x: auto;
-            border-radius: 10px;
-            border: 1px solid #e2e8f0;
-        }
-        .ap-summary-value {
-            font-weight: 700;
-            color: #0F5AAD;
-        }
-    </style>
-</head>
-<body>
-
-<?php require_once __DIR__ . '/../bi/_menu_global.php'; ?>
+<style>
+    body {
+        background: #f5f7fb;
+        font-size: 11px;
+    }
+    .ap-card {
+        background: #ffffff;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(15,90,173,.2);
+        border: 1px solid #dbe3ef;
+        margin-bottom: 10px;
+    }
+    .ap-card-header {
+        background: #0F5AAD;
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 10px 10px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .ap-title {
+        font-size: 14px;
+        margin: 0;
+        font-weight: 600;
+    }
+    .ap-subtitle {
+        font-size: 11px;
+        margin: 0;
+        opacity: .85;
+    }
+    .ap-card-body {
+        padding: 10px 14px;
+    }
+    .ap-label {
+        font-size: 11px;
+        font-weight: 600;
+        margin-bottom: 2px;
+        color: #555;
+    }
+    .form-control, .form-select {
+        font-size: 11px;
+        height: 28px;
+        padding: 3px 6px;
+    }
+    .btn-ap-primary {
+        background:#0F5AAD;
+        border-color:#0F5AAD;
+        color:#fff;
+        border-radius:999px;
+        font-size:11px;
+        padding:4px 14px;
+    }
+    .btn-ap-primary:hover {
+        background:#0c4a8d;
+        border-color:#0c4a8d;
+    }
+    .table-partidas thead th {
+        background:#f1f5f9;
+        font-size:10px;
+    }
+    .table-partidas tbody td {
+        font-size:10px;
+        padding:2px 4px;
+        vertical-align:middle;
+    }
+    .btn-row {
+        font-size:10px;
+        padding:2px 6px;
+    }
+</style>
 
 <div class="container-fluid py-2">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <div>
-            <div class="ap-title mb-0">
-                AssistPro SFA — Editar | Crear Orden de Compra
+    <div class="ap-card mb-2">
+        <div class="ap-card-header">
+            <div>
+                <div class="ap-title">
+                    <?php echo $esEdicion ? 'Editar Orden de Compra' : 'Nueva Orden de Compra'; ?>
+                </div>
+                <div class="ap-subtitle">
+                    th_aduana / td_aduana — OCN / OCI con partidas detalladas.
+                </div>
             </div>
-            <p class="ap-subtitle">
-                Encabezado y detalle de la Orden de Compra, con catálogos AssistPro.
-            </p>
-        </div>
-        <div>
-            <a href="orden_compra.php" class="btn btn-outline-secondary btn-sm btn-ap-link">
-                ↩ Volver a la lista
-            </a>
+            <div>
+                <a href="orden_compra.php" class="btn btn-outline-light btn-sm">
+                    Regresar
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Encabezado (sección 1, fuente 10px) -->
-    <form method="post" class="ap-card mb-2" onsubmit="return false;">
-        <div class="d-flex justify-content-between align-items-center mb-1">
-            <div>
-                <div class="ap-section-title mb-1">Encabezado</div>
-                <small class="text-muted">Datos principales de la Orden de Compra.</small>
-            </div>
-            <div>
-                <span class="badge bg-success-subtle text-success border border-success-subtle badge-status" id="badgeStatus">
-                    ABIERTA
-                </span>
-            </div>
-        </div>
-
-        <div class="row g-2">
-            <div class="col-md-2 col-sm-4">
-                <label class="ap-label">Folio</label>
-                <input type="text" class="form-control" id="folio"
-                       value="<?php echo htmlspecialchars($folio_sugerido, ENT_QUOTES, 'UTF-8'); ?>">
-            </div>
-            <div class="col-md-2 col-sm-4">
-                <label class="ap-label">Fecha OC</label>
-                <input type="date" class="form-control" id="fecha_oc">
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <label class="ap-label">Empresa</label>
-                <select class="form-select" id="empresa">
-                    <option value="">Cargando empresas...</option>
-                </select>
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <label class="ap-label">Almacén</label>
-                <select class="form-select" id="almacen">
-                    <option value="">Cargando almacenes...</option>
-                </select>
-            </div>
-            <div class="col-md-4 col-sm-12">
-                <label class="ap-label">Proveedor</label>
-                <select class="form-select" id="proveedor">
-                    <option value="">Cargando proveedores...</option>
-                </select>
-            </div>
-
-            <div class="col-md-3 col-sm-6">
-                <label class="ap-label">Tipo OC (protocolo)</label>
-                <select class="form-select" id="tipo_oc">
-                    <option value="">Seleccione...</option>
-                    <?php foreach ($tiposOc as $t): ?>
-                        <option value="<?php echo htmlspecialchars($t['ID_Protocolo'], ENT_QUOTES, 'UTF-8'); ?>">
-                            <?php echo htmlspecialchars($t['descripcion'] . ' [' . $t['ID_Protocolo'] . ']', ENT_QUOTES, 'UTF-8'); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <label class="ap-label">Moneda</label>
-                <select class="form-select" id="moneda">
-                    <option value="">Seleccione...</option>
-                    <option value="MXN">MXN - Pesos Mexicanos</option>
-                    <option value="USD">USD - Dólares</option>
-                </select>
-            </div>
-            <div class="col-md-2 col-sm-4">
-                <label class="ap-label">Tipo de cambio</label>
-                <input type="number" step="0.0001" class="form-control" id="tipo_cambio" value="1.0000">
-            </div>
-            <div class="col-md-2 col-sm-4">
-                <label class="ap-label">Folio ERP</label>
-                <input type="text" class="form-control" id="folio_erp" placeholder="Ej. OC-ERP-001">
-            </div>
-            <div class="col-md-2 col-sm-4">
-                <label class="ap-label">Status</label>
-                <select class="form-select" id="status_oc">
-                    <option value="ABIERTA">ABIERTA</option>
-                    <option value="CERRADA">CERRADA</option>
-                    <option value="CANCELADA">CANCELADA</option>
-                </select>
-            </div>
-
-            <div class="col-md-3 col-sm-4">
-                <label class="ap-label">ID Pedido relacionado (opcional)</label>
-                <input type="number" class="form-control" id="pedido_id" placeholder="vincula materiales">
-            </div>
-            <div class="col-md-3 col-sm-4">
-                <label class="ap-label">Fecha Compromiso</label>
-                <input type="date" class="form-control" id="fecha_compromiso">
-            </div>
-            <div class="col-md-3 col-sm-4">
-                <label class="ap-label">Recepción Prevista</label>
-                <input type="date" class="form-control" id="fecha_recep_prev">
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <label class="ap-label">Usuario</label>
-                <select class="form-select" id="usuario">
-                    <option value="">Seleccione usuario...</option>
-                    <?php foreach ($usuarios as $u): ?>
-                        <option value="<?php echo htmlspecialchars($u['cve_usuario'], ENT_QUOTES, 'UTF-8'); ?>">
-                            <?php
-                                $txt = $u['cve_usuario'];
-                                if (!empty($u['nombre_completo'])) {
-                                    $txt .= ' - ' . $u['nombre_completo'];
-                                }
-                                echo htmlspecialchars($txt, ENT_QUOTES, 'UTF-8');
-                            ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="col-md-12 col-sm-12">
-                <label class="ap-label">Comentarios</label>
-                <input type="text" class="form-control" id="comentarios" placeholder="Comentarios generales de la OC">
-            </div>
-        </div>
-    </form>
-
-    <!-- Detalle (sección 2) -->
     <div class="ap-card">
-        <div class="d-flex justify-content-between align-items-center mb-1">
-            <div>
-                <div class="ap-section-title mb-1">Detalle (productos)</div>
-                <small class="text-muted">Captura de productos, cantidades y precios (precio neto con IVA).</small>
-            </div>
-        </div>
-
-        <!-- Fila de captura -->
-        <form class="row g-2 mb-1" onsubmit="return false;">
-            <div class="col-md-2 col-sm-4">
-                <label class="ap-label">Clave</label>
-                <input type="text" class="form-control" id="detalle_clave"
-                       list="dlProductos" placeholder="Teclee clave...">
-                <datalist id="dlProductos">
-                    <?php foreach ($productos as $p): ?>
-                        <option value="<?php echo htmlspecialchars($p['cve_articulo'], ENT_QUOTES, 'UTF-8'); ?>">
-                            <?php echo htmlspecialchars($p['des_articulo'], ENT_QUOTES, 'UTF-8'); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </datalist>
-            </div>
-            <div class="col-md-4 col-sm-8">
-                <label class="ap-label">Producto</label>
-                <input type="text" class="form-control" id="detalle_producto" readonly>
-            </div>
-            <div class="col-md-1 col-sm-3">
-                <label class="ap-label">U.M.</label>
-                <input type="text" class="form-control" id="detalle_uom" placeholder="PZA" readonly>
-            </div>
-            <div class="col-md-1 col-sm-3">
-                <label class="ap-label">Cantidad</label>
-                <input type="number" step="0.0001" class="form-control" id="detalle_cantidad" value="0">
-            </div>
-            <div class="col-md-1 col-sm-3">
-                <label class="ap-label">Precio neto</label>
-                <input type="number" step="0.0001" class="form-control" id="detalle_precio" value="0">
-            </div>
-            <div class="col-md-1 col-sm-3">
-                <label class="ap-label">IVA (%)</label>
-                <input type="number" step="0.01" class="form-control" id="detalle_iva" value="16">
-            </div>
-            <div class="col-md-2 col-sm-12 d-flex align-items-end">
-                <button type="button" class="btn btn-ap-primary w-100" id="btnAgregarDetalle">
-                    + Agregar
-                </button>
-            </div>
-        </form>
-
-        <!-- Tabla detalle -->
-        <div id="tablaDetalleWrapper" class="table-responsive">
-            <table class="table table-sm table-hover align-middle mb-0" id="tablaDetalle">
-                <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
-                    <tr>
-                        <th style="width:90px;">Acciones</th>
-                        <th>Clave</th>
-                        <th>Producto</th>
-                        <th>U.M.</th>
-                        <th class="text-end">Cantidad</th>
-                        <th class="text-end">Precio neto</th>
-                        <th class="text-end">IVA %</th>
-                        <th class="text-end">Subtotal (base)</th>
-                        <th class="text-end">Total (neto)</th>
-                    </tr>
-                </thead>
-                <tbody id="tbodyDetalle">
-                    <tr>
-                        <td colspan="9" class="text-center text-muted">
-                            No hay productos capturados.
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Totales + botón Guardar en sección 2 -->
-        <div class="row mt-2">
-            <div class="col-md-8"></div>
-            <div class="col-md-4">
-                <div class="d-flex justify-content-between">
-                    <span class="ap-label">Subtotal (base)</span>
-                    <span class="ap-summary-value" id="lbl_subtotal">0.00</span>
+        <div class="ap-card-body">
+            <?php if ($mensajeError !== ''): ?>
+                <div class="alert alert-danger py-1" style="font-size:11px;">
+                    Error al guardar la OC: <?php echo e($mensajeError); ?>
                 </div>
-                <div class="d-flex justify-content-between">
-                    <span class="ap-label">IVA</span>
-                    <span class="ap-summary-value" id="lbl_iva">0.00</span>
+            <?php endif; ?>
+
+            <form method="post" id="formOc">
+                <input type="hidden" name="id_aduana" value="<?php echo (int)$encabezado['ID_Aduana']; ?>">
+
+                <!-- ENCABEZADO -->
+                <div class="row g-2 mb-2">
+                    <div class="col-md-3">
+                        <label class="ap-label">Proveedor</label>
+                        <select name="ID_Proveedor" class="form-select" <?php echo $esEdicion ? 'disabled' : ''; ?>>
+                            <option value="0">Seleccione...</option>
+                            <?php
+                            $idProvSel = (int)$encabezado['ID_Proveedor'];
+                            foreach ($proveedores as $p):
+                            ?>
+                                <option value="<?php echo (int)$p['ID_Proveedor']; ?>"
+                                    <?php echo ($idProvSel === (int)$p['ID_Proveedor']) ? 'selected' : ''; ?>>
+                                    <?php echo e($p['Nombre']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="ap-label">Almacén</label>
+                        <select name="Cve_Almac" class="form-select" <?php echo $esEdicion ? 'disabled' : ''; ?>>
+                            <option value="">Seleccione...</option>
+                            <?php
+                            $almSel = (string)$encabezado['Cve_Almac'];
+                            foreach ($almacenes as $a):
+                                $cve = (string)$a['clave'];
+                                $nom = (string)$a['nombre'];
+                            ?>
+                                <option value="<?php echo e($cve); ?>"
+                                    <?php echo ($almSel === $cve) ? 'selected' : ''; ?>>
+                                    <?php echo e($cve . ' - ' . $nom); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="ap-label">Tipo OC</label>
+                        <?php $tipoSel = (string)($encabezado['recurso'] ?? 'OCN'); ?>
+                        <select name="tipo_oc" class="form-select" <?php echo $esEdicion ? 'disabled' : ''; ?>>
+                            <option value="OCN" <?php echo ($tipoSel === 'OCN') ? 'selected' : ''; ?>>OCN</option>
+                            <option value="OCI" <?php echo ($tipoSel === 'OCI') ? 'selected' : ''; ?>>OCI</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="ap-label">Protocolo</label>
+                        <?php $protSel = (string)$encabezado['ID_Protocolo']; ?>
+                        <select name="ID_Protocolo" class="form-select" <?php echo $esEdicion ? 'disabled' : ''; ?>>
+                            <option value="">(Ninguno)</option>
+                            <?php foreach ($protocolos as $pr): ?>
+                                <option value="<?php echo e($pr['ID_Protocolo']); ?>"
+                                    <?php echo ($protSel === (string)$pr['ID_Protocolo']) ? 'selected' : ''; ?>>
+                                    <?php echo e($pr['descripcion']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="ap-label">Folio OC</label>
+                        <input type="text" name="Pedimento"
+                               class="form-control"
+                               value="<?php echo e((string)$encabezado['Pedimento']); ?>"
+                               <?php echo $esEdicion ? 'readonly' : ''; ?>>
+                    </div>
+
+                    <div class="col-md-1">
+                        <label class="ap-label">Moneda</label>
+                        <?php $monSel = (int)$encabezado['Id_moneda']; ?>
+                        <select name="Id_moneda" class="form-select" <?php echo $esEdicion ? 'disabled' : ''; ?>>
+                            <option value="1" <?php echo ($monSel === 1 ? 'selected' : ''); ?>>MXN</option>
+                            <option value="2" <?php echo ($monSel === 2 ? 'selected' : ''); ?>>USD</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="ap-label">Tipo cambio</label>
+                        <input type="number" step="0.0001" name="Tipo_Cambio"
+                               class="form-control"
+                               value="<?php echo e((string)$encabezado['Tipo_Cambio']); ?>"
+                               <?php echo $esEdicion ? 'readonly' : ''; ?>>
+                    </div>
                 </div>
-                <div class="d-flex justify-content-between mb-1">
-                    <span class="ap-label">Total (neto)</span>
-                    <span class="ap-summary-value" id="lbl_total">0.00</span>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-2">
+                        <label class="ap-label">Fecha OC</label>
+                        <input type="date" name="fech_pedimento"
+                               class="form-control"
+                               value="<?php echo e($fechaOcIso); ?>"
+                               <?php echo $esEdicion ? 'readonly' : ''; ?>>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="ap-label">Proyecto</label>
+                        <input type="text" name="Proyecto"
+                               class="form-control"
+                               value="<?php echo e((string)$encabezado['Proyecto']); ?>"
+                               <?php echo $esEdicion ? 'readonly' : ''; ?>>
+                    </div>
                 </div>
-                <div class="text-end mt-2 d-flex justify-content-end gap-2">
-                    <a href="orden_compra.php" class="btn btn-outline-secondary btn-sm btn-ap-link">
-                        Cancelar
-                    </a>
-                    <button type="button" class="btn btn-ap-primary" id="btnGuardarOC">
-                        💾 Guardar orden de compra
+
+                <hr class="my-2">
+
+                <!-- DETALLE -->
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="ap-label mb-0">Partidas</div>
+                    <button type="button" class="btn btn-sm btn-ap-primary" id="btnAddRow">
+                        Agregar partida
                     </button>
                 </div>
-            </div>
+
+                <div class="table-responsive" style="max-height:420px;overflow-y:auto;">
+                    <table class="table table-bordered table-hover table-partidas" id="tablaPartidas">
+                        <thead>
+                            <tr>
+                                <th style="width:40px;"></th>
+                                <th style="width:120px;">Artículo</th>
+                                <th>Descripción</th>
+                                <th style="width:70px;">UOM</th>
+                                <th style="width:80px;" class="text-end">Cantidad</th>
+                                <th style="width:80px;" class="text-end">Costo (c/IVA)</th>
+                                <th style="width:60px;" class="text-end">IVA %</th>
+                                <th style="width:100px;">Lote</th>
+                                <th style="width:90px;">Caducidad</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php
+                        if (!$detalle) {
+                            // Fila vacía
+                            ?>
+                            <tr>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-outline-danger btn-xs btn-row btn-del">
+                                        &times;
+                                    </button>
+                                </td>
+                                <td>
+                                    <input type="text" name="cve_articulo[]" class="form-control">
+                                </td>
+                                <td>
+                                    <input type="text" class="form-control" value="" disabled>
+                                </td>
+                                <td>
+                                    <input type="hidden" name="Id_UniMed[]" value="">
+                                    <input type="text" class="form-control" value="" disabled>
+                                </td>
+                                <td>
+                                    <input type="number" step="0.0001" name="cantidad[]" class="form-control text-end" value="">
+                                </td>
+                                <td>
+                                    <input type="number" step="0.0001" name="costo[]" class="form-control text-end" value="">
+                                </td>
+                                <td>
+                                    <input type="number" step="0.01" name="iva[]" class="form-control text-end" value="16">
+                                </td>
+                                <td>
+                                    <input type="text" name="Cve_Lote[]" class="form-control" value="">
+                                </td>
+                                <td>
+                                    <input type="date" name="caducidad[]" class="form-control" value="">
+                                </td>
+                            </tr>
+                            <?php
+                        } else {
+                            foreach ($detalle as $row):
+                                $cadIso = $row['caducidad'] ? substr($row['caducidad'],0,10) : '';
+                            ?>
+                            <tr>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-outline-danger btn-xs btn-row btn-del">
+                                        &times;
+                                    </button>
+                                </td>
+                                <td>
+                                    <input type="text" name="cve_articulo[]" class="form-control"
+                                           value="<?php echo e((string)$row['cve_articulo']); ?>">
+                                </td>
+                                <td>
+                                    <input type="text" class="form-control"
+                                           value="<?php echo e((string)($row['des_articulo'] ?? '')); ?>" disabled>
+                                </td>
+                                <td>
+                                    <input type="hidden" name="Id_UniMed[]" value="<?php echo e((string)$row['Id_UniMed']); ?>">
+                                    <input type="text" class="form-control"
+                                           value="<?php echo e((string)($row['des_umed'] ?? '')); ?>" disabled>
+                                </td>
+                                <td>
+                                    <input type="number" step="0.0001" name="cantidad[]" class="form-control text-end"
+                                           value="<?php echo e((string)$row['cantidad']); ?>">
+                                </td>
+                                <td>
+                                    <input type="number" step="0.0001" name="costo[]" class="form-control text-end"
+                                           value="<?php echo e((string)$row['costo']); ?>">
+                                </td>
+                                <td>
+                                    <input type="number" step="0.01" name="iva[]" class="form-control text-end"
+                                           value="<?php echo e((string)($row['IVA'] ?? '16')); ?>">
+                                </td>
+                                <td>
+                                    <input type="text" name="Cve_Lote[]" class="form-control"
+                                           value="<?php echo e((string)($row['Cve_Lote'] ?? '')); ?>">
+                                </td>
+                                <td>
+                                    <input type="date" name="caducidad[]" class="form-control"
+                                           value="<?php echo e($cadIso); ?>">
+                                </td>
+                            </tr>
+                            <?php
+                            endforeach;
+                        }
+                        ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-3 d-flex justify-content-between">
+                    <div class="text-muted" style="font-size:10px;">
+                        El costo capturado es <strong>precio total con IVA</strong>.<br>
+                        El desglose (precio neto, IVA, total) se calcula en reportes dividiendo entre (1 + IVA/100).
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-ap-primary">
+                            Guardar OC
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
-<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const API_FILTROS_URL = '../api/filtros_assistpro.php?action=init';
-const productosApi = <?php echo json_encode($productos, JSON_UNESCAPED_UNICODE); ?>;
-
-let detalleOC = [];
-
 document.addEventListener('DOMContentLoaded', () => {
-    const hoy = new Date();
-    const inpFechaOC = document.getElementById('fecha_oc');
-    if (inpFechaOC && !inpFechaOC.value) {
-        inpFechaOC.valueAsDate = hoy;
+    const tabla = document.getElementById('tablaPartidas').querySelector('tbody');
+    const btnAdd = document.getElementById('btnAddRow');
+
+    function bindDeleteButtons() {
+        tabla.querySelectorAll('.btn-del').forEach(btn => {
+            btn.onclick = () => {
+                const row = btn.closest('tr');
+                if (!row) return;
+                if (tabla.rows.length === 1) {
+                    // si solo queda una fila, la limpiamos
+                    row.querySelectorAll('input').forEach(inp => inp.value = '');
+                } else {
+                    row.remove();
+                }
+            };
+        });
     }
 
-    const selMoneda = document.getElementById('moneda');
-    if (selMoneda) selMoneda.value = 'MXN';
+    btnAdd.addEventListener('click', () => {
+        const rows = tabla.querySelectorAll('tr');
+        const base = rows[rows.length - 1];
+        const clone = base.cloneNode(true);
 
-    cargarFiltrosDesdeApi();
-    inicializarEventos();
+        // Limpia valores
+        clone.querySelectorAll('input').forEach(inp => {
+            if (inp.type === 'hidden') {
+                inp.value = '';
+                return;
+            }
+            if (inp.type === 'number' || inp.type === 'text' || inp.type === 'date') {
+                if (inp.name === 'iva[]') {
+                    inp.value = '16';
+                } else {
+                    inp.value = '';
+                }
+            }
+        });
+
+        tabla.appendChild(clone);
+        bindDeleteButtons();
+    });
+
+    bindDeleteButtons();
 });
-
-function inicializarEventos() {
-    const btnAgregar = document.getElementById('btnAgregarDetalle');
-    const inpClave   = document.getElementById('detalle_clave');
-    const btnGuardar = document.getElementById('btnGuardarOC');
-    const selStatus  = document.getElementById('status_oc');
-    const selTipoOc  = document.getElementById('tipo_oc');
-    const fComp      = document.getElementById('fecha_compromiso');
-    const fPrev      = document.getElementById('fecha_recep_prev');
-
-    if (btnAgregar) btnAgregar.addEventListener('click', agregarLineaDetalle);
-    if (inpClave) {
-        inpClave.addEventListener('change', autocompletarProductoPorClave);
-        inpClave.addEventListener('blur', autocompletarProductoPorClave);
-    }
-    if (btnGuardar) btnGuardar.addEventListener('click', guardarOC);
-
-    if (selStatus) {
-        selStatus.addEventListener('change', () => {
-            const badge = document.getElementById('badgeStatus');
-            if (!badge) return;
-            const val = selStatus.value || 'ABIERTA';
-            badge.textContent = val;
-        });
-    }
-
-    // OCN -> MXN, OCI -> USD
-    if (selTipoOc) {
-        selTipoOc.addEventListener('change', () => {
-            const v = selTipoOc.value;
-            const selMoneda = document.getElementById('moneda');
-            const tc = document.getElementById('tipo_cambio');
-            if (!selMoneda || !tc) return;
-
-            if (v === 'OCN') {
-                selMoneda.value = 'MXN';
-                if (!tc.value || parseFloat(tc.value) <= 0) tc.value = '1.0000';
-            } else if (v === 'OCI') {
-                selMoneda.value = 'USD';
-                if (!tc.value || parseFloat(tc.value) <= 0) tc.value = '1.0000';
-            }
-        });
-    }
-
-    // Fechas no menores que fecha OC
-    if (fComp) fComp.addEventListener('change', validarFechasContraOC);
-    if (fPrev) fPrev.addEventListener('change', validarFechasContraOC);
-}
-
-function validarFechasContraOC() {
-    const fOC  = document.getElementById('fecha_oc')?.value || '';
-    const fComp = document.getElementById('fecha_compromiso')?.value || '';
-    const fPrev = document.getElementById('fecha_recep_prev')?.value || '';
-
-    if (!fOC) return;
-
-    if (fComp && fComp < fOC) {
-        alert('La Fecha Compromiso no puede ser menor que la Fecha de la OC. Se ajustará a la fecha de la OC.');
-        document.getElementById('fecha_compromiso').value = fOC;
-    }
-    if (fPrev && fPrev < fOC) {
-        alert('La Recepción Prevista no puede ser menor que la Fecha de la OC. Se ajustará a la fecha de la OC.');
-        document.getElementById('fecha_recep_prev').value = fOC;
-    }
-}
-
-// ---------- Catálogos empresa / almacén / proveedor desde API ----------
-async function cargarFiltrosDesdeApi() {
-    try {
-        const res = await fetch(API_FILTROS_URL);
-        const data = await res.json();
-
-        if (!data || data.ok === false) {
-            console.error('Error en respuesta API filtros:', data);
-            setSelectVacio(document.getElementById('empresa'), 'Error empresas');
-            setSelectVacio(document.getElementById('almacen'), 'Error almacenes');
-            setSelectVacio(document.getElementById('proveedor'), 'Error proveedores');
-            return;
-        }
-
-        const selEmp = document.getElementById('empresa');
-        const selAlm = document.getElementById('almacen');
-        const selProv = document.getElementById('proveedor');
-
-        if (Array.isArray(data.empresas)) {
-            llenarSelect(
-                selEmp,
-                data.empresas,
-                'cve_cia',
-                item => `${item.des_cia} (${item.clave_empresa || item.cve_cia})`
-            );
-            if (data.empresas.length === 1 && selEmp) {
-                selEmp.value = data.empresas[0].cve_cia;
-            }
-        } else {
-            setSelectVacio(selEmp, 'Sin empresas');
-        }
-
-        if (Array.isArray(data.almacenes)) {
-            llenarSelect(
-                selAlm,
-                data.almacenes,
-                'cve_almac',
-                item => `${item.clave_almacen || item.cve_almac}`
-            );
-        } else {
-            setSelectVacio(selAlm, 'Sin almacenes');
-        }
-
-        if (Array.isArray(data.proveedores)) {
-            llenarSelect(
-                selProv,
-                data.proveedores,
-                'ID_Proveedor',
-                item => `${item.Nombre} [${item.cve_proveedor || item.ID_Proveedor}]`
-            );
-        } else {
-            setSelectVacio(selProv, 'Sin proveedores');
-        }
-
-    } catch (e) {
-        console.error('Error llamando API filtros:', e);
-        setSelectVacio(document.getElementById('empresa'), 'Error');
-        setSelectVacio(document.getElementById('almacen'), 'Error');
-        setSelectVacio(document.getElementById('proveedor'), 'Error');
-    }
-}
-
-function setSelectVacio(sel, texto) {
-    if (!sel) return;
-    sel.innerHTML = '';
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = texto || 'Sin datos';
-    sel.appendChild(opt);
-}
-
-function llenarSelect(sel, items, valueField, labelFn) {
-    if (!sel) return;
-    sel.innerHTML = '';
-    const opt0 = document.createElement('option');
-    opt0.value = '';
-    opt0.textContent = 'Seleccione...';
-    sel.appendChild(opt0);
-
-    items.forEach(it => {
-        const opt = document.createElement('option');
-        opt.value = it[valueField];
-        opt.textContent = typeof labelFn === 'function'
-            ? labelFn(it)
-            : (it[valueField] || '');
-        sel.appendChild(opt);
-    });
-}
-
-// ---------- Detalle ----------
-function autocompletarProductoPorClave() {
-    const clave = (document.getElementById('detalle_clave').value || '').trim();
-    const inpProd = document.getElementById('detalle_producto');
-    const inpUom  = document.getElementById('detalle_uom');
-
-    if (!clave) {
-        if (inpProd) inpProd.value = '';
-        if (inpUom)  inpUom.value  = '';
-        return;
-    }
-
-    const prod = productosApi.find(
-        p => (p.cve_articulo || '').toUpperCase() === clave.toUpperCase()
-    );
-
-    if (prod) {
-        if (inpProd) inpProd.value = prod.des_articulo || prod.cve_articulo;
-        if (inpUom && prod.cve_umed) inpUom.value = prod.cve_umed;
-    } else {
-        if (inpProd) inpProd.value = '';
-        if (inpUom)  inpUom.value  = '';
-    }
-}
-
-function agregarLineaDetalle() {
-    const clave    = (document.getElementById('detalle_clave').value || '').trim();
-    const producto = (document.getElementById('detalle_producto').value || '').trim();
-    const uom      = (document.getElementById('detalle_uom').value || '').trim();
-    const cantidad = parseFloat(document.getElementById('detalle_cantidad').value || '0');
-    const precio   = parseFloat(document.getElementById('detalle_precio').value || '0');
-    const ivaP     = parseFloat(document.getElementById('detalle_iva').value || '0');
-
-    if (!clave) {
-        alert('Capture la clave de producto.');
-        return;
-    }
-
-    const prodCat = productosApi.find(
-        p => (p.cve_articulo || '').toUpperCase() === clave.toUpperCase()
-    );
-    if (!prodCat) {
-        alert('La clave capturada no existe en el catálogo de productos.');
-        return;
-    }
-
-    if (!(cantidad > 0)) {
-        alert('La cantidad debe ser mayor a 0.');
-        return;
-    }
-    if (isNaN(precio) || precio < 0) {
-        alert('El precio neto debe ser mayor o igual a 0.');
-        return;
-    }
-
-    const descFinal = producto || prodCat.des_articulo || prodCat.cve_articulo;
-
-    // Precio NETO (incluye IVA) -> desglosar
-    const totalNetoLinea = cantidad * precio;
-    let base = totalNetoLinea;
-    let iva = 0;
-    if (ivaP > 0) {
-        base = totalNetoLinea / (1 + (ivaP / 100));
-        iva  = totalNetoLinea - base;
-    }
-    const subtotal = base;
-    const total = totalNetoLinea;
-
-    detalleOC.push({
-        id: Date.now() + Math.random(),
-        clave,
-        producto: descFinal,
-        uom,
-        cantidad,
-        precio,
-        ivaP,
-        subtotal,
-        iva,
-        total
-    });
-
-    renderDetalle();
-    limpiarDetalleCaptura();
-}
-
-function limpiarDetalleCaptura() {
-    document.getElementById('detalle_clave').value = '';
-    document.getElementById('detalle_producto').value = '';
-    document.getElementById('detalle_uom').value = '';
-    document.getElementById('detalle_cantidad').value = '0';
-    document.getElementById('detalle_precio').value = '0';
-    document.getElementById('detalle_iva').value = '16';
-}
-
-function eliminarLineaDetalle(id) {
-    detalleOC = detalleOC.filter(r => r.id !== id);
-    renderDetalle();
-}
-
-function renderDetalle() {
-    const tbody = document.getElementById('tbodyDetalle');
-    if (!tbody) return;
-
-    tbody.innerHTML = '';
-
-    if (!detalleOC.length) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = 9;
-        td.className = 'text-center text-muted';
-        td.textContent = 'No hay productos capturados.';
-        tr.appendChild(td);
-        tbody.appendChild(tr);
-        actualizarTotales();
-        return;
-    }
-
-    detalleOC.forEach(r => {
-        const tr = document.createElement('tr');
-
-        const tdAcc = document.createElement('td');
-        const btnDel = document.createElement('button');
-        btnDel.type = 'button';
-        btnDel.className = 'btn btn-outline-danger btn-sm';
-        btnDel.textContent = 'Eliminar';
-        btnDel.addEventListener('click', () => eliminarLineaDetalle(r.id));
-        tdAcc.appendChild(btnDel);
-        tr.appendChild(tdAcc);
-
-        const tdClave = document.createElement('td');
-        tdClave.textContent = r.clave;
-        tr.appendChild(tdClave);
-
-        const tdProd = document.createElement('td');
-        tdProd.textContent = r.producto;
-        tr.appendChild(tdProd);
-
-        const tdUom = document.createElement('td');
-        tdUom.textContent = r.uom;
-        tr.appendChild(tdUom);
-
-        const tdCant = document.createElement('td');
-        tdCant.className = 'text-end';
-        tdCant.textContent = r.cantidad.toFixed(4);
-        tr.appendChild(tdCant);
-
-        const tdPrecio = document.createElement('td');
-        tdPrecio.className = 'text-end';
-        tdPrecio.textContent = r.precio.toFixed(4);
-        tr.appendChild(tdPrecio);
-
-        const tdIvaP = document.createElement('td');
-        tdIvaP.className = 'text-end';
-        tdIvaP.textContent = r.ivaP.toFixed(2) + '%';
-        tr.appendChild(tdIvaP);
-
-        const tdSub = document.createElement('td');
-        tdSub.className = 'text-end';
-        tdSub.textContent = r.subtotal.toFixed(2);
-        tr.appendChild(tdSub);
-
-        const tdTot = document.createElement('td');
-        tdTot.className = 'text-end';
-        tdTot.textContent = r.total.toFixed(2);
-        tr.appendChild(tdTot);
-
-        tbody.appendChild(tr);
-    });
-
-    actualizarTotales();
-}
-
-function actualizarTotales() {
-    let subtotal = 0, iva = 0, total = 0;
-    detalleOC.forEach(r => {
-        subtotal += r.subtotal;
-        iva += r.iva;
-        total += r.total;
-    });
-
-    document.getElementById('lbl_subtotal').textContent = subtotal.toFixed(2);
-    document.getElementById('lbl_iva').textContent      = iva.toFixed(2);
-    document.getElementById('lbl_total').textContent    = total.toFixed(2);
-}
-
-// ---------- Guardar OC ----------
-async function guardarOC() {
-    if (!detalleOC.length) {
-        alert('Capture al menos un producto antes de guardar.');
-        return;
-    }
-
-    const empresaSel = document.getElementById('empresa')?.value || '';
-    const almSel     = document.getElementById('almacen')?.value || '';
-    const provSel    = document.getElementById('proveedor')?.value || '';
-    const tipoOc     = document.getElementById('tipo_oc')?.value || '';
-    const usuarioSel = document.getElementById('usuario')?.value || '';
-
-    if (!almSel) {
-        alert('Seleccione un almacén.');
-        return;
-    }
-    if (!provSel) {
-        alert('Seleccione un proveedor.');
-        return;
-    }
-    if (!tipoOc) {
-        alert('Seleccione el tipo de OC (protocolo).');
-        return;
-    }
-    if (!usuarioSel) {
-        alert('Seleccione el usuario.');
-        return;
-    }
-
-    // Validar fechas aquí también
-    const fechaOC  = document.getElementById('fecha_oc')?.value || '';
-    const fechaComp = document.getElementById('fecha_compromiso')?.value || '';
-    const fechaPrev = document.getElementById('fecha_recep_prev')?.value || '';
-
-    if (fechaOC) {
-        if (fechaComp && fechaComp < fechaOC) {
-            alert('La Fecha Compromiso no puede ser menor que la Fecha de la OC.');
-            return;
-        }
-        if (fechaPrev && fechaPrev < fechaOC) {
-            alert('La Recepción Prevista no puede ser menor que la Fecha de la OC.');
-            return;
-        }
-    }
-
-    const payload = {
-        encabezado: {
-            folio: document.getElementById('folio')?.value || '',
-            fecha_oc: fechaOC,
-            empresa: empresaSel,
-            almacen_cve: almSel,
-            proveedor_id: provSel ? parseInt(provSel, 10) : 0,
-            tipo_oc: tipoOc,
-            moneda: document.getElementById('moneda')?.value || '',
-            tipo_cambio: parseFloat(document.getElementById('tipo_cambio')?.value || '1'),
-            folio_erp: document.getElementById('folio_erp')?.value || '',
-            status: document.getElementById('status_oc')?.value || 'ABIERTA',
-            pedido_id: document.getElementById('pedido_id')?.value || '',
-            fecha_compromiso: fechaComp,
-            fecha_recep_prev: fechaPrev,
-            comentarios: document.getElementById('comentarios')?.value || '',
-            usuario: usuarioSel
-        },
-        detalle: detalleOC
-    };
-
-    try {
-        const res = await fetch('orden_compra_edit.php?ajax=guardar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!data || !data.ok) {
-            alert('No se pudo guardar la OC.\n' + (data && data.error ? data.error : 'Error desconocido.'));
-            return;
-        }
-
-        alert(
-            'OC registrada correctamente.\n' +
-            'ID_Aduana: ' + data.id_aduana + '\n' +
-            'Folio: ' + data.folio + '\n' +
-            'Consecutivo: ' + data.consec
-        );
-        window.location.href = 'orden_compra.php';
-
-    } catch (e) {
-        console.error(e);
-        alert('Error de comunicación con el servidor.');
-    }
-}
 </script>
-</body>
-</html>
+
+<?php
+require_once __DIR__ . '/../bi/_menu_global_end.php';
+?>

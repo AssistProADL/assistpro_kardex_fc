@@ -7,12 +7,11 @@ try {
     $pdo = db_pdo();
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (Throwable $e) {
-    die('Error de conexión a base de datos: ' . htmlspecialchars($e->getMessage()));
+    die('Error de conexión a base de datos: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
 }
 
 /**
- * Carga almacenes directamente desde th_aduana (almacenes que ya tienen OCs),
- * para no depender del API ni de otras tablas por ahora.
+ * Carga almacenes directamente desde th_aduana (almacenes que ya tienen OCs)
  */
 function cargarAlmacenes(PDO $pdo): array
 {
@@ -26,9 +25,14 @@ function cargarAlmacenes(PDO $pdo): array
 
         $out = [];
         foreach ($rows as $r) {
+            $clave = trim((string)$r['Clave_Almacen']);
+            if ($clave === '') {
+                continue;
+            }
+
             $out[] = [
-                'Clave_Almacen' => $r['Clave_Almacen'],
-                'Descripcion'   => $r['Clave_Almacen'],
+                'Clave'       => $clave,
+                'Descripcion' => $clave,
             ];
         }
         return $out;
@@ -38,7 +42,37 @@ function cargarAlmacenes(PDO $pdo): array
 }
 
 /**
- * Carga protocolos disponibles en t_protocolo para filtro.
+ * Carga monedas desde th_aduana (distintas Id_moneda existentes).
+ */
+function cargarMonedas(PDO $pdo): array
+{
+    try {
+        $rows = $pdo->query("
+            SELECT DISTINCT Id_moneda
+            FROM th_aduana
+            WHERE Id_moneda IS NOT NULL
+            ORDER BY Id_moneda
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        $out = [];
+        foreach ($rows as $r) {
+            $id = (int)$r['Id_moneda'];
+            if ($id <= 0) {
+                continue;
+            }
+            $out[] = [
+                'Id_moneda' => $id,
+                'Nombre'    => $id == 1 ? 'MXN' : 'USD',
+            ];
+        }
+        return $out;
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/**
+ * Carga protocolos desde t_protocolo para el combo de filtro.
  */
 function cargarProtocolos(PDO $pdo): array
 {
@@ -63,45 +97,63 @@ function cargarProtocolos(PDO $pdo): array
     }
 }
 
-// ================== LECTURA DE FILTROS ==================
-$almacen   = $_GET['almacen']  ?? '';
-$desde     = $_GET['desde']    ?? '';
-$hasta     = $_GET['hasta']    ?? '';
-$status    = $_GET['status']   ?? '';
-$protocolo = $_GET['protocolo']?? '';
-$tipoOc    = $_GET['tipooc']   ?? ''; // OCI / OCN
+// ================== LECTURA DE FILTROS =================
 
+$isFirstLoad = empty($_GET); // primera vez que entras a la vista
+
+$almacen    = isset($_GET['almacen'])      ? trim($_GET['almacen'])      : '';
+$fechaDesde = isset($_GET['fecha_desde'])  ? trim($_GET['fecha_desde'])  : '';
+$fechaHasta = isset($_GET['fecha_hasta'])  ? trim($_GET['fecha_hasta'])  : '';
+$status     = isset($_GET['status'])       ? trim($_GET['status'])       : '';
+$moneda     = isset($_GET['moneda'])       ? trim($_GET['moneda'])       : '';
+$protocolo  = isset($_GET['protocolo'])    ? trim($_GET['protocolo'])    : '';
+
+// Fechas por default: últimos 7 días (solo en primera carga)
+if ($isFirstLoad && $fechaDesde === '' && $fechaHasta === '') {
+    $fechaDesde = date('d/m/Y', strtotime('-7 days'));
+    $fechaHasta = date('d/m/Y');
+}
+
+// combos
 $almacenes = cargarAlmacenes($pdo);
+$monedas   = cargarMonedas($pdo);
 $protRows  = cargarProtocolos($pdo);
 
-// ================== WHERE de la consulta ==================
 $where  = [];
 $params = [];
 
+// Almacén
 if ($almacen !== '') {
     $where[]            = 'h.Cve_Almac = :almacen';
     $params[':almacen'] = $almacen;
 }
-if ($desde !== '') {
-    $where[]           = 'DATE(h.fech_pedimento) >= :desde';
-    $params[':desde']  = $desde;
+
+// Rango de fechas (Fecha OC = fech_pedimento)
+if ($fechaDesde !== '') {
+    $where[]               = 'DATE(h.fech_pedimento) >= STR_TO_DATE(:fdesde, "%d/%m/%Y")';
+    $params[':fdesde']     = $fechaDesde;
 }
-if ($hasta !== '') {
-    $where[]           = 'DATE(h.fech_pedimento) <= :hasta';
-    $params[':hasta']  = $hasta;
+if ($fechaHasta !== '') {
+    $where[]               = 'DATE(h.fech_pedimento) <= STR_TO_DATE(:fhasta, "%d/%m/%Y")';
+    $params[':fhasta']     = $fechaHasta;
 }
+
+// Status
 if ($status !== '') {
-    $where[]           = 'h.status = :status';
-    $params[':status'] = $status;
+    $where[]            = 'h.status = :status';
+    $params[':status']  = $status;
 }
+
+// Moneda
+if ($moneda !== '') {
+    $where[]            = 'h.Id_moneda = :moneda';
+    $params[':moneda']  = $moneda;
+}
+
+// Protocolo (vía ID_Protocolo)
 if ($protocolo !== '') {
-    $where[]                = 'h.ID_Protocolo = :protocolo';
-    $params[':protocolo']   = $protocolo;
-}
-if ($tipoOc !== '') {
-    // Se usa campo recurso = 'OCN' / 'OCI'
-    $where[]               = 'h.recurso = :tipooc';
-    $params[':tipooc']     = $tipoOc;
+    $where[]               = 'h.ID_Protocolo = :protocolo';
+    $params[':protocolo']  = $protocolo;
 }
 
 $sqlWhere = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
@@ -120,7 +172,6 @@ try {
             h.Cve_Almac,
             h.Tipo_Cambio,
             h.Id_moneda,
-            h.recurso AS tipo_oc,
             p.Nombre        AS proveedor,
             pr.descripcion  AS protocolo_desc,
             pr.ID_Protocolo AS protocolo_clave,
@@ -138,229 +189,206 @@ try {
             ON d.ID_Aduana = h.ID_Aduana
         $sqlWhere
         ORDER BY h.ID_Aduana DESC
-        LIMIT 500
+        LIMIT 25
     ";
 
     $st = $pdo->prepare($sql);
     $st->execute($params);
     $ocs = $st->fetchAll(PDO::FETCH_ASSOC);
+    $errorConsulta = '';
 } catch (Throwable $e) {
     $errorConsulta = $e->getMessage();
     $ocs           = [];
 }
 
-// ================== LAYOUT CORPORATIVO ==================
-$TITLE = 'Órdenes de Compra';
 require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
+
+<!-- LineAwesome (si ya lo cargas globalmente, puedes quitar este link) -->
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/line-awesome/1.3.0/line-awesome/css/line-awesome.min.css"/>
+
 <style>
-    body {
-        background: #f5f7fb;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    /* Estilo AssistPro para grillas: 10px, una línea, scroll H/V */
+    .ap-oc-table-wrapper {
+        max-height: 420px;
+        overflow: auto; /* scroll horizontal y vertical */
+    }
+    .ap-oc-table {
         font-size: 10px;
+        margin-bottom: 0;
     }
-    .ap-card {
-        background: #ffffff;
-        border-radius: 10px;
-        box-shadow: 0 1px 3px rgba(15, 90, 173, 0.20);
-        border: 1px solid #dbe3ef;
-        margin-bottom: 10px;
+    .ap-oc-table th,
+    .ap-oc-table td {
+        white-space: nowrap; /* una sola línea por registro */
+        padding: 4px 6px;
+        vertical-align: middle;
     }
-    .ap-card-header {
-        background: #0F5AAD;
-        color: #ffffff;
-        padding: 8px 14px;
-        border-radius: 10px 10px 0 0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .ap-title {
-        font-size: 15px;
+    .ap-oc-table thead th {
+        background-color: #f4f6fb;
         font-weight: 600;
     }
-    .ap-subtitle {
-        font-size: 11px;
-        margin: 0;
-        opacity: .85;
+    .ap-oc-table tbody tr:hover {
+        background-color: #f7faff;
     }
-    .ap-card-body {
-        padding: 10px 14px 8px;
+    .ap-oc-actions .btn {
+        padding: 2px 4px;
+        font-size: 10px;
+        line-height: 1.2;
+    }
+    .ap-oc-header-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    .ap-oc-header-subtitle {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 0;
     }
     .ap-label {
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 600;
-        color: #555;
-        margin-bottom: 2px;
-    }
-    .form-control,
-    .form-select {
-        font-size: 12px;
-        height: 30px;
-        padding: 3px 8px;
-    }
-    .btn-ap-primary {
-        background-color: #0F5AAD;
-        border-color: #0F5AAD;
-        color: #fff;
-        border-radius: 999px;
-        padding-inline: 14px;
-        padding-block: 3px;
-        font-size: 11px;
-        box-shadow: 0 4px 10px rgba(15, 90, 173, 0.4);
-    }
-    .btn-ap-primary:hover {
-        background-color: #0c4a8d;
-        border-color: #0c4a8d;
-    }
-    #tablaWrapper {
-        max-height: 520px;
-        overflow-y: auto;
-        overflow-x: auto;
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-    }
-    table.table-sm th,
-    table.table-sm td {
-        font-size: 11px;
-        white-space: nowrap;
-    }
-    table.table-sm th {
-        background: #f1f5f9;
-        position: sticky;
-        top: 0;
-        z-index: 5;
-    }
-    .badge-status {
-        font-size: 10px;
-        padding: 2px 8px;
-        border-radius: 999px;
-    }
-    .btn-group-sm>.btn {
-        font-size: 10px;
-        padding: 2px 6px;
     }
 </style>
 
-<div class="container-fluid py-2">
-
-    <!-- Encabezado -->
-    <div class="ap-card mb-2">
-        <div class="ap-card-header">
-            <div>
-                <div class="ap-title mb-0">AssistPro SFA — Órdenes de Compra</div>
-                <p class="ap-subtitle">Consulta y administración de Órdenes de Compra (th_aduana / td_aduana).</p>
-            </div>
-            <div>
-                <a href="orden_compra_edit.php" class="btn btn-ap-primary btn-sm">
-                    Nueva OC
-                </a>
-            </div>
-        </div>
+<div class="ap-wrapper">
+    <div class="ap-header mb-3">
+        <h1 class="ap-oc-header-title">AssistPro SFA — Órdenes de Compra</h1>
+        <p class="ap-oc-header-subtitle">
+            Módulo AssistPro SFA &amp; Ingresos — Administración de Órdenes de Compra (th_aduana / td_aduana).
+        </p>
     </div>
 
     <!-- Filtros -->
-    <div class="ap-card mb-2">
-        <div class="ap-card-body">
-            <form class="row g-2 align-items-end" method="get">
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+
                 <div class="col-md-2 col-sm-4">
                     <label class="ap-label">Almacén</label>
-                    <select class="form-select" name="almacen">
+                    <select class="form-select form-select-sm" name="almacen">
                         <option value="">Todos</option>
-                        <?php if (!$almacenes): ?>
-                            <option value="">(Sin almacenes en th_aduana)</option>
-                        <?php else: ?>
-                            <?php foreach ($almacenes as $a): ?>
-                                <option value="<?php echo htmlspecialchars($a['Clave_Almacen']); ?>"
-                                    <?php if ($almacen === $a['Clave_Almacen']) echo ' selected'; ?>>
-                                    <?php echo htmlspecialchars($a['Clave_Almacen'] . ' — ' . $a['Descripcion']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </select>
-                </div>
-
-                <div class="col-md-2 col-sm-4">
-                    <label class="ap-label">Fecha desde</label>
-                    <input type="date" class="form-control" name="desde"
-                           value="<?php echo htmlspecialchars($desde ?? ''); ?>">
-                </div>
-                <div class="col-md-2 col-sm-4">
-                    <label class="ap-label">Fecha hasta</label>
-                    <input type="date" class="form-control" name="hasta"
-                           value="<?php echo htmlspecialchars($hasta ?? ''); ?>">
-                </div>
-
-                <div class="col-md-2 col-sm-4">
-                    <label class="ap-label">Status</label>
-                    <select class="form-select" name="status">
-                        <option value="">Todos</option>
-                        <option value="A" <?php echo ($status === 'A') ? 'selected' : ''; ?>>Abierta</option>
-                        <option value="C" <?php echo ($status === 'C') ? 'selected' : ''; ?>>Cerrada</option>
-                    </select>
-                </div>
-
-                <div class="col-md-2 col-sm-4">
-                    <label class="ap-label">Protocolo</label>
-                    <select class="form-select" name="protocolo">
-                        <option value="">Todos</option>
-                        <?php foreach ($protRows as $pr): ?>
-                            <option value="<?php echo (int)$pr['ID_Protocolo']; ?>"
-                                <?php echo ($protocolo == $pr['ID_Protocolo']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($pr['Descripcion']); ?>
+                        <?php foreach ($almacenes as $a): ?>
+                            <option value="<?php echo htmlspecialchars((string)$a['Clave'], ENT_QUOTES, 'UTF-8'); ?>"
+                                <?php echo ($almacen === $a['Clave']) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars((string)$a['Clave'], ENT_QUOTES, 'UTF-8'); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
 
                 <div class="col-md-2 col-sm-4">
-                    <label class="ap-label">Tipo OC</label>
-                    <select class="form-select" name="tipooc">
+                    <label class="ap-label">Fecha desde</label>
+                    <input type="text"
+                           class="form-control form-control-sm"
+                           name="fecha_desde"
+                           placeholder="dd/mm/aaaa"
+                           value="<?php echo htmlspecialchars((string)$fechaDesde, ENT_QUOTES, 'UTF-8'); ?>">
+                </div>
+
+                <div class="col-md-2 col-sm-4">
+                    <label class="ap-label">Fecha hasta</label>
+                    <input type="text"
+                           class="form-control form-control-sm"
+                           name="fecha_hasta"
+                           placeholder="dd/mm/aaaa"
+                           value="<?php echo htmlspecialchars((string)$fechaHasta, ENT_QUOTES, 'UTF-8'); ?>">
+                </div>
+
+                <div class="col-md-2 col-sm-4">
+                    <label class="ap-label">Status</label>
+                    <select class="form-select form-select-sm" name="status">
                         <option value="">Todos</option>
-                        <option value="OCN" <?php echo ($tipoOc === 'OCN') ? 'selected' : ''; ?>>OCN</option>
-                        <option value="OCI" <?php echo ($tipoOc === 'OCI') ? 'selected' : ''; ?>>OCI</option>
+                        <option value="A" <?php echo ($status === 'A') ? 'selected' : ''; ?>>Activos</option>
+                        <option value="C" <?php echo ($status === 'C') ? 'selected' : ''; ?>>Cancelados</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2 col-sm-4">
+                    <label class="ap-label">Moneda</label>
+                    <select class="form-select form-select-sm" name="moneda">
+                        <option value="">Todas</option>
+                        <?php foreach ($monedas as $m): ?>
+                            <option value="<?php echo (int)$m['Id_moneda']; ?>"
+                                <?php echo ($moneda == $m['Id_moneda']) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars((string)$m['Nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="col-md-2 col-sm-4">
+                    <label class="ap-label">Protocolo</label>
+                    <select class="form-select form-select-sm" name="protocolo">
+                        <option value="">Todos</option>
+                        <?php foreach ($protRows as $pr): ?>
+                            <option value="<?php echo (int)$pr['ID_Protocolo']; ?>"
+                                <?php echo ($protocolo == $pr['ID_Protocolo']) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars((string)$pr['Descripcion'], ENT_QUOTES, 'UTF-8'); ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 
                 <div class="col-md-2 col-sm-4">
                     <label class="ap-label">&nbsp;</label>
-                    <button type="submit" class="btn btn-ap-primary w-100">
-                        Buscar
+                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                        <i class="la la-search"></i> Aplicar
                     </button>
                 </div>
+
+                <div class="col-md-2 col-sm-4">
+                    <label class="ap-label">&nbsp;</label>
+                    <a href="orden_compra.php" class="btn btn-outline-secondary btn-sm w-100">
+                        <i class="la la-eraser"></i> Limpiar
+                    </a>
+                </div>
+
             </form>
         </div>
     </div>
 
-    <!-- Tabla -->
-    <div class="ap-card">
-        <div class="ap-card-body">
-            <?php if (isset($errorConsulta)): ?>
-                <div class="alert alert-danger py-1 mb-2" style="font-size:11px;">
-                    Error al consultar órdenes de compra:
-                    <?php echo htmlspecialchars($errorConsulta, ENT_QUOTES, 'UTF-8'); ?>
+    <!-- Lista de OCs -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                    <h5 class="mb-0" style="font-size:13px;font-weight:600;">Órdenes de Compra — detalle</h5>
                 </div>
-            <?php endif; ?>
+                <div>
+                    <a href="orden_compra_edit.php" class="btn btn-sm btn-primary">
+                        <i class="la la-plus-circle"></i> Nueva OC
+                    </a>
+                </div>
+            </div>
 
-            <div id="tablaWrapper" class="table-responsive">
-                <table class="table table-sm table-hover align-middle mb-0" id="tablaOC">
+            <div class="ap-oc-table-wrapper">
+                <table class="table table-striped table-hover table-sm ap-oc-table">
                     <thead>
-                        <tr>
-                            <th style="width:170px;">Acciones</th>
-                            <th>ID Aduana</th>
-                            <th>Pedimento (folio OC)</th>
-                            <th>Fecha OC</th>
-                            <th>Proveedor</th>
-                            <th>Tipo OC</th>
-                            <th>Almacén</th>
-                            <th>Moneda</th>
-                            <th>Tipo Cambio</th>
-                            <th class="text-end" style="width:80px;">Partidas (td_aduana)</th>
-                            <th>Status</th>
-                        </tr>
+                    <tr>
+                        <th class="text-center" style="width:80px;">Acciones</th>
+                        <th>ID Aduana</th>
+                        <th>Pedimento (folio OC)</th>
+                        <th>Fecha OC</th>
+                        <th>Proveedor</th>
+                        <th>Protocolo</th>
+                        <th>Almacén</th>
+                        <th>Moneda</th>
+                        <th>Tipo Cambio</th>
+                        <th class="text-end">Partidas</th>
+                        <th>Status</th>
+                    </tr>
                     </thead>
                     <tbody>
-                    <?php if (!$ocs): ?>
+                    <?php if (!empty($errorConsulta)): ?>
+                        <tr>
+                            <td colspan="11" class="text-center text-danger">
+                                Error al consultar OCs:
+                                <?php echo htmlspecialchars((string)$errorConsulta, ENT_QUOTES, 'UTF-8'); ?>
+                            </td>
+                        </tr>
+                    <?php elseif (!$ocs): ?>
                         <tr>
                             <td colspan="11" class="text-center text-muted">
                                 No hay órdenes de compra para los filtros seleccionados.
@@ -369,124 +397,54 @@ require_once __DIR__ . '/../bi/_menu_global.php';
                     <?php else: ?>
                         <?php foreach ($ocs as $r): ?>
                             <?php
-                                $monedaTxt = '';
-                                if ((int)$r['Id_moneda'] === 1) {
-                                    $monedaTxt = 'MXN';
-                                } elseif ((int)$r['Id_moneda'] === 2) {
-                                    $monedaTxt = 'USD';
-                                }
-                                $statusBadge = ($r['status'] === 'A') ? 'success' : 'secondary';
-                                $statusText  = ($r['status'] === 'A') ? 'Abierta' : 'Cerrada';
+                            $monedaTxt = '';
+                            if ((int)$r['Id_moneda'] === 1) {
+                                $monedaTxt = 'MXN';
+                            } elseif ((int)$r['Id_moneda'] > 1) {
+                                $monedaTxt = 'USD';
+                            }
                             ?>
                             <tr>
-                                <td>
-                                    <div class="btn-group btn-group-sm" role="group">
-                                        <button type="button"
-                                                class="btn btn-outline-secondary btn-ver"
-                                                data-id="<?php echo (int)$r['ID_Aduana']; ?>">
-                                            Ver
-                                        </button>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm ap-oc-actions">
+                                        <a href="orden_compra_ver.php?id_aduana=<?php echo (int)$r['ID_Aduana']; ?>"
+                                           class="btn btn-outline-primary"
+                                           title="Ver OC">
+                                            <i class="la la-eye"></i>
+                                        </a>
                                         <a href="orden_compra_edit.php?id_aduana=<?php echo (int)$r['ID_Aduana']; ?>"
-                                           class="btn btn-outline-primary">
-                                            Editar
-                                        </a>
-                                        <a href="orden_compra_pdf.php?id_aduana=<?php echo (int)$r['ID_Aduana']; ?>"
-                                           class="btn btn-outline-secondary" target="_blank">
-                                            PDF OC
-                                        </a>
-                                        <a href="orden_compra_pdf_sin_costos.php?id_aduana=<?php echo (int)$r['ID_Aduana']; ?>"
-                                           class="btn btn-outline-secondary" target="_blank">
-                                            PDF recepción
+                                           class="btn btn-outline-secondary"
+                                           title="Editar OC">
+                                            <i class="la la-edit"></i>
                                         </a>
                                     </div>
                                 </td>
                                 <td><?php echo (int)$r['ID_Aduana']; ?></td>
-                                <td>
-                                    <?php echo htmlspecialchars($r['Pedimento'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
+                                <td><?php echo htmlspecialchars((string)($r['Pedimento'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>
                                     <?php
-                                        echo htmlspecialchars(
-                                            $r['fech_pedimento'] ? substr($r['fech_pedimento'], 0, 10) : '',
-                                            ENT_QUOTES,
-                                            'UTF-8'
-                                        );
+                                    if (!empty($r['fech_pedimento'])) {
+                                        $dt = new DateTime($r['fech_pedimento']);
+                                        echo $dt->format('d/m/Y');
+                                    }
                                     ?>
                                 </td>
-                                <td>
-                                    <?php echo htmlspecialchars($r['proveedor'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
-                                <td>
-                                    <?php echo htmlspecialchars($r['tipo_oc'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
-                                <td>
-                                    <?php echo htmlspecialchars($r['Cve_Almac'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
-                                <td>
-                                    <?php echo htmlspecialchars($monedaTxt, ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
-                                <td class="text-end">
-                                    <?php echo number_format((float)$r['Tipo_Cambio'], 4); ?>
-                                </td>
-                                <td class="text-end">
-                                    <?php echo (int)$r['partidas']; ?>
-                                </td>
-                                <td>
-                                    <span class="badge badge-status bg-<?php echo $statusBadge; ?>">
-                                        <?php echo htmlspecialchars($statusText, ENT_QUOTES, 'UTF-8'); ?>
-                                    </span>
-                                </td>
+                                <td><?php echo htmlspecialchars((string)($r['proveedor'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars((string)($r['protocolo_clave'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars((string)($r['Cve_Almac'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars((string)$monedaTxt, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars((string)($r['Tipo_Cambio'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="text-end"><?php echo (int)$r['partidas']; ?></td>
+                                <td><?php echo htmlspecialchars((string)($r['status'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
                     </tbody>
                 </table>
             </div>
-            <div class="text-muted mt-1" style="font-size:9px;">
-                Consulta limitada a 500 registros.
-            </div>
+
         </div>
     </div>
 </div>
-
-<!-- Modal Ver OC -->
-<div class="modal fade" id="modalVerOc" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content" style="font-size:10px;">
-      <div class="modal-header">
-        <h5 class="modal-title">Orden de Compra — Detalle</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body" id="modalVerOcBody">
-        Cargando...
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-// Botones Ver -> modal con resumen sin costos
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.btn-ver').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const id = btn.getAttribute('data-id');
-            const modalBody = document.getElementById('modalVerOcBody');
-            modalBody.textContent = 'Cargando...';
-            try {
-                const res = await fetch('orden_compra_ver.php?id_aduana=' + encodeURIComponent(id));
-                const html = await res.text();
-                modalBody.innerHTML = html;
-                const modal = new bootstrap.Modal(document.getElementById('modalVerOc'));
-                modal.show();
-            } catch (e) {
-                modalBody.textContent = 'Error al cargar el detalle de la OC.';
-            }
-        });
-    });
-});
-</script>
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>

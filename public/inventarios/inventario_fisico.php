@@ -1,156 +1,346 @@
 <?php
-// public/procesos/inventarios/inventario_fisico.php
-// Vista visual – Programación de Inventario Físico
+// public/inventarios/inventario_fisico.php
+// Inventario Físico – Selección de BL con existencia teórica (PZ + CT + LP)
 
+require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../bi/_menu_global.php';
-?>
 
-<div class="container-fluid">
+function h($s) {
+    return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+}
+
+/* ==========================================================
+   LECTURA DE FILTROS
+   ========================================================== */
+// Empresa (c_compania.cve_cia)
+$empresa_id   = isset($_GET['empresa_id'])   ? trim($_GET['empresa_id'])   : '';
+// Almacén padre (c_almacenp.id)
+$almacenp_id  = isset($_GET['almacenp_id'])  ? trim($_GET['almacenp_id'])  : '';
+// Zona de almacenaje (c_almacen.cve_almac)
+$zona_id      = isset($_GET['zona_id'])      ? trim($_GET['zona_id'])      : '';
+
+$empresas  = [];
+$almacenes = [];
+$zonas     = [];
+$bls       = [];
+$error_msg = '';
+
+try {
+
+    /* ==========================================================
+       EMPRESAS  (c_compania)
+       ========================================================== */
+    $sqlEmp = "
+        SELECT 
+            cve_cia       AS empresa_id,
+            COALESCE(des_cia, clave_empresa, CONCAT('CIA ', cve_cia)) AS nombre
+        FROM c_compania
+        WHERE IFNULL(Activo,1) = 1
+        ORDER BY des_cia, clave_empresa
+    ";
+    $empresas = db_all($sqlEmp);
+
+    /* ==========================================================
+       ALMACENES (c_almacenp) por empresa
+       ========================================================== */
+    $paramsAlm = [];
+    $sqlAlm = "
+        SELECT 
+            ap.id AS almacenp_id,
+            TRIM(CONCAT(IFNULL(ap.clave,''),' - ',IFNULL(ap.nombre,''))) AS nombre
+        FROM c_almacenp ap
+        WHERE IFNULL(ap.Activo,1) = 1
+    ";
+    if ($empresa_id !== '') {
+        $sqlAlm .= " AND ap.cve_cia = :empresa_id ";
+        $paramsAlm[':empresa_id'] = $empresa_id;
+    }
+    $sqlAlm .= " ORDER BY ap.nombre ";
+
+    $almacenes = db_all($sqlAlm, $paramsAlm);
+
+    /* ==========================================================
+       ZONAS (c_almacen) por almacén padre
+       ========================================================== */
+    if ($almacenp_id !== '') {
+        $sqlZona = "
+            SELECT 
+                a.cve_almac,
+                TRIM(CONCAT(IFNULL(a.clave_almacen,''),' - ',IFNULL(a.des_almac,''))) AS nombre
+            FROM c_almacen a
+            WHERE a.cve_almacenp = :almacenp_id
+              AND IFNULL(a.Activo,1) = 1
+            ORDER BY a.des_almac
+        ";
+        $zonas = db_all($sqlZona, [':almacenp_id' => $almacenp_id]);
+    }
+
+    /* ==========================================================
+       BLs (CodigoCSD) con existencia teórica PZ + CT + LP
+       ========================================================== */
+    if ($almacenp_id !== '') {
+
+        $paramsBL = [];
+
+        $sqlBL = "
+            SELECT 
+                u.idy_ubica,
+                u.CodigoCSD         AS bl,
+                u.cve_pasillo       AS pasillo,
+                u.cve_rack          AS rack,
+                u.cve_nivel         AS nivel,
+                u.Seccion           AS zona,
+                u.Ubicacion         AS posicion,
+                SUM(x.cantidad)     AS existencia_teorica
+            FROM c_ubicacion u
+            INNER JOIN (
+                -- Piezas
+                SELECT 
+                    p.cve_almac,
+                    p.idy_ubica,
+                    SUM(p.Existencia) AS cantidad
+                FROM ts_existenciapiezas p
+                GROUP BY p.cve_almac, p.idy_ubica
+
+                UNION ALL
+
+                -- Cajas / Contenedores
+                SELECT
+                    c.Cve_Almac AS cve_almac,
+                    c.idy_ubica,
+                    SUM(c.PiezasXCaja) AS cantidad
+                FROM ts_existenciacajas c
+                GROUP BY c.Cve_Almac, c.idy_ubica
+
+                UNION ALL
+
+                -- Tarimas / LP
+                SELECT
+                    t.cve_almac,
+                    t.idy_ubica,
+                    SUM(t.existencia) AS cantidad
+                FROM ts_existenciatarima t
+                GROUP BY t.cve_almac, t.idy_ubica
+            ) x
+                ON x.cve_almac = u.cve_almac
+               AND x.idy_ubica = u.idy_ubica
+            INNER JOIN c_almacen a 
+                ON a.cve_almac = u.cve_almac
+            INNER JOIN c_almacenp ap 
+                ON ap.id = a.cve_almacenp
+            WHERE IFNULL(a.Activo,1) = 1
+        ";
+
+        if ($empresa_id !== '') {
+            $sqlBL .= " AND ap.cve_cia = :empresa_id ";
+            $paramsBL[':empresa_id'] = $empresa_id;
+        }
+
+        // Filtrar por almacén padre seleccionado
+        $sqlBL .= " AND ap.id = :almacenp_id ";
+        $paramsBL[':almacenp_id'] = $almacenp_id;
+
+        // Filtrar por zona específica si se seleccionó
+        if ($zona_id !== '') {
+            $sqlBL .= " AND a.cve_almac = :zona_id ";
+            $paramsBL[':zona_id'] = $zona_id;
+        }
+
+        $sqlBL .= "
+            GROUP BY 
+                u.idy_ubica,
+                u.CodigoCSD,
+                u.cve_pasillo,
+                u.cve_rack,
+                u.cve_nivel,
+                u.Seccion,
+                u.Ubicacion
+            HAVING SUM(x.cantidad) > 0
+            ORDER BY 
+                u.cve_pasillo,
+                u.cve_rack,
+                u.cve_nivel,
+                u.Seccion,
+                u.Ubicacion,
+                u.CodigoCSD
+        ";
+
+        $bls = db_all($sqlBL, $paramsBL);
+    }
+
+} catch (Exception $ex) {
+    $error_msg = $ex->getMessage();
+}
+?>
+<div class="container-fluid" style="font-size:10px;">
 
     <!-- TÍTULO -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
-            <h5 class="mb-0 fw-semibold">Programación de Inventario Físico</h5>
-            <small class="text-muted">Definición de ubicaciones y productos a considerar en el conteo físico.</small>
+            <h5 class="mb-0 fw-semibold">Inventario Físico – Selección de BL</h5>
+            <small class="text-muted">
+                Filtra por empresa, almacén y zona para listar solo los BL (ubicaciones) con existencia teórica.
+            </small>
         </div>
     </div>
 
-    <!-- TARJETA PRINCIPAL -->
+    <?php if ($error_msg): ?>
+        <div class="alert alert-danger py-2 small">
+            <strong>Error:</strong> <?= h($error_msg) ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- FILTROS -->
+    <div class="card shadow-sm mb-3 border-0">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+
+                <!-- Empresa -->
+                <div class="col-md-3 col-sm-6">
+                    <label for="empresa_id" class="form-label mb-1">Empresa</label>
+                    <select name="empresa_id" id="empresa_id"
+                            class="form-select form-select-sm"
+                            onchange="this.form.submit()">
+                        <option value="">(Todas)</option>
+                        <?php foreach ($empresas as $e): ?>
+                            <option value="<?= h($e['empresa_id']) ?>"
+                                <?= ($empresa_id !== '' && $empresa_id == $e['empresa_id']) ? 'selected' : '' ?>>
+                                <?= h($e['nombre']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Almacén (c_almacenp) -->
+                <div class="col-md-3 col-sm-6">
+                    <label for="almacenp_id" class="form-label mb-1">Almacén</label>
+                    <select name="almacenp_id" id="almacenp_id"
+                            class="form-select form-select-sm"
+                            onchange="this.form.submit()">
+                        <option value="">Seleccione...</option>
+                        <?php foreach ($almacenes as $a): ?>
+                            <option value="<?= h($a['almacenp_id']) ?>"
+                                <?= ($almacenp_id !== '' && $almacenp_id == $a['almacenp_id']) ? 'selected' : '' ?>>
+                                <?= h($a['nombre']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Zona de almacenaje (c_almacen) -->
+                <div class="col-md-3 col-sm-6">
+                    <label for="zona_id" class="form-label mb-1">Zona de almacenaje</label>
+                    <select name="zona_id" id="zona_id"
+                            class="form-select form-select-sm"
+                            onchange="this.form.submit()">
+                        <option value="">(Todas)</option>
+                        <?php foreach ($zonas as $z): ?>
+                            <option value="<?= h($z['cve_almac']) ?>"
+                                <?= ($zona_id !== '' && $zona_id == $z['cve_almac']) ? 'selected' : '' ?>>
+                                <?= h($z['nombre']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Botón consultar -->
+                <div class="col-md-3 col-sm-6 text-end">
+                    <button type="submit" class="btn btn-primary btn-sm px-4 mt-3">
+                        Consultar BLs
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <!-- LISTA DE BLs CON EXISTENCIA -->
     <div class="card shadow-sm border-0">
         <div class="card-body">
 
-            <!-- FILA 1: FECHA / ALMACÉN / ZONA / BL -->
-            <div class="row g-2 mb-3">
-                <div class="col-md-2 col-sm-6">
-                    <label for="txtFecha" class="form-label mb-1">Fecha<span class="text-danger">*</span></label>
-                    <input type="date" id="txtFecha" class="form-control form-control-sm">
-                </div>
-
-                <div class="col-md-3 col-sm-6">
-                    <label for="cboAlmacen" class="form-label mb-1">Almacén<span class="text-danger">*</span></label>
-                    <select id="cboAlmacen" class="form-select form-select-sm">
-                        <option value="">Seleccione un almacén...</option>
-                        <option value="100">(100)Producto Terminado ADVL</option>
-                    </select>
-                </div>
-
-                <div class="col-md-3 col-sm-6">
-                    <label for="cboZona" class="form-label mb-1">Zona de Almacenaje</label>
-                    <select id="cboZona" class="form-select form-select-sm">
-                        <option value="">Seleccione una zona...</option>
-                    </select>
-                </div>
-
-                <div class="col-md-2 col-sm-6">
-                    <label for="cboBL" class="form-label mb-1">BL</label>
-                    <select id="cboBL" class="form-select form-select-sm">
-                        <option value="">Seleccione BL...</option>
-                    </select>
-                </div>
-
-                <div class="col-md-2 col-sm-12 d-flex align-items-end">
-                    <div class="form-check mt-3 mt-md-0">
-                        <input class="form-check-input" type="checkbox" id="chkRecepcion" disabled>
-                        <label class="form-check-label small" for="chkRecepcion">
-                            Áreas de Recepción
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <!-- FILA 2: PASILLO / RACK / NIVEL / POSICIÓN / PRODUCTO -->
-            <div class="row g-2 mb-3">
-                <div class="col-md-2 col-sm-6">
-                    <label for="cboPasillo" class="form-label mb-1">Pasillo</label>
-                    <select id="cboPasillo" class="form-select form-select-sm">
-                        <option value="">Seleccione...</option>
-                    </select>
-                </div>
-
-                <div class="col-md-2 col-sm-6">
-                    <label for="cboRack" class="form-label mb-1">Rack</label>
-                    <select id="cboRack" class="form-select form-select-sm">
-                        <option value="">Seleccione...</option>
-                    </select>
-                </div>
-
-                <div class="col-md-2 col-sm-6">
-                    <label for="cboNivel" class="form-label mb-1">Nivel</label>
-                    <select id="cboNivel" class="form-select form-select-sm">
-                        <option value="">Seleccione...</option>
-                    </select>
-                </div>
-
-                <div class="col-md-2 col-sm-6">
-                    <label for="cboPosicion" class="form-label mb-1">Posición</label>
-                    <select id="cboPosicion" class="form-select form-select-sm">
-                        <option value="">Seleccione...</option>
-                    </select>
-                </div>
-
-                <div class="col-md-4 col-sm-12">
-                    <label for="cboProducto" class="form-label mb-1">Producto</label>
-                    <select id="cboProducto" class="form-select form-select-sm">
-                        <option value="">Seleccione un producto...</option>
-                    </select>
-                </div>
-            </div>
-
-            <hr class="my-3">
-
-            <!-- TÍTULO UBICACIONES + BOTONES -->
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="fw-semibold mb-0">Ubicaciones de Inventario Físico</h6>
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-primary btn-sm">
-                        Cargar Ubicaciones
-                    </button>
-                    <button type="button" class="btn btn-primary btn-sm">
-                        Cargar Inventario Total
-                    </button>
-                </div>
+                <h6 class="mb-0">BLs con existencia teórica</h6>
+                <small class="text-muted">
+                    Solo se muestran las ubicaciones (BL) donde la suma de piezas, cajas y tarimas es &gt; 0.
+                </small>
             </div>
 
-            <!-- LISTAS DE UBICACIONES (DISPONIBLES / ASIGNADAS) -->
-            <div class="row g-3">
-                <div class="col-md-5">
-                    <label class="form-label mb-1 small" for="listaDisponibles">Ubicaciones Disponibles</label>
-                    <div id="listaDisponibles" class="border rounded-3 bg-white p-2" style="min-height: 220px; max-height: 260px; overflow-y: auto; font-size:10px;">
-                        <ul class="list-unstyled mb-0">
-                            <li class="text-muted text-center py-3">
-                                No hay ubicaciones cargadas.
-                            </li>
-                        </ul>
+            <?php if ($almacenp_id === ''): ?>
+                <div class="alert alert-info py-2 small mb-0">
+                    Selecciona un almacén para listar BLs con existencia teórica.
+                </div>
+            <?php else: ?>
+
+                <?php if (!$bls): ?>
+                    <div class="alert alert-warning py-2 small mb-0">
+                        No se encontraron BLs con existencia teórica para los filtros seleccionados.
                     </div>
-                </div>
+                <?php else: ?>
+                    <form method="post" action="#">
+                        <!-- Después conectaremos esto al snapshot teórico -->
+                        <div class="table-responsive" style="max-height:460px; overflow-y:auto;">
+                            <table class="table table-sm table-striped table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width:30px;">
+                                            <input type="checkbox"
+                                                   onclick="const c=this.checked;document.querySelectorAll('.chk-bl').forEach(x=>x.checked=c);">
+                                        </th>
+                                        <th>BL</th>
+                                        <th>Pasillo</th>
+                                        <th>Rack</th>
+                                        <th>Nivel</th>
+                                        <th>Zona</th>
+                                        <th>Posición</th>
+                                        <th class="text-end">Existencia teórica</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php
+                                    $totalExist = 0;
+                                    foreach ($bls as $row):
+                                        $totalExist += (float)$row['existencia_teorica'];
+                                    ?>
+                                        <tr>
+                                            <td>
+                                                <input type="checkbox"
+                                                       class="chk-bl"
+                                                       name="bls[]"
+                                                       value="<?= h($row['idy_ubica']) ?>">
+                                            </td>
+                                            <td><?= h($row['bl']) ?></td>
+                                            <td><?= h($row['pasillo']) ?></td>
+                                            <td><?= h($row['rack']) ?></td>
+                                            <td><?= h($row['nivel']) ?></td>
+                                            <td><?= h($row['zona']) ?></td>
+                                            <td><?= h($row['posicion']) ?></td>
+                                            <td class="text-end">
+                                                <?= number_format((float)$row['existencia_teorica'], 4) ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-light">
+                                        <th colspan="7" class="text-end">Total existencia teórica (BL listados):</th>
+                                        <th class="text-end">
+                                            <?= number_format($totalExist, 4) ?>
+                                        </th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
 
-                <div class="col-md-2 d-flex flex-column justify-content-center align-items-center gap-2">
-                    <button type="button" class="btn btn-primary btn-sm px-3">
-                        &gt;&gt;
-                    </button>
-                    <button type="button" class="btn btn-outline-primary btn-sm px-3">
-                        &lt;&lt;
-                    </button>
-                </div>
+                        <!-- Botón snapshot (lo conectamos en el siguiente paso) -->
+                        <div class="mt-3 text-end">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled>
+                                Snapshot teórico (pendiente)
+                            </button>
+                        </div>
+                    </form>
+                <?php endif; ?>
 
-                <div class="col-md-5">
-                    <label class="form-label mb-1 small" for="listaAsignadas">Ubicaciones Asignadas</label>
-                    <div id="listaAsignadas" class="border rounded-3 bg-white p-2" style="min-height: 220px; max-height: 260px; overflow-y: auto; font-size:10px;">
-                        <ul class="list-unstyled mb-0">
-                            <li class="text-muted text-center py-3">
-                                No hay ubicaciones asignadas.
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <!-- BOTÓN PLANIFICAR -->
-            <div class="d-flex justify-content-end mt-3">
-                <button type="button" class="btn btn-primary btn-sm px-4">
-                    Planificar Inventario
-                </button>
-            </div>
+            <?php endif; ?>
 
         </div>
     </div>
