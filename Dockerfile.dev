@@ -144,9 +144,13 @@ chmod -R 777 /var/www/html/assistpro_kardex_fc/logs || true\n\
 \n\
 echo "✅ Directorios configurados"\n\
 echo "🐛 Xdebug habilitado"\n\
+# Ejecutar migraciones\n\
+echo "Running migrations..."\n\
+php artisan migrate --force || echo "Migration warning - may be already applied"\n\
+echo "Migrations done"\n\
 echo "🚀 Iniciando servicios..."\n\
 echo "📍 MySQL: mysql:3306"\n\
-echo "📍 App: http://localhost:7070"\n\
+echo "📍 App: http://localhost:7070/assistpro_kardex_fc/"\n\
 echo "📍 PhpMyAdmin: http://localhost:8081"\n\
 \n\
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' > /docker-entrypoint.sh

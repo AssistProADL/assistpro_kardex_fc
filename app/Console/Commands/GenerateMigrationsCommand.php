@@ -923,12 +923,17 @@ EOT;
                 }
             }
             
-            // Basic mapping
+            // Basic mapping - NORMALIZED TYPES:
+            // - int/integer -> bigInteger (for consistency with Laravel's id())
+            // - text -> string with length 1000 (to allow indexing)
+            // - columns ending in _id -> unsignedBigInteger (for FK compatibility)
+            $isForeignKey = str_ends_with(strtolower($name), '_id');
+            
             $method = match($type) {
-                'int', 'integer' => 'integer',
-                'bigint' => 'bigInteger',
+                'int', 'integer' => $isForeignKey ? 'unsignedBigInteger' : 'bigInteger',
+                'bigint' => $isForeignKey ? 'unsignedBigInteger' : 'bigInteger',
                 'varchar', 'string' => 'string',
-                'text' => 'text',
+                'text' => 'string',
                 'timestamp', 'datetime' => 'timestamp',
                 'date' => 'date',
                 'decimal' => 'decimal',
@@ -936,7 +941,13 @@ EOT;
                 default => 'string'
             };
 
-            $lines[] = "                \$table->$method('$name')$nullable$default;";
+            // For text fields that were converted to string, add length parameter
+            $lengthParam = '';
+            if ($type === 'text') {
+                $lengthParam = ', 1000';
+            }
+
+            $lines[] = "                \$table->$method('$name'$lengthParam)$nullable$default;";
         }
         
         // Add standard columns if they don't exist

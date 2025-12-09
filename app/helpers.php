@@ -49,6 +49,19 @@ if (!function_exists('base_url')) {
             return $baseUrl . '/' . $path;
         }
 
-        return $baseUrl;
+    }
+}
+
+if (!function_exists('database_path')) {
+    /**
+     * Obtiene la ruta al directorio database
+     * 
+     * @param string $path Ruta opcional dentro de database
+     * @return string Ruta completa al directorio database
+     */
+    function database_path($path = '')
+    {
+        $basePath = __DIR__ . '/../database';
+        return $path ? $basePath . '/' . $path : $basePath;
     }
 }

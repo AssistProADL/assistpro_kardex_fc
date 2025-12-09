@@ -90,6 +90,19 @@ $container->alias('Illuminate\Contracts\Events\Dispatcher', 'events');
 $container->alias('db', 'Illuminate\Database\DatabaseManager');
 $container->alias('files', 'Illuminate\Filesystem\Filesystem');
 
+// Bind database connection for Schema facade
+$container->singleton('db.connection', function ($container) {
+    return $container['db']->connection();
+});
+
+// Bind Schema Builder - this is what Schema facade resolves to
+$container->singleton('db.schema', function ($container) {
+    return $container['db.connection']->getSchemaBuilder();
+});
+
+// Set Facade Application - allows facades to resolve from container
+\Illuminate\Support\Facades\Facade::setFacadeApplication($container);
+
 // Bind Dispatchers for Routing
 $container->bind(
     \Illuminate\Routing\Contracts\CallableDispatcher::class,

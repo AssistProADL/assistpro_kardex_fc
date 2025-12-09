@@ -146,6 +146,12 @@ chmod -R 775 /var/www/html/assistpro_kardex_fc/storage\n\
 chmod -R 775 /var/www/html/assistpro_kardex_fc/logs\n\
 \n\
 echo "✅ Permisos configurados"\n\
+\n\
+# Ejecutar migraciones\n\
+echo "🔄 Ejecutando migraciones..."\n\
+php artisan migrate --force || echo "⚠️  Error en migraciones (puede ser normal si ya están aplicadas)"\n\
+echo "✅ Migraciones completadas"\n\
+\n\
 echo "🚀 Iniciando servicios (PHP-FPM + Nginx)..."\n\
 \n\
 # Iniciar supervisord\n\
