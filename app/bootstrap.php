@@ -14,8 +14,34 @@ require_once __DIR__ . '/../vendor/autoload.php';
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->safeLoad();
 
+// Extend Container to add missing methods for console compatibility
+class ExtendedContainer extends Container
+{
+    public function runningUnitTests()
+    {
+        return false;
+    }
+
+    public function databasePath($path = '')
+    {
+        $basePath = __DIR__ . '/../database';
+        return $path ? $basePath . '/' . $path : $basePath;
+    }
+
+    public function environment(...$environments)
+    {
+        $env = $_ENV['APP_ENV'] ?? 'production';
+
+        if (count($environments) > 0) {
+            return in_array($env, is_array($environments[0]) ? $environments[0] : $environments);
+        }
+
+        return $env;
+    }
+}
+
 // Create Container
-$container = new Container;
+$container = new ExtendedContainer;
 Container::setInstance($container);
 $container->instance(Container::class, $container);
 $container->instance('Illuminate\Container\Container', $container);
