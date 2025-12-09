@@ -623,22 +623,42 @@ EOT;
     {
         $this->info('Generating views migration...');
         
-        $cfg = db_config();
-        $pdo = new \PDO("mysql:host={$cfg['host']};dbname={$cfg['name']};charset={$cfg['charset']}", $cfg['user'], $cfg['pass']);
-        
-        $views = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'VIEW'")->fetchAll(\PDO::FETCH_COLUMN);
-        
-        $viewDefinitions = [];
-        foreach ($views as $view) {
-            $stmt = $pdo->query("SHOW CREATE VIEW `$view`");
-            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-            $sql = $row['Create View'];
+        try {
+            $cfg = db_config();
+            $this->line("Connecting to: {$cfg['host']}:{$cfg['port']}/{$cfg['name']}");
             
-            // Remove DEFINER
-            $sql = preg_replace('/DEFINER=`[^`]+`@`[^`]+`/', '', $sql);
-            $sql = preg_replace('/SQL SECURITY [A-Z]+/', '', $sql);
+            $pdo = new \PDO("mysql:host={$cfg['host']};dbname={$cfg['name']};charset={$cfg['charset']}", $cfg['user'], $cfg['pass']);
+            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
             
-            $viewDefinitions[$view] = addslashes($sql);
+            $this->line("Querying for views...");
+            $stmt = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'VIEW'");
+            $views = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+            
+            if (empty($views)) {
+                $this->warn('No views found in database.');
+                return;
+            }
+            
+            $this->info('Found ' . count($views) . ' views: ' . implode(', ', $views));
+            $this->line('Generating migration...');
+            
+            $viewDefinitions = [];
+            foreach ($views as $view) {
+                $this->line("Processing view: $view");
+                $stmt = $pdo->query("SHOW CREATE VIEW `$view`");
+                $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+                $sql = $row['Create View'];
+                
+                // Remove DEFINER
+                $sql = preg_replace('/DEFINER=`[^`]+`@`[^`]+`/', '', $sql);
+                $sql = preg_replace('/SQL SECURITY [A-Z]+/', '', $sql);
+                
+                $viewDefinitions[$view] = addslashes($sql);
+            }
+        } catch (\Exception $e) {
+            $this->error('Error generating views migration: ' . $e->getMessage());
+            $this->error('Stack trace: ' . $e->getTraceAsString());
+            return;
         }
         
         $viewsExport = var_export($viewDefinitions, true);
