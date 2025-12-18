@@ -8,7 +8,6 @@ require_once __DIR__ . '/../../app/mailer_common.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-$logger = app_logger();
 
 $smtps = db_all("SELECT id, nombre FROM c_smtp_config ORDER BY id");
 $plantillas = db_all("SELECT id, codigo, descripcion, asunto, cuerpo_html, cuerpo_texto

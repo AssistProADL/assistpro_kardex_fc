@@ -31,7 +31,7 @@ function lista(PDO $pdo)
 {
     try {
         $sql = "SELECT Id, clave, nombre
-                  FROM t_almacenp
+                  FROM c_almacenp
                  WHERE (Activo = 1 OR Activo IS NULL)
               ORDER BY clave";
 

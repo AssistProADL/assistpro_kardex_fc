@@ -143,9 +143,9 @@ foreach ($zonas as $z) {
                     <label class="mb-1" style="font-size:9px;text-transform:uppercase;color:#6c757d;">Almacén</label>
                     <select name="almacen" class="form-select form-select-sm" onchange="this.form.submit()">
                         <?php foreach ($almacenes as $a): ?>
-                            <option value="<?= htmlspecialchars($a['id_almacenp']) ?>"
+                            <option value="<?= htmlspecialchars($a['id_almacenp'] ?? '') ?>"
                                 <?= ($a['id_almacenp'] == $almacenPadreSeleccionado) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($a['clave'] . ' - ' . $a['nombre']) ?>
+                                <?= htmlspecialchars($a['clave'] . ' - ' . $a['nombre'] ?? '') ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -158,7 +158,7 @@ foreach ($zonas as $z) {
                             <?php $idZ = (int)$z['cve_almac_int']; ?>
                             <option value="<?= $idZ ?>"
                                 <?= (!empty($zonaSeleccionada) && $zonaSeleccionada === $idZ) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($idZ . ' - ' . $z['des_almac']) ?>
+                                <?= htmlspecialchars($idZ . ' - ' . $z['des_almac'] ?? '') ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -179,8 +179,8 @@ foreach ($zonas as $z) {
                     <div class="fw-semibold text-uppercase" style="font-size:10px;letter-spacing:.05em;">Ubicaciones</div>
                     <div class="fw-bold" style="font-size:18px;"><?= number_format($totales['total']) ?></div>
                     <div class="text-white-50" style="font-size:9px;">
-                        <?= htmlspecialchars($nombreAlmacenActual) ?>
-                        <?= $nombreZonaActual ? ' · ' . htmlspecialchars($nombreZonaActual) : '' ?>
+                        <?= htmlspecialchars($nombreAlmacenActual ?? '') ?>
+                        <?= $nombreZonaActual ? ' · ' . htmlspecialchars($nombreZonaActual ?? '') : '' ?>
                     </div>
                 </div>
             </div>
@@ -260,18 +260,18 @@ foreach ($zonas as $z) {
                     <tbody>
                     <?php foreach ($ubicaciones as $u): ?>
                         <tr>
-                            <td><?= htmlspecialchars($u['clave_almacen_padre'] . ' - ' . $u['nombre_almacen_padre']) ?></td>
-                            <td><?= htmlspecialchars($u['nombre_zona']) ?></td>
+                            <td><?= htmlspecialchars($u['clave_almacen_padre'] . ' - ' . $u['nombre_almacen_padre'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($u['nombre_zona'] ?? '') ?></td>
                             <td><?= (int)$u['cve_almac_int'] ?></td>
-                            <td><?= htmlspecialchars($u['CodigoCSD']) ?></td>
-                            <td><?= htmlspecialchars($u['Ubicacion']) ?></td>
-                            <td><?= htmlspecialchars($u['cve_pasillo']) ?></td>
-                            <td><?= htmlspecialchars($u['cve_rack']) ?></td>
-                            <td><?= htmlspecialchars($u['cve_nivel']) ?></td>
+                            <td><?= htmlspecialchars($u['CodigoCSD'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($u['Ubicacion'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($u['cve_pasillo'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($u['cve_rack'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($u['cve_nivel'] ?? '') ?></td>
                             <td><?= strtoupper($u['picking']) === 'S' ? '✔' : '' ?></td>
                             <td><?= strtoupper($u['Reabasto']) === 'S' ? '✔' : '' ?></td>
-                            <td><?= htmlspecialchars($u['Tipo']) ?></td>
-                            <td><?= htmlspecialchars($u['TECNOLOGIA']) ?></td>
+                            <td><?= htmlspecialchars($u['Tipo'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($u['TECNOLOGIA'] ?? '') ?></td>
                             <td><?= (int)$u['Activo'] === 1 ? '✔' : '' ?></td>
                         </tr>
                     <?php endforeach; ?>

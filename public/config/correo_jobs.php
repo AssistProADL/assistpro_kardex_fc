@@ -8,7 +8,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 // Motor de BD + mailer
 require_once __DIR__ . '/../../app/mailer_common.php';
 
-$logger = app_logger();
+ 
 
 // --- Catálogos para selects ---
 $smtps      = db_all("SELECT id, nombre FROM c_smtp_config ORDER BY id");

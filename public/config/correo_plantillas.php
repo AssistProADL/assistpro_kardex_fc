@@ -5,7 +5,7 @@
 require_once __DIR__ . '/../bi/_menu_global.php';
 require_once __DIR__ . '/../../app/bootstrap.php';
 
-$logger = app_logger();
+ 
 
 // --- POST: guardar plantilla ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

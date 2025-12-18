@@ -9,7 +9,7 @@ require_once __DIR__ . '/../../app/mailer_common.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-$logger = app_logger();
+ 
 $error = null;
 $mensajeOk = null;
 $mensajeErr = null;
