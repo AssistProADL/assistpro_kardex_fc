@@ -536,15 +536,19 @@ require_once __DIR__ . '../../../bi/_menu_global.php';
 
 <?php
 require_once __DIR__ . '../../../bi/_menu_global_end.php';
-?><script>
+?>
+<script>
     $(document).ready(function () {
 
+        /* ===========================================================
+           CONSTANTES
+        ============================================================ */
         const API_FILTROS_URL   = '../../api/filtros_assistpro.php';
         const API_EMBARQUES_URL = '../../api/api_embarques_planeacion.php';
 
-        // =========================
-        // DataTable
-        // =========================
+        /* ===========================================================
+           DATATABLE PRINCIPAL
+        ============================================================ */
         var tablaEmbarques = $('#tabla_embarques').DataTable({
             processing: true,
             serverSide: false,
@@ -555,7 +559,7 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
             scrollX: true,
             autoWidth: false,
             language: {
-                url: '/app/template/datatables/es_es.json'
+                url: '../../app/template/datatables/es_es.json'
             },
             columnDefs: [
                 {targets: 0, orderable: false, searchable: false}, // Acción
@@ -565,9 +569,10 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
             ]
         });
 
-        // =========================
-        // Helpers filtros_assistpro
-        // =========================
+        /* ===========================================================
+           HELPERS
+        ============================================================ */
+
         function getProp(obj, keys) {
             if (!obj) return undefined;
             for (var i = 0; i < keys.length; i++) {
@@ -579,10 +584,66 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
             return undefined;
         }
 
-        function llenarSelect($select, lista, keepFirstText) {
+        /**
+         * Extrae una lista "plana" de objetos desde cualquier JSON:
+         * - Si es array → lo devuelve
+         * - Si es objeto → concatena todos los valores que sean arrays
+         *   (incluyendo los que estén dentro de data)
+         */
+        function extraerLista(payload) {
+            if (!payload) return [];
+
+            // Si ya es un array directo
+            if (Array.isArray(payload)) {
+                return payload;
+            }
+
+            var listas = [];
+
+            // Si viene como { ok, data: [...] } o { data: { ... } }
+            if (payload.data !== undefined) {
+                var d = payload.data;
+                if (Array.isArray(d)) {
+                    listas.push(d);
+                } else if (d && typeof d === 'object') {
+                    Object.keys(d).forEach(function (k) {
+                        if (Array.isArray(d[k])) {
+                            listas.push(d[k]);
+                        }
+                    });
+                }
+            }
+
+            // Además, revisar el propio objeto raíz
+            if (payload && typeof payload === 'object') {
+                Object.keys(payload).forEach(function (k) {
+                    if (k === 'data' || k === 'ok' || k === 'error') return;
+                    if (Array.isArray(payload[k])) {
+                        listas.push(payload[k]);
+                    }
+                });
+            }
+
+            // Aplanar y quitar nulls
+            var out = [];
+            listas.forEach(function (arr) {
+                arr.forEach(function (item) {
+                    if (item && typeof item === 'object') {
+                        out.push(item);
+                    }
+                });
+            });
+
+            return out;
+        }
+
+        /**
+         * Llenar un select de forma genérica
+         */
+        function llenarSelectGenerico($select, lista, placeholder) {
             if (!$select || $select.length === 0) return;
 
-            var firstText = keepFirstText || $select.find('option').first().text() || 'Todos';
+            var firstText = placeholder || $select.find('option').first().text() || 'Todos';
 
             $select.empty();
             $select.append($('<option>', { value: '', text: firstText }));
@@ -593,147 +654,187 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
                 if (!item || typeof item !== 'object') return;
 
                 var value = getProp(item, [
-                    'id', 'clave', 'cve', 'cve_empresa', 'cve_cia',
-                    'cve_almacen', 'cve_ruta', 'codigo', 'valor'
+                    'id', 'id_almacen', 'id_almacenp',
+                    'cve_cia', 'cve_empresa',
+                    'clave', 'cve', 'cve_almacen', 'cve_almac',
+                    'codigo', 'valor'
                 ]);
-
-                var textoPrincipal = getProp(item, [
-                    'descripcion', 'nombre', 'texto', 'label',
-                    'razon_social', 'destinatario', 'cliente'
-                ]);
-
                 if (value === undefined || value === null || value === '') return;
-                if (!textoPrincipal) textoPrincipal = value;
+
+                var nombre = getProp(item, [
+                    'nombre', 'descripcion', 'texto', 'label',
+                    'razon_social', 'razonsocial',
+                    'destinatario', 'cliente'
+                ]);
 
                 var clave = getProp(item, [
-                    'clave', 'cve', 'codigo', 'cve_empresa', 'cve_cia',
-                    'cve_almacen', 'cve_ruta'
+                    'cve_cia', 'cve_empresa',
+                    'clave', 'cve_almacen', 'cve_almac',
+                    'codigo'
                 ]);
 
-                var textoFinal = (clave && clave !== textoPrincipal)
-                    ? (clave + ' - ' + textoPrincipal)
-                    : textoPrincipal;
+                var textoFinal = '';
+                if (clave && nombre && clave !== nombre) {
+                    textoFinal = clave + ' - ' + nombre;
+                } else if (nombre) {
+                    textoFinal = nombre;
+                } else if (clave) {
+                    textoFinal = clave;
+                } else {
+                    textoFinal = String(value);
+                }
 
-                $select.append($('<option>', { value: value, text: textoFinal }));
+                $select.append($('<option>', {
+                    value: value,
+                    text: textoFinal
+                }));
             });
         }
 
-        // =========================
-        // Carga de catálogos
-        // Empresa -> Almacén -> Ruta/Isla
-        // =========================
+        /**
+         * Consumir filtros_assistpro.php usando fn=...
+         * fnName: string (empresas, almacenes, rutas, islas, etc.)
+         * extraParams: parámetros adicionales (empresa, almacen, ruta...)
+         * cb: callback(lista)
+         */
+        function solicitarFiltros(fnName, extraParams, cb) {
+            var dataSend = $.extend({}, extraParams || {}, { fn: fnName });
 
-        // 1) Empresas
-        function cargarEmpresas() {
             $.ajax({
                 url: API_FILTROS_URL,
                 method: 'GET',
                 dataType: 'json',
-                data: { fn: 'base' } // asumiendo que empresas viene en fn=base
+                data: dataSend
             }).done(function (resp) {
-                var payload = resp && resp.data ? resp.data : resp;
-                var empresas = payload && payload.empresas ? payload.empresas : [];
-                llenarSelect($('#empresa'), empresas, 'Todas');
+                var lista = extraerLista(resp);
+                if (!Array.isArray(lista)) lista = [];
+                if (typeof cb === 'function') cb(lista);
             }).fail(function (xhr, status, error) {
-                console.error('Error cargando empresas:', error, xhr.responseText);
+                console.error('Error filtros_assistpro.php fn=' + fnName, status, error, xhr.responseText);
+                if (typeof cb === 'function') cb([]);
             });
         }
 
-        // 2) Almacenes por empresa
+        /* ===========================================================
+           CARGA DE CATÁLOGOS (EMPRESA / ALMACÉN / RUTA / ISLA)
+        ============================================================ */
+
+        function cargarEmpresas() {
+            solicitarFiltros('empresas', {}, function (listaRaw) {
+                // NO filtramos nada: mostramos TODO lo que regrese el API
+                var $sel = $('#empresa');
+                llenarSelectGenerico($sel, listaRaw, 'Todas');
+                $sel.prop('disabled', false);
+            });
+        }
+
         function cargarAlmacenes(empresa) {
-            $('#almacen').prop('disabled', true);
+            var $alm = $('#almacen');
+
+            $alm.prop('disabled', true);
             $('#ruta').prop('disabled', true);
             $('#isla').prop('disabled', true);
 
-            llenarSelect($('#almacen'), [], 'Todos');
-            llenarSelect($('#ruta'), [], 'Todas');
-            llenarSelect($('#isla'), [], 'Todas');
+            $alm.empty().append('<option value="">Todos</option>');
+            $('#ruta').empty().append('<option value="">Todas</option>');
+            $('#isla').empty().append('<option value="">Todas</option>');
 
             if (!empresa) return;
 
-            $.ajax({
-                url: API_FILTROS_URL,
-                method: 'GET',
-                dataType: 'json',
-                data: {
-                    fn: 'almacenes',
-                    empresa: empresa
+            solicitarFiltros(
+                'almacenes',
+                { empresa: empresa },
+                function (listaRaw) {
+                    // De nuevo: NO filtramos nada, usamos todo el arreglo de almacenes
+                    llenarSelectGenerico($alm, listaRaw, 'Todos');
+                    $alm.prop('disabled', false);
                 }
-            }).done(function (resp) {
-                var almacenes = resp && resp.almacenes ? resp.almacenes : [];
-                llenarSelect($('#almacen'), almacenes, 'Todos');
-                $('#almacen').prop('disabled', false);
-            }).fail(function (xhr, status, error) {
-                console.error('Error cargando almacenes:', error, xhr.responseText);
-            });
+            );
         }
 
-        // 3) Rutas por almacén
         function cargarRutas(empresa, almacen) {
-            $('#ruta').prop('disabled', true);
-            $('#isla').prop('disabled', true);
-            llenarSelect($('#ruta'), [], 'Todas');
-            llenarSelect($('#isla'), [], 'Todas');
+            var $ruta = $('#ruta');
+            var $isla = $('#isla');
+
+            $ruta.prop('disabled', true);
+            $isla.prop('disabled', true);
+
+            $ruta.empty().append('<option value="">Todas</option>');
+            $isla.empty().append('<option value="">Todas</option>');
 
             if (!almacen) return;
 
-            $.ajax({
-                url: API_FILTROS_URL,
-                method: 'GET',
-                dataType: 'json',
-                data: {
-                    fn: 'base', // asumiendo que rutas está en base
-                    empresa: empresa,
-                    almacen: almacen
+            solicitarFiltros(
+                'rutas',
+                { empresa: empresa, almacen: almacen },
+                function (listaRaw) {
+                    llenarSelectGenerico($ruta, listaRaw, 'Todas');
+                    $ruta.prop('disabled', false);
                 }
-            }).done(function (resp) {
-                var payload = resp && resp.data ? resp.data : resp;
-                var rutas = payload && payload.rutas ? payload.rutas : [];
-                llenarSelect($('#ruta'), rutas, 'Todas');
-                $('#ruta').prop('disabled', false);
-            }).fail(function (xhr, status, error) {
-                console.error('Error cargando rutas:', error, xhr.responseText);
-            });
+            );
         }
 
-        // 4) Islas por almacén / ruta
         function cargarIslas(empresa, almacen, ruta) {
-            $('#isla').prop('disabled', true);
-            llenarSelect($('#isla'), [], 'Todas');
+            var $isla = $('#isla');
+            $isla.prop('disabled', true);
+            $isla.empty().append('<option value="">Todas</option>');
 
             if (!almacen) return;
 
-            $.ajax({
-                url: API_FILTROS_URL,
-                method: 'GET',
-                dataType: 'json',
-                data: {
-                    fn: 'zonas',        // asumimos zonas como "islas" de embarque
-                    empresa: empresa,
-                    almacen: almacen,
-                    ruta: ruta || ''
+            solicitarFiltros(
+                'islas',
+                { empresa: empresa, almacen: almacen, ruta: ruta || '' },
+                function (listaRaw) {
+                    llenarSelectGenerico($isla, listaRaw, 'Todas');
+                    $isla.prop('disabled', false);
                 }
-            }).done(function (resp) {
-                var zonas = resp && resp.zonas ? resp.zonas : [];
-                llenarSelect($('#isla'), zonas, 'Todas');
-                $('#isla').prop('disabled', false);
-            }).fail(function (xhr, status, error) {
-                console.error('Error cargando islas:', error, xhr.responseText);
-            });
+            );
         }
 
-        // =========================
-        // Encadenamiento de selects
-        // =========================
+        function cargarClientes(empresa, almacen, ruta) {
+            solicitarFiltros(
+                'clientes',
+                { empresa: empresa, almacen: almacen, ruta: ruta || '' },
+                function (listaRaw) {
+                    llenarSelectGenerico($('#cliente'), listaRaw, 'Todos');
+                }
+            );
+        }
 
-        // Empresa seleccionada
+        function cargarColonias(empresa, almacen, ruta) {
+            solicitarFiltros(
+                'colonias',
+                { empresa: empresa, almacen: almacen, ruta: ruta || '' },
+                function (listaRaw) {
+                    llenarSelectGenerico($('#colonia'), listaRaw, 'Todas');
+                }
+            );
+        }
+
+        function cargarCodigosPostales(empresa, almacen, ruta) {
+            solicitarFiltros(
+                'codigos_postales',
+                { empresa: empresa, almacen: almacen, ruta: ruta || '' },
+                function (listaRaw) {
+                    llenarSelectGenerico($('#cpostal'), listaRaw, 'Todos');
+                }
+            );
+        }
+
+        /* ===========================================================
+           ENCADENAMIENTO DE SELECTS
+        ============================================================ */
+
         $('#empresa').on('change', function () {
             var empresa = $(this).val() || '';
 
-            // reset dependientes
             $('#almacen').val('');
             $('#ruta').val('');
             $('#isla').val('');
+            $('#cliente').val('');
+            $('#colonia').val('');
+            $('#cpostal').val('');
+
             $('#almacen, #ruta, #isla').prop('disabled', true);
 
             if (empresa) {
@@ -743,46 +844,49 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
             recargarEmbarques();
         });
 
-        // Almacén seleccionado
         $('#almacen').on('change', function () {
             var empresa = $('#empresa').val() || '';
             var almacen = $(this).val() || '';
 
             $('#ruta').val('');
             $('#isla').val('');
+            $('#cliente').val('');
+            $('#colonia').val('');
+            $('#cpostal').val('');
+
             $('#ruta, #isla').prop('disabled', true);
 
             if (almacen) {
                 cargarRutas(empresa, almacen);
                 cargarIslas(empresa, almacen, '');
+                cargarClientes(empresa, almacen, '');
+                cargarColonias(empresa, almacen, '');
+                cargarCodigosPostales(empresa, almacen, '');
             }
 
             recargarEmbarques();
         });
 
-        // Ruta seleccionada
         $('#ruta').on('change', function () {
             var empresa = $('#empresa').val() || '';
             var almacen = $('#almacen').val() || '';
             var ruta    = $(this).val() || '';
 
             cargarIslas(empresa, almacen, ruta);
+            cargarClientes(empresa, almacen, ruta);
+            cargarColonias(empresa, almacen, ruta);
+            cargarCodigosPostales(empresa, almacen, ruta);
+
             recargarEmbarques();
         });
 
-        // Isla seleccionada
         $('#isla').on('change', function () {
             recargarEmbarques();
         });
 
-        // =========================
-        // Otros filtros que disparan recarga
-        // =========================
-
-        $('#cliente, #colonia, #cpostal, #fecha_desde, #fecha_hasta, #estatus')
-            .on('change', function () {
-                recargarEmbarques();
-            });
+        $('#cliente, #colonia, #cpostal, #fecha_desde, #fecha_hasta, #estatus').on('change', function () {
+            recargarEmbarques();
+        });
 
         $('#buscar').on('keyup', function (e) {
             if (e.key === 'Enter') {
@@ -823,9 +927,10 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
             recargarEmbarques();
         });
 
-        // =========================
-        // Consumo API embarques
-        // =========================
+        /* ===========================================================
+           API DE EMBARQUES
+        ============================================================ */
+
         function obtenerFiltros() {
             return {
                 action     : 'cargarGridPrincipal',
@@ -865,6 +970,7 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
                 var data = Array.isArray(resp.data) ? resp.data : [];
 
                 data.forEach(function (r) {
+
                     var folio   = r.folio   || '';
                     var sufijo  = r.sufijo  || '';
                     var fPed    = r.fecha_pedido  || '';
@@ -918,7 +1024,7 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
                         lat,                        // 14 Latitud
                         lon,                        // 15 Longitud
                         rutaTxt,                    // 16 Ruta
-                        (r.almacen_label || ''),    // 17 Almacén (si lo retornas en la API)
+                        (r.almacen_label || ''),    // 17 Almacén (si lo regresas en la API)
                         rango,                      // 18 Horario Planeado
                         totalGuias,                 // 19 Total guías
                         pesoTotal,                  // 20 Peso total
@@ -930,7 +1036,7 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
                         clienteEmpresa,             // 26 Cliente | Empresa
                         razon,                      // 27 Razón Social
                         isla,                       // 28 Zona Embarque (Isla)
-                        status                      // 29 Listo Para Entrega / status
+                        status                      // 29 Estatus
                     ]);
                 });
 
@@ -956,7 +1062,10 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
             });
         }
 
-        // Botones (stubs)
+        /* ===========================================================
+           BOTONES (stub para lógica legacy)
+        ============================================================ */
+
         $('#btn_generar_reportes').on('click', function () {
             console.log('Generar reportes / etiquetas (pendiente)');
         });
@@ -970,13 +1079,18 @@ require_once __DIR__ . '../../../bi/_menu_global_end.php';
         $('#tabla_embarques').on('click', '.btn-embarcar', function () {
             var folio = $(this).data('folio');
             console.log('Embarcar folio:', folio);
+            // Aquí se enchufa luego la lógica legacy
         });
 
-        // Carga inicial
+        /* ===========================================================
+           CARGA INICIAL
+        ============================================================ */
+        $('#almacen').prop('disabled', true);
+        $('#ruta').prop('disabled', true);
+        $('#isla').prop('disabled', true);
+
         cargarEmpresas();
         recargarEmbarques();
+
     });
 </script>
-
-
-

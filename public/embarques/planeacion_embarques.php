@@ -120,10 +120,8 @@ $manana  = date('Y-m-d', strtotime('+1 day'));
                             <div class="col-md-2 col-sm-4">
                                 <div class="form-group">
                                     <label>Almacén</label>
-                                    <select class="form-control">
-                                        <option>[Todos]</option>
-                                        <option>(100) - Producto Terminado ADVL</option>
-                                        <option>(200) - Materia Prima</option>
+                                    <select class="form-control" id="almacen_planeacion">
+                                        <option>Cargando almacenes...</option>
                                     </select>
                                 </div>
                             </div>
@@ -172,11 +170,36 @@ $manana  = date('Y-m-d', strtotime('+1 day'));
 
                         <!-- CARDS -->
                         <div class="row">
-                            <div class="col-md-3 col-sm-6"><div class="card-resumen bg-hoy text-center"><div class="titulo">Embarques del día</div><div class="valor">18</div><div class="detalle">Programados para hoy</div></div></div>
-                            <div class="col-md-3 col-sm-6"><div class="card-resumen bg-planeados text-center"><div class="titulo">Planeados</div><div class="valor">42</div><div class="detalle">En ventana de 7 días</div></div></div>
-                            <div class="col-md-3 col-sm-6"><div class="card-resumen bg-enruta text-center"><div class="titulo">En ruta</div><div class="valor">9</div><div class="detalle">Unidades en tránsito</div></div></div>
-                            <div class="col-md-3 col-sm-6"><div class="card-resumen bg-retrasados text-center"><div class="titulo">Retrasados</div><div class="valor">3</div><div class="detalle">Fuera de ventana</div></div></div>
+                            <div class="col-md-3 col-sm-6">
+                                <div class="card-resumen bg-hoy text-center">
+                                    <div class="titulo">Embarques del día</div>
+                                    <div class="valor" id="kpi_embarques_dia">0</div>
+                                    <div class="detalle">Programados para hoy</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-sm-6">
+                                <div class="card-resumen bg-planeados text-center">
+                                    <div class="titulo">Planeados</div>
+                                    <div class="valor" id="kpi_planeados">0</div>
+                                    <div class="detalle">En ventana de 7 días</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-sm-6">
+                                <div class="card-resumen bg-enruta text-center">
+                                    <div class="titulo">En ruta</div>
+                                    <div class="valor" id="kpi_en_ruta">0</div>
+                                    <div class="detalle">Unidades en tránsito</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-sm-6">
+                                <div class="card-resumen bg-retrasados text-center">
+                                    <div class="titulo">Retrasados</div>
+                                    <div class="valor" id="kpi_retrasados">0</div>
+                                    <div class="detalle">Fuera de ventana</div>
+                                </div>
+                            </div>
                         </div>
+
 
                         <hr>
 
@@ -198,9 +221,8 @@ $manana  = date('Y-m-d', strtotime('+1 day'));
                                     <div class="row mb-5px">
                                         <div class="col-md-4">
                                             <span class="badge-subtitle">Almacén</span>
-                                            <select class="form-control">
-                                                <option>(100) - Producto Terminado ADVL</option>
-                                                <option>(200) - Materia Prima</option>
+                                            <select class="form-control" id="almacen_planeacion">
+                                                <option>Cargando almacenes...</option>
                                             </select>
                                         </div>
                                         <div class="col-md-4">
@@ -252,10 +274,17 @@ $manana  = date('Y-m-d', strtotime('+1 day'));
                                                 </thead>
                                                 <tbody>
                                                 <tr>
-                                                    <td>6</td><td>6</td><td>1849.00</td><td>3.020000</td><td>3272</td><td>9</td><td>9</td>
+                                                    <td id="res_pedidos">0</td>
+                                                    <td id="res_entregas">0</td>
+                                                    <td id="res_peso">0</td>
+                                                    <td id="res_volumen">0</td>
+                                                    <td id="res_piezas">0</td>
+                                                    <td id="res_guias">0</td>
+                                                    <td id="res_pallets">0</td>
                                                 </tr>
                                                 </tbody>
                                             </table>
+
                                         </div>
                                         <div class="col-md-3">
                                             <span class="badge-subtitle">Número de pedido</span>
@@ -356,65 +385,9 @@ $manana  = date('Y-m-d', strtotime('+1 day'));
                                             <th>Zona Embarque (Isla)</th>
                                         </tr>
                                         </thead>
-                                        <tbody>
-                                        <tr>
-                                            <td>
-                                                <button class="btn btn-xs btn-default"><i class="fa fa-search"></i></button>
-                                                <button class="btn btn-xs btn-default"><i class="fa fa-list"></i></button>
-                                            </td>
-                                            <td><button class="btn btn-xs btn-warning">&gt;&gt;</button></td>
-                                            <td>S202510161</td>
-                                            <td>15-10-2025</td>
-                                            <td>15-10-2025</td>
-                                            <td>-</td>
-                                            <td>R001</td>
-                                            <td>11138403</td>
-                                            <td>67497</td>
-                                            <td>Monserrat de la Mora</td>
-                                            <td>Marrocos 15 casa 9 Colonia México 68</td>
-                                            <td>53260</td>
-                                            <td>México 68</td>
-                                            <td>19.3616381</td>
-                                            <td>-99.110018</td>
-                                            <td>1</td>
-                                            <td>1.0000</td>
-                                            <td>1</td>
-                                            <td>0.25</td>
-                                            <td>0.00</td>
-                                            <td>CANAL RODRIGUEZ MARIA DEL CARMEN</td>
-                                            <td>Área de Embarque 2</td>
-                                        </tr>
-                                        <tr>
-                                            <td>
-                                                <button class="btn btn-xs btn-default"><i class="fa fa-search"></i></button>
-                                                <button class="btn btn-xs btn-default"><i class="fa fa-list"></i></button>
-                                            </td>
-                                            <td><button class="btn btn-xs btn-warning">&gt;&gt;</button></td>
-                                            <td>PED151020251</td>
-                                            <td>15-10-2024</td>
-                                            <td>15-10-2024</td>
-                                            <td>-</td>
-                                            <td>R002</td>
-                                            <td>9501</td>
-                                            <td>77127</td>
-                                            <td>ADVL</td>
-                                            <td>62 X 77 Y 75 608A</td>
-                                            <td>97000</td>
-                                            <td>CENTRO</td>
-                                            <td>19.3611111</td>
-                                            <td>-99.000000</td>
-                                            <td>2</td>
-                                            <td>20.0000</td>
-                                            <td>2</td>
-                                            <td>62.5</td>
-                                            <td>0.68</td>
-                                            <td>ADVL</td>
-                                            <td>Área de Embarque 2</td>
-                                        </tr>
-                                        </tbody>
+                                        <tbody id="gridPedidos"></tbody>
                                     </table>
                                 </div>
-
                                 <div class="mt-10px mb-10px">
                                     <button class="btn btn-primary btn-sm">Generar Reportes Etiquetas</button>
                                 </div>
@@ -433,13 +406,8 @@ $manana  = date('Y-m-d', strtotime('+1 day'));
                                             <th>Tarimas</th><th>Destino</th><th>Estatus</th><th>Desviación</th>
                                         </tr>
                                         </thead>
-                                        <tbody>
-                                        <tr>
-                                            <td>EMB-240010</td><td>08:00</td><td>08:12</td><td>WH1</td><td>Cliente A</td>
-                                            <td>RT01</td><td>Transportes del Norte</td><td>Juan Pérez</td>
-                                            <td>380</td><td>16</td><td>CDMX</td><td>En ruta</td><td>+12 min</td>
-                                        </tr>
-                                        </tbody>
+                                        <tbody id="gridDia"></tbody>
+
                                     </table>
                                 </div>
                             </div>
@@ -455,13 +423,7 @@ $manana  = date('Y-m-d', strtotime('+1 day'));
                                             <th>Destino</th><th>Estatus</th><th>Entrega</th><th>On Time</th>
                                         </tr>
                                         </thead>
-                                        <tbody>
-                                        <tr>
-                                            <td>EMB-239950</td><td><?= date('Y-m-d', strtotime('-3 days')) ?></td><td>WH1</td><td>Cliente A</td>
-                                            <td>RT01</td><td>Transportes del Norte</td><td>Full</td><td>400</td><td>17</td>
-                                            <td>CDMX</td><td>Entregado</td><td>2025-11-08 16:40</td><td>Sí</td>
-                                        </tr>
-                                        </tbody>
+                                        <tbody id="gridHist"></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -565,31 +527,305 @@ Se Recogerá En:"></textarea>
 </div>
 
 <script>
-    $(function(){
-        function dt(id){
-            $(id).DataTable({
-                pageLength: 10,
-                scrollX: true,
-                language: { url: "//cdn.datatables.net/plug-ins/1.10.25/i18n/Spanish.json" },
-                lengthChange:false
-            });
-        }
-        dt('#tabla_pedidos');
-        dt('#tabla_dia');
-        dt('#tabla_hist');
+    document.addEventListener('DOMContentLoaded', function () {
 
-        // Fallback JS por si el HTML se renderiza sin los data-bs- (no debería ser necesario)
-        document.querySelectorAll('[data-bs-toggle="modal"]').forEach(function(btn){
-            btn.addEventListener('click', function(e){
-                var sel = btn.getAttribute('data-bs-target');
-                if (window.bootstrap && bootstrap.Modal){
-                    var el = document.querySelector(sel);
-                    var modal = bootstrap.Modal.getOrCreateInstance(el);
-                    modal.show();
-                }
+        /* ================== DATATABLES ================== */
+        if (window.jQuery && $.fn.DataTable) {
+            function dt(id) {
+                $(id).DataTable({
+                    pageLength: 10,
+                    scrollX: true,
+                    language: {
+                        url: "//cdn.datatables.net/plug-ins/1.10.25/i18n/Spanish.json"
+                    },
+                    lengthChange: false
+                });
+            }
+
+            dt('#tabla_pedidos');
+            dt('#tabla_dia');
+            dt('#tabla_hist');
+        }
+
+        /* ================== CONTEXTO GLOBAL ================== */
+        let ID_ALMACEN_ACTUAL = null;
+        let DATA_PEDIDOS = [];
+        let FILTRO_RUTA = '';
+        let FILTRO_AREA = '';
+
+        const apiAlmacenes = '../api/filtros_almacenes.php';
+        const apiPedidos   = '../api/planeacion_pedidos.php';
+
+        /* ================== CARGAR ALMACENES ================== */
+        function cargarAlmacenes(selectId) {
+            const selects = document.querySelectorAll(`#${selectId}`);
+            if (!selects.length) return;
+
+            fetch(apiAlmacenes)
+                .then(r => r.json())
+                .then(data => {
+                    if (!Array.isArray(data)) return;
+
+                    selects.forEach(select => {
+                        select.innerHTML =
+                            '<option value="">Seleccione un almacén</option>' +
+                            data.map(a =>
+                                `<option value="${a.nombre}">${a.nombre}</option>`
+                            ).join('');
+                    });
+                });
+        }
+
+        /* ================== CARGA PRINCIPAL ================== */
+        function cargarPedidosPlaneacion() {
+            if (!ID_ALMACEN_ACTUAL) return;
+
+            fetch(`${apiPedidos}?almacen=${encodeURIComponent(ID_ALMACEN_ACTUAL)}`)
+                .then(r => r.json())
+                .then(resp => {
+                    if (!resp.success || !Array.isArray(resp.data)) return;
+
+                    DATA_PEDIDOS = resp.data;
+
+                    poblarRutas(DATA_PEDIDOS);
+                    poblarAreas(DATA_PEDIDOS);
+
+                    aplicarFiltros();
+                });
+        }
+
+        /* ================== POBLAR SELECTS DINÁMICOS ================== */
+        function poblarRutas(data){
+            const selectRuta = document.querySelector(
+                '#t_planeacion .row.mb-5px select:nth-of-type(3)'
+            );
+            if (!selectRuta) return;
+
+            const rutas = [...new Set(
+                data.map(p => p.ruta).filter(r => r)
+            )];
+
+            selectRuta.innerHTML =
+                '<option value="">Todas</option>' +
+                rutas.map(r => `<option value="${r}">${r}</option>`).join('');
+        }
+
+        function poblarAreas(data){
+            const selectArea = document.querySelector(
+                '#t_planeacion .row.mb-5px select:nth-of-type(2)'
+            );
+            if (!selectArea) return;
+
+            const areas = [...new Set(
+                data.map(p => p.area_embarque).filter(a => a)
+            )];
+
+            selectArea.innerHTML =
+                '<option value="">Todas</option>' +
+                areas.map(a => `<option value="${a}">${a}</option>`).join('');
+        }
+
+        /* ================== FILTROS ================== */
+        function aplicarFiltros(){
+            let dataFiltrada = DATA_PEDIDOS;
+
+            if (FILTRO_RUTA) {
+                dataFiltrada = dataFiltrada.filter(p =>
+                    String(p.ruta || '').toLowerCase() === FILTRO_RUTA.toLowerCase()
+                );
+            }
+
+            if (FILTRO_AREA) {
+                dataFiltrada = dataFiltrada.filter(p =>
+                    String(p.area_embarque || '').toLowerCase() === FILTRO_AREA.toLowerCase()
+                );
+            }
+
+            pintarGridPlaneacion(dataFiltrada);
+            calcularKPIs(dataFiltrada);
+            pintarResumenPlaneacion(dataFiltrada);
+            pintarEmbarquesDia(dataFiltrada);
+            pintarHistorico(dataFiltrada);
+        }
+
+        /* ================== PLANEACIÓN ================== */
+        function pintarGridPlaneacion(data) {
+            const grid = document.getElementById('gridPedidos');
+            if (!grid) return;
+
+            grid.innerHTML = data.map(r => `
+            <tr>
+                <td>
+                    <button class="btn btn-xs btn-default"><i class="fa fa-search"></i></button>
+                    <button class="btn btn-xs btn-default"><i class="fa fa-list"></i></button>
+                </td>
+                <td><button class="btn btn-xs btn-warning">&gt;&gt;</button></td>
+                <td>${r.folio}</td>
+                <td>${r.fecha_pedido || ''}</td>
+                <td>${r.fecha_entrega || ''}</td>
+                <td>${r.horario_planeado || '-'}</td>
+                <td>${r.ruta || ''}</td>
+                <td>${r.cliente || ''}</td>
+                <td>${r.destinatario || ''}</td>
+                <td>${r.total_cajas || 0}</td>
+                <td>${r.total_piezas || 0}</td>
+                <td>${r.valor_comercial || 0}</td>
+            </tr>
+        `).join('');
+        }
+
+        /* ================== KPIs ================== */
+        function calcularKPIs(data) {
+            const hoy = new Date().toISOString().slice(0, 10);
+
+            let embarquesDia = 0;
+            let planeados = data.length;
+            let enRuta = 0;
+            let retrasados = 0;
+
+            data.forEach(p => {
+                if (p.fecha_entrega === hoy) embarquesDia++;
+                if (p.status === 'EN_RUTA') enRuta++;
+                if (p.fecha_entrega < hoy && p.status !== 'ENTREGADO') retrasados++;
+            });
+
+            document.getElementById('kpi_embarques_dia').innerText = embarquesDia;
+            document.getElementById('kpi_planeados').innerText    = planeados;
+            document.getElementById('kpi_en_ruta').innerText      = enRuta;
+            document.getElementById('kpi_retrasados').innerText   = retrasados;
+        }
+
+        /* ================== RESUMEN ================== */
+        function pintarResumenPlaneacion(data) {
+            let resumen = {
+                pedidos: data.length,
+                entregas: data.length,
+                peso: 0,
+                volumen: 0,
+                piezas: 0,
+                guias: 0,
+                pallets: 0
+            };
+
+            data.forEach(p => {
+                resumen.peso    += Number(p.peso_total || 0);
+                resumen.volumen += Number(p.volumen_total || 0);
+                resumen.piezas  += Number(p.total_piezas || 0);
+                resumen.guias   += Number(p.total_guias || 0);
+                resumen.pallets += Number(p.total_pallets || 0);
+            });
+
+            document.getElementById('res_pedidos').innerText  = resumen.pedidos;
+            document.getElementById('res_entregas').innerText = resumen.entregas;
+            document.getElementById('res_peso').innerText     = resumen.peso.toFixed(2);
+            document.getElementById('res_volumen').innerText  = resumen.volumen.toFixed(3);
+            document.getElementById('res_piezas').innerText   = resumen.piezas;
+            document.getElementById('res_guias').innerText    = resumen.guias;
+            document.getElementById('res_pallets').innerText  = resumen.pallets;
+        }
+
+        /* ================== EMBARQUES DEL DÍA ================== */
+        function pintarEmbarquesDia(data) {
+            const hoy = new Date().toISOString().slice(0, 10);
+            const grid = document.getElementById('gridDia');
+            if (!grid) return;
+
+            grid.innerHTML = data
+                .filter(p => p.fecha_entrega === hoy)
+                .map(p => `
+                <tr>
+                    <td>${p.folio}</td>
+                    <td>${p.fecha_salida || ''}</td>
+                    <td>${p.fecha_entrega || ''}</td>
+                    <td>${p.almacen || ''}</td>
+                    <td>${p.cliente || ''}</td>
+                    <td>${p.ruta || ''}</td>
+                    <td>${p.transportista || ''}</td>
+                    <td>${p.operador || ''}</td>
+                    <td>${p.total_cajas || 0}</td>
+                    <td>${p.total_pallets || 0}</td>
+                    <td>${p.destino || ''}</td>
+                    <td>${p.status || ''}</td>
+                    <td>${p.desviacion || ''}</td>
+                </tr>
+            `).join('');
+        }
+
+        /* ================== HISTÓRICO ================== */
+        function pintarHistorico(data) {
+            const hoy = new Date().toISOString().slice(0, 10);
+            const grid = document.getElementById('gridHist');
+            if (!grid) return;
+
+            grid.innerHTML = data
+                .filter(p => p.fecha_entrega < hoy)
+                .map(p => `
+                <tr>
+                    <td>${p.folio}</td>
+                    <td>${p.fecha_entrega || ''}</td>
+                    <td>${p.almacen || ''}</td>
+                    <td>${p.cliente || ''}</td>
+                    <td>${p.ruta || ''}</td>
+                    <td>${p.transportista || ''}</td>
+                    <td>${p.tipo || ''}</td>
+                    <td>${p.total_cajas || 0}</td>
+                    <td>${p.total_pallets || 0}</td>
+                    <td>${p.destino || ''}</td>
+                    <td>${p.status || ''}</td>
+                    <td>${p.entrega || ''}</td>
+                    <td>${p.on_time || ''}</td>
+                </tr>
+            `).join('');
+        }
+
+        /* ================== EVENTOS ================== */
+
+        // Almacén (planeación)
+        document.querySelectorAll('#almacen_planeacion').forEach(select => {
+            select.addEventListener('change', function () {
+                ID_ALMACEN_ACTUAL = this.value || null;
+                if (!ID_ALMACEN_ACTUAL) return;
+                FILTRO_RUTA = '';
+                FILTRO_AREA = '';
+                cargarPedidosPlaneacion();
             });
         });
+
+        // Ruta
+        const selectRuta = document.querySelector('#t_planeacion .row.mb-5px select:nth-of-type(3)');
+        if (selectRuta) {
+            selectRuta.addEventListener('change', function(){
+                FILTRO_RUTA = this.value || '';
+                aplicarFiltros();
+            });
+        }
+
+        // Área de embarque
+        const selectArea = document.querySelector('#t_planeacion .row.mb-5px select:nth-of-type(2)');
+        if (selectArea) {
+            selectArea.addEventListener('change', function(){
+                FILTRO_AREA = this.value || '';
+                aplicarFiltros();
+            });
+        }
+
+        /* ================== INICIO ================== */
+        cargarAlmacenes('almacen_planeacion');
+        cargarAlmacenes('almacen_filtro');
+
     });
 </script>
+
+
+
+
+
+
+
+
+
+
+
+
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>

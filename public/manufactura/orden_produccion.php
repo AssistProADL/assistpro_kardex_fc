@@ -1,641 +1,601 @@
 <?php
-//@//@session_start();
-require_once __DIR__ . '/../../app/db.php';
+// ======================================================================
+//  MÓDULO VISUAL: ADMINISTRACIÓN DE ORDENES DE PRODUCCIÓN
+//  Ruta: /public/manufactura/orden_produccion_admin.php
+// ======================================================================
 
-/* ============================================================
-   CONEXIÓN
-============================================================ */
-$pdo = db_pdo();
-
-/* ============================================================
-   HELPERS
-============================================================ */
-function table_exists(string $table): bool
-{
-  return (int) db_val("
-        SELECT COUNT(*)
-        FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME   = ?
-    ", [$table]) > 0;
-}
-
-/**
- * Stock disponible en un BL (zona + idy_ubica) para un artículo.
- * Suma ts_existenciapiezas + ts_existenciatarima (solo activos / no QA).
- */
-function stock_disponible_en_bl(string $articulo, int $cve_almac, int $idy_ubica, array &$debug = null): float
-{
-  $total = 0.0;
-  $dbg = [];
-
-  // Piezas
-  if (table_exists('ts_existenciapiezas')) {
-    $sql1 = "
-            SELECT SUM(Existencia)
-            FROM ts_existenciapiezas
-            WHERE cve_almac    = ?
-              AND idy_ubica    = ?
-              AND cve_articulo = ?
-              AND IFNULL(Cuarentena,0) = 0
-        ";
-    $p1 = [$cve_almac, $idy_ubica, $articulo];
-    $v1 = (float) db_val($sql1, $p1);
-    $total += $v1;
-    $dbg['piezas'] = ['sql' => $sql1, 'params' => $p1, 'resultado' => $v1];
-  }
-
-  // Tarimas
-  if (table_exists('ts_existenciatarima')) {
-    $sql2 = "
-            SELECT SUM(existencia)
-            FROM ts_existenciatarima
-            WHERE cve_almac    = ?
-              AND idy_ubica    = ?
-              AND cve_articulo = ?
-              AND IFNULL(Cuarentena,0) = 0
-              AND IFNULL(Activo,1) = 1
-        ";
-    $p2 = [$cve_almac, $idy_ubica, $articulo];
-    $v2 = (float) db_val($sql2, $p2);
-    $total += $v2;
-    $dbg['tarima'] = ['sql' => $sql2, 'params' => $p2, 'resultado' => $v2];
-  }
-
-  if ($debug !== null) {
-    $debug = $dbg;
-  }
-
-  return $total;
-}
-
-/* ============================================================
-   API AJAX (JSON)
-============================================================ */
-$op = $_GET['op'] ?? $_POST['op'] ?? null;
-
-if ($op) {
-  header('Content-Type: application/json; charset=utf-8');
-
-  try {
-
-    /* ---------- ZONAS POR ALMACÉN (c_almacenp -> c_almacen) ---------- */
-    if ($op === 'listar_zonas') {
-      $almacenp = (int) ($_GET['almacenp'] ?? $_POST['almacenp'] ?? 0);
-
-      if (!$almacenp) {
-        echo json_encode(['ok' => false, 'error' => 'Almacén requerido']);
-        exit;
-      }
-
-      if (!table_exists('c_almacen')) {
-        echo json_encode(['ok' => false, 'error' => 'Tabla c_almacen no existe']);
-        exit;
-      }
-
-      $rows = db_all("
-                SELECT
-                    cve_almac,
-                    clave_almacen,
-                    des_almac
-                FROM c_almacen
-                WHERE IFNULL(Activo,1) = 1
-                  AND cve_almacenp     = ?
-                ORDER BY clave_almacen, des_almac
-            ", [$almacenp]);
-
-      echo json_encode(['ok' => true, 'data' => $rows]);
-      exit;
-    }
-
-    /* ---------- BL DE MANUFACTURA POR ZONA (c_ubicacion) ---------- */
-    if ($op === 'listar_bls') {
-      $zona = (int) ($_GET['zona'] ?? $_POST['zona'] ?? 0);
-
-      if (!$zona) {
-        echo json_encode(['ok' => false, 'error' => 'Zona de almacén requerida']);
-        exit;
-      }
-
-      if (!table_exists('c_ubicacion')) {
-        echo json_encode(['ok' => false, 'error' => 'Tabla c_ubicacion no existe']);
-        exit;
-      }
-
-      // AJUSTE: AreaProduccion 'S'/'N' y Activo numérico 0/1
-      $rows = db_all("
-                SELECT
-                    idy_ubica,
-                    CodigoCSD AS bl
-                FROM c_ubicacion
-                WHERE cve_almac                 = ?
-                  AND IFNULL(AreaProduccion,'N') = 'S'
-                  AND IFNULL(Activo,1)           = 1
-                ORDER BY CodigoCSD
-            ", [$zona]);
-
-      echo json_encode(['ok' => true, 'data' => $rows]);
-      exit;
-    }
-
-    /* ---------- CÁLCULO DE REQUERIMIENTOS ---------- */
-    if ($op === 'calc_requerimientos') {
-      $producto = trim($_POST['producto'] ?? '');
-      $cantidad = (float) ($_POST['cantidad'] ?? 0);
-      $cve_almac = (int) ($_POST['cve_almac'] ?? 0);   // zona (c_almacen.cve_almac)
-      $idy_ubica = (int) ($_POST['idy_ubica'] ?? 0);   // BL (c_ubicacion.idy_ubica)
-      $wantDebug = !empty($_POST['debug_stock']);
-
-      if ($producto === '' || $cantidad <= 0) {
-        echo json_encode(['ok' => false, 'error' => 'Producto compuesto y cantidad son requeridos']);
-        exit;
-      }
-
-      if (!table_exists('t_artcompuesto')) {
-        echo json_encode(['ok' => false, 'error' => 'Tabla t_artcompuesto no existe']);
-        exit;
-      }
-      if (!table_exists('c_articulo')) {
-        echo json_encode(['ok' => false, 'error' => 'Tabla c_articulo no existe']);
-        exit;
-      }
-
-      // Componentes del BOM (idéntico a bom.php)
-      $componentes = db_all("
-                SELECT
-                    c.Cve_ArtComponente              AS componente,
-                    a.des_articulo                   AS descripcion,
-                    c.Cantidad                       AS cantidad,
-                    COALESCE(c.cve_umed, a.cve_umed) AS unidad
-                FROM t_artcompuesto c
-                LEFT JOIN c_articulo a
-                       ON a.cve_articulo = c.Cve_ArtComponente
-                WHERE c.Cve_Articulo = ?
-                  AND (c.Activo IS NULL OR c.Activo = 1)
-                ORDER BY c.Cve_ArtComponente
-            ", [$producto]);
-
-      if (!$componentes) {
-        echo json_encode(['ok' => false, 'error' => 'El producto no tiene componentes configurados en t_artcompuesto']);
-        exit;
-      }
-
-      $detalles = [];
-      $debugStock = [];
-
-      foreach ($componentes as $idx => $c) {
-        $debugRow = null;
-        $stock_bl = 0.0;
-
-        if ($cve_almac && $idy_ubica) {
-          $stock_bl = stock_disponible_en_bl($c['componente'], $cve_almac, $idy_ubica, $debugRow);
-        }
-
-        $cant_por_uni = (float) $c['cantidad'];
-        $cant_total = $cant_por_uni * $cantidad;
-
-        $detalles[] = [
-          'componente' => $c['componente'],
-          'descripcion' => $c['descripcion'],
-          'umed' => $c['unidad'],
-          'cantidad_por_uni' => $cant_por_uni,
-          'cantidad_total' => $cant_total,
-          'cantidad_solic' => $cant_total, // por ahora igual
-          'stock_bl' => $stock_bl
-        ];
-
-        // Para no inflar la respuesta, mandamos el debug del primer componente
-        if ($wantDebug && $idx === 0) {
-          $debugStock = $debugRow;
-        }
-      }
-
-      echo json_encode([
-        'ok' => true,
-        'detalles' => $detalles,
-        'debug_stock' => $debugStock
-      ], JSON_UNESCAPED_UNICODE);
-      exit;
-    }
-
-    echo json_encode(['ok' => false, 'error' => 'Operación no válida']);
-    exit;
-
-  } catch (Throwable $e) {
-    echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
-    exit;
-  }
-}
-
-/* ============================================================
-   CARGA INICIAL (HTML)
-============================================================ */
-
-// Almacenes (c_almacenp) -> value = id (clave interna)
-$almacenesP = [];
-if (table_exists('c_almacenp')) {
-  $almacenesP = db_all("
-        SELECT id, clave, nombre
-        FROM c_almacenp
-        WHERE IFNULL(Activo,1) = 1
-        ORDER BY clave, nombre
-    ");
-}
-
-include __DIR__ . '/../bi/_menu_global.php';
+require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
-
 <head>
-  <meta charset="utf-8">
-  <title>Orden de Producción</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.datatables.net/v/bs5/dt-2.1.8/datatables.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <style>
-    body {
-      font-size: 10px;
-    }
+    <meta charset="utf-8"/>
+    <title>Administración de Manufactura</title>
 
-    .section-title {
-      font-size: 11px;
-      font-weight: 600;
-      color: #555;
-      margin-bottom: 4px;
-    }
+    <!-- Bootstrap 5 -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
 
-    .card-header small {
-      font-size: 9px;
-      color: #777;
-    }
+    <!-- Font Awesome -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
 
-    .table-sm td,
-    .table-sm th {
-      padding: .3rem .4rem;
-      vertical-align: middle;
-    }
+    <!-- DataTables + ColReorder -->
+    <link rel="stylesheet"
+          href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css"/>
+    <link rel="stylesheet"
+          href="https://cdn.datatables.net/colreorder/1.7.0/css/colReorder.bootstrap5.min.css"/>
 
-    .dt-right {
-      text-align: right;
-    }
+    <!-- Select2 -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css"/>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css"/>
 
-    .dt-center {
-      text-align: center;
-    }
-  </style>
+    <!-- Flatpickr -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"/>
+
+    <!-- SweetAlert2 -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css"/>
+
+    <style>
+        .ap-section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1f4e79;
+            margin-bottom: .25rem;
+        }
+
+        .ap-section-subtitle {
+            font-size: .85rem;
+            color: #6c757d;
+        }
+
+        .ap-kpi-title {
+            font-size: .8rem;
+            text-transform: uppercase;
+            color: #6c757d;
+            margin-bottom: .25rem;
+        }
+
+        .ap-kpi-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f4e79;
+        }
+
+        .ap-card-kpi {
+            border-radius: .75rem;
+            border: 1px solid #e5e7eb;
+            padding: .75rem .9rem;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+            height: 100%;
+        }
+
+        .ap-card-grid {
+            border-radius: .75rem;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+        }
+
+        .ap-card-grid-header {
+            padding: .75rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .ap-card-grid-body {
+            padding: .75rem;
+        }
+
+        table.dataTable thead th {
+            white-space: nowrap;
+        }
+
+        table.dataTable tbody td {
+            font-size: 0.80rem;
+            white-space: nowrap;
+        }
+    </style>
 </head>
-
 <body>
-  <div class="container-fluid mt-2">
 
-    <div class="card mb-2">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <div>
-          <strong><i class="bi bi-diagram-3-fill"></i> Orden de Producción</strong>
-          <small class="ms-2 text-muted">Explosión de materiales / Manufactura</small>
-        </div>
-        <span class="badge bg-secondary">Borrador</span>
-      </div>
-      <div class="card-body">
+<div class="container-fluid mt-3">
 
-        <!-- ENCABEZADO OT -->
-        <div class="row g-2 mb-2">
-          <div class="col-md-3">
-            <label class="form-label section-title">No. OT (interno)</label>
-            <input type="text" class="form-control form-control-sm" id="txtOtInterno"
-              value="Se asignará al guardar / importar" readonly>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label section-title">OT ERP</label>
-            <input type="text" class="form-control form-control-sm" id="txtOtErp"
-              placeholder="Referencia en ERP (opcional)">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label section-title">Pedido de venta</label>
-            <input type="text" class="form-control form-control-sm" id="txtPedido" placeholder="(opcional)">
-          </div>
-        </div>
-
-        <!-- ALMACÉN / ZONA / BL -->
-        <div class="row g-2 mb-3">
-          <div class="col-md-3">
-            <label class="form-label section-title">Almacén</label>
-            <select class="form-select form-select-sm" id="selAlmacen">
-              <option value="">Seleccione almacén</option>
-              <?php foreach ($almacenesP as $a): ?>
-                <option value="<?= (int) $a['id'] ?>">
-                  (<?= htmlspecialchars($a['clave']) ?>) <?= htmlspecialchars($a['nombre']) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label section-title">Zona de Almacenaje</label>
-            <select class="form-select form-select-sm" id="selZona">
-              <option value="">Seleccione zona de almacén</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label section-title">BL Manufactura</label>
-            <select class="form-select form-select-sm" id="selBL">
-              <option value="">Seleccione BL de Manufactura</option>
-            </select>
-            <div class="form-text" style="font-size:9px;">
-              Se listan únicamente BL marcados como área de producción.
+    <!-- TÍTULO -->
+    <div class="row mb-2">
+        <div class="col-12 d-flex align-items-center justify-content-between">
+            <div>
+                <div class="ap-section-title">
+                    Administración de Manufactura
+                </div>
+                <div class="ap-section-subtitle">
+                    Control y seguimiento de órdenes de trabajo
+                </div>
             </div>
-          </div>
         </div>
-
-        <!-- PRODUCTO COMPUESTO -->
-        <div class="row g-2 mb-2">
-          <div class="col-md-6">
-            <label class="form-label section-title">Producto compuesto (clave o descripción)</label>
-            <div class="input-group input-group-sm">
-              <input type="text" class="form-control" id="txtBuscarProd"
-                placeholder="Escribe código o parte de la descripción">
-              <button class="btn btn-primary" id="btnBuscarProd">
-                <i class="bi bi-search"></i>
-              </button>
-            </div>
-            <div class="form-text" style="font-size:9px;">
-              Se busca en c_articulo donde Compuesto = 'S'.
-            </div>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label section-title">Producto compuesto seleccionado</label>
-            <input type="text" class="form-control form-control-sm" id="txtProdSel" readonly>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label section-title">Descripción</label>
-            <input type="text" class="form-control form-control-sm" id="txtProdDesc" readonly>
-          </div>
-        </div>
-
-        <div class="row g-2 mb-2">
-          <div class="col-md-2">
-            <label class="form-label section-title">UMed</label>
-            <input type="text" class="form-control form-control-sm" id="txtUMed" readonly>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label section-title">Fecha OT</label>
-            <input type="date" class="form-control form-control-sm" id="fecOT" value="<?= date('Y-m-d') ?>">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label section-title">Fecha compromiso</label>
-            <input type="date" class="form-control form-control-sm" id="fecComp"
-              value="<?= date('Y-m-d', strtotime('+1 day')) ?>">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label section-title">Cantidad a producir</label>
-            <input type="number" min="1" step="1" class="form-control form-control-sm" id="txtCantidad" value="10">
-          </div>
-          <div class="col-md-4 d-flex align-items-end justify-content-end gap-2">
-            <button class="btn btn-primary btn-sm" id="btnCalc">
-              <i class="bi bi-calculator"></i> Calcular requerimientos
-            </button>
-            <button class="btn btn-outline-secondary btn-sm" id="btnCsv" disabled>
-              <i class="bi bi-filetype-csv"></i> Exportar CSV
-            </button>
-          </div>
-        </div>
-
-        <hr>
-
-        <!-- RESUMEN CABECERA SELECCIONADA -->
-        <div id="resCabecera" class="mb-2" style="font-size:10px; display:none;">
-          <strong>Producto compuesto:</strong> <span id="lblProd"></span> —
-          <strong>Cantidad a producir:</strong> <span id="lblCant"></span> |
-          <strong>Fecha OT:</strong> <span id="lblFecOT"></span> |
-          <strong>Fecha compromiso:</strong> <span id="lblFecComp"></span> |
-          <strong>BL Manufactura:</strong> <span id="lblBL"></span>
-        </div>
-
-        <!-- TABLA COMPONENTES -->
-        <div class="table-responsive">
-          <table class="table table-sm table-striped table-hover w-100" id="tblComponentes">
-            <thead>
-              <tr>
-                <th>Componente</th>
-                <th>Descripción</th>
-                <th>UMed</th>
-                <th class="dt-right">Cantidad por unidad</th>
-                <th class="dt-right">Cantidad total</th>
-                <th class="dt-right">Cantidad solicitada</th>
-                <th class="dt-right">Stock disponible (BL)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- se llena por JS -->
-            </tbody>
-          </table>
-        </div>
-
-      </div>
     </div>
 
-  </div>
+    <!-- FILTROS -->
+    <div class="row mb-2">
+        <div class="col-12">
+            <div class="accordion" id="filtrosAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingFiltros">
+                        <button class="accordion-button" type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#collapseFiltros"
+                                aria-expanded="true"
+                                aria-controls="collapseFiltros">
+                            <i class="fa fa-filter me-2"></i> Filtros de búsqueda
+                        </button>
+                    </h2>
+                    <div id="collapseFiltros"
+                         class="accordion-collapse collapse show"
+                         aria-labelledby="headingFiltros"
+                         data-bs-parent="#filtrosAccordion">
+                        <div class="accordion-body">
 
-  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.datatables.net/v/bs5/dt-2.1.8/datatables.min.js"></script>
-  <script>
-    (function () {
-      'use strict';
+                            <div class="row g-2 align-items-end mb-2">
 
-      let dtComp = null;
-      let prodSel = null; // código del producto compuesto
+                                <div class="col-md-3 col-sm-6">
+                                    <label for="empresa" class="form-label mb-1">
+                                        Empresa
+                                    </label>
+                                    <select name="empresa" id="empresa"
+                                            class="form-select form-select-sm select2">
+                                        <option value="">Seleccione empresa...</option>
+                                    </select>
+                                </div>
 
-      function alertMsg(msg) {
-        window.alert(msg);
-      }
+                                <div class="col-md-3 col-sm-6">
+                                    <label for="almacen" class="form-label mb-1">
+                                        Almacén
+                                    </label>
+                                    <select name="almacen" id="almacen"
+                                            class="form-select form-select-sm select2">
+                                        <option value="">Seleccione almacén...</option>
+                                    </select>
+                                </div>
 
-      /* ==========================
-         COMBOS: ALMACÉN → ZONA → BL
-      ========================== */
-      function cargarZonas() {
-        const alm = $('#selAlmacen').val();
-        $('#selZona').empty().append('<option value="">Seleccione zona de almacén</option>');
-        $('#selBL').empty().append('<option value="">Seleccione BL de Manufactura</option>');
-        if (!alm) return;
+                                <div class="col-md-3 col-sm-6">
+                                    <label for="Proveedr" class="form-label mb-1">
+                                        Proveedor
+                                    </label>
+                                    <select name="Proveedr" id="Proveedr"
+                                            class="form-select form-select-sm select2">
+                                        <option value="">Seleccione proveedor...</option>
+                                    </select>
+                                </div>
 
-        $.get('orden_produccion.php', { op: 'listar_zonas', almacenp: alm }, function (r) {
-          if (!r.ok) {
-            console.log('DEBUG zonas:', r);
-            alertMsg(r.error || 'Error al cargar zonas');
-            return;
-          }
-          (r.data || []).forEach(z => {
-            $('#selZona').append(
-              $('<option>', {
-                value: z.cve_almac,
-                text: '(' + z.clave_almacen + ') ' + z.des_almac
-              })
-            );
-          });
-        }, 'json');
-      }
+                                <div class="col-md-3 col-sm-6">
+                                    <label for="statusOT" class="form-label mb-1">
+                                        Status OT
+                                    </label>
+                                    <select name="statusOT" id="statusOT"
+                                            class="form-select form-select-sm">
+                                        <option value="">Todos</option>
+                                        <option value="P">Pendiente</option>
+                                        <option value="I">En Producción</option>
+                                        <option value="T">Terminada</option>
+                                        <option value="C">Cancelada</option>
+                                    </select>
+                                </div>
 
-      function cargarBL() {
-        const zona = $('#selZona').val();
-        $('#selBL').empty().append('<option value="">Seleccione BL de Manufactura</option>');
-        if (!zona) return;
+                            </div>
 
-        $.get('orden_produccion.php', { op: 'listar_bls', zona: zona }, function (r) {
-          if (!r.ok) {
-            console.log('DEBUG BL:', r);
-            alertMsg(r.error || 'Error al cargar BL');
-            return;
-          }
-          (r.data || []).forEach(b => {
-            $('#selBL').append(
-              $('<option>', {
-                value: b.idy_ubica,
-                text: b.bl
-              })
-            );
-          });
-        }, 'json');
-      }
+                            <div class="row g-2 align-items-end mb-2">
+                                <div class="col-md-3 col-sm-6">
+                                    <label for="criteriob" class="form-label mb-1">
+                                        Buscar
+                                    </label>
+                                    <input type="text" id="criteriob"
+                                           class="form-control form-control-sm"
+                                           placeholder="Folio, artículo, etc.">
+                                </div>
 
-      $('#selAlmacen').on('change', cargarZonas);
-      $('#selZona').on('change', cargarBL);
+                                <div class="col-md-3 col-sm-6">
+                                    <label for="criteriobLP" class="form-label mb-1">
+                                        Buscar LP
+                                    </label>
+                                    <input type="text" id="criteriobLP"
+                                           class="form-control form-control-sm"
+                                           placeholder="LP, referencia...">
+                                </div>
 
-      /* ==========================
-         BÚSQUEDA DE PRODUCTO (usa bom.php)
-      ========================== */
-      function buscarProducto() {
-        const q = $('#txtBuscarProd').val().trim();
-        if (!q) {
-          alertMsg('Escribe parte de la clave o descripción.');
-          return;
-        }
-        $.get('bom.php', { op: 'buscar_compuestos', q: q }, function (r) {
-          if (!r.ok) {
-            alertMsg(r.msg || 'Error en búsqueda');
-            return;
-          }
-          const data = r.data || [];
-          if (data.length === 0) {
-            alertMsg('No se encontraron productos compuestos que coincidan.');
-            return;
-          }
-          // Tomamos el primero
-          const p = data[0];
-          prodSel = p.cve_articulo;
-          $('#txtProdSel').val(p.cve_articulo);
-          $('#txtProdDesc').val(p.des_articulo);
-          $('#txtUMed').val(p.unidadMedida || '');
-        }, 'json');
-      }
+                                <div class="col-md-3 col-sm-6">
+                                    <label for="fechai" class="form-label mb-1">
+                                        Fecha inicio
+                                    </label>
+                                    <input type="text" id="fechai"
+                                           class="form-control form-control-sm flatpickr"
+                                           placeholder="YYYY-MM-DD">
+                                </div>
 
-      $('#btnBuscarProd').on('click', buscarProducto);
-      $('#txtBuscarProd').on('keypress', function (e) {
-        if (e.which === 13) {
-          e.preventDefault();
-          buscarProducto();
-        }
-      });
+                                <div class="col-md-3 col-sm-6">
+                                    <label for="fechaf" class="form-label mb-1">
+                                        Fecha fin
+                                    </label>
+                                    <input type="text" id="fechaf"
+                                           class="form-control form-control-sm flatpickr"
+                                           placeholder="YYYY-MM-DD">
+                                </div>
+                            </div>
 
-      /* ==========================
-         CALCULAR REQUERIMIENTOS
-      ========================== */
-      function calcular() {
-        if (!prodSel) {
-          alertMsg('Selecciona primero un producto compuesto.');
-          return;
-        }
-        const cant = parseFloat($('#txtCantidad').val() || '0');
-        if (!(cant > 0)) {
-          alertMsg('Captura una cantidad a producir válida.');
-          return;
-        }
+                            <div class="row g-2 mt-2">
+                                <div class="col-md-4 col-sm-6 d-grid mb-1">
+                                    <button type="button" class="btn btn-primary btn-sm"
+                                            onclick="ReloadGrid();">
+                                        <i class="fa fa-search me-1"></i> Aplicar filtros
+                                    </button>
+                                </div>
 
-        const zona = $('#selZona').val();
-        const bl = $('#selBL').val();
+                                <div class="col-md-4 col-sm-6 d-grid mb-1">
+                                    <button type="button" id="btnLimpiarFiltros"
+                                            class="btn btn-light btn-sm border">
+                                        <i class="fa fa-eraser me-1"></i> Limpiar filtros
+                                    </button>
+                                </div>
 
-        $.post('orden_produccion.php', {
-          op: 'calc_requerimientos',
-          producto: prodSel,
-          cantidad: cant,
-          cve_almac: zona,
-          idy_ubica: bl,
-          debug_stock: 1
-        }, function (r) {
-          console.log('DEBUG calc_requerimientos:', r.debug_stock || {});
-          if (!r.ok) {
-            alertMsg(r.error || 'Error al calcular requerimientos');
-            return;
-          }
+                                <div class="col-md-4 text-md-end text-start mb-1">
+                                    <button type="button" id="btnExportarPendientes"
+                                            class="btn btn-outline-secondary btn-sm">
+                                        <i class="fa fa-file-excel-o me-1"></i> Exportar OT pendientes
+                                    </button>
+                                </div>
+                            </div>
 
-          const det = r.detalles || [];
+                        </div><!-- accordion-body -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-          if (dtComp) {
-            dtComp.clear().destroy();
-            $('#tblComponentes tbody').empty();
-          }
+    <!-- KPIs -->
+    <div class="row mb-3 g-2">
+        <div class="col-md-3 col-sm-6">
+            <div class="ap-card-kpi">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="ap-kpi-title">OT pendientes</div>
+                        <div class="ap-kpi-value" id="kpi_ot_pendientes">0</div>
+                    </div>
+                    <i class="fa fa-clock-o"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="ap-card-kpi">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="ap-kpi-title">OT en producción</div>
+                        <div class="ap-kpi-value" id="kpi_en_produccion">0</div>
+                    </div>
+                    <i class="fa fa-industry"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="ap-card-kpi">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="ap-kpi-title">OT terminadas</div>
+                        <div class="ap-kpi-value" id="kpi_terminadas">0</div>
+                    </div>
+                    <i class="fa fa-check-circle"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="ap-card-kpi">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="ap-kpi-title">OT canceladas</div>
+                        <div class="ap-kpi-value" id="kpi_canceladas">0</div>
+                    </div>
+                    <i class="fa fa-times-circle"></i>
+                </div>
+            </div>
+        </div>
+    </div>
 
-          det.forEach(d => {
-            $('#tblComponentes tbody').append(
-              `<tr>
-             <td>${d.componente}</td>
-             <td>${d.descripcion || ''}</td>
-             <td>${d.umed || ''}</td>
-             <td class="dt-right">${d.cantidad_por_uni}</td>
-             <td class="dt-right">${d.cantidad_total}</td>
-             <td class="dt-right">${d.cantidad_solic}</td>
-             <td class="dt-right">${d.stock_bl}</td>
-           </tr>`
-            );
-          });
+    <!-- GRID -->
+    <div class="row">
+        <div class="col-12">
+            <div class="ap-card-grid">
+                <div class="ap-card-grid-header">
+                    <div class="fw-semibold text-secondary">
+                        Órdenes de Producción
+                    </div>
+                </div>
+                <div class="ap-card-grid-body">
+                    <div class="table-responsive">
+                        <table id="grid-table"
+                               class="table table-striped table-bordered table-hover w-100">
+                            <thead class="table-light">
+                            <tr>
+                                <th>Acciones</th>
+                                <th>Fecha OT</th>
+                                <th>Hora OT</th>
+                                <th>Folio OT</th>
+                                <th>Pedido</th>
+                                <th>Clave Artículo</th>
+                                <th>Descripción</th>
+                                <th>Lote</th>
+                                <th>Caducidad</th>
+                                <th>Cantidad</th>
+                                <th>Cantidad Producida</th>
+                                <th>Usuario</th>
+                                <th>Fecha Compromiso</th>
+                                <th>Status</th>
+                                <th>Fecha Inicio</th>
+                                <th>Hora Inicio</th>
+                                <th>Fecha Fin</th>
+                                <th>Hora Fin</th>
+                                <th>Proveedor</th>
+                                <th>Status OT</th>
+                                <th>Almacén</th>
+                                <th>Zona Almacén</th>
+                                <th>Traslado</th>
+                                <th>Área Prod.</th>
+                                <th>Palletizado</th>
+                                <th>Documentos</th>
+                                <th>Tipo OT</th>
+                            </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-          dtComp = new DataTable('#tblComponentes', {
-            paging: false,
-            searching: false,
-            info: false,
-            order: [[0, 'asc']]
-          });
+</div>
 
-          // resumen
-          $('#lblProd').text($('#txtProdSel').val() + ' — ' + ($('#txtProdDesc').val() || ''));
-          $('#lblCant').text(cant);
-          $('#lblFecOT').text($('#fecOT').val());
-          $('#lblFecComp').text($('#fecComp').val());
-          $('#lblBL').text($('#selBL option:selected').text() || '');
-          $('#resCabecera').show();
+<!-- JS -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-          $('#btnCsv').prop('disabled', det.length === 0);
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-        }, 'json');
-      }
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/colreorder/1.7.0/js/dataTables.colReorder.min.js"></script>
 
-      $('#btnCalc').on('click', calcular);
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-      /* ==========================
-         EXPORTAR CSV (simple, solo front)
-      ========================== */
-      $('#btnCsv').on('click', function () {
-        if (!dtComp) {
-          alertMsg('No hay datos para exportar.');
-          return;
-        }
-        let csv = 'Componente,Descripcion,UMed,Cantidad_por_unidad,Cantidad_total,Cantidad_solicitada,Stock_BL\n';
-        $('#tblComponentes tbody tr').each(function () {
-          const tds = $(this).find('td').map(function () { return $(this).text().trim(); }).get();
-          csv += tds.map(v => `"${v.replace(/"/g, '""')}"`).join(',') + "\n";
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+
+<script>
+    const API_FILTROS     = "../api/filtros_assistpro.php";
+    const API_MANUFACTURA = "../api/api_manufactura.php";
+
+    let AP_PROVEEDORES = [];
+    let tablaOT        = null;
+
+    flatpickr(".flatpickr", {
+        locale: "es",
+        dateFormat: "Y-m-d",
+        allowInput: true
+    });
+
+    function getSection(resp, key) {
+        if (!resp) return [];
+        if (resp[key] && Array.isArray(resp[key])) return resp[key];
+        if (resp.data && resp.data[key] && Array.isArray(resp.data[key])) return resp.data[key];
+        return [];
+    }
+
+    function cargarFiltrosDesdeApi() {
+        $.ajax({
+            url: API_FILTROS,
+            type: "GET",
+            dataType: "json",
+            data: { secciones: "empresas,proveedores" }
+        }).done(function(resp){
+            const empresas    = getSection(resp, 'empresas');
+            const proveedores = getSection(resp, 'proveedores');
+
+            const $empresa = $("#empresa");
+            $empresa.empty().append('<option value="">Seleccione empresa...</option>');
+            empresas.forEach(function(e){
+                const id    = e.cve_cia || e.Cve_Cia || e.id || e.Empresa || e.empresa_id;
+                const desc  = e.des_cia || e.Des_cia || e.Des_Cia || e.razon_social || e.nombre || e.Nombre;
+                const clave = e.clave_empresa || e.ClaveEmpresa || e.clave || e.Clave;
+                if (!id) return;
+                let text = desc || '';
+                if (clave) text = text ? text + ' (' + clave + ')' : clave;
+                $empresa.append($("<option>", { value: id, text: text }));
+            });
+
+            AP_PROVEEDORES = proveedores;
+            rellenarProveedores();
+        }).fail(function(err){
+            console.error("Error filtros empresas/proveedores", err);
         });
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = 'OT_componentes.csv';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      });
+    }
 
-    })();
-  </script>
+    function cargarAlmacenesPorEmpresa() {
+        const empresaSel = $("#empresa").val();
+        const $alm       = $("#almacen");
+        $alm.empty().append('<option value="">Seleccione almacén...</option>');
+        if (!empresaSel) {
+            $alm.trigger("change.select2");
+            return;
+        }
+        $.ajax({
+            url: API_FILTROS,
+            type: "POST",
+            dataType: "json",
+            data: { secciones: "almacenes", empresa: empresaSel }
+        }).done(function(resp){
+            const almacenes = getSection(resp, 'almacenes');
+            almacenes.forEach(function(a){
+                const value = a.clave_almacen || a.cve_almac || a.clave || a.id;
+                const text  = a.des_almac     || a.nombre   || a.descripcion || value;
+                if (!value) return;
+                $alm.append($("<option>", { value: value, text: text }));
+            });
+            $alm.trigger("change.select2");
+        }).fail(function(err){
+            console.error("Error filtros almacenes", err);
+            Swal.fire('Error','No se pudieron cargar los almacenes','error');
+        });
+    }
+
+    function rellenarProveedores() {
+        const $prov = $("#Proveedr");
+        $prov.empty().append('<option value="">Seleccione proveedor...</option>');
+        AP_PROVEEDORES.forEach(function(p){
+            const id    = p.ID_Proveedor || p.Id_Proveedor || p.id || p.ID_Prov;
+            const clave = p.cve_proveedor || p.Cve_Prov || p.cve || p.Cve_prov;
+            const razon = p.RazonSocial || p.razonsocial || p.Nombre || p.nombre;
+            if (!id && !razon && !clave) return;
+            let text = razon || '';
+            if (clave) text = text ? text + ' (' + clave + ')' : clave;
+            if (!text && id) text = "Proveedor " + id;
+            $prov.append($("<option>", { value: id, text: text }));
+        });
+        $prov.trigger("change.select2");
+    }
+
+    function limpiarFiltros() {
+        $("#empresa").val("").trigger("change.select2");
+        $("#almacen").val("").trigger("change.select2");
+        $("#Proveedr").val("").trigger("change.select2");
+        $("#statusOT").val("");
+        $("#criteriob").val("");
+        $("#criteriobLP").val("");
+        $("#fechai").val("");
+        $("#fechaf").val("");
+    }
+
+    function exportarPendientes() {
+        Swal.fire({
+            icon: 'info',
+            title: 'Exportar OT pendientes',
+            text: 'Función de exportación pendiente de implementar.'
+        });
+    }
+
+    function ReloadGrid() {
+        if (tablaOT) tablaOT.ajax.reload(null, true);
+    }
+
+    $(document).ready(function () {
+        $('.select2').select2({ theme: "bootstrap-5", width: '100%' });
+
+        cargarFiltrosDesdeApi();
+
+        $("#empresa").on("change", function(){
+            cargarAlmacenesPorEmpresa();
+            ReloadGrid();
+        });
+
+        $("#almacen, #Proveedr, #statusOT").on("change", function(){
+            ReloadGrid();
+        });
+
+        $("#btnLimpiarFiltros").on("click", function(){
+            limpiarFiltros();
+            ReloadGrid();
+        });
+
+        $("#btnExportarPendientes").on("click", exportarPendientes);
+
+        tablaOT = $('#grid-table').DataTable({
+            pageLength: 25,
+            lengthMenu: [[25, 50, 100], [25, 50, 100]],
+            responsive: true,
+            scrollX: true,
+            scrollY: "420px",
+            processing: true,
+            serverSide: true,
+            paging: true,
+            ordering: false,
+            searching: false,
+            colReorder: true,
+            deferRender: true,
+            language: {
+                url: "https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json"
+            },
+            ajax: {
+                url: API_MANUFACTURA,
+                type: "POST",
+                data: function (d) {
+                    d.action      = 'list';
+                    d.empresa     = $("#empresa").val();
+                    d.almacen     = $("#almacen").val();
+                    d.Proveedor   = $("#Proveedr").val();
+                    d.statusOT    = $("#statusOT").val();
+                    d.criterio    = $("#criteriob").val();
+                    d.criterioLP  = $("#criteriobLP").val();
+                    d.fechaInicio = $("#fechai").val();
+                    d.fechaFin    = $("#fechaf").val();
+                },
+                dataSrc: function (json) {
+                    if (!json || json.ok === false) {
+                        let msg = (json && json.error) ? json.error : 'Error en la API de manufactura.';
+                        Swal.fire('Error', msg, 'error');
+                        return [];
+                    }
+                    const rows = json.data || [];
+                    return rows;
+                },
+                error: function (xhr) {
+                    let msg = 'Error al cargar órdenes de producción.';
+                    try {
+                        const res = JSON.parse(xhr.responseText);
+                        if (res && res.error) msg = res.error;
+                    } catch (e) {}
+                    Swal.fire('Error', msg, 'error');
+                }
+            },
+            columns: [
+                { data: 'acciones',           orderable: false, searchable: false, className: 'text-center' },
+                { data: 'fechaOt' },
+                { data: 'horaOt' },
+                { data: 'folioOt' },
+                { data: 'pedidoFolio' },
+                { data: 'articuloClave' },
+                { data: 'articuloDescripcion' },
+                { data: 'lote' },
+                { data: 'caducidad' },
+                { data: 'cantidad',          className: 'text-end' },
+                { data: 'cantidadProducida', className: 'text-end' },
+                { data: 'usuario' },
+                { data: 'fechaCompromiso' },
+                { data: 'status' },
+                { data: 'fechaInicio' },
+                { data: 'horaInicio' },
+                { data: 'fechaFin' },
+                { data: 'horaFin' },
+                { data: 'proveedorNombre' },
+                { data: 'statusOt' },
+                { data: 'almacenClave' },
+                { data: 'zonaAlmacen' },
+                { data: 'traslado' },
+                { data: 'areaProduccion' },
+                { data: 'palletizado' },
+                { data: 'documentos' },
+                { data: 'tipoOt' }
+            ]
+        });
+    });
+</script>
+
+<?php
+require_once __DIR__ . '/../bi/_menu_global_end.php';
+?>
 </body>
-
 </html>
-<?php include __DIR__ . '/../bi/_menu_global_end.php'; ?>

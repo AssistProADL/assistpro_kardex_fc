@@ -540,23 +540,24 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 </div>
 
 <script>
-    const api = '../api/api_cat_gpo_clasificacion.php';
-    let dataCache=[], verInactivos=0;
+    const api = '../api/clasificacion.php';
+    const apiAlmacenes = '../api/filtros_almacenes.php';
+
+    let dataCache = [], verInactivos = 0;
     let paginaActual = 1;
     const filasPorPagina = 25;
 
-
     /* ================== ALERTAS ================== */
     function apAlert(tipo, msg){
-        const h=document.getElementById('apAlertHeader');
-        const t=document.getElementById('apAlertTitle');
-        const m=document.getElementById('apAlertMsg');
-        h.className='ap-modal-header';
-        if(tipo==='success'){h.classList.add('bg-success');t.innerText='Éxito'}
-        else if(tipo==='error'){h.classList.add('bg-danger');t.innerText='Error'}
-        else if(tipo==='warning'){h.classList.add('bg-warning');t.innerText='Atención'}
-        else{h.classList.add('bg-info');t.innerText='Aviso'}
-        m.innerText=msg;
+        const h = document.getElementById('apAlertHeader');
+        const t = document.getElementById('apAlertTitle');
+        const m = document.getElementById('apAlertMsg');
+        h.className = 'ap-modal-header';
+        if(tipo === 'success'){ h.classList.add('bg-success'); t.innerText = 'Éxito'; }
+        else if(tipo === 'error'){ h.classList.add('bg-danger'); t.innerText = 'Error'; }
+        else if(tipo === 'warning'){ h.classList.add('bg-warning'); t.innerText = 'Atención'; }
+        else{ h.classList.add('bg-info'); t.innerText = 'Aviso'; }
+        m.innerText = msg;
         mdlAlert.classList.add('show');
     }
     function cerrarApAlert(){ mdlAlert.classList.remove('show'); }
@@ -565,24 +566,17 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     function mostrarModalImportar(){ mdlImport.classList.add('show'); }
     function cerrarModalImportar(){
         mdlImport.classList.remove('show');
-        fileCsvImport.value='';
-        csvPreviewWrapImport.style.display='none';
+        fileCsvImport.value = '';
+        csvPreviewWrapImport.style.display = 'none';
     }
-    function descargarLayoutImport(){
 
+    function descargarLayoutImport(){
         let csv =
             "sep=;\r\n" +
             "Clave Clasificación;Grupo de Artículo;Descripción;Almacén;Múltiplo;Incluye\r\n";
 
-        // Convertir a UTF-16 LE (Excel compatible)
-        const utf16 = new Uint16Array(
-            Array.from(csv).map(c => c.charCodeAt(0))
-        );
-
-        const blob = new Blob(
-            [utf16],
-            { type: 'text/csv;charset=utf-16le;' }
-        );
+        const utf16 = new Uint16Array(Array.from(csv).map(c => c.charCodeAt(0)));
+        const blob = new Blob([utf16], { type: 'text/csv;charset=utf-16le;' });
 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -593,32 +587,40 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
+
     function previsualizarCsvImport(){
-        const f=fileCsvImport.files[0]; if(!f) return;
-        const r=new FileReader();
-        r.onload=e=>{
-            const l=e.target.result.split(/\r?\n/).filter(x=>x.trim());
-            const d=l[0].includes(';')?';':',';
-            csvHeadImport.innerHTML='<tr>'+l[0].split(d).map(h=>`<th>${h}</th>`).join('')+'</tr>';
-            csvBodyImport.innerHTML=l.slice(1,6).map(r=>'<tr>'+r.split(d).map(c=>`<td>${c}</td>`).join('')+'</tr>').join('');
-            csvPreviewWrapImport.style.display='block';
+        const f = fileCsvImport.files[0];
+        if(!f) return;
+
+        const r = new FileReader();
+        r.onload = e => {
+            const l = e.target.result.split(/\r?\n/).filter(x => x.trim());
+            const d = l[0].includes(';') ? ';' : ',';
+            csvHeadImport.innerHTML =
+                '<tr>' + l[0].split(d).map(h => `<th>${h}</th>`).join('') + '</tr>';
+            csvBodyImport.innerHTML =
+                l.slice(1,6).map(r =>
+                    '<tr>' + r.split(d).map(c => `<td>${c}</td>`).join('') + '</tr>'
+                ).join('');
+            csvPreviewWrapImport.style.display = 'block';
         };
         r.readAsText(f);
     }
+
     function importarCsvImport(){
-        const f=fileCsvImport.files[0];
+        const f = fileCsvImport.files[0];
         if(!f) return apAlert('warning','Selecciona un archivo CSV');
 
-        const r=new FileReader();
-        r.onload=e=>{
-            const lines=e.target.result.split(/\r?\n/).filter(l=>l.trim());
-            const d=lines[0].includes(';')?';':',';
-            const data=lines.slice(1);
-            const reqs=[];
+        const r = new FileReader();
+        r.onload = e => {
+            const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
+            const d = lines[0].includes(';') ? ';' : ',';
+            const data = lines.slice(1);
+            const reqs = [];
 
-            data.forEach(l=>{
-                const c=l.split(d);
-                if(!c[0]||!c[2]) return;
+            data.forEach(l => {
+                const c = l.split(d);
+                if(!c[0] || !c[2]) return;
                 reqs.push(fetch(api,{
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
@@ -647,57 +649,71 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
     /* ================== NUEVO / EDITAR ================== */
     function nuevoRegistro(){
-        limpiarNuevo(); edit_id.value='';
-        tituloModalNuevo.innerHTML='<i class="fa fa-plus"></i> Nueva Clasificación';
+        limpiarNuevo();
+        edit_id.value = '';
+        cargarAlmacenes(); // 👈 AQUÍ se consume el API de almacenes
+        tituloModalNuevo.innerHTML = '<i class="fa fa-plus"></i> Nueva Clasificación';
         mdlNuevo.classList.add('show');
     }
+
     function editar(id){
-        const r=dataCache.find(x=>x.id==id); if(!r) return;
-        edit_id.value=r.id;
-        n_cve_sgpoart.value=r.cve_sgpoart;
-        n_cve_gpoart.value=r.cve_gpoart;
-        n_des_sgpoart.value=r.des_sgpoart;
-        n_id_almacen.value=r.id_almacen;
-        n_Num_Multiplo.value=r.Num_Multiplo;
-        n_Ban_Incluye.checked=r.Ban_Incluye==1;
-        tituloModalNuevo.innerHTML='<i class="fa fa-edit"></i> Editar Clasificación';
+        const r = dataCache.find(x => x.id == id);
+        if(!r) return;
+
+        edit_id.value = r.id;
+        n_cve_sgpoart.value = r.cve_sgpoart;
+        n_cve_gpoart.value = r.cve_gpoart;
+        n_des_sgpoart.value = r.des_sgpoart;
+        n_Num_Multiplo.value = r.Num_Multiplo;
+        n_Ban_Incluye.checked = r.Ban_Incluye == 1;
+
+        cargarAlmacenes(r.id_almacen); // 👈 AQUÍ se consume el API de almacenes
+
+        tituloModalNuevo.innerHTML = '<i class="fa fa-edit"></i> Editar Clasificación';
         mdlNuevo.classList.add('show');
     }
+
     function cerrarModalNuevo(){ mdlNuevo.classList.remove('show'); }
+
     function limpiarNuevo(){
-        n_cve_sgpoart.value=''; n_cve_gpoart.value='';
-        n_des_sgpoart.value=''; n_id_almacen.value='';
-        n_Num_Multiplo.value=0; n_Ban_Incluye.checked=false;
+        n_cve_sgpoart.value = '';
+        n_cve_gpoart.value = '';
+        n_des_sgpoart.value = '';
+        n_id_almacen.value = '';
+        n_Num_Multiplo.value = 0;
+        n_Ban_Incluye.checked = false;
     }
+
     function guardarNuevo(){
-        if(!n_cve_sgpoart.value||!n_des_sgpoart.value)
+        if(!n_cve_sgpoart.value || !n_des_sgpoart.value)
             return apAlert('warning','Clave y descripción son obligatorias');
 
-        const action=edit_id.value?'update':'create';
+        const action = edit_id.value ? 'update' : 'create';
 
         fetch(api,{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({
-                action, id:edit_id.value,
-                cve_sgpoart:n_cve_sgpoart.value,
-                cve_gpoart:n_cve_gpoart.value,
-                des_sgpoart:n_des_sgpoart.value,
-                id_almacen:n_id_almacen.value,
-                Num_Multiplo:n_Num_Multiplo.value,
-                Ban_Incluye:n_Ban_Incluye.checked?1:0
+                action,
+                id: edit_id.value,
+                cve_sgpoart: n_cve_sgpoart.value,
+                cve_gpoart: n_cve_gpoart.value,
+                des_sgpoart: n_des_sgpoart.value,
+                id_almacen: n_id_almacen.value,
+                Num_Multiplo: n_Num_Multiplo.value,
+                Ban_Incluye: n_Ban_Incluye.checked ? 1 : 0
             })
         })
-            .then(r=>r.json())
-            .then(resp=>{
+            .then(r => r.json())
+            .then(resp => {
                 if(resp.success){
                     apAlert('success', edit_id.value
                         ? 'Registro actualizado correctamente'
                         : 'Registro agregado correctamente');
                     cerrarModalNuevo();
                     cargarDatos();
-                }else{
-                    apAlert('error', resp.error||'No se pudo guardar');
+                } else {
+                    apAlert('error', resp.error || 'No se pudo guardar');
                 }
             })
             .catch(()=> apAlert('error','Error de comunicación con el servidor'));
@@ -706,61 +722,91 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     /* ================== GRID ================== */
     function cargarDatos(){
         fetch(`${api}?inactivos=${verInactivos}`)
-            .then(r=>r.json())
-            .then(d=>{ dataCache=d.data||[]; renderGrid(dataCache); });
+            .then(r => r.json())
+            .then(d => {
+                dataCache = d.data || [];
+                renderGrid(dataCache);
+            });
     }
-    function renderGrid(d){
 
+    function renderGrid(d){
         const inicio = (paginaActual - 1) * filasPorPagina;
         const fin = inicio + filasPorPagina;
         const datosPagina = d.slice(inicio, fin);
 
-        gridDatos.innerHTML = datosPagina.map(r=>`
-        <tr>
-            <td>
-                <button class="btn btn-warning btn-sm" onclick="editar(${r.id})">
-                    <i class="fa fa-edit"></i>
-                </button>
-                ${r.Activo==1
+        gridDatos.innerHTML = datosPagina.map(r => `
+            <tr>
+                <td>
+                    <button class="btn btn-warning btn-sm" onclick="editar(${r.id})">
+                        <i class="fa fa-edit"></i>
+                    </button>
+                    ${r.Activo==1
             ? `<button class="btn btn-danger btn-sm" onclick="desactivar(${r.id})">
-                            <i class="fa fa-trash"></i>
-                       </button>`
+                               <i class="fa fa-trash"></i>
+                           </button>`
             : `<button class="btn btn-success btn-sm" onclick="restaurar(${r.id})">
-                            <i class="fa fa-undo"></i>
-                       </button>`}
-            </td>
-            <td>${r.cve_sgpoart}</td>
-            <td>${r.cve_gpoart||''}</td>
-            <td>${r.des_sgpoart||''}</td>
-            <td>${r.id_almacen||''}</td>
-            <td>${r.Num_Multiplo}</td>
-            <td>${r.Ban_Incluye==1?'Sí':'No'}</td>
-            <td>${r.Activo==1?'Activo':'Inactivo'}</td>
-        </tr>`).join('');
+                               <i class="fa fa-undo"></i>
+                           </button>`}
+                </td>
+                <td>${r.cve_sgpoart}</td>
+                <td>${r.cve_gpoart||''}</td>
+                <td>${r.des_sgpoart||''}</td>
+                <td>${r.id_almacen||''}</td>
+                <td>${r.Num_Multiplo}</td>
+                <td>${r.Ban_Incluye==1?'Sí':'No'}</td>
+                <td>${r.Activo==1?'Activo':'Inactivo'}</td>
+            </tr>
+        `).join('');
 
         renderPaginador(d.length);
     }
 
     function buscar(){
-        const q=txtBuscar.value.toLowerCase();
-        renderGrid(dataCache.filter(r=>r.cve_sgpoart.toLowerCase().includes(q)));
+        const q = txtBuscar.value.toLowerCase();
+        renderGrid(dataCache.filter(r => r.cve_sgpoart.toLowerCase().includes(q)));
     }
-    function toggleInactivos(){ verInactivos=verInactivos?0:1; cargarDatos(); }
+    function toggleInactivos(){ verInactivos = verInactivos ? 0 : 1; cargarDatos(); }
 
-    function exportarCSV(){ window.location=`${api}?action=export`; }
+    function exportarCSV(){ window.location = `${api}?action=export`; }
+
     function desactivar(id){
         fetch(api,{method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({action:'delete',id})})
             .then(()=>{ cargarDatos(); apAlert('success','Registro desactivado'); });
     }
+
     function restaurar(id){
         fetch(api,{method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({action:'restore',id})})
             .then(()=>{ cargarDatos(); apAlert('success','Registro recuperado'); });
     }
 
+    /* ================== ALMACENES ================== */
+    function cargarAlmacenes(selectedId = null){
+        const select = document.getElementById('n_id_almacen');
+        if (!select) return;
+
+        fetch(apiAlmacenes)
+            .then(r => r.json())
+            .then(data => {
+                if (!Array.isArray(data)) {
+                    select.innerHTML = '<option value="">Sin almacenes disponibles</option>';
+                    return;
+                }
+
+                select.innerHTML =
+                    '<option value="">Seleccione un almacén</option>' +
+                    data.map(a =>
+                        `<option value="${a.id}" ${
+                            String(selectedId) === String(a.id) ? 'selected' : ''
+                        }>${a.nombre}</option>`
+                    ).join('');
+            })
+            .catch(() => {
+                select.innerHTML = '<option value="">Error al cargar almacenes</option>';
+            });
+    }
+
     cargarDatos();
-
-
-
 </script>
+
