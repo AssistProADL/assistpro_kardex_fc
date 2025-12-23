@@ -49,9 +49,9 @@ if ($op) {
       $q = trim($_POST['q'] ?? $_GET['q'] ?? '');
       $p = [];
       $sql = "
-        SELECT a.cve_articulo, a.des_articulo, a.id_umed AS unidadMedida, u.cve_umed AS cve_unidad
+        SELECT a.cve_articulo, a.des_articulo, a.unidadMedida, u.cve_umed AS cve_unidad
         FROM c_articulo a
-        LEFT JOIN c_unimed u ON u.id_umed = a.id_umed
+        LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida
         WHERE COALESCE(a.Compuesto,'N')='S'
       ";
       if ($q !== '') {
@@ -70,7 +70,7 @@ if ($op) {
       $padre = trim($_POST['padre'] ?? $_GET['padre'] ?? '');
       if ($padre === '')
         throw new Exception('Artículo requerido');
-      $r = db_row("SELECT a.cve_articulo, a.des_articulo, a.id_umed AS unidadMedida, u.cve_umed AS cve_unidad FROM c_articulo a LEFT JOIN c_unimed u ON u.id_umed = a.id_umed WHERE a.cve_articulo = ?", [$padre]);
+      $r = db_row("SELECT a.cve_articulo, a.des_articulo, a.unidadMedida, u.cve_umed AS cve_unidad FROM c_articulo a LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida WHERE a.cve_articulo = ?", [$padre]);
       if (!$r)
         throw new Exception('Artículo no encontrado');
       echo json_encode(['ok' => true, 'producto' => $r]);
@@ -87,12 +87,12 @@ if ($op) {
           c.Cve_Articulo AS componente,
           a.des_articulo AS descripcion,
           c.Cantidad AS cantidad,
-          COALESCE(c.cve_umed, a.id_umed) AS unidad,
+          COALESCE(c.cve_umed, a.unidadMedida) AS unidad,
           u.cve_umed AS cve_unidad,
           COALESCE(c.Etapa,'') AS etapa
         FROM t_artcompuesto c
         LEFT JOIN c_articulo a ON a.cve_articulo = c.Cve_Articulo
-        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.id_umed)
+        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.unidadMedida)
         WHERE c.Cve_ArtComponente = ?
         ORDER BY c.Cve_Articulo
       ";
@@ -114,17 +114,17 @@ if ($op) {
           c.Cve_Articulo AS componente,
           a.des_articulo AS descripcion,
           c.Cantidad AS cantidad,
-          COALESCE(c.cve_umed, a.id_umed) AS unidad,
+          COALESCE(c.cve_umed, a.unidadMedida) AS unidad,
           u.cve_umed AS cve_unidad,
           COALESCE(c.Etapa,'') AS etapa
         FROM t_artcompuesto c
         LEFT JOIN c_articulo a ON a.cve_articulo = c.Cve_Articulo
-        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.id_umed)
+        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.unidadMedida)
         WHERE c.Cve_ArtComponente = ?
         ORDER BY c.Cve_Articulo
       ", [$padre]);
 
-      $producto = db_row("SELECT a.cve_articulo, a.des_articulo, a.id_umed AS unidadMedida, u.cve_umed AS cve_unidad FROM c_articulo a LEFT JOIN c_unimed u ON u.id_umed = a.id_umed WHERE a.cve_articulo = ?", [$padre]);
+      $producto = db_row("SELECT a.cve_articulo, a.des_articulo, a.unidadMedida, u.cve_umed AS cve_unidad FROM c_articulo a LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida WHERE a.cve_articulo = ?", [$padre]);
 
       $filename = "BOM_{$padre}_" . date('Ymd_His') . ".csv";
       header('Content-Type: text/csv; charset=utf-8');
@@ -149,18 +149,18 @@ if ($op) {
       if ($padre === '')
         throw new Exception('Artículo compuesto requerido');
 
-      $producto = db_row("SELECT a.cve_articulo, a.des_articulo, a.id_umed AS unidadMedida, u.cve_umed AS cve_unidad FROM c_articulo a LEFT JOIN c_unimed u ON u.id_umed = a.id_umed WHERE a.cve_articulo = ?", [$padre]);
+      $producto = db_row("SELECT a.cve_articulo, a.des_articulo, a.unidadMedida, u.cve_umed AS cve_unidad FROM c_articulo a LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida WHERE a.cve_articulo = ?", [$padre]);
       $rows = db_all("
         SELECT
           c.Cve_Articulo AS componente,
           a.des_articulo AS descripcion,
           c.Cantidad AS cantidad,
-          COALESCE(c.cve_umed, a.id_umed) AS unidad,
+          COALESCE(c.cve_umed, a.unidadMedida) AS unidad,
           u.cve_umed AS cve_unidad,
           COALESCE(c.Etapa,'') AS etapa
         FROM t_artcompuesto c
         LEFT JOIN c_articulo a ON a.cve_articulo = c.Cve_Articulo
-        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.id_umed)
+        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.unidadMedida)
         WHERE c.Cve_ArtComponente = ?
         ORDER BY c.Cve_Articulo
       ", [$padre]);
@@ -392,7 +392,7 @@ if ($op) {
 
           $countLines = 0;
           foreach ($items as [$hijo, $cantidad]) {
-            $umed = db_val("SELECT id_umed FROM c_articulo WHERE cve_articulo = ?", [$hijo]);
+            $umed = db_val("SELECT unidadMedida FROM c_articulo WHERE cve_articulo = ?", [$hijo]);
 
             // Insertar: Cve_ArtComponente = producto final, Cve_Articulo = componente
             dbq("INSERT INTO t_artcompuesto

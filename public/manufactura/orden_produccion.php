@@ -168,10 +168,10 @@ if ($op) {
         SELECT
           a.cve_articulo,
           a.des_articulo,
-          a.id_umed AS unidadMedida,
+          a.unidadMedida,
           u.cve_umed AS cve_unidad
         FROM c_articulo a
-        LEFT JOIN c_unimed u ON u.id_umed = a.id_umed
+        LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida
         WHERE COALESCE(a.Compuesto,'N')='S'
           AND (a.cve_articulo LIKE ? OR a.des_articulo LIKE ?)
         ORDER BY a.des_articulo
@@ -197,10 +197,10 @@ if ($op) {
         SELECT
           a.cve_articulo,
           a.des_articulo,
-          a.id_umed AS unidadMedida,
+          a.unidadMedida,
           u.cve_umed AS cve_unidad
         FROM c_articulo a
-        LEFT JOIN c_unimed u ON u.id_umed = a.id_umed
+        LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida
         WHERE a.cve_articulo = ?
           AND COALESCE(a.Compuesto,'N')='S'
       ", [$cve]);
@@ -231,9 +231,9 @@ if ($op) {
                 throw new Exception('BL Manufactura requerido.');
 
             $prod = db_row("
-        SELECT a.cve_articulo, a.des_articulo, a.id_umed AS unidadMedida, u.cve_umed AS cve_unidad
+        SELECT a.cve_articulo, a.des_articulo, a.unidadMedida, u.cve_umed AS cve_unidad
         FROM c_articulo a
-        LEFT JOIN c_unimed u ON u.id_umed = a.id_umed
+        LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida
         WHERE a.cve_articulo = ?
       ", [$padre]);
             if (!$prod)
@@ -243,13 +243,13 @@ if ($op) {
         SELECT
           c.Cve_Articulo AS componente,
           a.des_articulo AS descripcion,
-          COALESCE(c.cve_umed, a.id_umed) AS unidadMedida,
+          COALESCE(c.cve_umed, a.unidadMedida) AS unidadMedida,
           u.cve_umed AS cve_unidad,
           COALESCE(c.Etapa,'') AS etapa,
           c.Cantidad AS cantidad_por_unidad
         FROM t_artcompuesto c
         LEFT JOIN c_articulo a ON a.cve_articulo = c.Cve_Articulo
-        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.id_umed)
+        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.unidadMedida)
         WHERE c.Cve_ArtComponente = ?
           AND (c.Activo IS NULL OR c.Activo = 1)
         ORDER BY c.Cve_Articulo
