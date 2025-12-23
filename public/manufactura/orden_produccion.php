@@ -500,7 +500,7 @@ include __DIR__ . '/../bi/_menu_global.php';
                 columns: [
                     { data: 'componente' },
                     { data: 'descripcion' },
-                    { data: 'unidadMedida' },
+                    { data: 'cve_unidad' },
                     { data: 'etapa' },
                     { data: 'cantidad_por_unidad', className: 'dt-right', render: (v) => Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) },
                     { data: 'cantidad_total', className: 'dt-right', render: (v) => Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) },
@@ -589,7 +589,7 @@ include __DIR__ . '/../bi/_menu_global.php';
                     prodSel = r.producto;
                     $('#txtProdSel').val(prodSel.cve_articulo || '');
                     $('#txtProdSelDes').val(prodSel.des_articulo || '');
-                    $('#txtProdSelUmed').val(prodSel.unidadMedida || '');
+                    $('#txtProdSelUmed').val(prodSel.cve_unidad || prodSel.unidadMedida || '');
                     toast('Producto compuesto seleccionado.', 'success');
                 });
             }
