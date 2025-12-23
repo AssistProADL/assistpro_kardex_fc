@@ -90,7 +90,7 @@ if ($op) {
           COALESCE(c.Etapa,'') AS etapa
         FROM t_artcompuesto c
         LEFT JOIN c_articulo a ON a.cve_articulo = c.Cve_Articulo
-        WHERE c.Cve_Articulo = ?
+        WHERE c.Cve_ArtComponente = ?
         ORDER BY c.Cve_Articulo
       ";
       $rows = db_all($sql, [$padre]);
@@ -115,7 +115,7 @@ if ($op) {
           COALESCE(c.Etapa,'') AS etapa
         FROM t_artcompuesto c
         LEFT JOIN c_articulo a ON a.cve_articulo = c.Cve_Articulo
-        WHERE c.Cve_Articulo = ?
+        WHERE c.Cve_ArtComponente = ?
         ORDER BY c.Cve_Articulo
       ", [$padre]);
 
@@ -154,7 +154,7 @@ if ($op) {
           COALESCE(c.Etapa,'') AS etapa
         FROM t_artcompuesto c
         LEFT JOIN c_articulo a ON a.cve_articulo = c.Cve_Articulo
-        WHERE c.Cve_Articulo = ?
+        WHERE c.Cve_ArtComponente = ?
         ORDER BY c.Cve_Articulo
       ", [$padre]);
 
@@ -377,35 +377,29 @@ if ($op) {
       try {
         $has_prod = table_exists('t_artcompuesto');
         $inserted_stg = 0;
-        $inserted_prod = 0;
         $parents_detail = []; // [ ['padre'=>..., 'lineas'=>N], ... ]
 
         foreach ($rowsByParent as $padre => $items) {
-          dbq("DELETE FROM t_artcompuesto WHERE Cve_Articulo=?", [$padre]);
-          if ($has_prod)
-            dbq("DELETE FROM t_artcompuesto WHERE Cve_Articulo=?", [$padre]);
+          // Eliminar componentes existentes del producto compuesto (padre)
+          dbq("DELETE FROM t_artcompuesto WHERE Cve_ArtComponente=?", [$padre]);
 
           $countLines = 0;
           foreach ($items as [$hijo, $cantidad]) {
             $umed = db_val("SELECT unidadMedida FROM c_articulo WHERE cve_articulo = ?", [$hijo]);
 
+            // Insertar: Cve_ArtComponente = producto final, Cve_Articulo = componente
             dbq("INSERT INTO t_artcompuesto
-                   (Cve_Articulo, Cve_ArtComponente, Cantidad, cve_umed, Activo)
+                   (Cve_ArtComponente, Cve_Articulo, Cantidad, cve_umed, Activo)
                  VALUES (?,?,?,?, '1')",
               [$padre, $hijo, $cantidad, $umed]
             );
             $inserted_stg++;
             $countLines++;
-
-            if ($has_prod) {
-              dbq("INSERT INTO t_artcompuesto
-                     (Cve_Articulo, Cve_ArtComponente, Cantidad, cve_umed, Activo)
-                   VALUES (?,?,?,?, '1')",
-                [$padre, $hijo, $cantidad, $umed]
-              );
-              $inserted_prod++;
-            }
           }
+
+          // Marcar el artículo padre como producto compuesto
+          dbq("UPDATE c_articulo SET Compuesto='S' WHERE cve_articulo=?", [$padre]);
+
           $parents_detail[] = ['padre' => $padre, 'lineas' => $countLines];
         }
 
@@ -414,7 +408,6 @@ if ($op) {
           'ok' => true,
           'replaced_parents' => count($rowsByParent),
           'inserted_stg' => $inserted_stg,
-          'inserted_prod' => $inserted_prod,
           'errors' => [],
           'synced_prod' => $has_prod,
           'parents_detail' => $parents_detail
@@ -424,6 +417,7 @@ if ($op) {
       } catch (Throwable $e) {
         if ($pdo->inTransaction())
           $pdo->rollBack();
+        error_log("BOM Import Error: " . $e->getMessage());
         throw $e;
       }
     }
