@@ -165,38 +165,74 @@ $(function(){
 // CARGA EMPRESAS / ALMACENES
 // =============================
 
-function cargarEmpresas(){
-  $('#f_empresa').html('<option value="">Todas</option>');
-  $.getJSON('../api/filtros_empresas.php', function(data){
-    data.forEach(e=>{
-      $('#f_empresa').append(
-        `<option value="${e.cve_cia}">${e.des_cia}</option>`
-      );
-    });
+// =============================
+// CARGA EMPRESA / ALMACENES (filtros_assistpro.php)
+// =============================
+function initFiltros(){
+  // Fechas default: última semana
+  const hoy = new Date();
+  const fin = hoy.toISOString().slice(0,10);
+  const iniDate = new Date(hoy.getTime() - (7*24*60*60*1000));
+  const ini = iniDate.toISOString().slice(0,10);
+  $('#f_fecha_ini').val(ini);
+  $('#f_fecha_fin').val(fin);
+
+  $.getJSON('../api/filtros_assistpro.php', { action:'init', secciones:'empresas,almacenes' }, function(resp){
+    if(!resp || resp.ok !== true){
+      console.error(resp);
+      return;
+    }
+
+    // Empresas
+    const emps = resp.empresas || [];
+    $('#f_empresa').empty();
+    if(emps.length === 1){
+      // Única empresa: default + lock
+      $('#f_empresa').append(`<option value="${emps[0].cve_cia}">${emps[0].des_cia}</option>`);
+      $('#f_empresa').val(emps[0].cve_cia).prop('disabled', true);
+    } else {
+      $('#f_empresa').append('<option value="">Todas</option>');
+      emps.forEach(e=>{
+        $('#f_empresa').append(`<option value="${e.cve_cia}">${e.des_cia}</option>`);
+      });
+    }
+
+    // Almacenes (inicial)
+    pintarAlmacenes(resp.almacenes || []);
+
+    // Si viene buscar por querystring
+    const qs = new URLSearchParams(window.location.search);
+    const buscar = qs.get('buscar') || '';
+    if(buscar){
+      $('#f_buscar').val(buscar);
+    }
+
+    // primera carga grid (con defaults)
+    setTimeout(()=>tablaOT.ajax.reload(), 50);
   });
 }
 
-function cargarAlmacenes(empresa){
+function pintarAlmacenes(lista){
   $('#f_almacen').html('<option value="">Todos</option>');
-  $.getJSON('../api/filtros_almacenes.php?empresa='+empresa, function(data){
-    data.forEach(a=>{
-      $('#f_almacen').append(
-        `<option value="${a.clave}">${a.nombre}</option>`
-      );
-    });
+  (lista || []).forEach(a=>{
+    const clave = a.cve_almac || a.clave || a.clave_almacen || '';
+    const nombre = a.nombre || a.des_almac || '';
+    if(!clave) return;
+    $('#f_almacen').append(`<option value="${clave}">(${clave}) ${nombre}</option>`);
   });
 }
 
 // Inicial
-cargarEmpresas();
-cargarAlmacenes('');
+initFiltros();
 
-// Cambio de empresa
+// Cambio de empresa: recargar almacenes filtrados
 $('#f_empresa').on('change', function(){
-  cargarAlmacenes(this.value);
+  const emp = this.value || '';
+  $.getJSON('../api/filtros_assistpro.php', { action:'init', secciones:'almacenes', empresa: emp }, function(resp){
+    if(!resp || resp.ok !== true){ console.error(resp); return; }
+    pintarAlmacenes(resp.almacenes || []);
+  });
 });
-
-
 tablaOT = $('#grid-table').DataTable({
 serverSide:true,
 processing:true,

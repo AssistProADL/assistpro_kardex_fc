@@ -1,19 +1,19 @@
 <?php
-// //@//@session_start();
+//@//@session_start();
 require_once __DIR__ . '/../../app/db.php';
 $pdo = db_pdo();
 
-/* ============================================================
-   HELPERS
-============================================================ */
+/* --------------------------
+   Helpers locales
+---------------------------*/
 function table_exists($table)
 {
   return (int) db_val("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", [$table]) > 0;
 }
 
-/* ============================================================
+/* --------------------------
    API AJAX
-============================================================ */
+---------------------------*/
 $op = $_POST['op'] ?? $_GET['op'] ?? null;
 if ($op) {
 
@@ -22,106 +22,88 @@ if ($op) {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="layout_bom.csv"');
     echo "producto_compuesto,componente,cantidad\n";
-    echo "1000011321-J1,207013-001-J1,1.0000\n";
-    echo "1000011321-J1,207013-100-J1,1.0000\n";
+    echo "BUL-0001,AG1-CH-105,1.0000\n";
+    echo "BUL-0001,AG1-CH-108,0.5000\n";
+    echo "KIT-XYZ,MP000001,2.0000\n";
     exit;
   }
 
   header('Content-Type: application/json; charset=utf-8');
 
   try {
-
-    /* ---------- KPIs ---------- */
-
-    // Total productos compuestos (usa columna Comp0uesto=S si existe)
+    // KPI: total compuestos
     if ($op === 'kpi_compuestos') {
-      // si tu bandera se llama diferente, ajusta aquí
       $n = (int) db_val("SELECT COUNT(*) FROM c_articulo WHERE COALESCE(Compuesto,'N')='S'");
       echo json_encode(['ok' => true, 'total' => $n]);
       exit;
     }
-
-    // Total artículos
+    // KPI: total artículos
     if ($op === 'kpi_total_articulos') {
       $n = (int) db_val("SELECT COUNT(*) FROM c_articulo");
       echo json_encode(['ok' => true, 'total' => $n]);
       exit;
     }
 
-    /* ---------- BÚSQUEDA DE PRODUCTOS COMPUESTOS ---------- */
-
+    // Buscar producto compuesto (clave/descr)
     if ($op === 'buscar_compuestos') {
       $q = trim($_POST['q'] ?? $_GET['q'] ?? '');
       $p = [];
       $sql = "
-        SELECT
-          cve_articulo,
-          des_articulo,
-          cve_umed AS unidadMedida
-        FROM c_articulo
-        WHERE COALESCE(Compuesto,'N')='S'
+        SELECT a.cve_articulo, a.des_articulo, a.unidadMedida, u.cve_umed AS cve_unidad
+        FROM c_articulo a
+        LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida
+        WHERE COALESCE(a.Compuesto,'N')='S'
       ";
       if ($q !== '') {
-        $sql .= " AND (cve_articulo LIKE ? OR des_articulo LIKE ?) ";
+        $sql .= " AND (a.cve_articulo LIKE ? OR a.des_articulo LIKE ?) ";
         $p[] = "%$q%";
         $p[] = "%$q%";
       }
-      $sql .= " ORDER BY des_articulo LIMIT 20";
+      $sql .= " ORDER BY a.des_articulo LIMIT 20";
       $rows = db_all($sql, $p);
       echo json_encode(['ok' => true, 'data' => $rows]);
       exit;
     }
 
-    /* ---------- DETALLE DE PRODUCTO COMPUESTO ---------- */
-
+    // Encabezado de producto compuesto
     if ($op === 'get_producto') {
       $padre = trim($_POST['padre'] ?? $_GET['padre'] ?? '');
       if ($padre === '')
         throw new Exception('Artículo requerido');
-      $r = db_row("
-        SELECT
-          cve_articulo,
-          des_articulo,
-          cve_umed AS unidadMedida
-        FROM c_articulo
-        WHERE cve_articulo = ?
-      ", [$padre]);
+      $r = db_row("SELECT a.cve_articulo, a.des_articulo, a.unidadMedida, u.cve_umed AS cve_unidad FROM c_articulo a LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida WHERE a.cve_articulo = ?", [$padre]);
       if (!$r)
         throw new Exception('Artículo no encontrado');
       echo json_encode(['ok' => true, 'producto' => $r]);
       exit;
     }
 
-    /* ---------- COMPONENTES DEL BOM ---------- */
-
+    // Componentes del producto compuesto
     if ($op === 'get_componentes') {
       $padre = trim($_POST['padre'] ?? $_GET['padre'] ?? '');
       if ($padre === '')
         throw new Exception('Artículo compuesto requerido');
-
-      // IMPORTANTE: usamos t_artcompuesto + c_articulo
       $sql = "
         SELECT
-          c.Cve_ArtComponente                 AS componente,
-          a.des_articulo                      AS descripcion,
-          c.Cantidad                          AS cantidad,
-          COALESCE(c.cve_umed, a.cve_umed)    AS unidad,
-          COALESCE(c.Etapa,'')                AS etapa
+          c.Cve_Articulo AS componente,
+          a.des_articulo AS descripcion,
+          c.Cantidad AS cantidad,
+          COALESCE(c.cve_umed, a.unidadMedida) AS unidad,
+          u.cve_umed AS cve_unidad,
+          COALESCE(c.Etapa,'') AS etapa
         FROM t_artcompuesto c
-        LEFT JOIN c_articulo a
-               ON a.cve_articulo = c.Cve_ArtComponente
-        WHERE c.Cve_Articulo = ?
-          AND (c.Activo IS NULL OR c.Activo = 1)
-        ORDER BY c.Cve_ArtComponente
+        LEFT JOIN c_articulo a ON a.cve_articulo = c.Cve_Articulo
+        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.unidadMedida)
+        WHERE c.Cve_ArtComponente = ?
+        ORDER BY c.Cve_Articulo
       ";
-
       $rows = db_all($sql, [$padre]);
       echo json_encode(['ok' => true, 'data' => $rows]);
       exit;
     }
 
-    /* ---------- EXPORTAR CSV ---------- */
+    /* ---------- EXPORTACIONES ---------- */
 
+    // Exportar CSV de componentes por padre
     if ($op === 'export_csv') {
       $padre = trim($_GET['padre'] ?? '');
       if ($padre === '')
@@ -129,30 +111,26 @@ if ($op) {
 
       $rows = db_all("
         SELECT
-          c.Cve_ArtComponente                 AS componente,
-          a.des_articulo                      AS descripcion,
-          c.Cantidad                          AS cantidad,
-          COALESCE(c.cve_umed, a.cve_umed)    AS unidad,
-          COALESCE(c.Etapa,'')                AS etapa
+          c.Cve_Articulo AS componente,
+          a.des_articulo AS descripcion,
+          c.Cantidad AS cantidad,
+          COALESCE(c.cve_umed, a.unidadMedida) AS unidad,
+          u.cve_umed AS cve_unidad,
+          COALESCE(c.Etapa,'') AS etapa
         FROM t_artcompuesto c
-        LEFT JOIN c_articulo a
-               ON a.cve_articulo = c.Cve_ArtComponente
-        WHERE c.Cve_Articulo = ?
-          AND (c.Activo IS NULL OR c.Activo = 1)
-        ORDER BY c.Cve_ArtComponente
+        LEFT JOIN c_articulo a ON a.cve_articulo = c.Cve_Articulo
+        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.unidadMedida)
+        WHERE c.Cve_ArtComponente = ?
+        ORDER BY c.Cve_Articulo
       ", [$padre]);
 
-      $producto = db_row("
-        SELECT cve_articulo, des_articulo, cve_umed AS unidadMedida
-        FROM c_articulo
-        WHERE cve_articulo = ?
-      ", [$padre]);
+      $producto = db_row("SELECT a.cve_articulo, a.des_articulo, a.unidadMedida, u.cve_umed AS cve_unidad FROM c_articulo a LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida WHERE a.cve_articulo = ?", [$padre]);
 
       $filename = "BOM_{$padre}_" . date('Ymd_His') . ".csv";
       header('Content-Type: text/csv; charset=utf-8');
       header("Content-Disposition: attachment; filename=\"$filename\"");
       $out = fopen('php://output', 'w');
-      fputcsv($out, ['Producto compuesto', $producto['cve_articulo'] ?? $padre]);
+      fputcsv($out, ['Producto compuesto', $padre]);
       fputcsv($out, ['Descripción', $producto['des_articulo'] ?? '']);
       fputcsv($out, ['UMed', $producto['unidadMedida'] ?? '']);
       fputcsv($out, ['Generado', date('Y-m-d H:i:s')]);
@@ -165,35 +143,29 @@ if ($op) {
       exit;
     }
 
-    /* ---------- EXPORTAR PDF (o HTML) ---------- */
-
+    // Exportar PDF/HTML de componentes por padre (con logo y sello de tiempo)
     if ($op === 'export_pdf') {
       $padre = trim($_GET['padre'] ?? '');
       if ($padre === '')
         throw new Exception('Artículo compuesto requerido');
 
-      $producto = db_row("
-        SELECT cve_articulo, des_articulo, cve_umed AS unidadMedida
-        FROM c_articulo
-        WHERE cve_articulo = ?
-      ", [$padre]);
-
+      $producto = db_row("SELECT a.cve_articulo, a.des_articulo, a.unidadMedida, u.cve_umed AS cve_unidad FROM c_articulo a LEFT JOIN c_unimed u ON u.id_umed = a.unidadMedida WHERE a.cve_articulo = ?", [$padre]);
       $rows = db_all("
         SELECT
-          c.Cve_ArtComponente                 AS componente,
-          a.des_articulo                      AS descripcion,
-          c.Cantidad                          AS cantidad,
-          COALESCE(c.cve_umed, a.cve_umed)    AS unidad,
-          COALESCE(c.Etapa,'')                AS etapa
+          c.Cve_Articulo AS componente,
+          a.des_articulo AS descripcion,
+          c.Cantidad AS cantidad,
+          COALESCE(c.cve_umed, a.unidadMedida) AS unidad,
+          u.cve_umed AS cve_unidad,
+          COALESCE(c.Etapa,'') AS etapa
         FROM t_artcompuesto c
-        LEFT JOIN c_articulo a
-               ON a.cve_articulo = c.Cve_ArtComponente
-        WHERE c.Cve_Articulo = ?
-          AND (c.Activo IS NULL OR c.Activo = 1)
-        ORDER BY c.Cve_ArtComponente
+        LEFT JOIN c_articulo a ON a.cve_articulo = c.Cve_Articulo
+        LEFT JOIN c_unimed u ON u.id_umed = COALESCE(c.cve_umed, a.unidadMedida)
+        WHERE c.Cve_ArtComponente = ?
+        ORDER BY c.Cve_Articulo
       ", [$padre]);
 
-      $logoPath = __DIR__ . '/../../public/assets/logo.png';
+      $logoPath = __DIR__ . '/../../public/assets/logo.png'; // ajusta si tu logo está en otra ruta
       $logoUrl = file_exists($logoPath) ? (dirname($_SERVER['SCRIPT_NAME']) . '/assets/logo.png') : '';
 
       ob_start(); ?>
@@ -255,9 +227,8 @@ if ($op) {
           <?php if ($logoUrl): ?><img src="<?php echo htmlspecialchars($logoUrl); ?>" alt="logo"><?php endif; ?>
           <div>
             <h2>BOM — <?php echo htmlspecialchars($padre); ?></h2>
-            <div class="muted">
-              <?php echo htmlspecialchars($producto['des_articulo'] ?? ''); ?>
-              | UMed: <?php echo htmlspecialchars($producto['unidadMedida'] ?? ''); ?>
+            <div class="muted"><?php echo htmlspecialchars($producto['des_articulo'] ?? ''); ?> | UMed:
+              <?php echo htmlspecialchars($producto['unidadMedida'] ?? ''); ?>
             </div>
             <div class="muted">Generado: <?php echo date('Y-m-d H:i:s'); ?></div>
           </div>
@@ -291,10 +262,12 @@ if ($op) {
       <?php
       $html = ob_get_clean();
 
+      $dompdf_ok = false;
       $vendor = __DIR__ . '/../../vendor/autoload.php';
       if (file_exists($vendor)) {
         require_once $vendor;
         if (class_exists('\Dompdf\Dompdf')) {
+          $dompdf_ok = true;
           $dompdf = new \Dompdf\Dompdf(['isRemoteEnabled' => true]);
           $dompdf->loadHtml($html, 'UTF-8');
           $dompdf->setPaper('letter', 'portrait');
@@ -309,13 +282,14 @@ if ($op) {
       exit;
     }
 
-    /* ---------- IMPORTADOR CSV (REPLACE TOTAL POR PADRE EN t_artcompuesto) ---------- */
+    /* ---------- IMPORTADOR (validación total + replace por padre + N×N) ---------- */
 
     if ($op === 'import_bom') {
       if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
         throw new Exception('Archivo no recibido.');
       }
 
+      // 1) Leer CSV y validar forma
       $fh = fopen($_FILES['file']['tmp_name'], 'r');
       if (!$fh)
         throw new Exception('No fue posible leer el archivo.');
@@ -334,7 +308,7 @@ if ($op) {
         rewind($fh);
       }
 
-      $rowsByParent = [];
+      $rowsByParent = []; // padre => [ [hijo, cantidad], ... ]
       $parentsSet = [];
       $componentsSet = [];
       $errors = [];
@@ -371,7 +345,7 @@ if ($op) {
         exit;
       }
 
-      // PRE-VALIDACIÓN en c_articulo
+      // 2) PRE-VALIDACIÓN en BD: existencia de padres y componentes
       $todos = array_values(array_unique(array_merge(array_keys($parentsSet), array_keys($componentsSet))));
       $existentes = [];
       if (!empty($todos)) {
@@ -398,33 +372,41 @@ if ($op) {
           'replaced_parents' => 0,
           'inserted_stg' => 0,
           'inserted_prod' => 0,
-          'synced_prod' => true,
+          'synced_prod' => table_exists('t_artcompuesto'),
           'parents_detail' => []
         ]);
         exit;
       }
 
+      // 3) Transacción: borrar + reinsertar (REPLACE total por cada padre)
       $pdo = db_pdo();
       $pdo->beginTransaction();
       try {
-        $inserted = 0;
-        $parents_detail = [];
+        $has_prod = table_exists('t_artcompuesto');
+        $inserted_stg = 0;
+        $parents_detail = []; // [ ['padre'=>..., 'lineas'=>N], ... ]
 
         foreach ($rowsByParent as $padre => $items) {
-          dbq("DELETE FROM t_artcompuesto WHERE Cve_Articulo = ?", [$padre]);
+          // Eliminar componentes existentes del producto compuesto (padre)
+          dbq("DELETE FROM t_artcompuesto WHERE Cve_ArtComponente=?", [$padre]);
 
           $countLines = 0;
           foreach ($items as [$hijo, $cantidad]) {
-            $umed = db_val("SELECT cve_umed FROM c_articulo WHERE cve_articulo = ?", [$hijo]);
+            $umed = db_val("SELECT unidadMedida FROM c_articulo WHERE cve_articulo = ?", [$hijo]);
 
+            // Insertar: Cve_ArtComponente = producto final, Cve_Articulo = componente
             dbq("INSERT INTO t_artcompuesto
-                   (Cve_Articulo, Cve_ArtComponente, Cantidad, cve_umed, Activo)
-                 VALUES (?,?,?,?, 1)",
+                   (Cve_ArtComponente, Cve_Articulo, Cantidad, cve_umed, Activo)
+                 VALUES (?,?,?,?, '1')",
               [$padre, $hijo, $cantidad, $umed]
             );
-            $inserted++;
+            $inserted_stg++;
             $countLines++;
           }
+
+          // Marcar el artículo padre como producto compuesto
+          dbq("UPDATE c_articulo SET Compuesto='S' WHERE cve_articulo=?", [$padre]);
+
           $parents_detail[] = ['padre' => $padre, 'lineas' => $countLines];
         }
 
@@ -432,10 +414,9 @@ if ($op) {
         echo json_encode([
           'ok' => true,
           'replaced_parents' => count($rowsByParent),
-          'inserted_stg' => 0,
-          'inserted_prod' => $inserted,
+          'inserted_stg' => $inserted_stg,
           'errors' => [],
-          'synced_prod' => true,
+          'synced_prod' => $has_prod,
           'parents_detail' => $parents_detail
         ]);
         exit;
@@ -443,6 +424,7 @@ if ($op) {
       } catch (Throwable $e) {
         if ($pdo->inTransaction())
           $pdo->rollBack();
+        error_log("BOM Import Error: " . $e->getMessage());
         throw $e;
       }
     }
@@ -462,7 +444,7 @@ if ($op) {
 
 <head>
   <meta charset="utf-8">
-  <title>Análisis de Artículos Compuesto</title>
+  <title>Análisis de Artículos Compuestos Kitting</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.datatables.net/v/bs5/dt-2.1.8/datatables.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -522,7 +504,7 @@ if ($op) {
 <body>
   <div class="container-fluid mt-2">
 
-    <!-- KPIs generales -->
+    <!-- KPIs -->
     <div class="row g-2 mb-2">
       <div class="col-sm-3">
         <div class="kpi-card p-3 h-100">
@@ -542,8 +524,8 @@ if ($op) {
 
     <div class="card mb-2">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <h6 class="mb-0"><i class="bi bi-diagram-3"></i> Análisis de Artículos Compuesto</h6>
-        <span class="text-muted">Manufactura</span>
+        <h6 class="mb-0"><i class="bi bi-diagram-3"></i> Análisis de Artículos Compuestos</h6>
+        <span class="text-muted">Manufactura o Kitting</span>
       </div>
       <div class="card-body">
 
@@ -551,7 +533,7 @@ if ($op) {
         <div class="row g-2 align-items-end mb-2">
           <div class="col-md-6">
             <label class="form-label mb-0">Buscar <strong>producto compuesto</strong> (clave o descripción)</label>
-            <input id="txtBuscar" class="form-control form-control-sm" placeholder="Ej. 1000011321-J1, 'Cherry', etc.">
+            <input id="txtBuscar" class="form-control form-control-sm" placeholder="Ej. BUL-0012, 'Cherry', etc.">
           </div>
           <div class="col-md-2">
             <button id="btnBuscar" class="btn btn-primary btn-sm w-100"><i class="bi bi-search"></i> Buscar</button>
@@ -573,7 +555,7 @@ if ($op) {
           </table>
         </div>
 
-        <!-- Encabezado del producto compuesto -->
+        <!-- Encabezado -->
         <div id="panelPadre" class="alert alert-light border d-none">
           <div class="d-flex flex-wrap gap-3 align-items-center">
             <div><strong>Producto compuesto:</strong> <span id="p_cve">—</span></div>
@@ -581,31 +563,6 @@ if ($op) {
             <div><strong>UMed:</strong> <span id="p_ume">—</span></div>
           </div>
           <div class="muted mt-1">Componentes activos del producto seleccionado.</div>
-        </div>
-
-        <!-- Cards específicas del BOM seleccionado -->
-        <div id="cardsBOM" class="row g-2 mb-2 d-none">
-          <div class="col-sm-4">
-            <div class="kpi-card p-2 h-100">
-              <div class="kpi-title">Componentes del BOM</div>
-              <div id="cardNumComp" class="kpi-value">0</div>
-              <div class="text-muted mini">Número de componentes activos</div>
-            </div>
-          </div>
-          <div class="col-sm-4">
-            <div class="kpi-card p-2 h-100">
-              <div class="kpi-title">Suma de cantidades</div>
-              <div id="cardSumCant" class="kpi-value">0</div>
-              <div class="text-muted mini">Σ Cantidad por unidad</div>
-            </div>
-          </div>
-          <div class="col-sm-4">
-            <div class="kpi-card p-2 h-100">
-              <div class="kpi-title">Unidad de medida</div>
-              <div id="cardUmedPadre" class="kpi-value">-</div>
-              <div class="text-muted mini">UMed del producto compuesto</div>
-            </div>
-          </div>
         </div>
 
         <!-- Componentes -->
@@ -647,7 +604,7 @@ if ($op) {
             <div class="muted mt-1">
               Formato: <strong>A</strong>=producto_compuesto, <strong>B</strong>=componente,
               <strong>C</strong>=cantidad.
-              La unidad de medida se toma de <code>c_articulo.cve_umed</code> del componente.
+              La unidad de medida se toma de <code>c_articulo.unidadMedida</code> del componente.
             </div>
           </div>
           <div class="col-md-3">
@@ -708,7 +665,9 @@ if ($op) {
         <div class="modal-body">
           <ul class="mb-2" style="font-size:11px;">
             <li><strong>Productos compuestos reemplazados:</strong> <span id="m_replaced">0</span></li>
-            <li><strong>Líneas insertadas:</strong> <span id="m_ins_prod">0</span></li>
+            <li><strong>Líneas insertadas (staging):</strong> <span id="m_ins_stg">0</span></li>
+            <li><strong>Líneas insertadas (producción):</strong> <span id="m_ins_prod">0</span></li>
+            <li><strong>Sincronizado a producción:</strong> <span id="m_sync">No</span></li>
           </ul>
           <div>
             <strong>Errores (si hubo):</strong>
@@ -742,7 +701,6 @@ if ($op) {
       'use strict';
       let tRes = null, tComp = null, tPrev = null, padreSel = '';
       let toastObj = null;
-      let umedPadreSel = '';
 
       function toast(msg, type = 'success') {
         const el = document.getElementById('appToast');
@@ -762,7 +720,7 @@ if ($op) {
       function buscar() {
         const q = $('#txtBuscar').val().trim();
         $.get('bom.php', { op: 'buscar_compuestos', q }, r => {
-          if (!r.ok) { toast(r.msg || 'Error al buscar', 'danger'); return; }
+          if (!r.ok) { alert(r.msg || 'Error'); return; }
           const data = r.data || [];
           if (!tRes) {
             tRes = new DataTable('#tblResultados', {
@@ -789,29 +747,24 @@ if ($op) {
           }
           if (tComp) { tComp.clear().draw(); }
           $('#panelPadre').addClass('d-none');
-          $('#cardsBOM').addClass('d-none');
-          $('#btnCsv,#btnPdf').prop('disabled', true);
         }, 'json');
       }
 
       function cargarProducto(padre) {
         $.get('bom.php', { op: 'get_producto', padre }, r => {
-          if (!r.ok) { toast(r.msg || 'Error obteniendo producto', 'danger'); return; }
+          if (!r.ok) { alert(r.msg || 'Error'); return; }
           const p = r.producto;
           $('#p_cve').text(p.cve_articulo || '—');
           $('#p_des').text(p.des_articulo || '—');
           $('#p_ume').text(p.unidadMedida || '—');
-          umedPadreSel = p.unidadMedida || '';
+          $('#btnCsv, #btnPdf').prop('disabled', false);
           $('#panelPadre').removeClass('d-none');
-          $('#btnCsv,#btnPdf').prop('disabled', false);
-          // actualizamos la card de UMed por si ya hay componentes
-          $('#cardUmedPadre').text(umedPadreSel || '-');
         }, 'json');
       }
 
       function cargarComponentes(padre) {
         $.get('bom.php', { op: 'get_componentes', padre }, r => {
-          if (!r.ok) { toast(r.msg || 'Error obteniendo componentes', 'danger'); return; }
+          if (!r.ok) { alert(r.msg || 'Error'); return; }
           const data = r.data || [];
           if (!tComp) {
             tComp = new DataTable('#tblComponentes', {
@@ -827,18 +780,6 @@ if ($op) {
           } else {
             tComp.clear().rows.add(data).draw(false);
           }
-
-          // === KPIs de BOM seleccionado ===
-          const numComp = data.length;
-          let sumCant = 0;
-          data.forEach(r => {
-            const v = parseFloat(r.cantidad);
-            if (!isNaN(v)) sumCant += v;
-          });
-          $('#cardNumComp').text(numComp);
-          $('#cardSumCant').text(sumCant.toFixed(4));
-          $('#cardUmedPadre').text(umedPadreSel || $('#p_ume').text() || '-');
-          $('#cardsBOM').removeClass('d-none');
         }, 'json');
       }
 
@@ -905,7 +846,9 @@ if ($op) {
 
             if (!r.ok) {
               $('#m_replaced').text(r.replaced_parents || 0);
+              $('#m_ins_stg').text(r.inserted_stg || 0);
               $('#m_ins_prod').text(r.inserted_prod || 0);
+              $('#m_sync').text(r.synced_prod ? 'Sí' : 'No');
               $('#m_errs').text((r.errors || [r.msg || 'Error desconocido']).join("\n"));
               fillParents(r.parents_detail);
               new bootstrap.Modal(document.getElementById('impModal')).show();
@@ -913,11 +856,13 @@ if ($op) {
               return;
             }
 
-            const info = `Importación OK: ${r.inserted_prod} líneas, ${r.replaced_parents} productos reemplazados.`;
+            const info = `Importación OK: ${r.inserted_stg} líneas (staging), ${r.replaced_parents} productos reemplazados${r.synced_prod ? ' (sincronizado a producción)' : ''}.`;
             $('#impSummary').html(`<strong>${info}</strong>`);
             $('#impErrors').html('');
             $('#m_replaced').text(r.replaced_parents || 0);
+            $('#m_ins_stg').text(r.inserted_stg || 0);
             $('#m_ins_prod').text(r.inserted_prod || 0);
+            $('#m_sync').text(r.synced_prod ? 'Sí' : 'No');
             $('#m_errs').text('');
             fillParents(r.parents_detail);
             new bootstrap.Modal(document.getElementById('impModal')).show();
