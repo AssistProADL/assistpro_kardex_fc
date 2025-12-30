@@ -1,32 +1,66 @@
 <?php
+// public/api/filtros_almacenes.php  (v2)
 require_once __DIR__ . '/../../app/db.php';
+header('Content-Type: application/json; charset=utf-8');
 
-header('Content-Type: application/json');
+function jexit($ok, $msg='', $data=[]){
+  echo json_encode(['ok'=>$ok,'msg'=>$msg,'data'=>$data], JSON_UNESCAPED_UNICODE);
+  exit;
+}
 
 try {
+  $action = $_GET['action'] ?? 'almacenes';
 
+  // Filtros
+  $cve_cia     = (int)($_GET['cve_cia'] ?? 0);        // c_compania.cve_cia
+  $almacenp_id = trim((string)($_GET['almacenp_id'] ?? '')); // c_almacenp.id (TEXT)
+
+  if ($action === 'almacenes') {
+
+    $where = ["COALESCE(ap.Activo,1)=1"];
+    $params = [];
+
+    // c_almacenp trae cve_cia como TEXT; filtramos por igualdad textual
+    if ($cve_cia > 0) {
+      $where[] = "TRIM(IFNULL(ap.cve_cia,'')) = :cia";
+      $params[':cia'] = (string)$cve_cia;
+    }
+
+    // JOIN correcto: a.cve_almacenp (INT) = CAST(ap.id AS UNSIGNED)
     $sql = "
-        SELECT DISTINCT
-            ap.id,
-            ap.nombre
-        FROM c_almacenp ap
-        INNER JOIN c_almacen a ON a.cve_almacenp = ap.id
-        INNER JOIN t_ubicacionembarque ue ON ue.cve_almac = a.cve_almac AND ue.Activo = 1
-        -- Se cambia a LEFT JOIN para no ocultar almacenes si falla la relación de pedidos
-        LEFT JOIN rel_uembarquepedido r ON r.cve_ubicacion = ue.cve_ubicacion AND r.Activo = 1
-        WHERE ap.Activo = 1
-        -- Agrupamos para evitar duplicados múltiples por el LEFT JOIN
-        GROUP BY ap.id, ap.nombre
-        ORDER BY ap.nombre
+      SELECT DISTINCT
+        ap.id   AS almacenp_id,
+        ap.clave AS clave,
+        ap.nombre AS nombre
+      FROM c_almacenp ap
+      INNER JOIN c_almacen a
+        ON a.cve_almacenp = CAST(ap.id AS UNSIGNED)
+      WHERE " . implode(" AND ", $where) . "
+      ORDER BY ap.nombre
     ";
 
-    $data = db_all($sql);
+    $rows = db_all($sql, $params);
+    jexit(true, '', $rows);
+  }
 
-    echo json_encode($data);
+  if ($action === 'zonas') {
+    if ($almacenp_id === '') jexit(true, '', []);
 
-} catch (Exception $e) {
-    echo json_encode([
-        'error' => 'Error al cargar almacenes',
-        'msg' => $e->getMessage()
-    ]);
+    $sql = "
+      SELECT
+        a.cve_almac,
+        a.des_almac
+      FROM c_almacen a
+      WHERE a.cve_almacenp = CAST(:id AS UNSIGNED)
+        AND COALESCE(a.Activo,1)=1
+      ORDER BY a.des_almac
+    ";
+    $rows = db_all($sql, [':id' => $almacenp_id]);
+    jexit(true, '', $rows);
+  }
+
+  jexit(false, 'Acción no soportada: '.$action, []);
+
+} catch (Throwable $e) {
+  jexit(false, $e->getMessage(), []);
 }

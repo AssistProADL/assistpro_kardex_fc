@@ -1,0 +1,28 @@
+<IfModule mod_rewrite.c>
+  <IfModule mod_negotiation.c>
+    Options -MultiViews -Indexes
+  </IfModule>
+
+  RewriteEngine On
+
+  # Mantener Authorization header
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+  # ✅ NO reescribir llamadas a /api/ (deja que ejecuten sus .php físicos)
+  RewriteRule ^api/ - [L]
+
+  # Quitar trailing slash si no es directorio
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_URI} (.+)/$
+  RewriteRule ^ %1 [L,R=301]
+
+  # Front controller
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ router.php [L]
+</IfModule>
+
+<IfModule mod_authz_core.c>
+  Require all granted
+</IfModule>

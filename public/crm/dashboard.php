@@ -1,647 +1,453 @@
 <?php
-// public/crm/dashboard.php
+// /public/crm/dashboard.php
+declare(strict_types=1);
+
 require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../bi/_menu_global.php';
-
 $db = db_pdo();
-$mensaje_error = '';
-
-// =======================
-// Filtros del dashboard
-// =======================
-$fil_fecha_ini = $_GET['f_ini'] ?? date('Y-m-01');
-$fil_fecha_fin = $_GET['f_fin'] ?? date('Y-m-t');
-$fil_asesor    = $_GET['asesor'] ?? '';
-$fil_etapa     = $_GET['etapa'] ?? '';
-$fil_cliente   = $_GET['cliente'] ?? '';
-$fil_canal     = $_GET['canal'] ?? ''; // reservado para futuro (ej. Amazon vs Directo)
-
-// =======================
-// Filtros SQL para oportunidades
-// =======================
-$where_opp = " WHERE 1=1 ";
-$params_opp = [];
-
-if ($fil_asesor !== '') {
-    $where_opp .= " AND o.usuario_responsable = ? ";
-    $params_opp[] = $fil_asesor;
+// --- Helpers ---
+function h($v): string {
+    return htmlspecialchars((string)($v ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
-if ($fil_etapa !== '') {
-    $where_opp .= " AND o.etapa = ? ";
-    $params_opp[] = $fil_etapa;
-}
-if ($fil_cliente !== '') {
-    $where_opp .= " AND (c.RazonSocial LIKE ? OR c.Cve_Clte LIKE ?) ";
-    $params_opp[] = "%$fil_cliente%";
-    $params_opp[] = "%$fil_cliente%";
-}
-// rango de fechas sobre fecha_crea de la oportunidad
-$where_opp .= " AND DATE(o.fecha_crea) BETWEEN ? AND ? ";
-$params_opp[] = $fil_fecha_ini;
-$params_opp[] = $fil_fecha_fin;
+function dt_today(): string { return date('Y-m-d'); }
+function month_start(): string { return date('Y-m-01'); }
+function month_end(): string { return date('Y-m-t'); }
 
-// =======================
-// Catálogo de asesores para combo
-// =======================
-$asesores_combo = [];
+// --- PDO (tu db.php es PDO directo; normalmente expone $pdo) ---
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    // Si tu db.php usa otro nombre, ajusta aquí (ej. $conn)
+    if (isset($conn) && $conn instanceof PDO) $pdo = $conn;
+}
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    echo "<div style='padding:12px;font-family:Arial'>
+            <b>Error:</b> No se encontró instancia PDO (\$pdo). Revisa app/db.php.
+          </div>";
+    exit;
+}
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+// --- Filtros ---
+$fi = $_GET['fi'] ?? month_start();
+$ff = $_GET['ff'] ?? month_end();
+$asesor = trim((string)($_GET['asesor'] ?? ''));
+$etapa  = trim((string)($_GET['etapa'] ?? ''));
+$cliente_q = trim((string)($_GET['cliente'] ?? ''));
+
+// Normaliza fechas (fallback)
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fi)) $fi = month_start();
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ff)) $ff = month_end();
+
+// --- Combos (asesores / etapas) ---
+$asesores = [];
+$etapas = [];
+
 try {
-    $asesores_combo = db_all("
-        SELECT DISTINCT usuario_responsable
-        FROM t_crm_oportunidad
-        WHERE usuario_responsable IS NOT NULL AND usuario_responsable <> ''
-        ORDER BY usuario_responsable
-    ");
+    $stmt = $pdo->query("SELECT DISTINCT usuario_responsable AS asesor
+                         FROM t_crm_oportunidad
+                         WHERE usuario_responsable IS NOT NULL AND usuario_responsable <> ''
+                         ORDER BY usuario_responsable");
+    $asesores = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    $stmt = $pdo->query("SELECT DISTINCT etapa
+                         FROM t_crm_oportunidad
+                         WHERE etapa IS NOT NULL AND etapa <> ''
+                         ORDER BY etapa");
+    $etapas = $stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
-    // no es crítico
+    // no bloquea UI
 }
 
-// =======================
-// Variables de KPIs y datasets
-// =======================
-$kpi_leads_30      = 0;
-$kpi_opp_abiertas  = 0;
-$kpi_opp_ganadas   = 0;
-$kpi_conv_pct      = 0;
-$kpi_act_hoy       = 0;
+// --- WHERE dinámico (periodo sobre fecha_crea) ---
+$where = " WHERE o.fecha_crea >= :fi AND o.fecha_crea < DATE_ADD(:ff, INTERVAL 1 DAY) ";
+$params = [':fi' => $fi, ':ff' => $ff];
 
+if ($asesor !== '') { $where .= " AND o.usuario_responsable = :asesor "; $params[':asesor'] = $asesor; }
+if ($etapa !== '')  { $where .= " AND o.etapa = :etapa "; $params[':etapa'] = $etapa; }
+
+if ($cliente_q !== '') {
+    // cliente por id_cliente o por texto en lead/título
+    $where .= " AND (
+                    CAST(o.id_cliente AS CHAR) LIKE :cq
+                    OR o.titulo LIKE :cq
+                    OR EXISTS (
+                        SELECT 1 FROM t_crm_lead l
+                        WHERE l.id_lead = o.id_lead
+                          AND (l.nombre LIKE :cq OR l.empresa LIKE :cq OR l.email LIKE :cq)
+                    )
+                ) ";
+    $params[':cq'] = "%{$cliente_q}%";
+}
+
+// --- KPIs ---
+$kpi = [
+    'leads' => 0,
+    'opp_abiertas' => 0,
+    'opp_ganadas' => 0,
+    'conversion' => 0.0,
+    'act_hoy' => 0
+];
+
+try {
+    // Leads en periodo (si tienes t_crm_lead con fecha_crea)
+    $sql = "SELECT COUNT(*) FROM t_crm_lead
+            WHERE fecha_crea >= :fi AND fecha_crea < DATE_ADD(:ff, INTERVAL 1 DAY)";
+    $st = $pdo->prepare($sql);
+    $st->execute([':fi'=>$fi, ':ff'=>$ff]);
+    $kpi['leads'] = (int)$st->fetchColumn();
+
+    // OPP abiertas / ganadas en periodo con filtros
+    $sql = "SELECT
+              SUM(CASE WHEN o.estatus='Abierta' THEN 1 ELSE 0 END) abiertas,
+              SUM(CASE WHEN o.estatus='Ganada' THEN 1 ELSE 0 END) ganadas,
+              COUNT(*) total
+            FROM t_crm_oportunidad o {$where}";
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $row = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+    $kpi['opp_abiertas'] = (int)($row['abiertas'] ?? 0);
+    $kpi['opp_ganadas']  = (int)($row['ganadas'] ?? 0);
+    $total = (int)($row['total'] ?? 0);
+    $kpi['conversion'] = $total > 0 ? round(($kpi['opp_ganadas'] / $total) * 100, 1) : 0.0;
+
+    // Actividades hoy (si tienes t_crm_actividad)
+    $sql = "SELECT COUNT(*)
+            FROM t_crm_actividad a
+            WHERE DATE(a.fecha_programada) = CURDATE()";
+    $st = $pdo->query($sql);
+    $kpi['act_hoy'] = (int)$st->fetchColumn();
+
+} catch (Throwable $e) {
+    // no bloquea UI
+}
+
+// --- Funnel por etapa (abiertas) ---
 $funnel = [];
-$opp_por_asesor = [];
-$acts_pendientes = [];
-$top_opp = [];
-$kpi_amz_ventas_30 = null;
-$kpi_amz_unidades_30 = null;
-
-// ===============================
-// KPIs principales (usando filtros)
-// ===============================
 try {
-    // Leads en rango de fechas
-    $row = db_row("
-        SELECT COUNT(*) AS total
-        FROM t_crm_lead
-        WHERE DATE(fecha_alta) BETWEEN ? AND ?
-    ", [$fil_fecha_ini, $fil_fecha_fin]);
-    $kpi_leads_30 = (int)($row['total'] ?? 0);
+    $sql = "SELECT o.etapa,
+                   COUNT(*) oportunidades,
+                   SUM(COALESCE(o.valor_estimado,0)) monto
+            FROM t_crm_oportunidad o
+            {$where} AND o.estatus='Abierta'
+            GROUP BY o.etapa
+            ORDER BY oportunidades DESC";
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $funnel = $st->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
-    // Oportunidades abiertas (filtradas)
-    $row = db_row("
-        SELECT COUNT(*) AS total
-        FROM t_crm_oportunidad o
-        LEFT JOIN c_cliente c ON c.id_cliente = o.id_cliente
-        $where_opp
-        AND o.etapa NOT IN ('Ganada','Perdida')
-    ", $params_opp);
-    $kpi_opp_abiertas = (int)($row['total'] ?? 0);
-
-    // Oportunidades ganadas (filtradas + etapa ganada)
-    $row = db_row("
-        SELECT COUNT(*) AS total
-        FROM t_crm_oportunidad o
-        LEFT JOIN c_cliente c ON c.id_cliente = o.id_cliente
-        $where_opp
-        AND o.etapa = 'Ganada'
-    ", $params_opp);
-    $kpi_opp_ganadas = (int)($row['total'] ?? 0);
-
-    // Tasa de conversión (ganada vs perdida, filtradas)
-    $row = db_row("
-        SELECT
-            SUM(o.etapa='Ganada') AS ganadas,
-            SUM(o.etapa='Perdida') AS perdidas,
-            COUNT(*) AS total
-        FROM t_crm_oportunidad o
-        LEFT JOIN c_cliente c ON c.id_cliente = o.id_cliente
-        $where_opp
-    ", $params_opp);
-    $gan = (int)($row['ganadas'] ?? 0);
-    $per = (int)($row['perdidas'] ?? 0);
-    if ($gan + $per > 0) {
-        $kpi_conv_pct = round(($gan / ($gan + $per)) * 100, 1);
-    } else {
-        $kpi_conv_pct = 0;
-    }
-
-    // Actividades programadas para hoy (independiente del filtro de fecha de opp)
-    $row = db_row("
-        SELECT COUNT(*) AS total
-        FROM t_crm_actividad
-        WHERE estatus = 'Programada'
-          AND DATE(fecha_programada) = CURDATE()
-    ");
-    $kpi_act_hoy = (int)($row['total'] ?? 0);
-
-} catch (Throwable $e) {
-    $mensaje_error = 'Error cargando KPIs: ' . $e->getMessage();
-}
-
-// ===============================
-// Funil por etapa (filtrado)
-// ===============================
+// --- Oportunidades por asesor (abiertas) ---
+$porAsesor = [];
 try {
-    $funnel = db_all("
-        SELECT 
-            o.etapa,
-            COUNT(*) AS total,
-            SUM(o.valor_estimado) AS valor,
-            SUM(o.valor_estimado * (o.probabilidad/100)) AS forecast
-        FROM t_crm_oportunidad o
-        LEFT JOIN c_cliente c ON c.id_cliente = o.id_cliente
-        $where_opp
-        GROUP BY o.etapa
-        ORDER BY FIELD(o.etapa,'Prospección','Propuesta','Cotizado','Negociación','Ganada','Perdida'), o.etapa
-    ", $params_opp);
-} catch (Throwable $e) {
-    // no rompemos la vista
-}
+    $sql = "SELECT o.usuario_responsable AS asesor,
+                   COUNT(*) oportunidades,
+                   SUM(COALESCE(o.valor_estimado,0)) monto
+            FROM t_crm_oportunidad o
+            {$where} AND o.estatus='Abierta'
+            GROUP BY o.usuario_responsable
+            ORDER BY oportunidades DESC, monto DESC";
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $porAsesor = $st->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
-// ===============================
-// Oportunidades por asesor (filtrado)
-// ===============================
+// --- Actividades próximas (programadas en rango) ---
+$actividades = [];
 try {
-    $opp_por_asesor = db_all("
-        SELECT 
-            o.usuario_responsable,
-            COUNT(*) AS total,
-            SUM(o.valor_estimado) AS valor
-        FROM t_crm_oportunidad o
-        LEFT JOIN c_cliente c ON c.id_cliente = o.id_cliente
-        $where_opp
-        GROUP BY o.usuario_responsable
-        ORDER BY total DESC
-        LIMIT 10
-    ", $params_opp);
-} catch (Throwable $e) {
-    // ignorar
-}
+    $sql = "SELECT a.fecha_programada, a.tipo, a.descripcion, a.id_lead, a.id_opp, a.usuario, a.estatus
+            FROM t_crm_actividad a
+            WHERE a.fecha_programada >= :fi AND a.fecha_programada < DATE_ADD(:ff, INTERVAL 1 DAY)
+            ORDER BY a.fecha_programada ASC
+            LIMIT 25";
+    $st = $pdo->prepare($sql);
+    $st->execute([':fi'=>$fi, ':ff'=>$ff]);
+    $actividades = $st->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
-// ===============================
-// Actividades pendientes próximas (sin filtrar por opp, ya que es agenda general)
-// ===============================
+// --- Top oportunidades abiertas ---
+$topOpp = [];
 try {
-    $acts_pendientes = db_all("
-        SELECT 
-            a.*,
-            l.nombre_contacto,
-            o.titulo AS opp_titulo
-        FROM t_crm_actividad a
-        LEFT JOIN t_crm_lead l ON l.id_lead = a.id_lead
-        LEFT JOIN t_crm_oportunidad o ON o.id_opp = a.id_opp
-        WHERE a.estatus = 'Programada'
-        ORDER BY a.fecha_programada ASC
-        LIMIT 20
-    ");
-} catch (Throwable $e) {
-    // ignorar
-}
+    $sql = "SELECT o.id_opp, o.titulo, o.valor_estimado, o.probabilidad, o.etapa, o.fecha_crea, o.id_lead, o.id_cliente
+            FROM t_crm_oportunidad o
+            {$where} AND o.estatus='Abierta'
+            ORDER BY COALESCE(o.valor_estimado,0) DESC, o.probabilidad DESC, o.id_opp DESC
+            LIMIT 10";
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $topOpp = $st->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
-// ===============================
-// Top oportunidades abiertas (filtrado)
-// ===============================
-try {
-    $top_opp = db_all("
-        SELECT 
-            o.id_opp,
-            o.titulo,
-            o.valor_estimado,
-            o.probabilidad,
-            o.etapa,
-            o.fecha_cierre_estimada,
-            o.usuario_responsable,
-            l.nombre_contacto,
-            c.RazonSocial AS cliente_nombre
-        FROM t_crm_oportunidad o
-        LEFT JOIN t_crm_lead l ON l.id_lead = o.id_lead
-        LEFT JOIN c_cliente c ON c.id_cliente = o.id_cliente
-        $where_opp
-        AND o.etapa NOT IN ('Ganada','Perdida')
-        ORDER BY o.valor_estimado DESC
-        LIMIT 20
-    ", $params_opp);
-} catch (Throwable $e) {
-    // ignorar
-}
-
-// ===============================
-// Ventas Amazon (opcional, si existe fact_ventas_comercial)
-// usando tambien el rango de fechas
-// ===============================
-try {
-    $row = db_row("
-        SELECT 
-            SUM(venta_neta) AS venta_30,
-            SUM(unidades)   AS unidades_30
-        FROM fact_ventas_comercial
-        WHERE canal = 'AMAZON'
-          AND fecha BETWEEN ? AND ?
-    ", [$fil_fecha_ini, $fil_fecha_fin]);
-    if ($row && (!is_null($row['venta_30']) || !is_null($row['unidades_30']))) {
-        $kpi_amz_ventas_30   = (float)$row['venta_30'];
-        $kpi_amz_unidades_30 = (float)$row['unidades_30'];
-    }
-} catch (Throwable $e) {
-    // si no existe, no mostramos
-}
-
-// calcular max para barras del funil
-$max_funnel_val = 0;
-foreach ($funnel as $f) {
-    $max_funnel_val = max($max_funnel_val, (float)$f['forecast'], (float)$f['valor']);
-}
 ?>
-<div class="container-fluid mt-3" style="font-size:0.82rem;">
+<style>
+/* --- Corporate / elegante --- */
+.ap-wrap{padding:12px;font-size:12px}
+.ap-title{font-size:18px;font-weight:700;color:#0b5ed7;margin:4px 0 10px 0;display:flex;align-items:center;gap:10px}
+.ap-sub{color:#5b6b7c;font-size:12px;margin-top:-6px;margin-bottom:10px}
 
-    <h4 class="mb-2">CRM – Dashboard Comercial</h4>
+.ap-filters{background:#fff;border:1px solid #dbe5f1;border-radius:12px;padding:10px;box-shadow:0 2px 10px rgba(10,36,84,.06);margin-bottom:10px}
+.ap-filters .row{--bs-gutter-x:10px}
+.ap-filters label{font-size:11px;color:#5b6b7c;margin-bottom:3px}
+.ap-filters .form-control,.ap-filters .form-select{font-size:12px;border-radius:10px}
+.ap-btn{border-radius:10px;font-weight:600}
 
-    <?php if ($mensaje_error): ?>
-        <div class="alert alert-danger py-1"><?= htmlspecialchars($mensaje_error) ?></div>
-    <?php endif; ?>
+.ap-kpis{display:grid;grid-template-columns:repeat(5,minmax(160px,1fr));gap:10px;margin-bottom:10px}
+@media(max-width:1200px){.ap-kpis{grid-template-columns:repeat(2,minmax(160px,1fr));}}
+.ap-card{background:#fff;border:1px solid #dbe5f1;border-radius:14px;padding:12px;box-shadow:0 2px 12px rgba(10,36,84,.06)}
+.ap-kpi-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.ap-kpi-title{font-size:11px;color:#6c7b8a;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.ap-kpi-val{font-size:22px;font-weight:800;color:#0b1f44;line-height:1}
+.ap-kpi-badge{font-size:11px;font-weight:700;border-radius:999px;padding:4px 10px;background:#eef5ff;color:#0b5ed7;border:1px solid #dbe5f1}
+.ap-kpi-foot{font-size:11px;color:#6c7b8a}
 
-    <!-- Filtros -->
-    <form method="get" class="card p-2 mb-3" style="font-size:0.80rem;">
-        <div class="row g-2 align-items-end">
+.ap-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:10px}
+@media(max-width:1200px){.ap-grid{grid-template-columns:1fr;}}
+.ap-card h6{font-size:12px;font-weight:800;color:#0b1f44;margin:0 0 8px 0}
+.ap-table{width:100%;border-collapse:collapse;font-size:10px}
+.ap-table th{background:#f6f9ff;color:#0b1f44;border:1px solid #e6eefb;padding:6px 6px;text-align:left}
+.ap-table td{border:1px solid #eef2f7;padding:6px 6px;vertical-align:top}
+.ap-table td.num, .ap-table th.num{text-align:right}
+.ap-muted{color:#6c7b8a}
+.ap-chip{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef5ff;border:1px solid #dbe5f1;color:#0b5ed7;font-size:10px;font-weight:700}
+.ap-bar{height:10px;border-radius:999px;background:#eef2f7;overflow:hidden;border:1px solid #e6eefb}
+.ap-bar > div{height:100%;background:#0b5ed7}
+.ap-scroll{max-height:260px;overflow:auto}
+</style>
 
-            <div class="col-md-2 col-6">
-                <label class="form-label mb-0">Fecha inicio</label>
-                <input type="date" name="f_ini" class="form-control form-control-sm"
-                       value="<?= htmlspecialchars($fil_fecha_ini) ?>">
-            </div>
+<div class="ap-wrap">
+  <div class="ap-title">
+    <i class="fa-solid fa-chart-line"></i>
+    CRM – Dashboard Comercial
+  </div>
+  <div class="ap-sub">Visión ejecutiva del pipeline y productividad (filtros por periodo, asesor, etapa y cliente).</div>
 
-            <div class="col-md-2 col-6">
-                <label class="form-label mb-0">Fecha fin</label>
-                <input type="date" name="f_fin" class="form-control form-control-sm"
-                       value="<?= htmlspecialchars($fil_fecha_fin) ?>">
-            </div>
+  <form class="ap-filters" method="GET" action="">
+    <div class="row align-items-end">
+      <div class="col-md-2">
+        <label>Fecha inicio</label>
+        <input type="date" class="form-control" name="fi" value="<?=h($fi)?>">
+      </div>
+      <div class="col-md-2">
+        <label>Fecha fin</label>
+        <input type="date" class="form-control" name="ff" value="<?=h($ff)?>">
+      </div>
+      <div class="col-md-2">
+        <label>Asesor</label>
+        <select class="form-select" name="asesor">
+          <option value="">— Todos —</option>
+          <?php foreach ($asesores as $a): ?>
+            <option value="<?=h($a)?>" <?=($a===$asesor?'selected':'')?>><?=h($a)?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label>Etapa</label>
+        <select class="form-select" name="etapa">
+          <option value="">— Todas —</option>
+          <?php foreach ($etapas as $e): ?>
+            <option value="<?=h($e)?>" <?=($e===$etapa?'selected':'')?>><?=h($e)?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label>Cliente</label>
+        <input type="text" class="form-control" name="cliente" placeholder="Nombre o clave" value="<?=h($cliente_q)?>">
+      </div>
+      <div class="col-md-1 d-grid">
+        <button class="btn btn-primary ap-btn" type="submit">Aplicar</button>
+      </div>
+    </div>
+  </form>
 
-            <div class="col-md-2">
-                <label class="form-label mb-0">Asesor</label>
-                <select name="asesor" class="form-select form-select-sm">
-                    <option value="">-- Todos --</option>
-                    <?php foreach ($asesores_combo as $a): ?>
-                        <option value="<?= htmlspecialchars($a['usuario_responsable']) ?>"
-                            <?= $fil_asesor === $a['usuario_responsable'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($a['usuario_responsable']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label mb-0">Etapa</label>
-                <select name="etapa" class="form-select form-select-sm">
-                    <option value="">-- Todas --</option>
-                    <?php
-                    $etapas_combo = ['Prospección','Propuesta','Cotizado','Negociación','Ganada','Perdida'];
-                    foreach ($etapas_combo as $e):
-                    ?>
-                        <option value="<?= $e ?>" <?= $fil_etapa === $e ? 'selected' : '' ?>>
-                            <?= $e ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label mb-0">Cliente</label>
-                <input type="text" name="cliente" class="form-control form-control-sm"
-                       placeholder="Nombre o clave"
-                       value="<?= htmlspecialchars($fil_cliente) ?>">
-            </div>
-
-            <div class="col-md-1 col-6">
-                <button class="btn btn-primary btn-sm w-100">Aplicar</button>
-            </div>
-
-        </div>
-    </form>
-
-    <!-- KPIs principales -->
-    <div class="row g-2 mb-3">
-        <div class="col-6 col-md-2">
-            <div class="card text-bg-light h-100">
-                <div class="card-body p-2">
-                    <div class="text-muted" style="font-size:0.75rem;">Leads periodo</div>
-                    <div style="font-size:1.3rem; font-weight:bold;"><?= $kpi_leads_30 ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-2">
-            <div class="card text-bg-light h-100">
-                <div class="card-body p-2">
-                    <div class="text-muted" style="font-size:0.75rem;">OPP abiertas</div>
-                    <div style="font-size:1.3rem; font-weight:bold;"><?= $kpi_opp_abiertas ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-2">
-            <div class="card text-bg-light h-100">
-                <div class="card-body p-2">
-                    <div class="text-muted" style="font-size:0.75rem;">OPP ganadas</div>
-                    <div style="font-size:1.3rem; font-weight:bold;"><?= $kpi_opp_ganadas ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-2">
-            <div class="card text-bg-light h-100">
-                <div class="card-body p-2">
-                    <div class="text-muted" style="font-size:0.75rem;">Conversión</div>
-                    <div style="font-size:1.3rem; font-weight:bold;"><?= number_format($kpi_conv_pct, 1) ?>%</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-2">
-            <div class="card text-bg-light h-100">
-                <div class="card-body p-2">
-                    <div class="text-muted" style="font-size:0.75rem;">Actividades hoy</div>
-                    <div style="font-size:1.3rem; font-weight:bold;"><?= $kpi_act_hoy ?></div>
-                </div>
-            </div>
-        </div>
-        <?php if (!is_null($kpi_amz_ventas_30)): ?>
-        <div class="col-6 col-md-2">
-            <div class="card text-bg-light h-100">
-                <div class="card-body p-2">
-                    <div class="text-muted" style="font-size:0.75rem;">Ventas Amazon</div>
-                    <div style="font-size:0.9rem; font-weight:bold;">
-                        $<?= number_format($kpi_amz_ventas_30, 2) ?><br>
-                        <small><?= number_format($kpi_amz_unidades_30, 0) ?> uds.</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php endif; ?>
+  <div class="ap-kpis">
+    <div class="ap-card">
+      <div class="ap-kpi-top">
+        <div class="ap-kpi-title">Leads periodo</div>
+        <div class="ap-kpi-badge"><i class="fa-solid fa-user-plus"></i></div>
+      </div>
+      <div class="ap-kpi-val"><?=number_format((int)$kpi['leads'])?></div>
+      <div class="ap-kpi-foot">Base de prospección en el rango.</div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <!-- Funil por etapa -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header py-2">
-                    Funil por etapa
-                </div>
-                <div class="card-body p-2">
-                    <?php if (empty($funnel)): ?>
-                        <div class="text-muted">No hay oportunidades en el periodo/filtros.</div>
-                    <?php else: ?>
-                        <?php foreach ($funnel as $f): 
-                            $val_total = (float)($f['valor'] ?? 0);
-                            $val_fc    = (float)($f['forecast'] ?? 0);
-                            $pct_bar   = ($max_funnel_val > 0) ? round(($val_fc / $max_funnel_val) * 100) : 0;
-                            if ($pct_bar < 5 && $val_fc > 0) $pct_bar = 5;
-                        ?>
-                        <div class="mb-2">
-                            <div class="d-flex justify-content-between mb-1">
-                                <strong><?= htmlspecialchars($f['etapa']) ?></strong>
-                                <small>
-                                    <?= (int)$f['total'] ?> opps ·
-                                    $<?= number_format($val_fc, 0) ?> forecast
-                                </small>
-                            </div>
-                            <div class="progress" style="height: 12px;">
-                                <div class="progress-bar" role="progressbar"
-                                     style="width: <?= $pct_bar ?>%;"
-                                     aria-valuenow="<?= $pct_bar ?>" aria-valuemin="0" aria-valuemax="100">
-                                </div>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-
-        <!-- Oportunidades por asesor -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header py-2">
-                    Oportunidades por asesor
-                </div>
-                <div class="card-body p-2">
-                    <?php if (empty($opp_por_asesor)): ?>
-                        <div class="text-muted">No hay datos de asesores con los filtros actuales.</div>
-                    <?php else: ?>
-                        <div class="table-responsive d-none d-md-block">
-                            <table class="table table-sm table-bordered mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Asesor</th>
-                                        <th class="text-end">Oportunidades</th>
-                                        <th class="text-end">Valor total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($opp_por_asesor as $r): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($r['usuario_responsable']) ?></td>
-                                            <td class="text-end"><?= (int)$r['total'] ?></td>
-                                            <td class="text-end">$<?= number_format($r['valor'], 2) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Cards en móvil -->
-                        <div class="d-md-none">
-                            <div class="row g-2">
-                                <?php foreach ($opp_por_asesor as $r): ?>
-                                    <div class="col-12">
-                                        <div class="card border-secondary">
-                                            <div class="card-body p-2">
-                                                <strong><?= htmlspecialchars($r['usuario_responsable']) ?></strong>
-                                                <div><small>Oportunidades: <?= (int)$r['total'] ?></small></div>
-                                                <div><small>Valor total: $<?= number_format($r['valor'],2) ?></small></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
+    <div class="ap-card">
+      <div class="ap-kpi-top">
+        <div class="ap-kpi-title">OPP abiertas</div>
+        <div class="ap-kpi-badge"><i class="fa-solid fa-folder-open"></i></div>
+      </div>
+      <div class="ap-kpi-val"><?=number_format((int)$kpi['opp_abiertas'])?></div>
+      <div class="ap-kpi-foot">Pipeline activo (Abierta).</div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <!-- Actividades próximas -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header py-2">
-                    Actividades próximas
-                </div>
-                <div class="card-body p-2">
-                    <?php if (empty($acts_pendientes)): ?>
-                        <div class="text-muted">No hay actividades programadas.</div>
-                    <?php else: ?>
-                        <div class="table-responsive d-none d-md-block">
-                            <table class="table table-sm table-bordered mb-0" id="tblActsDash">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Tipo</th>
-                                        <th>Lead / OPP</th>
-                                        <th>Descripción</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($acts_pendientes as $a): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars(substr($a['fecha_programada'],0,16)) ?></td>
-                                            <td><?= htmlspecialchars($a['tipo']) ?></td>
-                                            <td>
-                                                <?php if ($a['nombre_contacto']): ?>
-                                                    <div><strong><?= htmlspecialchars($a['nombre_contacto']) ?></strong></div>
-                                                <?php endif; ?>
-                                                <?php if ($a['opp_titulo']): ?>
-                                                    <div><small>OPP: <?= htmlspecialchars($a['opp_titulo']) ?></small></div>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td><?= htmlspecialchars($a['descripcion']) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="d-md-none">
-                            <div class="row g-2">
-                                <?php foreach ($acts_pendientes as $a): ?>
-                                    <div class="col-12">
-                                        <div class="card border-secondary">
-                                            <div class="card-body p-2">
-                                                <div class="d-flex justify-content-between">
-                                                    <strong><?= htmlspecialchars($a['tipo']) ?></strong>
-                                                    <small><?= htmlspecialchars(substr($a['fecha_programada'],0,16)) ?></small>
-                                                </div>
-                                                <?php if ($a['descripcion']): ?>
-                                                    <div class="mt-1"><?= htmlspecialchars($a['descripcion']) ?></div>
-                                                <?php endif; ?>
-                                                <?php if ($a['nombre_contacto'] || $a['opp_titulo']): ?>
-                                                    <div class="mt-1">
-                                                        <?php if ($a['nombre_contacto']): ?>
-                                                            <div><small>Lead: <?= htmlspecialchars($a['nombre_contacto']) ?></small></div>
-                                                        <?php endif; ?>
-                                                        <?php if ($a['opp_titulo']): ?>
-                                                            <div><small>OPP: <?= htmlspecialchars($a['opp_titulo']) ?></small></div>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-
-        <!-- Top oportunidades abiertas -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header py-2">
-                    Top oportunidades abiertas
-                </div>
-                <div class="card-body p-2">
-                    <?php if (empty($top_opp)): ?>
-                        <div class="text-muted">No hay oportunidades abiertas con los filtros actuales.</div>
-                    <?php else: ?>
-                        <div class="table-responsive d-none d-md-block">
-                            <table class="table table-sm table-bordered mb-0" id="tblTopOpp">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Folio</th>
-                                        <th>Título</th>
-                                        <th>Lead / Cliente</th>
-                                        <th class="text-end">Valor</th>
-                                        <th class="text-center">% Prob</th>
-                                        <th>Etapa</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($top_opp as $o): ?>
-                                        <tr>
-                                            <td>#<?= (int)$o['id_opp'] ?></td>
-                                            <td><?= htmlspecialchars($o['titulo']) ?></td>
-                                            <td>
-                                                <?php if ($o['nombre_contacto']): ?>
-                                                    <div><strong><?= htmlspecialchars($o['nombre_contacto']) ?></strong></div>
-                                                <?php endif; ?>
-                                                <?php if ($o['cliente_nombre']): ?>
-                                                    <div><small><?= htmlspecialchars($o['cliente_nombre']) ?></small></div>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td class="text-end">$<?= number_format($o['valor_estimado'], 2) ?></td>
-                                            <td class="text-center"><?= (int)$o['probabilidad'] ?>%</td>
-                                            <td><?= htmlspecialchars($o['etapa']) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="d-md-none">
-                            <div class="row g-2">
-                                <?php foreach ($top_opp as $o): ?>
-                                    <div class="col-12">
-                                        <div class="card border-secondary">
-                                            <div class="card-body p-2">
-                                                <div class="d-flex justify-content-between">
-                                                    <strong>#<?= (int)$o['id_opp'] ?> – <?= htmlspecialchars($o['titulo']) ?></strong>
-                                                    <span class="badge bg-secondary"><?= htmlspecialchars($o['etapa']) ?></span>
-                                                </div>
-                                                <div class="mt-1">
-                                                    <small>Valor: $<?= number_format($o['valor_estimado'],2) ?> · <?= (int)$o['probabilidad'] ?>%</small>
-                                                </div>
-                                                <?php if ($o['nombre_contacto'] || $o['cliente_nombre']): ?>
-                                                    <div class="mt-1">
-                                                        <?php if ($o['nombre_contacto']): ?>
-                                                            <div><small>Lead: <?= htmlspecialchars($o['nombre_contacto']) ?></small></div>
-                                                        <?php endif; ?>
-                                                        <?php if ($o['cliente_nombre']): ?>
-                                                            <div><small>Cliente: <?= htmlspecialchars($o['cliente_nombre']) ?></small></div>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
+    <div class="ap-card">
+      <div class="ap-kpi-top">
+        <div class="ap-kpi-title">OPP ganadas</div>
+        <div class="ap-kpi-badge"><i class="fa-solid fa-trophy"></i></div>
+      </div>
+      <div class="ap-kpi-val"><?=number_format((int)$kpi['opp_ganadas'])?></div>
+      <div class="ap-kpi-foot">Cierres exitosos en el rango.</div>
     </div>
 
+    <div class="ap-card">
+      <div class="ap-kpi-top">
+        <div class="ap-kpi-title">Conversión</div>
+        <div class="ap-kpi-badge"><i class="fa-solid fa-percent"></i></div>
+      </div>
+      <div class="ap-kpi-val"><?=h((string)$kpi['conversion'])?>%</div>
+      <div class="ap-kpi-foot">Ganadas / Total oportunidades.</div>
+    </div>
+
+    <div class="ap-card">
+      <div class="ap-kpi-top">
+        <div class="ap-kpi-title">Actividades hoy</div>
+        <div class="ap-kpi-badge"><i class="fa-solid fa-calendar-check"></i></div>
+      </div>
+      <div class="ap-kpi-val"><?=number_format((int)$kpi['act_hoy'])?></div>
+      <div class="ap-kpi-foot">Agenda operativa del día.</div>
+    </div>
+  </div>
+
+  <div class="ap-grid">
+    <div class="ap-card">
+      <h6><i class="fa-solid fa-filter-circle-dollar"></i> Funil por etapa</h6>
+      <div class="ap-scroll">
+        <table class="ap-table">
+          <thead>
+            <tr>
+              <th>Etapa</th>
+              <th class="num">Oportunidades</th>
+              <th class="num">Monto</th>
+              <th style="width:180px">Participación</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php
+            $totalOpp = 0;
+            foreach ($funnel as $r) $totalOpp += (int)($r['oportunidades'] ?? 0);
+            foreach ($funnel as $r):
+              $cnt = (int)($r['oportunidades'] ?? 0);
+              $monto = (float)($r['monto'] ?? 0);
+              $pct = ($totalOpp>0) ? round(($cnt/$totalOpp)*100,1) : 0;
+          ?>
+            <tr>
+              <td><span class="ap-chip"><?=h($r['etapa'] ?? '')?></span></td>
+              <td class="num"><?=number_format($cnt)?></td>
+              <td class="num">$<?=number_format($monto,2)?></td>
+              <td>
+                <div class="ap-bar" title="<?=h((string)$pct)?>%">
+                  <div style="width: <?=$pct?>%"></div>
+                </div>
+                <div class="ap-muted" style="font-size:10px;margin-top:2px"><?=h((string)$pct)?>%</div>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          <?php if (!$funnel): ?>
+            <tr><td colspan="4" class="ap-muted">Sin datos para los filtros seleccionados.</td></tr>
+          <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ap-card">
+      <h6><i class="fa-solid fa-user-tie"></i> Oportunidades por asesor</h6>
+      <div class="ap-scroll">
+        <table class="ap-table">
+          <thead>
+            <tr>
+              <th>Asesor</th>
+              <th class="num">Oportunidades</th>
+              <th class="num">Valor total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($porAsesor as $r): ?>
+              <tr>
+                <td><?=h($r['asesor'] ?? '')?></td>
+                <td class="num"><?=number_format((int)($r['oportunidades'] ?? 0))?></td>
+                <td class="num">$<?=number_format((float)($r['monto'] ?? 0),2)?></td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if (!$porAsesor): ?>
+              <tr><td colspan="3" class="ap-muted">Sin datos para los filtros seleccionados.</td></tr>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ap-card">
+      <h6><i class="fa-solid fa-list-check"></i> Actividades próximas</h6>
+      <div class="ap-scroll">
+        <table class="ap-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Lead / OPP</th>
+              <th>Descripción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($actividades as $a): ?>
+              <tr>
+                <td><?=h($a['fecha_programada'] ?? '')?></td>
+                <td><?=h($a['tipo'] ?? '')?></td>
+                <td>
+                  <span class="ap-muted">Lead:</span> <?=h((string)($a['id_lead'] ?? ''))?>
+                  &nbsp; <span class="ap-muted">OPP:</span> <?=h((string)($a['id_opp'] ?? ''))?>
+                </td>
+                <td><?=h($a['descripcion'] ?? '')?></td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if (!$actividades): ?>
+              <tr><td colspan="4" class="ap-muted">Sin actividades en el rango.</td></tr>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ap-card">
+      <h6><i class="fa-solid fa-star"></i> Top oportunidades abiertas</h6>
+      <div class="ap-scroll">
+        <table class="ap-table">
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Título</th>
+              <th>Lead / Cliente</th>
+              <th class="num">Valor</th>
+              <th class="num">% Prob</th>
+              <th>Etapa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($topOpp as $o): ?>
+              <tr>
+                <td>#<?=h((string)($o['id_opp'] ?? ''))?></td>
+                <td><?=h($o['titulo'] ?? '')?></td>
+                <td>
+                  <b><?=h((string)($o['id_lead'] ?? ''))?></b>
+                  <span class="ap-muted">/</span>
+                  <?=h((string)($o['id_cliente'] ?? ''))?>
+                </td>
+                <td class="num">$<?=number_format((float)($o['valor_estimado'] ?? 0),2)?></td>
+                <td class="num"><?=h((string)($o['probabilidad'] ?? 0))?>%</td>
+                <td><?=h($o['etapa'] ?? '')?></td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if (!$topOpp): ?>
+              <tr><td colspan="6" class="ap-muted">Sin oportunidades abiertas en el rango.</td></tr>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
 </div>
 
-<script>
-document.addEventListener("DOMContentLoaded", function(){
-    if (typeof $ !== 'undefined' && $.fn.DataTable) {
-        $("#tblActsDash").DataTable({
-            pageLength: 10,
-            scrollY: "200px",
-            scrollCollapse: true,
-            ordering: false,
-            searching: false,
-            info: false
-        });
-        $("#tblTopOpp").DataTable({
-            pageLength: 10,
-            scrollY: "200px",
-            scrollCollapse: true,
-            ordering: true,
-            searching: false,
-            info: false
-        });
-    }
-});
-</script>
-
-<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
+<?php
+// Cierre de layout global si aplica en tu proyecto
+if (file_exists(__DIR__ . '/../bi/_menu_global_end.php')) {
+    require_once __DIR__ . '/../bi/_menu_global_end.php';
+}
+?>

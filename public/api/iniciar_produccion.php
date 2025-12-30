@@ -1,180 +1,83 @@
 <?php
+// /public/api/iniciar_produccion.php
+declare(strict_types=1);
+
 require_once __DIR__ . '/../../app/db.php';
-require_once __DIR__ . '/../bi/_menu_global.php';
+header('Content-Type: application/json; charset=utf-8');
 
 $pdo = db_pdo();
 
-$id = $_GET['id'] ?? 0;
-if (!$id) {
-    die('OT no especificada');
+function out(bool $ok, array $extra=[]): void {
+  echo json_encode(array_merge(['ok'=>$ok?1:0], $extra), JSON_UNESCAPED_UNICODE);
+  exit;
 }
 
-/* =============================
-   DATOS DE LA ORDEN
-   ============================= */
-$sql = "
-SELECT 
-    id,
-    Folio_Pro,
-    Referencia,
-    Cve_Articulo,
-    Cantidad,
-    Status
-FROM t_ordenprod
-WHERE id = :id
-";
-$stmt = $pdo->prepare($sql);
-$stmt->execute([':id' => $id]);
-$ot = $stmt->fetch(PDO::FETCH_ASSOC);
+$id = (int)($_POST['id'] ?? 0);
+$bl = (int)($_POST['idy_ubica_dest'] ?? 0);
 
-if (!$ot) {
-    die('Orden de producción no encontrada');
+if($id <= 0) out(false, ['error'=>'OT inválida']);
+if($bl <= 0) out(false, ['error'=>'BL de producción inválido']);
+
+$usr = 'DEMO'; // sin sesión por ahora
+
+try{
+  $pdo->beginTransaction();
+
+  // Lock OT
+  $st = $pdo->prepare("SELECT id, Status, cve_almac FROM t_ordenprod WHERE id=? FOR UPDATE");
+  $st->execute([$id]);
+  $ot = $st->fetch(PDO::FETCH_ASSOC);
+
+  if(!$ot){
+    $pdo->rollBack();
+    out(false, ['error'=>'OT no encontrada']);
+  }
+
+  $status = (string)($ot['Status'] ?? '');
+  if($status !== 'P'){
+    $pdo->rollBack();
+    out(false, ['error'=>"La OT no está en status Planeada (P). Status actual: {$status}"]);
+  }
+
+  $alm = (int)($ot['cve_almac'] ?? 0);
+
+  // Validar BL por almacén y AreaProduccion='S'
+  $vb = $pdo->prepare("
+    SELECT COUNT(*)
+    FROM c_ubicacion
+    WHERE idy_ubica = ?
+      AND cve_almac = ?
+      AND AreaProduccion = 'S'
+  ");
+  $vb->execute([$bl, $alm]);
+  if((int)$vb->fetchColumn() <= 0){
+    $pdo->rollBack();
+    out(false, ['error'=>'El BL seleccionado no pertenece al almacén o no es AreaProduccion=S']);
+  }
+
+  // Arranque controlado: P -> E
+  // En tu esquema real: Usr_Armo existe, no Usr_Cambio
+  $up = $pdo->prepare("
+    UPDATE t_ordenprod
+    SET
+      Status         = 'E',
+      Hora_Ini       = NOW(),
+      idy_ubica_dest = :bl,
+      Usr_Armo       = :usr
+    WHERE id = :id
+      AND Status = 'P'
+  ");
+  $up->execute([':bl'=>$bl, ':usr'=>$usr, ':id'=>$id]);
+
+  if($up->rowCount() <= 0){
+    $pdo->rollBack();
+    out(false, ['error'=>'No se pudo iniciar (concurrencia o status cambió).']);
+  }
+
+  $pdo->commit();
+  out(true, ['id'=>$id, 'idy_ubica_dest'=>$bl, 'status'=>'E']);
+
+}catch(Throwable $e){
+  if($pdo->inTransaction()) $pdo->rollBack();
+  out(false, ['error'=>$e->getMessage()]);
 }
-
-/* =============================
-   VALIDAR BOM
-   ============================= */
-$tieneBom = false;
-
-if (!empty($ot['Referencia'])) {
-    $sqlBom = "
-    SELECT COUNT(*) 
-    FROM td_ordenprod
-    WHERE Folio_Pro = :folio
-      AND Activo = 1
-    ";
-    $stmtBom = $pdo->prepare($sqlBom);
-    $stmtBom->execute([':folio' => $ot['Referencia']]);
-    $tieneBom = $stmtBom->fetchColumn() > 0;
-}
-
-/* =============================
-   SI YA ESTÁ INICIADA
-   ============================= */
-if ($ot['Status'] === 'I') {
-    header("Location: registrar_produccion.php?id={$id}");
-    exit;
-}
-?>
-
-<style>
-.ap-card {
-    background: #fff;
-    border-radius: 12px;
-    border: 1px solid #dbe3f0;
-    padding: 18px;
-    box-shadow: 0 2px 4px rgba(15,90,173,.08);
-}
-.ap-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: #0F5AAD;
-}
-.ap-label {
-    font-size: 11px;
-    color: #6c757d;
-}
-.ap-value {
-    font-size: 14px;
-    font-weight: 600;
-}
-.ap-btn-start {
-    font-size: 14px;
-    padding: 10px 22px;
-}
-</style>
-
-<div class="container-fluid mt-4">
-
-    <div class="ap-card mx-auto" style="max-width:720px">
-
-        <div class="mb-3">
-            <div class="ap-title">
-                <i class="fa fa-play-circle me-1"></i> Iniciar Producción
-            </div>
-            <div class="ap-label">
-                Arranque controlado de Orden de Producción
-            </div>
-        </div>
-
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <div class="ap-label">Orden de Producción</div>
-                <div class="ap-value"><?= htmlspecialchars($ot['Folio_Pro']) ?></div>
-            </div>
-            <div class="col-md-6">
-                <div class="ap-label">Producto</div>
-                <div class="ap-value"><?= htmlspecialchars($ot['Cve_Articulo']) ?></div>
-            </div>
-        </div>
-
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <div class="ap-label">Cantidad Planeada</div>
-                <div class="ap-value"><?= number_format($ot['Cantidad'], 2) ?></div>
-            </div>
-            <div class="col-md-6">
-                <div class="ap-label">Usuario</div>
-                <div class="ap-value"><?= $_SESSION['usuario'] ?? 'Operador' ?></div>
-            </div>
-        </div>
-
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="ap-label">Fecha / Hora</div>
-                <div class="ap-value"><?= date('d/m/Y H:i:s') ?></div>
-            </div>
-            <div class="col-md-6">
-                <div class="ap-label">Estado Actual</div>
-                <div class="ap-value">
-                    <?= $ot['Status'] === 'P' ? 'Pendiente' : $ot['Status'] ?>
-                </div>
-            </div>
-        </div>
-
-        <?php if (!$tieneBom): ?>
-            <div class="alert alert-warning">
-                <i class="fa fa-exclamation-triangle"></i>
-                No es posible iniciar la producción porque la OT no tiene componentes (BOM) definidos.
-            </div>
-        <?php endif; ?>
-
-        <div class="text-center">
-            <button id="btnIniciar"
-                class="btn btn-success ap-btn-start"
-                <?= (!$tieneBom || $ot['Status'] !== 'P') ? 'disabled' : '' ?>
-            >
-                <i class="fa fa-play"></i> Iniciar Producción
-            </button>
-        </div>
-
-    </div>
-</div>
-
-<script>
-const btn = document.getElementById('btnIniciar');
-if (btn) {
-    btn.addEventListener('click', function () {
-
-        this.disabled = true;
-        this.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Iniciando...';
-
-        fetch('../api/iniciar_produccion.php', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'id=<?= $ot['id'] ?>'
-        })
-        .then(r => r.json())
-        .then(resp => {
-            if (resp.ok) {
-                window.location.href = 'registrar_produccion.php?id=<?= $ot['id'] ?>';
-            } else {
-                alert(resp.error || 'Error al iniciar producción');
-                location.reload();
-            }
-        });
-    });
-}
-</script>
-
-<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>

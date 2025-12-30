@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'guard
 // Catálogos
 // ============================
 $opps = db_all("SELECT id_opp, titulo FROM t_crm_oportunidad ORDER BY id_opp DESC");
-$vendedores = db_all("SELECT id_vendedor, nombre FROM t_vendedor WHERE activo=1");
+$vendedores = db_all("SELECT id_vendedor, nombre FROM t_vendedores WHERE activo=1");
 $clientes = db_all("SELECT id_cliente, RazonSocial FROM c_cliente WHERE Activo=1");
 $tipos = db_all("SELECT id_tipo_gasto, descripcion FROM c_gasto_tipo WHERE activo=1");
 
@@ -66,7 +66,7 @@ $gastos = db_all("
     SELECT g.*, o.titulo, v.nombre AS vendedor, c.RazonSocial
     FROM t_crm_gasto g
     JOIN t_crm_oportunidad o ON o.id_opp = g.id_opp
-    JOIN t_vendedor v ON v.id_vendedor = g.id_vendedor
+    JOIN t_vendedores v ON v.id_vendedor = g.id_vendedor
     LEFT JOIN c_cliente c ON c.id_cliente = g.id_cliente
     ORDER BY g.fecha_crea DESC
     LIMIT 100

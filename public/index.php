@@ -7,6 +7,13 @@
 
 require_once __DIR__ . '/../app/auth_check.php';
 
+$uri = $_SERVER['REQUEST_URI'] ?? '';
+
+if (strpos($uri, '/api/') === false) {
+    session_start();
+}
+
+
 // Si auth_check no redirigió, significa que hay sesión válida.
 // Redirigimos al dashboard.
 header("Location: /assistpro_kardex_fc/public/dashboard/index.php");

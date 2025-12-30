@@ -8,6 +8,13 @@ $db = db_pdo();
 $mensaje_ok = '';
 $mensaje_error = '';
 
+/**
+ * Escape HTML seguro para PHP 8.1+ (evita deprecations por NULL).
+ */
+function h($v): string {
+    return htmlspecialchars((string)($v ?? ''), ENT_QUOTES, 'UTF-8');
+}
+
 $id_lead_filtro = isset($_GET['lead']) ? (int)$_GET['lead'] : 0;
 $lead_actual = null;
 
@@ -192,19 +199,19 @@ $etapas_posibles = [
         CRM – Oportunidades
         <?php if ($lead_actual): ?>
             <small class="text-muted">
-                &nbsp;|&nbsp; Lead: 
-                <?= htmlspecialchars($lead_actual['nombre_contacto']) ?>
-                (<?= htmlspecialchars($lead_actual['empresa']) ?>)
+                &nbsp;|&nbsp; Lead:
+                <?= h($lead_actual['nombre_contacto'] ?? '') ?>
+                (<?= h($lead_actual['empresa'] ?? '') ?>)
             </small>
         <?php endif; ?>
     </h4>
 
     <?php if ($mensaje_ok): ?>
-        <div class="alert alert-success py-1"><?= htmlspecialchars($mensaje_ok) ?></div>
+        <div class="alert alert-success py-1"><?= h($mensaje_ok) ?></div>
     <?php endif; ?>
 
     <?php if ($mensaje_error): ?>
-        <div class="alert alert-danger py-1"><?= htmlspecialchars($mensaje_error) ?></div>
+        <div class="alert alert-danger py-1"><?= h($mensaje_error) ?></div>
     <?php endif; ?>
 
     <!-- Alta rápida de oportunidad -->
@@ -216,7 +223,7 @@ $etapas_posibles = [
             <form method="post" class="row g-2 align-items-end">
                 <input type="hidden" name="accion" value="guardar_opp">
                 <?php if ($lead_actual): ?>
-                    <input type="hidden" name="id_lead" value="<?= (int)$lead_actual['id_lead'] ?>">
+                    <input type="hidden" name="id_lead" value="<?= (int)($lead_actual['id_lead'] ?? 0) ?>">
                 <?php else: ?>
                     <div class="col-md-2">
                         <label class="form-label mb-0">ID Lead (opcional)</label>
@@ -230,7 +237,7 @@ $etapas_posibles = [
                         <option value="">-- Sin cliente aún --</option>
                         <?php foreach ($clientes as $cli): ?>
                             <option value="<?= (int)$cli['id_cliente'] ?>">
-                                <?= htmlspecialchars($cli['RazonSocial'] . ' [' . $cli['Cve_Clte'] . ']') ?>
+                                <?= h(($cli['RazonSocial'] ?? '') . ' [' . ($cli['Cve_Clte'] ?? '') . ']') ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -256,7 +263,7 @@ $etapas_posibles = [
                     <label class="form-label mb-0">Etapa</label>
                     <select name="etapa" class="form-select form-select-sm">
                         <?php foreach ($etapas_posibles as $et): ?>
-                            <option value="<?= htmlspecialchars($et) ?>"><?= htmlspecialchars($et) ?></option>
+                            <option value="<?= h($et) ?>"><?= h($et) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -302,98 +309,102 @@ $etapas_posibles = [
                         <tbody>
                             <?php foreach ($opps as $o): ?>
                                 <tr>
-                                    <td><?= htmlspecialchars($o['fecha_crea']) ?></td>
-                                    <td><?= htmlspecialchars($o['titulo']) ?></td>
+                                    <td><?= h($o['fecha_crea'] ?? '') ?></td>
+                                    <td><?= h($o['titulo'] ?? '') ?></td>
                                     <td>
-                                        <?php if ($o['nombre_contacto']): ?>
-                                            <div><strong>Lead: </strong><?= htmlspecialchars($o['nombre_contacto']) ?></div>
-                                            <?php if ($o['empresa']): ?>
-                                                <div><small><?= htmlspecialchars($o['empresa']) ?></small></div>
+                                        <?php if (!empty($o['nombre_contacto'])): ?>
+                                            <div><strong>Lead: </strong><?= h($o['nombre_contacto']) ?></div>
+                                            <?php if (!empty($o['empresa'])): ?>
+                                                <div><small><?= h($o['empresa']) ?></small></div>
                                             <?php endif; ?>
                                         <?php endif; ?>
-                                        <?php if ($o['cliente_nombre']): ?>
-                                            <div><strong>Cliente: </strong><?= htmlspecialchars($o['cliente_nombre']) ?></div>
+                                        <?php if (!empty($o['cliente_nombre'])): ?>
+                                            <div><strong>Cliente: </strong><?= h($o['cliente_nombre']) ?></div>
                                         <?php endif; ?>
                                     </td>
                                     <td class="text-end">
-                                        <?= number_format($o['valor_estimado'], 2) ?>
+                                        <?= number_format((float)($o['valor_estimado'] ?? 0), 2) ?>
                                     </td>
                                     <td class="text-center">
-                                        <?= (int)$o['probabilidad'] ?>%
+                                        <?= (int)($o['probabilidad'] ?? 0) ?>%
                                     </td>
                                     <td>
-                                        <span class="badge bg-secondary"><?= htmlspecialchars($o['etapa']) ?></span>
+                                        <span class="badge bg-secondary"><?= h($o['etapa'] ?? '') ?></span>
                                     </td>
-                                    <td><?= htmlspecialchars($o['fecha_cierre_estimada']) ?></td>
-                                    <td><?= htmlspecialchars($o['usuario_responsable']) ?></td>
+
+                                    <!-- FIX PRINCIPAL: estos 2 venían NULL y tronaban en PHP 8.1+ -->
+                                    <td><?= h($o['fecha_cierre_estimada'] ?? '') ?></td>
+                                    <td><?= h($o['usuario_responsable'] ?? '') ?></td>
+
                                     <td>
                                         <div class="d-flex flex-column gap-1">
                                             <button type="button"
-                                                    class="btn btn-sm btn-outline-primary"
+                                                    class="btn btn-outline-primary btn-sm"
                                                     data-bs-toggle="modal"
                                                     data-bs-target="#modalEtapa<?= (int)$o['id_opp'] ?>">
                                                 Etapa
                                             </button>
-
-                                            <a href="/assistpro_kardex_fc/public/procesos/cotizaciones.php?id_opp=<?= (int)$o['id_opp'] ?>"
-                                               class="btn btn-sm btn-success">
+                                            <a class="btn btn-success btn-sm"
+                                               href="/assistpro_kardex_fc/public/procesos/cotizaciones.php?id_opp=<?= (int)$o['id_opp'] ?>">
                                                 Cotización
                                             </a>
-
-                                            <a href="/assistpro_kardex_fc/public/crm/actividades.php?id_opp=<?= (int)$o['id_opp'] ?>"
-                                               class="btn btn-sm btn-secondary">
+                                            <a class="btn btn-secondary btn-sm"
+                                               href="/assistpro_kardex_fc/public/crm/actividades.php?id_opp=<?= (int)$o['id_opp'] ?>">
                                                 Actividades
                                             </a>
                                         </div>
+
+                                        <!-- Modal etapa -->
+                                        <div class="modal fade" id="modalEtapa<?= (int)$o['id_opp'] ?>" tabindex="-1">
+                                            <div class="modal-dialog modal-dialog-centered">
+                                                <div class="modal-content">
+                                                    <form class="modal-content" method="post">
+                                                        <input type="hidden" name="accion" value="cambiar_etapa">
+                                                        <input type="hidden" name="id_opp" value="<?= (int)$o['id_opp'] ?>">
+
+                                                        <div class="modal-header py-2">
+                                                            <h5 class="modal-title">Cambiar etapa – OPP #<?= (int)$o['id_opp'] ?></h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                        </div>
+
+                                                        <div class="modal-body" style="font-size:0.85rem;">
+                                                            <p><strong><?= h($o['titulo'] ?? '') ?></strong></p>
+                                                            <p>
+                                                                Etapa actual:
+                                                                <span class="badge bg-secondary"><?= h($o['etapa'] ?? '') ?></span>
+                                                            </p>
+
+                                                            <div class="mb-2">
+                                                                <label class="form-label">Nueva etapa</label>
+                                                                <select name="etapa_nueva" class="form-select form-select-sm" required>
+                                                                    <option value="">-- Seleccione --</option>
+                                                                    <?php foreach ($etapas_posibles as $et): ?>
+                                                                        <option value="<?= h($et) ?>"
+                                                                            <?= ($et === ($o['etapa'] ?? '')) ? 'selected' : '' ?>>
+                                                                            <?= h($et) ?>
+                                                                        </option>
+                                                                    <?php endforeach; ?>
+                                                                </select>
+                                                            </div>
+
+                                                            <div class="mb-2">
+                                                                <label class="form-label">Comentario (opcional)</label>
+                                                                <input type="text" name="comentario" class="form-control form-control-sm">
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div class="modal-footer py-2">
+                                                            <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                                                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- /Modal -->
                                     </td>
                                 </tr>
-
-                                <!-- Modal cambio de etapa -->
-                                <div class="modal fade" id="modalEtapa<?= (int)$o['id_opp'] ?>" tabindex="-1">
-                                    <div class="modal-dialog">
-                                        <form class="modal-content" method="post">
-                                            <input type="hidden" name="accion" value="cambiar_etapa">
-                                            <input type="hidden" name="id_opp" value="<?= (int)$o['id_opp'] ?>">
-
-                                            <div class="modal-header py-2">
-                                                <h5 class="modal-title">Cambiar etapa – OPP #<?= (int)$o['id_opp'] ?></h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                            </div>
-
-                                            <div class="modal-body" style="font-size:0.85rem;">
-                                                <p><strong><?= htmlspecialchars($o['titulo']) ?></strong></p>
-                                                <p>
-                                                    Etapa actual:
-                                                    <span class="badge bg-secondary"><?= htmlspecialchars($o['etapa']) ?></span>
-                                                </p>
-
-                                                <div class="mb-2">
-                                                    <label class="form-label">Nueva etapa</label>
-                                                    <select name="etapa_nueva" class="form-select form-select-sm" required>
-                                                        <option value="">-- Seleccione --</option>
-                                                        <?php foreach ($etapas_posibles as $et): ?>
-                                                            <option value="<?= htmlspecialchars($et) ?>"
-                                                                <?= $et === $o['etapa'] ? 'selected' : '' ?>>
-                                                                <?= htmlspecialchars($et) ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                </div>
-
-                                                <div class="mb-2">
-                                                    <label class="form-label">Comentario (opcional)</label>
-                                                    <input type="text" name="comentario" class="form-control form-control-sm">
-                                                </div>
-                                            </div>
-
-                                            <div class="modal-footer py-2">
-                                                <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
-                                                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-
                             <?php endforeach; ?>
                         </tbody>
                     </table>
@@ -413,42 +424,42 @@ $etapas_posibles = [
                                 <div class="card-body p-2">
                                     <div class="d-flex justify-content-between">
                                         <div>
-                                            <div><strong><?= htmlspecialchars($o['titulo']) ?></strong></div>
+                                            <div><strong><?= h($o['titulo'] ?? '') ?></strong></div>
                                             <div>
                                                 <small class="text-muted">
-                                                    <?= htmlspecialchars(substr($o['fecha_crea'],0,16)) ?>
+                                                    <?= h(substr((string)($o['fecha_crea'] ?? ''), 0, 16)) ?>
                                                 </small>
                                             </div>
                                         </div>
                                         <div class="text-end">
-                                            <span class="badge bg-secondary"><?= htmlspecialchars($o['etapa']) ?></span>
+                                            <span class="badge bg-secondary"><?= h($o['etapa'] ?? '') ?></span>
                                             <div class="mt-1">
-                                                <small><?= (int)$o['probabilidad'] ?>% prob.</small>
+                                                <small><?= (int)($o['probabilidad'] ?? 0) ?>% prob.</small>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <?php if ($o['nombre_contacto'] || $o['cliente_nombre']): ?>
+                                    <?php if (!empty($o['nombre_contacto']) || !empty($o['cliente_nombre'])): ?>
                                         <div class="mt-1">
-                                            <?php if ($o['nombre_contacto']): ?>
-                                                <div><small>Lead: <?= htmlspecialchars($o['nombre_contacto']) ?></small></div>
+                                            <?php if (!empty($o['nombre_contacto'])): ?>
+                                                <div><small>Lead: <?= h($o['nombre_contacto']) ?></small></div>
                                             <?php endif; ?>
-                                            <?php if ($o['cliente_nombre']): ?>
-                                                <div><small>Cliente: <?= htmlspecialchars($o['cliente_nombre']) ?></small></div>
+                                            <?php if (!empty($o['cliente_nombre'])): ?>
+                                                <div><small>Cliente: <?= h($o['cliente_nombre']) ?></small></div>
                                             <?php endif; ?>
                                         </div>
                                     <?php endif; ?>
 
                                     <div class="mt-1 d-flex justify-content-between">
                                         <div>
-                                            <small>Valor: <?= number_format($o['valor_estimado'],2) ?></small><br>
-                                            <?php if ($o['fecha_cierre_estimada']): ?>
-                                                <small>Cierre: <?= htmlspecialchars($o['fecha_cierre_estimada']) ?></small>
+                                            <small>Valor: <?= number_format((float)($o['valor_estimado'] ?? 0), 2) ?></small><br>
+                                            <?php if (!empty($o['fecha_cierre_estimada'])): ?>
+                                                <small>Cierre: <?= h($o['fecha_cierre_estimada']) ?></small>
                                             <?php endif; ?>
                                         </div>
                                         <div class="text-end">
                                             <small>Asesor:</small><br>
-                                            <small><?= htmlspecialchars($o['usuario_responsable']) ?></small>
+                                            <small><?= h($o['usuario_responsable'] ?? '') ?></small>
                                         </div>
                                     </div>
 
@@ -474,9 +485,7 @@ $etapas_posibles = [
                                 </div>
                             </div>
                         </div>
-
-                        <!-- Reuso del mismo modal de etapa definido en la parte desktop -->
-                        <!-- (ya está incluido arriba, Bootstrap lo maneja igual en móvil) -->
+                        <!-- Reuso del mismo modal de etapa definido arriba -->
                     <?php endforeach; ?>
                 </div>
             </div>

@@ -5,7 +5,6 @@ require_once __DIR__ . '/../../app/auth_check.php';
 ?>
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -418,41 +417,47 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // ADMINISTRACIÓN
             'Administración' => [
-                ['titulo' => 'Empresas', 'url' => 'catalogos/cat_c_compania.php', 'icono' => 'fa-building'],
-                ['titulo' => 'Almacenes', 'url' => 'catalogos/cat_c_almacenp.php', 'icono' => 'fa-building'],
-                ['titulo' => 'Usuarios', 'url' => 'catalogos/usuarios.php', 'icono' => 'fa-user'],
-                ['titulo' => 'Perfiles', 'url' => 'catalogos/cat_t_perfilesusuarios.php', 'icono' => 'fa-id-badge'],
+                ['titulo' => 'Empresas',   'url' => 'catalogos/empresas.php',     'icono' => 'fa-building'],
+                ['titulo' => 'Almacenes',  'url' => 'catalogos/almacenes.php',    'icono' => 'fa-building'],
+                ['titulo' => 'Usuarios',   'url' => 'catalogos/usuarios.php',     'icono' => 'fa-user'],
+                ['titulo' => 'Perfiles Usuario',   'url' => 'catalogos/perfiles_usuario.php',     'icono' => 'fa-id-badge'],
             ],
 
             // CATÁLOGOS
             'Catálogos' => [
-                ['titulo' => 'Ajustes | Incidencias',         'url' => 'catalogos/catalogos/cat_c_motivoajuste.php', 'icono' => 'fa-circle'],
-                ['titulo' => 'License Plate',                 'url' => 'catalogos/catalogos/cat_c_licenseplate.php', 'icono' => 'fa-circle'],
-                ['titulo' => 'Motivo No Ventas',              'url' => 'catalogos/catalogos/cat_c_motivosnoventas.php', 'icono' => 'fa-circle'],
-                ['titulo' => 'Motivo de Devolución',          'url' => 'catalogos/catalogos/cat_c_motivodevolucion.php', 'icono' => 'fa-circle'],
-                ['titulo' => 'Pallet y Contenedores', 'url' => 'catalogos/catalogos/cat_c_charolas.php', 'icono' => 'fa-box-open'],
-                ['titulo' => 'Rutas', 'url' => 'catalogos/cat_t_ruta.php', 'icono' => 'fa-route'],
-                ['titulo' => 'Protocolos de Entrada', 'url' => 'catalogos/catalogos/cat_c_protocolos.php', 'icono' => 'fa-clipboard-check'],
-                ['titulo' => 'Proveedores',                   'url' => 'catalogos/proveedores.php',           'icono' => 'fa-truck-field'],
-                ['titulo' => 'Proyectos | CC', 'url' => 'catalogos/catalogos/cat_c_proyectos.php', 'icono' => 'fa-diagram-project'],
-                ['titulo' => 'QA | Cuarentena', 'url' => 'catalogos/catalogos/cat_c_motivocuarentena.php', 'icono' => 'fa-triangle-exclamation'],
-                ['titulo' => 'Clientes',                 'url' => 'catalogos/clientes.php',      'icono' => 'fa-road'],
-                ['titulo' => 'Tipo de Prioridad', 'url' => 'catalogos/catalogos/cat_c_tipodeprioridad.php', 'icono' => 'fa-layer-group'],
+                ['titulo' => 'Articulos',                'url' => 'catalogos/articulos.php',             'icono' => 'fa-circle'],
+                ['titulo' => 'Tipos de Articulos',       'url' => 'catalogos/tipos_articulos.php',       'icono' => 'fa-circle'],
+        	['titulo' => 'Grupo de Articulos',       'url' => 'catalogos/grupos.php', 'icono' => 'fa-layer-group'],
+ 	      
+                ['titulo' => 'Motivo No Ventas',         'url' => 'catalogos/motivos_no_venta.php',  'icono' => 'fa-circle'],
+                ['titulo' => 'Motivo de Devolución',     'url' => 'catalogos/motivos_devolucion.php', 'icono' => 'fa-circle'],
+                ['titulo' => 'Pallets y Contenedores',   'url' => 'catalogos/pallets_contenedores.php',   'icono' => 'fa-box-open'],
+                ['titulo' => 'BL Ubicaciones',           'url' => 'catalogos/ubicaciones.php',            'icono' => 'fa-box-open'],
 
-                ['titulo' => 'Formas de Pago', 'url' => 'catalogos/formas_pago.php', 'icono' => 'fa-layer-group'],
+
+                ['titulo' => 'Rutas',                    'url' => 'catalogos/rutas.php',                   'icono' => 'fa-route'],
+                ['titulo' => 'Clientes',                 'url' => 'catalogos/clientes.php',                'icono' => 'fa-road'],
+                ['titulo' => 'Grupo de clientes',        'url' => 'catalogos/clientes_grupo.php',          'icono' => 'fa-layer-group'],
+                ['titulo' => 'Destinatarios',            'url' => 'catalogos/destinatarios.php',           'icono' => 'fa-road'],
+                ['titulo' => 'Proveedores',              'url' => 'catalogos/proveedores.php',             'icono' => 'fa-truck-field'],
+                ['titulo' => 'Contactos',                'url' => 'catalogos/contactos.php', 'icono' => 'fa-layer-group'],
+
+
+                ['titulo' => 'Protocolos de Entrada',    'url' => 'catalogos/protocolos_entrada.php',        'icono' => 'fa-clipboard-check'],
+                ['titulo' => 'Proyectos | CC',           'url' => 'catalogos/cat_c_proyectos.php',         'icono' => 'fa-diagram-project'],
+                ['titulo' => 'QA | Cuarentena',          'url' => 'catalogos/cat_c_motivocuarentena.php',  'icono' => 'fa-triangle-exclamation'],
+
+
+                ['titulo' => 'Tipo de Prioridad',        'url' => 'catalogos/catalogos/cat_c_tipodeprioridad.php', 'icono' => 'fa-layer-group'],
+                ['titulo' => 'Formas de Pago',           'url' => 'catalogos/formas_pago.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Configuracion de Tickets', 'url' => 'catalogos/ticket.php', 'icono' => 'fa-layer-group'],
-                ['titulo' => 'Contactos', 'url' => 'catalogos/contactos.php', 'icono' => 'fa-layer-group'],
-                ['titulo' => 'Grupo de clientes', 'url' => 'catalogos/clientes_grupo.php', 'icono' => 'fa-layer-group'],
- 
-		['titulo' => 'Grupo de Articulos', 'url' => 'catalogos/grupos.php', 'icono' => 'fa-layer-group'],
- 		['titulo' => 'Clasificacion de Articulos', 'url' => 'catalogos/clasificacion.php', 'icono' => 'fa-layer-group'],
+		['titulo' => 'Clasificacion',            'url' => 'catalogos/clasificacion.php', 'icono' => 'fa-layer-group'],
 	               
             ],
 
             // E-Commerce
             'E-Commerce' => [
                 ['titulo' => 'Catálogo digital',     'url' => 'portal_clientes/catalogo.php',              'icono' => 'fa-building'],
-                ['titulo' => 'Registro Prospectos',  'url' => 'portal_clientes/registro_cliente.php',      'icono' => 'fa-building'],
                 ['titulo' => 'Registro Prospectos',  'url' => 'portal_clientes/registro_cliente.php',      'icono' => 'fa-building'],
                 ['titulo' => 'Mis pedidos',          'url' => 'portal_clientes/mis_pedidos.php',           'icono' => 'fa-building'],     
                 ['titulo' => 'Admin Banners',        'url' => 'portal_admin_imagenes/banners.php',         'icono' => 'fa-building'],
@@ -461,12 +466,14 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
            // CRM
             'CRM' => [
-                ['titulo' => 'Cotizaciones', 'url' => 'crm/cotizaciones.php', 'icono' => 'fa-building'],
-                ['titulo' => 'Actividades', 'url' => 'crm/actividades.php', 'icono' => 'fa-building'],
-                ['titulo' => 'Dashboard', 'url' => 'crm/dashboard.php', 'icono' => 'fa-building'],
-                ['titulo' => 'Leads', 'url' => 'crm/leads.php', 'icono' => 'fa-building'],
-                ['titulo' => 'Oportunidades', 'url' => 'crm/oportunidades.php', 'icono' => 'fa-building'],
-            ],
+                ['titulo' => 'Cotizaciones',         'url' => 'crm/cotizaciones.php',               'icono' => 'fa-building'],
+                ['titulo' => 'Actividades',          'url' => 'crm/actividades.php',                'icono' => 'fa-building'],
+                ['titulo' => 'Dashboard',            'url' => 'crm/dashboard.php',                  'icono' => 'fa-building'],
+                ['titulo' => 'Leads',                'url' => 'crm/leads.php',                      'icono' => 'fa-building'],
+                ['titulo' => 'Oportunidades',        'url' => 'crm/oportunidades.php',              'icono' => 'fa-building'],
+                ['titulo' => 'Gastos Operativos',    'url' => 'crm/gastos.php',                     'icono' => 'fa-building'],
+          
+              ],
 
             // DEPOT SERVICE CONTROL
             'DSC Depot Service Control' => [
@@ -477,8 +484,11 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Cotizaciones', 'url' => 'procesos/servicio_depot/servicio_generar_cotizacion.php', 'icono' => 'fa-circle'],
             ],
 
+
             // SFA
             'SFA' => [
+                ['titulo' => 'Dashboard Activos',        'url' => 'sfa/dashboard_activos.php',                    'icono' => 'fa-tags'],
+                ['titulo' => 'Geolocalización Activos',  'url' => 'sfa/activos_geocercas.php',                    'icono' => 'fa-tags'],
                 ['titulo' => 'Resumen Ejecutivo',        'url' => 'sfa/resumen_rutas.php',                        'icono' => 'fa-tags'],
                 ['titulo' => 'Planeación de Rutas',      'url' => 'sfa/planeacion_rutas_destinatarios.php',       'icono' => 'fa-tags'],
                 ['titulo' => 'Configuración Rutas',      'url' => 'sfa/rutas_planning.php',                       'icono' => 'fa-tags'],
@@ -486,12 +496,19 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Lista de Descuentos',      'url' => 'sfa/lista_descuentos.php',                     'icono' => 'fa-percent'],
                 ['titulo' => 'Promociones',              'url' => 'sfa/promociones.php',                          'icono' => 'fa-gift'],
                 ['titulo' => 'Grupo Promociones',        'url' => 'sfa/grupo_promociones.php',                    'icono' => 'fa-layer-group'],
-            ],
+                ['titulo' => 'Asignación de Activos',    'url' => 'sfa/activos_control.php',                      'icono' => 'fa-tags'],             
+                ['titulo' => 'Activos',                  'url' => 'sfa/activos.php',                              'icono' => 'fa-tags'],             
+                ['titulo' => 'Tipos de Activos',         'url' => 'sfa/activo_tipos.php',                         'icono' => 'fa-tags'],
+                ['titulo' => 'Propietario Activos',      'url' => 'sfa/activos_propiedad.php',                    'icono' => 'fa-percent'],
+                ['titulo' => 'Status Activos',           'url' => 'sfa/activo_estados.php',                       'icono' => 'fa-gift'],
+                ['titulo' => 'Condicion Activos',        'url' => 'sfa/activo_condicion.php',                     'icono' => 'fa-layer-group'],
+		['titulo' => 'Encuestas',        	 'url' => 'sfa/encuestas.php',                            'icono' => 'fa-layer-group'],
+                     ],
 
             // TMS
             'TMS' => [
-                ['titulo' => 'Mantenimiento', 'url' => 'tms/mto_transportes.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Ordenes de Servicio', 'url' => 'tms/mto_ordenes.php', 'icono' => 'fa-percent'],
+                ['titulo' => 'Mantenimiento',            'url' => 'tms/mto_transportes.php',                      'icono' => 'fa-tags'],
+                ['titulo' => 'Ordenes de Servicio',      'url' => 'tms/mto_ordenes.php',                          'icono' => 'fa-percent'],
                      ],
             // TMS
             'YMS' => [
@@ -502,14 +519,13 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // ADMINISTRACIÓN DE ALMACEN
             'Administración Almacen' => [
-                ['titulo' => 'Config. de Almacén', 'url' => 'config_almacen/configuracion_almacen.php', 'icono' => 'fa-gear'],
-                ['titulo' => 'Pallets y Contenedores', 'url' => 'config_almacen/license_plate.php', 'icono' => 'fa-right-left'],
+                ['titulo' => 'Config. de Almacén',     'url' => 'config_almacen/configuracion_almacen.php', 'icono' => 'fa-gear'],
+                ['titulo' => 'Pallets y Contenedores', 'url' => 'config_almacen/license_plate.php',         'icono' => 'fa-right-left'],
             ],
 
 
             // PROCESOS
             'Procesos' => [
-                ['titulo' => 'Diagnostico', 'url' => 'procesos/reporte_diagnostico.php', 'icono' => 'fa-cubes'],
                 ['titulo' => 'Control de Incidencias (PQRS)', 'url' => 'procesos/incidencias.php', 'icono' => 'fa-flag'],
                 ['titulo' => 'Control de Activos', 'url' => 'procesos/control_activos.php', 'icono' => 'fa-screwdriver-wrench'],
                 ['titulo' => 'Logística Inversa', 'url' => 'procesos/logistica_inversa.php', 'icono' => 'fa-rotate-left'],
@@ -518,34 +534,37 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // INGRESOS
             'Ingresos' => [
-                ['titulo' => 'Orden de Compra', 'url' => 'ingresos/orden_compra.php', 'icono' => 'fa-right-to-bracket'],
-                ['titulo' => 'Recepción de Materiales', 'url' => 'ingresos/recepcion_materiales.php', 'icono' => 'fa-box-archive'],
+                ['titulo' => 'Orden de Compra',            'url' => 'ingresos/orden_compra.php', 'icono' => 'fa-right-to-bracket'],
+                ['titulo' => 'Recepción de Materiales',    'url' => 'ingresos/recepcion_materiales.php', 'icono' => 'fa-box-archive'],
                 ['titulo' => 'Administración de Ingresos', 'url' => 'ingresos/ingresos_admin.php', 'icono' => 'fa-right-left'],
-                ['titulo' => 'Importador', 'url' => 'ingresos/importador_ingresos.php', 'icono' => 'fa-box-archive'],
+                ['titulo' => 'Importador',                 'url' => 'ingresos/importador_ingresos.php', 'icono' => 'fa-box-archive'],
             ],
 
             // PUTAWAY
             'PutAway' => [
-                ['titulo' => 'PutAway (Acomodo)', 'url' => 'putaway/putaway.php', 'icono' => 'fa-right-left'],
-                ['titulo' => 'Traslado', 'url' => 'putaway/traslado.php', 'icono' => 'fa-box-archive'],
-                ['titulo' => 'Traslado entre Almacenes', 'url' => 'putaway/traslado_entre_almacenes.php', 'icono' => 'fa-box-archive'],
+                ['titulo' => 'PutAway (Acomodo)',          'url' => 'putaway/putaway.php',              'icono' => 'fa-right-left'],
+                ['titulo' => 'RTM (Pendiente de Acomodo)', 'url' => 'putaway/rtm.php',                  'icono' => 'fa-right-left'],
+                ['titulo' => 'Traslado',                   'url' => 'putaway/traslado.php',             'icono' => 'fa-box-archive'],
+                ['titulo' => 'Traslado entre Almacenes',   'url' => 'putaway/traslado_entre_almacenes.php', 'icono' => 'fa-box-archive'],
             ],
 
             // PICKING
             'Picking' => [
-                ['titulo' => 'Registro de Pedidos', 'url' => 'pedidos/pedido.php', 'icono' => 'fa-right-left'],
-                ['titulo' => 'Administración de Pedidos', 'url' => 'pedidos/picking_admin.php', 'icono' => 'fa-right-left'],
-                ['titulo' => 'Secuencia de Surtido', 'url' => 'pedidos/secuencia_surtido.php', 'icono' => 'fa-box-archive'],
+                ['titulo' => 'Registro de Pedidos',        'url' => 'pedidos/pedido.php',            'icono' => 'fa-right-left'],
+                ['titulo' => 'Administración de Pedidos',  'url' => 'pedidos/picking_admin.php',     'icono' => 'fa-right-left'],
+                ['titulo' => 'Secuencia de Surtido',       'url' => 'pedidos/secuencia_surtido.php', 'icono' => 'fa-box-archive'],
             ],
 
 
             // MANUFACTURA KITTING
             'Manufactura' => [
                 ['titulo' => 'Agregar Editar Componentes ',   'url' => 'manufactura/bom.php',                      'icono' => 'fa-industry'],
-                ['titulo' => 'Orden de Produción',            'url' => 'manufactura/orden_produccion.php',         'icono' => 'fa-flag'],
-                ['titulo' => 'Administración OTs',            'url' => 'manufactura/orden_produccion_admin.php',   'icono' => 'fa-screwdriver-wrench'],
-                ['titulo' => 'Importación OTs',               'url' => 'manufactura/ot_importar.php',              'icono' => 'fa-screwdriver-wrench'],
-            ],
+                ['titulo' => 'Planeacion OP',                 'url' => 'manufactura/orden_produccion.php',         'icono' => 'fa-flag'],
+                ['titulo' => 'Importador OPs',                'url' => 'manufactura/ot_importar.php',              'icono' => 'fa-industry'],
+                ['titulo' => 'Administrador OP',              'url' => 'manufactura/orden_produccion_admin_base.php',         'icono' => 'fa-flag'],
+                ['titulo' => 'Monitor Producción',            'url' => 'manufactura/monitor_produccion.php',       'icono' => 'fa-flag'],
+                
+                             ],
 
             // QA AUDITORIA
             'QA Auditoría' => [
