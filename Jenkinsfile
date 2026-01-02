@@ -35,6 +35,21 @@ pipeline {
             }
         }
 
+        stage('Build - QA') {
+            when {
+                anyOf {
+                    branch 'QA'
+                    expression { env.GIT_BRANCH == 'origin/QA' }
+                }
+            }
+            steps {
+                echo "🔨 Build QA - ${IMAGE_NAME}"
+                sh "docker build --target production -t ${DOCKER_USER}/${IMAGE_NAME}:QA ."
+                sh "echo \$DOCKER_CREDENTIALS_PSW | docker login -u \$DOCKER_CREDENTIALS_USR --password-stdin"
+                sh "docker push ${DOCKER_USER}/${IMAGE_NAME}:QA"
+            }
+        }
+
         stage('Build - Production') {
             when {
                 anyOf {
@@ -69,12 +84,41 @@ pipeline {
                         def port = '8890'
                         
                         // Variables de BD para DEV
-                        def dbHost = '212.56.46.7'
+                        def dbHost = '89.117.146.27'
                         def dbName = 'assistpro_etl_fc_dev'
-                        def dbUser = 'root'
-                        def dbPass = 'H922CDPs6=:W'
+                        def dbUser = 'root2'
+                        def dbPass = 'AdvLogMysql21#'
                         
                         deployContainer(serverIP, user, containerName, storagePath, port, 'DEV', dbHost, dbName, dbUser, dbPass)
+                    }
+                }
+            }
+        }
+
+        stage('Deploy - QA') {
+            when {
+                anyOf {
+                    branch 'QA'
+                    expression { env.GIT_BRANCH == 'origin/QA' }
+                }
+            }
+            steps {
+                echo "🚀 Deploy QA"
+                sshagent(['server-dev']) {
+                    script {
+                        def serverIP = '212.56.46.7'
+                        def user = 'root'
+                        def containerName = 'kardex-fc-qa'
+                        def storagePath = '/home/kardex-fc-storage-qa'
+                        def port = '8891'
+                        
+                        // Variables de BD para QA
+                        def dbHost = '89.117.146.27'
+                        def dbName = 'assistpro_etl_fc_qa'
+                        def dbUser = 'root2'
+                        def dbPass = 'AdvLogMysql21#'
+                        
+                        deployContainer(serverIP, user, containerName, storagePath, port, 'QA', dbHost, dbName, dbUser, dbPass)
                     }
                 }
             }
@@ -95,13 +139,13 @@ pipeline {
                         def user = 'root'
                         def containerName = 'kardex-fc-lacanada'
                         def storagePath = '/home/kardex-fc-storage-lacanada'
-                        def port = '8891'
+                        def port = '8892'
                         
                         // Variables de BD para LA CANADA
-                        def dbHost = '212.56.46.7'
+                        def dbHost = '89.117.146.27'
                         def dbName = 'assistpro_etl_fc_canada'
-                        def dbUser = 'root'
-                        def dbPass = 'H922CDPs6=:W'
+                        def dbUser = 'root2'
+                        def dbPass = 'AdvLogMysql21#'
                         
                         deployContainer(serverIP, user, containerName, storagePath, port, 'PROD', dbHost, dbName, dbUser, dbPass)
                     }
