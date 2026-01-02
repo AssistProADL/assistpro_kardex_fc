@@ -1,203 +1,161 @@
 pipeline {
     agent any
-
+    
     environment {
         CI = 'true'
         DOCKER_USER = 'alfredo1011'
         DOCKER_CREDENTIALS = credentials('dockerhub-credentials')
-        PROJECT_NAME = 'assistpro-kardex-fc'
+        IMAGE_NAME = 'assistpro-kardex-fc'
     }
 
     stages {
-        stage('Load Instance Configurations') {
-            steps {
-                script {
-                    // ========================================
-                    // CONFIGURACIÓN DE INSTANCIAS
-                    // Agrega instancias aquí - se desplegarán automáticamente
-                    // ========================================
-                    env.INSTANCE_CONFIGS = groovy.json.JsonOutput.toJson([
-                        'cliente1': [
-                            server: '212.56.46.7',
-                            port: '7070',
-                            dbHost: 'mysql1.example.com',
-                            dbPort: '3306',
-                            dbName: 'assistpro_cliente1',
-                            dbUser: 'user_cliente1',
-                            dbPass: 'pass_cliente1'
-                        ],
-                        'cliente2': [
-                            server: '212.56.46.8',
-                            port: '7070',
-                            dbHost: 'mysql2.example.com',
-                            dbPort: '3306',
-                            dbName: 'assistpro_cliente2',
-                            dbUser: 'user_cliente2',
-                            dbPass: 'pass_cliente2'
-                        ],
-                        'cliente3': [
-                            server: '212.56.46.7',
-                            port: '7071',
-                            dbHost: 'mysql3.example.com',
-                            dbPort: '3306',
-                            dbName: 'assistpro_cliente3',
-                            dbUser: 'user_cliente3',
-                            dbPass: 'pass_cliente3'
-                        ]
-                        // ⬇️ AGREGA MÁS INSTANCIAS AQUÍ
-                        // Se desplegarán automáticamente en el próximo commit
-                    ])
-                    
-                    def configs = new groovy.json.JsonSlurper().parseText(env.INSTANCE_CONFIGS)
-                    echo "=== 📋 Instancias Configuradas ==="
-                    configs.each { name, config ->
-                        echo "  • ${name} → ${config.server}:${config.port}"
-                    }
-                    echo "Total: ${configs.size()} instancias"
-                }
-            }
-        }
-
         stage('Debug Info') {
             steps {
                 script {
-                    echo "=== 🔍 DEBUG INFO ==="
-                    echo "Branch: ${env.GIT_BRANCH}"
-                    echo "Commit: ${env.GIT_COMMIT}"
-                    sh 'pwd'
-                    sh 'ls -la'
+                    echo "=== DEBUG INFO ==="
+                    sh 'pwd && ls -la'
+                    echo "================="
                 }
             }
         }
 
-        stage('Build Docker Image') {
+        // ========== BUILD STAGES ==========
+        stage('Build - Development') {
             when {
-                branch 'main'
+                anyOf {
+                    branch 'dev'
+                    expression { env.GIT_BRANCH == 'origin/dev' }
+                }
             }
             steps {
-                echo "🔨 Compilando Imagen Docker"
-                
-                script {
-                    sh "touch .env"
-
-                    echo "📦 Building Docker image: ${DOCKER_USER}/${PROJECT_NAME}:latest"
-                    sh "docker build -f Dockerfile -t ${DOCKER_USER}/${PROJECT_NAME}:latest ."
-
-                    echo "🔐 Login to DockerHub"
-                    sh "echo \$DOCKER_CREDENTIALS_PSW | docker login -u \$DOCKER_CREDENTIALS_USR --password-stdin"
-
-                    echo "📤 Pushing image to DockerHub"
-                    sh "docker push ${DOCKER_USER}/${PROJECT_NAME}:latest"
-                    
-                    echo "✅ Imagen construida y publicada"
-                }
+                echo "🔨 Build DEV - ${IMAGE_NAME}"
+                sh "docker build --target development -t ${DOCKER_USER}/${IMAGE_NAME}:DEV ."
+                sh "echo \$DOCKER_CREDENTIALS_PSW | docker login -u \$DOCKER_CREDENTIALS_USR --password-stdin"
+                sh "docker push ${DOCKER_USER}/${IMAGE_NAME}:DEV"
             }
         }
 
-        stage('Deploy All Instances') {
+        stage('Build - Production') {
             when {
-                branch 'main'
+                anyOf {
+                    branch 'main'
+                    expression { env.GIT_BRANCH == 'origin/main' }
+                }
             }
             steps {
-                script {
-                    def configs = new groovy.json.JsonSlurper().parseText(env.INSTANCE_CONFIGS)
-                    
-                    echo "\n🚀 Iniciando deployment de ${configs.size()} instancias..."
-                    
-                    // Desplegar cada instancia
-                    configs.each { instanceName, config ->
-                        stage("Deploy ${instanceName}") {
-                            echo "\n=== 🎯 Desplegando: ${instanceName} ==="
-                            echo "Servidor: ${config.server}"
-                            echo "Puerto: ${config.port}"
-                            
-                            sshagent(['server-dev']) {
-                                def user = 'root'
-                                def containerName = "assistpro-kardex-${instanceName}"
-                                
-                                try {
-                                    // Login to DockerHub on target server
-                                    sh """ssh -o StrictHostKeyChecking=no -l ${user} ${config.server} \
-                                        'echo ${DOCKER_CREDENTIALS_PSW} | docker login -u ${DOCKER_CREDENTIALS_USR} --password-stdin'"""
+                echo "🔨 Build PROD - ${IMAGE_NAME}"
+                sh "docker build --target production -t ${DOCKER_USER}/${IMAGE_NAME}:PROD ."
+                sh "echo \$DOCKER_CREDENTIALS_PSW | docker login -u \$DOCKER_CREDENTIALS_USR --password-stdin"
+                sh "docker push ${DOCKER_USER}/${IMAGE_NAME}:PROD"
+            }
+        }
 
-                                    // Stop & Remove existing container
-                                    sh """ssh -o StrictHostKeyChecking=no -l ${user} ${config.server} \
-                                        'docker stop ${containerName} || true && docker rm ${containerName} || true'"""
-
-                                    // Run new container
-                                    sh """ssh -o StrictHostKeyChecking=no -l ${user} ${config.server} \
-                                        'docker run -d --pull=always \
-                                        --name ${containerName} \
-                                        -p ${config.port}:7071 \
-                                        -e DB_HOST=${config.dbHost} \
-                                        -e DB_PORT=${config.dbPort} \
-                                        -e DB_NAME=${config.dbName} \
-                                        -e DB_USER=${config.dbUser} \
-                                        -e DB_PASS=${config.dbPass} \
-                                        -e DB_CHARSET=utf8mb4 \
-                                        -e DB_TIMEZONE=-06:00 \
-                                        -e INSTANCE_NAME=${instanceName} \
-                                        --restart unless-stopped \
-                                        ${DOCKER_USER}/${PROJECT_NAME}:latest'"""
-                                    
-                                    // Verificar
-                                    sh "sleep 5"
-                                    sh """ssh -o StrictHostKeyChecking=no -l ${user} ${config.server} \
-                                        'docker ps --filter name=${containerName} --format "{{.Names}}: {{.Status}}"'"""
-                                    
-                                    echo "✅ ${instanceName} desplegado exitosamente"
-                                    echo "🌐 URL: http://${config.server}:${config.port}/assistpro_kardex_fc/"
-                                    
-                                } catch (Exception e) {
-                                    echo "❌ Error desplegando ${instanceName}: ${e.message}"
-                                    // Continuar con las demás instancias
-                                }
-                            }
-                        }
+        // ========== DEPLOY STAGES ==========
+        stage('Deploy - Development') {
+            when {
+                anyOf {
+                    branch 'dev'
+                    expression { env.GIT_BRANCH == 'origin/dev' }
+                }
+            }
+            steps {
+                echo "🚀 Deploy DEV"
+                sshagent(['server-dev']) {
+                    script {
+                        def serverIP = '212.56.46.7'
+                        def user = 'root'
+                        def containerName = 'kardex-fc-dev'
+                        def storagePath = '/home/kardex-fc-storage-dev'
+                        def port = '8890'
+                        
+                        // Variables de BD para DEV
+                        def dbHost = '212.56.46.7'
+                        def dbName = 'assistpro_etl_fc_dev'
+                        def dbUser = 'root'
+                        def dbPass = 'H922CDPs6=:W'
+                        
+                        deployContainer(serverIP, user, containerName, storagePath, port, 'DEV', dbHost, dbName, dbUser, dbPass)
                     }
                 }
             }
         }
 
-        stage('Deployment Summary') {
+        stage('Deploy - La Canada (Production)') {
             when {
-                branch 'main'
+                anyOf {
+                    branch 'main'
+                    expression { env.GIT_BRANCH == 'origin/main' }
+                }
             }
             steps {
-                script {
-                    def configs = new groovy.json.JsonSlurper().parseText(env.INSTANCE_CONFIGS)
-                    
-                    echo "\n=========================================="
-                    echo "✅ DEPLOYMENT COMPLETADO"
-                    echo "=========================================="
-                    echo "📦 Imagen: ${DOCKER_USER}/${PROJECT_NAME}:latest"
-                    echo "🎯 Instancias desplegadas: ${configs.size()}"
-                    echo "\n📋 URLs de acceso:"
-                    
-                    configs.each { name, config ->
-                        echo "  • ${name}: http://${config.server}:${config.port}/assistpro_kardex_fc/"
+                echo "🚀 Deploy LA CANADA (PRODUCTION)"
+                sshagent(['server-dev']) {
+                    script {
+                        def serverIP = '212.56.46.7'
+                        def user = 'root'
+                        def containerName = 'kardex-fc-lacanada'
+                        def storagePath = '/home/kardex-fc-storage-lacanada'
+                        def port = '8891'
+                        
+                        // Variables de BD para LA CANADA
+                        def dbHost = '212.56.46.7'
+                        def dbName = 'assistpro_etl_fc_canada'
+                        def dbUser = 'root'
+                        def dbPass = 'H922CDPs6=:W'
+                        
+                        deployContainer(serverIP, user, containerName, storagePath, port, 'PROD', dbHost, dbName, dbUser, dbPass)
                     }
-                    
-                    echo "=========================================="
                 }
             }
         }
     }
 
     post {
-        always {
-            echo "🧹 Limpiando..."
-            sh 'docker image prune -f || true'
-        }
         success {
-            script {
-                def configs = new groovy.json.JsonSlurper().parseText(env.INSTANCE_CONFIGS)
-                echo "\n✅ Pipeline ejecutado exitosamente"
-                echo "Total de instancias: ${configs.size()}"
-            }
+            echo "✅ Pipeline ejecutado exitosamente - Branch: ${env.BRANCH_NAME}"
         }
         failure {
-            echo "\n❌ Pipeline falló - revisa los logs arriba"
+            echo "❌ Pipeline falló en la rama ${env.BRANCH_NAME}"
+        }
+        always {
+            sh 'docker image prune -f || true'
         }
     }
+}
+
+// ========== HELPER FUNCTION ==========
+def deployContainer(serverIP, user, containerName, storagePath, port, tag, dbHost, dbName, dbUser, dbPass) {
+    sh """ssh -o StrictHostKeyChecking=no -l ${user} ${serverIP} \
+        'echo ${DOCKER_CREDENTIALS_PSW} | docker login -u ${DOCKER_CREDENTIALS_USR} --password-stdin'"""
+    
+    sh "ssh -o StrictHostKeyChecking=no -l ${user} ${serverIP} 'docker stop ${containerName} || true'"
+    sh "ssh -o StrictHostKeyChecking=no -l ${user} ${serverIP} 'docker rm ${containerName} || true'"
+    
+    sh """ssh -o StrictHostKeyChecking=no -l ${user} ${serverIP} \
+        'mkdir -p ${storagePath}/logs ${storagePath}/uploads'"""
+    
+    sh """ssh -o StrictHostKeyChecking=no -l ${user} ${serverIP} \
+        'chown -R 33:33 ${storagePath} && chmod -R 775 ${storagePath}'"""
+    
+    sh """ssh -o StrictHostKeyChecking=no -l ${user} ${serverIP} \
+        'docker run -d --pull=always \
+        --name ${containerName} \
+        -p ${port}:80 \
+        -e DB_HOST=${dbHost} \
+        -e DB_PORT=3306 \
+        -e DB_NAME=${dbName} \
+        -e DB_USER=${dbUser} \
+        -e DB_PASS="${dbPass}" \
+        -e DB_CHARSET=utf8mb4 \
+        -v ${storagePath}/logs:/var/www/html/assistpro_kardex_fc/storage/logs \
+        -v ${storagePath}/uploads:/var/www/html/assistpro_kardex_fc/uploads \
+        --restart unless-stopped \
+        ${DOCKER_USER}/${IMAGE_NAME}:${tag}'"""
+    
+    sh "sleep 10"
+    sh "ssh -o StrictHostKeyChecking=no -l ${user} ${serverIP} 'docker ps | grep ${containerName}'"
+    
+    echo "✅ Deploy ${tag} completado - http://${serverIP}:${port}"
+    echo "📁 Storage: ${storagePath}"
+    echo "🗄️  Database: ${dbHost}/${dbName}"
 }

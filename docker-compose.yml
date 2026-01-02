@@ -1,81 +1,21 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  # Aplicación PHP
   app:
     build:
       context: .
-      dockerfile: Dockerfile.dev
-    container_name: assistpro-kardex-dev
+      target: development
     ports:
-      - "7070:7071"
+      - "80:80"
     volumes:
-      # Montar código fuente para desarrollo en vivo
       - .:/var/www/html/assistpro_kardex_fc
-      # Persistir logs
-      - ./storage/logs:/var/www/html/assistpro_kardex_fc/storage/logs
-      - ./logs:/var/www/html/assistpro_kardex_fc/logs
+      - /var/www/html/assistpro_kardex_fc/vendor # Exclude vendor
     environment:
-      - DB_HOST=mysql
+      # Configurar con credenciales de BD dev
+      - DB_HOST=89.117.146.27
       - DB_PORT=3306
-      - DB_NAME=assistpro_etl_fc
-      - DB_USER=root
-      - DB_PASS=root
+      - DB_NAME=assistpro_etl_fc_dev
+      - DB_USER=root2
+      - DB_PASS=AdvLogMysql21#
       - DB_CHARSET=utf8mb4
-      - DB_TIMEZONE=-06:00
-    depends_on:
-      - mysql
-    networks:
-      - assistpro-network
     restart: unless-stopped
-
-  # Base de datos MySQL
-  mysql:
-    image: mysql:8.0
-    container_name: assistpro-mysql-dev
-    # Puerto NO expuesto - solo accesible desde Docker network
-    expose:
-      - "3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: assistpro_etl_fc
-      MYSQL_USER: assistpro
-      MYSQL_PASSWORD: assistpro123
-    volumes:
-      # Persistir datos de MySQL
-      - mysql-data:/var/lib/mysql
-      # Importar SQL inicial si existe
-      - ./database/init:/docker-entrypoint-initdb.d
-    networks:
-      - assistpro-network
-    restart: unless-stopped
-    command: --default-authentication-plugin=mysql_native_password
-
-  # PhpMyAdmin para gestión de BD
-  phpmyadmin:
-    image: phpmyadmin:latest
-    container_name: assistpro-phpmyadmin-dev
-    ports:
-      - "8081:80"
-    environment:
-      PMA_HOST: mysql
-      PMA_PORT: 3306
-      # Autenticación adicional con htpasswd
-      PMA_ABSOLUTE_URI: http://localhost:8081/
-      # Usuario/password adicional para PhpMyAdmin (además del MySQL)
-      # Usuario: admin / Password: admin123
-      APACHE_HTTP_AUTH_USER: admin
-      APACHE_HTTP_AUTH_PASSWORD: admin123
-    depends_on:
-      - mysql
-    networks:
-      - assistpro-network
-    restart: unless-stopped
-
-networks:
-  assistpro-network:
-    driver: bridge
-
-volumes:
-  mysql-data:
-    driver: local

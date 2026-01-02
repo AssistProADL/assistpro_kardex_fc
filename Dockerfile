@@ -1,166 +1,99 @@
-FROM php:8.3-fpm
+# ============================================
+# BASE IMAGE - Apache + PHP 8.4
+# ============================================
+FROM php:8.4-apache AS base
 
-# Instalar Nginx, Supervisor y dependencias
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx supervisor \
-    git curl zip unzip ca-certificates \
-    libfreetype6-dev libjpeg62-turbo-dev libpng-dev \
-    libonig-dev libxml2-dev libicu-dev libzip-dev zlib1g-dev \
-  && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libzip-dev \
+    libicu-dev \
+    unzip \
+    git \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+        gd \
+        mysqli \
+        pdo_mysql \
+        zip \
+        intl \
+        opcache \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Instalar extensiones de PHP necesarias
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd intl zip sockets
+# Enable Apache modules
+RUN a2enmod rewrite headers
 
-# Configurar PHP para manejar archivos grandes y múltiples usuarios
-RUN echo "upload_max_filesize = 100M" > /usr/local/etc/php/conf.d/uploads.ini \
-    && echo "post_max_size = 100M" >> /usr/local/etc/php/conf.d/uploads.ini \
-    && echo "max_execution_time = 300" >> /usr/local/etc/php/conf.d/uploads.ini \
-    && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/uploads.ini
+# Configure Apache to serve from /var/www/html (like XAMPP)
+ENV APACHE_DOCUMENT_ROOT=/var/www/html
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-# Configurar PHP-FPM para 100+ usuarios concurrentes
-RUN echo "[www]" > /usr/local/etc/php-fpm.d/zz-custom.conf \
-    && echo "pm = dynamic" >> /usr/local/etc/php-fpm.d/zz-custom.conf \
-    && echo "pm.max_children = 150" >> /usr/local/etc/php-fpm.d/zz-custom.conf \
-    && echo "pm.start_servers = 30" >> /usr/local/etc/php-fpm.d/zz-custom.conf \
-    && echo "pm.min_spare_servers = 20" >> /usr/local/etc/php-fpm.d/zz-custom.conf \
-    && echo "pm.max_spare_servers = 50" >> /usr/local/etc/php-fpm.d/zz-custom.conf \
-    && echo "pm.max_requests = 500" >> /usr/local/etc/php-fpm.d/zz-custom.conf
+# Set working directory
+WORKDIR /var/www/html
 
-# Instalar Composer
+# Copy project to /var/www/html/assistpro_kardex_fc (like XAMPP structure)
+RUN mkdir -p assistpro_kardex_fc
+COPY . assistpro_kardex_fc/
+
+# Create storage directories and set permissions
+RUN mkdir -p assistpro_kardex_fc/storage/framework/views \
+             assistpro_kardex_fc/storage/logs \
+             assistpro_kardex_fc/uploads \
+    && chown -R www-data:www-data assistpro_kardex_fc \
+    && chmod -R 755 assistpro_kardex_fc/storage \
+    && chmod -R 755 assistpro_kardex_fc/uploads
+
+# ============================================
+# DEVELOPMENT IMAGE
+# ============================================
+FROM base AS development
+
+# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Configurar directorio de trabajo
-# IMPORTANTE: Usamos /var/www/html/assistpro_kardex_fc para respetar rutas hardcoded
+# Development PHP config
+RUN echo "display_errors=On" >> /usr/local/etc/php/conf.d/dev.ini \
+    && echo "error_reporting=E_ALL" >> /usr/local/etc/php/conf.d/dev.ini \
+    && echo "log_errors=On" >> /usr/local/etc/php/conf.d/dev.ini \
+    && echo "memory_limit=512M" >> /usr/local/etc/php/conf.d/dev.ini
+
+# Install dependencies
 WORKDIR /var/www/html/assistpro_kardex_fc
+RUN composer install --no-interaction --prefer-dist
 
-# Copiar archivos del proyecto
-COPY . .
+# Copy db.php template
+COPY docker/db.php.docker app/db.php
+RUN chown www-data:www-data app/db.php
 
-# Crear directorios necesarios
-RUN mkdir -p storage/logs \
-    storage/framework/cache \
-    storage/framework/sessions \
-    storage/framework/views \
-    logs
+# Copy redirect index.php to web root
+COPY docker/index.php /var/www/html/index.php
+RUN chown www-data:www-data /var/www/html/index.php
 
-# Instalar dependencias de Composer
-RUN composer install --optimize-autoloader --no-dev
+EXPOSE 80
 
-# Configurar permisos
-RUN chown -R www-data:www-data /var/www/html/assistpro_kardex_fc \
-    && chmod -R 775 /var/www/html/assistpro_kardex_fc/storage \
-    && chmod -R 775 /var/www/html/assistpro_kardex_fc/logs
+# ============================================
+# PRODUCTION IMAGE  
+# ============================================
+FROM base AS production
 
-# Configurar Nginx
-# ROOT en /var/www/html para que /assistpro_kardex_fc/... funcione
-RUN echo 'server {\n\
-    listen 7071;\n\
-    server_name localhost;\n\
-    root /var/www/html;\n\
-\n\
-    add_header X-Frame-Options "SAMEORIGIN";\n\
-    add_header X-Content-Type-Options "nosniff";\n\
-\n\
-    index index.php index.html;\n\
-    charset utf-8;\n\
-\n\
-    client_max_body_size 100M;\n\
-    client_body_timeout 300s;\n\
-    client_header_timeout 300s;\n\
-\n\
-    # Proteger archivos sensibles\n\
-    location ~ /\.(?!well-known).* {\n\
-        deny all;\n\
-    }\n\
-    location ~ ^/assistpro_kardex_fc/(storage|bootstrap|vendor|app)/ {\n\
-        deny all;\n\
-    }\n\
-    location ~ ^/assistpro_kardex_fc/(composer\.|\.env|artisan) {\n\
-        deny all;\n\
-    }\n\
-\n\
-    # Manejo principal de rutas\n\
-    location / {\n\
-        try_files $uri $uri/ /assistpro_kardex_fc/index.php?$query_string;\n\
-    }\n\
-\n\
-    # Ejecución de archivos PHP\n\
-    location ~ \.php$ {\n\
-        fastcgi_pass 127.0.0.1:9000;\n\
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;\n\
-        include fastcgi_params;\n\
-        fastcgi_read_timeout 300;\n\
-        fastcgi_send_timeout 300;\n\
-        fastcgi_buffer_size 128k;\n\
-        fastcgi_buffers 256 16k;\n\
-        fastcgi_busy_buffers_size 256k;\n\
-        fastcgi_temp_file_write_size 256k;\n\
-    }\n\
-}' > /etc/nginx/sites-available/default
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Configurar Supervisor para manejar PHP-FPM y Nginx
-RUN echo '[supervisord]\n\
-nodaemon=true\n\
-user=root\n\
-logfile=/var/log/supervisor/supervisord.log\n\
-pidfile=/var/run/supervisord.pid\n\
-\n\
-[program:php-fpm]\n\
-command=php-fpm\n\
-autostart=true\n\
-autorestart=true\n\
-priority=5\n\
-stderr_logfile=/var/log/php-fpm.err.log\n\
-stdout_logfile=/var/log/php-fpm.out.log\n\
-stdout_logfile_maxbytes=10MB\n\
-stderr_logfile_maxbytes=10MB\n\
-\n\
-[program:nginx]\n\
-command=nginx -g "daemon off;"\n\
-autostart=true\n\
-autorestart=true\n\
-priority=10\n\
-stderr_logfile=/var/log/nginx.err.log\n\
-stdout_logfile=/var/log/nginx.out.log\n\
-stdout_logfile_maxbytes=10MB\n\
-stderr_logfile_maxbytes=10MB' > /etc/supervisor/conf.d/supervisord.conf
+# Production PHP config
+COPY docker/php-production.ini /usr/local/etc/php/conf.d/production.ini
 
-# Crear directorio de logs de supervisor
-RUN mkdir -p /var/log/supervisor
+# Install dependencies (no dev)
+WORKDIR /var/www/html/assistpro_kardex_fc
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
-# Crear script de entrypoint
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-echo "=== Configurando AssistPro Kardex FC ==="\n\
-\n\
-# Asegurar que los directorios existen\n\
-mkdir -p /var/www/html/assistpro_kardex_fc/storage/logs\n\
-mkdir -p /var/www/html/assistpro_kardex_fc/logs\n\
-\n\
-# Configurar permisos\n\
-chown -R www-data:www-data /var/www/html/assistpro_kardex_fc/storage\n\
-chown -R www-data:www-data /var/www/html/assistpro_kardex_fc/logs\n\
-chmod -R 775 /var/www/html/assistpro_kardex_fc/storage\n\
-chmod -R 775 /var/www/html/assistpro_kardex_fc/logs\n\
-\n\
-echo "✅ Permisos configurados"\n\
-\n\
-# Ejecutar migraciones\n\
-echo "🔄 Ejecutando migraciones..."\n\
-php artisan migrate --force || echo "⚠️  Error en migraciones (puede ser normal si ya están aplicadas)"\n\
-echo "✅ Migraciones completadas"\n\
-\n\
-echo "🚀 Iniciando servicios (PHP-FPM + Nginx)..."\n\
-\n\
-# Iniciar supervisord\n\
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' > /docker-entrypoint.sh
+# Copy db.php for production
+COPY docker/db.php.docker app/db.php
+RUN chown www-data:www-data app/db.php
 
-RUN chmod +x /docker-entrypoint.sh
+# Copy redirect index.php to web root
+COPY docker/index.php /var/www/html/index.php
+RUN chown www-data:www-data /var/www/html/index.php
 
-# Exponer puerto interno
-EXPOSE 7071
-
-# Usar el entrypoint
-ENTRYPOINT ["/docker-entrypoint.sh"]
+EXPOSE 80
