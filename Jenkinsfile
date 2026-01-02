@@ -81,7 +81,7 @@ pipeline {
                         def user = 'root'
                         def containerName = 'kardex-fc-dev'
                         def storagePath = '/home/kardex-fc-storage-dev'
-                        def port = '8890'
+                        def port = '8893'
                         
                         // Variables de BD para DEV
                         def dbHost = '89.117.146.27'
@@ -110,7 +110,7 @@ pipeline {
                         def user = 'root'
                         def containerName = 'kardex-fc-qa'
                         def storagePath = '/home/kardex-fc-storage-qa'
-                        def port = '8891'
+                        def port = '8894'
                         
                         // Variables de BD para QA
                         def dbHost = '89.117.146.27'
@@ -139,7 +139,7 @@ pipeline {
                         def user = 'root'
                         def containerName = 'kardex-fc-lacanada'
                         def storagePath = '/home/kardex-fc-storage-lacanada'
-                        def port = '8892'
+                        def port = '8895'
                         
                         // Variables de BD para LA CANADA
                         def dbHost = '89.117.146.27'
