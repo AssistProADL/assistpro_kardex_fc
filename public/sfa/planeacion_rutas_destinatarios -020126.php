@@ -1,3 +1,4 @@
+ 
 <?php
 include __DIR__ . '/../bi/_menu_global.php';
 ?>
@@ -37,7 +38,7 @@ include __DIR__ . '/../bi/_menu_global.php';
         <div class="col-md-3">
           <label class="form-label mb-1">Almacén (IdEmpresa)</label>
           <select id="f_almacen" class="form-select form-select-sm">
-            <option value="">Cargando.</option>
+            <option value="">Cargando...</option>
           </select>
           <div class="ap-hint" id="hint_almacen"></div>
         </div>
@@ -74,12 +75,12 @@ include __DIR__ . '/../bi/_menu_global.php';
         <div class="col-md-3">
           <label class="form-label fw-bold mb-1">Ruta destino (global)</label>
           <select id="ruta_global" class="form-select form-select-sm">
-            <option value="">Cargando.</option>
+            <option value="">Cargando...</option>
           </select>
           <div class="ap-hint" id="hint_rutas"></div>
         </div>
 
-        <div class="col-md-5">
+        <div class="col-md-6">
           <label class="form-label fw-bold mb-1">Días de visita (global)</label><br>
           <label class="me-2"><input type="checkbox" class="dia-global" value="Lu"> L</label>
           <label class="me-2"><input type="checkbox" class="dia-global" value="Ma"> M</label>
@@ -90,8 +91,7 @@ include __DIR__ . '/../bi/_menu_global.php';
           <label class="me-2"><input type="checkbox" class="dia-global" value="Do"> Do</label>
         </div>
 
-        <div class="col-md-4 text-end">
-          <button id="btn_asignar_comercial" class="btn btn-outline-primary btn-sm">🧾 Asignar Comercial</button>
+        <div class="col-md-3 text-end">
           <button id="btn_guardar" class="btn btn-success btn-sm">Guardar planeación</button>
         </div>
 
@@ -111,12 +111,6 @@ include __DIR__ . '/../bi/_menu_global.php';
                   <th style="width:36px"><input type="checkbox" id="chk_all"></th>
                   <th>Cliente</th>
                   <th>Destinatario</th>
-
-                  <!-- NUEVO BLOQUE COMERCIAL -->
-                  <th>Lista Precio</th>
-                  <th>Promoción</th>
-                  <th>Descuento</th>
-
                   <th>Dirección</th>
                   <th>Colonia</th>
                   <th>CP</th>
@@ -132,7 +126,7 @@ include __DIR__ . '/../bi/_menu_global.php';
               </thead>
               <tbody id="tabla_destinatarios">
                 <tr>
-                  <td colspan="17" class="text-center text-muted">Seleccione un almacén</td>
+                  <td colspan="14" class="text-center text-muted">Seleccione un almacén</td>
                 </tr>
               </tbody>
             </table>
@@ -172,80 +166,13 @@ include __DIR__ . '/../bi/_menu_global.php';
 
 </div>
 
-<!-- MODAL ASIGNAR COMERCIAL -->
-<div class="modal fade" id="mdlComercial" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content" style="border-radius:14px;">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold">Asignación Comercial (Listas / Promos / Descuentos)</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body">
-        <div class="ap-hint mb-2">
-          Alcance recomendado: aplicar sobre <b>seleccionados</b>. Para campañas masivas, usa geocerca y luego aplica.
-        </div>
-
-        <div class="row g-2 mb-2">
-          <div class="col-md-4">
-            <div class="badge bg-light text-dark w-100 text-start">Almacén: <span id="mdl_alm">-</span></div>
-          </div>
-          <div class="col-md-4">
-            <div class="badge bg-light text-dark w-100 text-start">Seleccionados: <span id="mdl_sel">0</span></div>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label mb-1">Modo</label>
-            <select id="mdl_scope" class="form-select form-select-sm">
-              <option value="selected">Solo seleccionados</option>
-              <option value="filtered">Todos los filtrados (página actual)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row g-2">
-          <div class="col-md-4">
-            <label class="form-label mb-1">Lista de Precios</label>
-            <select id="mdl_listaP" class="form-select form-select-sm">
-              <option value="">(Sin cambio)</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label mb-1">Promoción</label>
-            <select id="mdl_listaPromo" class="form-select form-select-sm">
-              <option value="">(Sin cambio)</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label mb-1">Descuento</label>
-            <select id="mdl_listaD" class="form-select form-select-sm">
-              <option value="">(Sin cambio)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-check mt-3">
-          <input class="form-check-input" type="checkbox" id="mdl_overwrite">
-          <label class="form-check-label" for="mdl_overwrite">Sobrescribir asignaciones existentes</label>
-        </div>
-
-        <div class="alert alert-info mt-3 mb-0" style="font-size:12px;">
-          <b>Gobierno de datos:</b> esta operación actualiza <code>relclilis</code> por destinatario (Id_Destinatario) y deja traza en API response.
-        </div>
-
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-        <button class="btn btn-primary btn-sm" id="mdl_apply">Aplicar</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script>
 let pagina = 1;
-let RUTAS = [];
-let CLIENTES = [];
+let RUTAS = [];          // [{id,nombre}]
+let CLIENTES = [];       // data cargada del API
 let map, drawingManager, polygon = null;
 let markers = [];
+let byId = new Map();    // id_destinatario -> row record
 let selected = new Set();
 
 const API_ALMACENES_CANDIDATOS = [
@@ -301,6 +228,7 @@ async function fetchFirstOk(urls, opts=null){
       if(json && json.error){ logDebug("Endpoint error: "+u, json); continue; }
       if(Array.isArray(json)) return {url:u, data:json};
       if(json && Array.isArray(json.data)) return {url:u, data:json.data};
+      // algunos regresan {almacenes:[...]}
       for(const k of ["almacenes","rutas","items","rows"]){
         if(json && Array.isArray(json[k])) return {url:u, data:json[k]};
       }
@@ -357,12 +285,6 @@ function initMap(){
   });
 }
 
-function normFloat(v){
-  if(v===null || v===undefined) return NaN;
-  const s = String(v).trim().replace(",",".");
-  return parseFloat(s);
-}
-
 function paintMarkers(rows){
   markers.forEach(m=>m.setMap(null));
   markers = [];
@@ -371,8 +293,8 @@ function paintMarkers(rows){
 
   const bounds = new google.maps.LatLngBounds();
   rows.forEach(r=>{
-    const lat = normFloat(r.latitud);
-    const lng = normFloat(r.longitud);
+    const lat = parseFloat(r.latitud);
+    const lng = parseFloat(r.longitud);
     if(!isFinite(lat) || !isFinite(lng)) return;
 
     const pos = {lat,lng};
@@ -388,14 +310,7 @@ function paintMarkers(rows){
     markers.push(marker);
   });
 
-  if(markers.length>0) map.fitBounds(bounds);
-
-  // 🔥 FIX: al repintar, re-sincroniza selección vs polígono (si existe)
-  if(polygon){
-    recomputeSelectionFromPolygon();
-  }else{
-    syncSelectedToTable();
-  }
+  map.fitBounds(bounds);
 }
 
 function recomputeSelectionFromPolygon(){
@@ -418,11 +333,11 @@ function syncSelectedToTable(){
 }
 
 /* ===========================
-   CARGA SELECTS
+   CARGA SELECTS (robusto)
    =========================== */
 async function cargarAlmacenes(){
   const sel = document.getElementById("f_almacen");
-  sel.innerHTML = `<option value="">Cargando.</option>`;
+  sel.innerHTML = `<option value="">Cargando...</option>`;
   document.getElementById("hint_almacen").textContent = "";
 
   const resp = await fetchFirstOk(API_ALMACENES_CANDIDATOS);
@@ -448,6 +363,7 @@ async function cargarRutas(almacen){
   sel.innerHTML = `<option value="">Cargando...</option>`;
   document.getElementById("hint_rutas").textContent = "";
 
+  // algunos endpoints requieren almacén, otros no. probamos ambos
   const urls = [];
   API_RUTAS_CANDIDATOS.forEach(u=>{
     urls.push(u);
@@ -482,12 +398,13 @@ async function cargarDatos(){
   if(!alm) return;
 
   const fd = new FormData();
+  // tolerante: mandamos ambos nombres
   fd.append('almacen', alm);
   fd.append('IdEmpresa', alm);
   fd.append('buscar', document.getElementById('f_buscar').value || '');
   fd.append('pagina', pagina);
 
-  document.getElementById("badge_status").textContent = "Consultando.";
+  document.getElementById("badge_status").textContent = "Consultando...";
   logDebug("POST clientes_asignacion_data.php", {almacen:alm, buscar:document.getElementById('f_buscar').value, pagina});
 
   try{
@@ -513,7 +430,7 @@ async function cargarDatos(){
 }
 
 /* ===========================
-   RENDER TABLA + MAPA + COMERCIAL
+   RENDER TABLA + MAPA
    =========================== */
 function renderTabla(resp, errMsg=null){
   const tb = document.getElementById('tabla_destinatarios');
@@ -523,7 +440,7 @@ function renderTabla(resp, errMsg=null){
   CLIENTES = rows;
 
   if(errMsg){
-    tb.innerHTML = `<tr><td colspan="17" class="text-center text-danger">${errMsg}</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="14" class="text-center text-danger">${errMsg}</td></tr>`;
     document.getElementById("k_total").textContent = `0 clientes`;
     document.getElementById("k_gps").textContent = `0 con GPS`;
     document.getElementById("k_sel").textContent = `0 seleccionados`;
@@ -532,7 +449,7 @@ function renderTabla(resp, errMsg=null){
   }
 
   if(rows.length===0){
-    tb.innerHTML = `<tr><td colspan="17" class="text-center text-muted">Sin datos</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="14" class="text-center text-muted">Sin datos</td></tr>`;
     document.getElementById("k_total").textContent = `0 clientes`;
     document.getElementById("k_gps").textContent = `0 con GPS`;
     document.getElementById("k_sel").textContent = `0 seleccionados`;
@@ -561,12 +478,6 @@ function renderTabla(resp, errMsg=null){
         <td><input type="checkbox" class="chk-row" data-id="${id}"></td>
         <td>[${r.clave_cliente ?? ''}] ${r.cliente ?? ''}</td>
         <td>[${r.id}] ${r.clave_destinatario ?? ''} ${r.destinatario ?? ''}</td>
-
-        <!-- NUEVO: placeholders comerciales -->
-        <td class="c_lp" data-id="${id}"><span class="text-muted">—</span></td>
-        <td class="c_promo" data-id="${id}"><span class="text-muted">—</span></td>
-        <td class="c_desc" data-id="${id}"><span class="text-muted">—</span></td>
-
         <td>${r.direccion ?? ''}</td>
         <td>${r.colonia ?? ''}</td>
         <td>${r.postal ?? ''}</td>
@@ -594,7 +505,7 @@ function renderTabla(resp, errMsg=null){
     `;
   });
 
-  // check individuales
+  // eventos check individuales
   document.querySelectorAll(".chk-row").forEach(chk=>{
     chk.addEventListener("change", ()=>{
       const id = String(chk.dataset.id);
@@ -603,40 +514,86 @@ function renderTabla(resp, errMsg=null){
     });
   });
 
-  // Pinta mapa
+  // Pinta mapa con los que tienen GPS
   paintMarkers(rows);
-
-  // 🔥 Hidrata bloque comercial por lote (solo rows visibles)
-  cargarComercialDeTabla(rows);
 }
 
-async function cargarComercialDeTabla(rows){
-  try{
-    const ids = rows.map(r=>String(r.id)).filter(x=>x);
-    if(ids.length===0) return;
+/* ===========================
+   GUARDAR
+   =========================== */
+document.getElementById('btn_guardar').onclick = async ()=>{
 
-    const resp = await fetch('../api/clientes_comercial_data.php',{
+  const almacen = document.getElementById('f_almacen').value;
+  const rutaGlobal = document.getElementById('ruta_global').value;
+  const diasGlobal = [...document.querySelectorAll('.dia-global:checked')].map(d=>d.value);
+
+  const items = [];
+  document.querySelectorAll('#tabla_destinatarios tr').forEach(tr=>{
+    const chk = tr.querySelector('.chk-row');
+    if(!chk || !chk.checked) return;
+
+    items.push({
+      id_destinatario: chk.dataset.id,
+      ruta: tr.querySelector('.ruta-fila').value,
+      dias: [...tr.querySelectorAll('.dias-fila input:checked')].map(d=>d.value),
+      secuencia: tr.querySelector('.secuencia').value
+    });
+  });
+
+  if(items.length===0){ alert('Seleccione al menos un destinatario'); return; }
+  if(!rutaGlobal && items.every(i=>!i.ruta)){ alert('Seleccione ruta'); return; }
+  if(diasGlobal.length===0 && items.every(i=>i.dias.length===0)){ alert('Seleccione días'); return; }
+
+  try{
+    const resp = await fetch('../api/clientes_asignacion_save.php',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ids: ids })
+      body: JSON.stringify({
+        almacen: almacen,
+        IdEmpresa: almacen,
+        ruta_global: rutaGlobal,
+        dias_global: diasGlobal,
+        items: items
+      })
     }).then(r=>r.json());
 
-    if(resp && resp.ok && resp.data){
-      // resp.data: { "443": {lp:{id,nombre}, promo:{...}, desc:{...}} }
-      Object.keys(resp.data).forEach(id=>{
-        const d = resp.data[id] || {};
-        const elLP = document.querySelector(`td.c_lp[data-id="${id}"]`);
-        const elPR = document.querySelector(`td.c_promo[data-id="${id}"]`);
-        const elDS = document.querySelector(`td.c_desc[data-id="${id}"]`);
-
-        const fmt = (x)=> x && x.id ? `[${x.id}] ${x.nombre||''}` : '—';
-
-        if(elLP) elLP.innerHTML = `<span class="${d.lp && d.lp.id ? 'badge-soft':''}">${fmt(d.lp)}</span>`;
-        if(elPR) elPR.innerHTML = `<span class="${d.promo && d.promo.id ? 'badge-soft':''}">${fmt(d.promo)}</span>`;
-        if(elDS) elDS.innerHTML = `<span class="${d.desc && d.desc.id ? 'badge-soft':''}">${fmt(d.desc)}</span>`;
-      });
-    }else{
-      logDebug("clientes_comercial_data.php sin ok", resp);
-    }
+    if(resp.error){ alert(resp.error); return; }
+    alert(resp.mensaje || 'Planeación guardada');
+    cargarDatos();
   }catch(e){
-    logDebug
+    alert('Error guardando: ' + e);
+  }
+};
+
+/* ===========================
+   EVENTOS
+   =========================== */
+document.getElementById('btn_buscar').onclick=()=>{ pagina=1; cargarDatos(); };
+document.getElementById('btn_refrescar').onclick=()=>{ cargarDatos(); };
+
+document.getElementById('chk_all').onchange = e => {
+  document.querySelectorAll('.chk-row').forEach(c=>{
+    c.checked = e.target.checked;
+    const id = String(c.dataset.id);
+    if(c.checked) selected.add(id); else selected.delete(id);
+  });
+  document.getElementById("k_sel").textContent = `${selected.size} seleccionados`;
+};
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  await cargarAlmacenes();
+
+  document.getElementById('f_almacen').addEventListener('change', async e=>{
+    const alm = e.target.value;
+    selected.clear();
+    if(alm){
+      await cargarRutas(alm);
+      await cargarDatos();
+    }
+  });
+});
+</script>
+
+<?php
+include __DIR__ . '/../bi/_menu_global_end.php';
+?>

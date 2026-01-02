@@ -26,6 +26,7 @@ if($action==='export_csv'){
   fputcsv($out,$headers);
 
   if($tipo==='datos'){
+    // Exporta todo (sin filtros). Si quieres export con filtros, se hace desde la UI con querystring.
     $sql = "SELECT ".implode(',', $headers)." FROM Venta ORDER BY Fecha DESC, Id DESC";
     foreach($pdo->query($sql) as $row) fputcsv($out,$row);
   }
@@ -34,7 +35,12 @@ if($action==='export_csv'){
 }
 
 /* =========================
- * WHERE dinámico
+ * WHERE dinámico (Venta)
+ * REGLA: Excluir canceladas por default
+ * - Si Cancelada viene vacío o no viene -> Cancelada = 0
+ * - Si Cancelada = '' pero el usuario eligió (Todas) en UI: manda Cancelada='' (se considera default=0)
+ *   Para "Todas" real, UI debe mandar Cancelada='*' (si algún día lo quieres); por ahora, default siempre excluye canceladas.
+ * - Si Cancelada=1 -> solo canceladas
  * ========================= */
 function build_where(&$params){
   $where = " WHERE 1=1 ";
@@ -42,11 +48,16 @@ function build_where(&$params){
   $IdEmpresa  = s($_GET['IdEmpresa'] ?? null);
   $RutaId     = i0($_GET['RutaId'] ?? 0);
   $VendedorId = i0($_GET['VendedorId'] ?? 0);
-  $Cancelada  = $_GET['Cancelada'] ?? '';
+
+  // Default: excluir canceladas
+  // Solo si viene explícito 1, mostramos canceladas
+  $CanceladaRaw = $_GET['Cancelada'] ?? null;  // puede venir null, '', '0', '1'
+  $Cancelada = ($CanceladaRaw === null || $CanceladaRaw === '') ? '0' : (string)$CanceladaRaw;
+
   $q          = trim((string)($_GET['q'] ?? ''));
 
-  $fecha_ini  = s($_GET['fecha_ini'] ?? null);
-  $fecha_fin  = s($_GET['fecha_fin'] ?? null);
+  $fecha_ini  = s($_GET['fecha_ini'] ?? null); // YYYY-MM-DD
+  $fecha_fin  = s($_GET['fecha_fin'] ?? null); // YYYY-MM-DD
 
   if($IdEmpresa){
     $where .= " AND v.IdEmpresa = :IdEmpresa ";
@@ -60,10 +71,13 @@ function build_where(&$params){
     $where .= " AND v.VendedorId = :VendedorId ";
     $params[':VendedorId'] = $VendedorId;
   }
-  if($Cancelada !== '' && ($Cancelada==='0' || $Cancelada==='1')){
+
+  // Aplicar regla Cancelada (default = 0)
+  if($Cancelada === '0' || $Cancelada === '1'){
     $where .= " AND IFNULL(v.Cancelada,0) = :Cancelada ";
     $params[':Cancelada'] = (int)$Cancelada;
   }
+
   if($fecha_ini){
     $where .= " AND v.Fecha >= :fecha_ini ";
     $params[':fecha_ini'] = $fecha_ini . " 00:00:00";
@@ -72,6 +86,7 @@ function build_where(&$params){
     $where .= " AND v.Fecha <= :fecha_fin ";
     $params[':fecha_fin'] = $fecha_fin . " 23:59:59";
   }
+
   if($q !== ''){
     $where .= " AND (v.Documento LIKE :q OR v.CodCliente LIKE :q OR v.DocSalida LIKE :q OR v.TipoVta LIKE :q) ";
     $params[':q'] = "%$q%";
@@ -158,7 +173,8 @@ if($action==='detalle'){
 }
 
 /* =========================
- * KPIs
+ * KPIs (incluye Crédito/Contado)
+ * REGLA: usa build_where => default Cancelada=0
  * ========================= */
 if($action==='kpis'){
   $params = [];
@@ -172,7 +188,11 @@ if($action==='kpis'){
       SUM(IFNULL(v.IVA,0)) AS iva,
       SUM(IFNULL(v.IEPS,0)) AS ieps,
       SUM(IFNULL(v.Items,0)) AS items,
-      AVG(IFNULL(v.TOTAL,0)) AS ticket_promedio
+      AVG(IFNULL(v.TOTAL,0)) AS ticket_promedio,
+
+      -- Nuevos: Crédito vs Contado (robusto)
+      SUM(CASE WHEN UPPER(TRIM(IFNULL(v.TipoVta,''))) LIKE 'CREDI%' THEN IFNULL(v.TOTAL,0) ELSE 0 END) AS total_credito,
+      SUM(CASE WHEN UPPER(TRIM(IFNULL(v.TipoVta,''))) LIKE 'CONT%'  THEN IFNULL(v.TOTAL,0) ELSE 0 END) AS total_contado
     FROM Venta v
     $where
   ";
@@ -190,6 +210,9 @@ if($action==='kpis'){
       'ieps'=>(float)($k['ieps'] ?? 0),
       'items'=>(float)($k['items'] ?? 0),
       'ticket_promedio'=>(float)($k['ticket_promedio'] ?? 0),
+
+      'total_credito'=>(float)($k['total_credito'] ?? 0),
+      'total_contado'=>(float)($k['total_contado'] ?? 0),
     ]
   ]);
   exit;
@@ -197,6 +220,7 @@ if($action==='kpis'){
 
 /* =========================
  * LIST paginado
+ * REGLA: usa build_where => default Cancelada=0
  * ========================= */
 if($action==='list'){
   $page = max(1, (int)($_GET['page'] ?? 1));

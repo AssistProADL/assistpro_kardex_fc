@@ -444,11 +444,12 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
 
                 ['titulo' => 'Protocolos de Entrada',    'url' => 'catalogos/protocolos_entrada.php',        'icono' => 'fa-clipboard-check'],
-                ['titulo' => 'Proyectos | CC',           'url' => 'catalogos/cat_c_proyectos.php',         'icono' => 'fa-diagram-project'],
-                ['titulo' => 'QA | Cuarentena',          'url' => 'catalogos/cat_c_motivocuarentena.php',  'icono' => 'fa-triangle-exclamation'],
+                ['titulo' => 'Proyectos | CC',           'url' => 'catalogos/proyecto.php',         'icono' => 'fa-diagram-project'],
+                ['titulo' => 'Ajustes | Incidencias',    'url' => 'catalogos/ajustes_incidencias.php',  'icono' => 'fa-triangle-exclamation'],
+		['titulo' => 'QA | Cuarentena',          'url' => 'catalogos/qa_cuarentena.php',  'icono' => 'fa-triangle-exclamation'],
 
 
-                ['titulo' => 'Tipo de Prioridad',        'url' => 'catalogos/catalogos/cat_c_tipodeprioridad.php', 'icono' => 'fa-layer-group'],
+                ['titulo' => 'Tipo de Prioridad',        'url' => 'catalogos/tipos_prioridad.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Formas de Pago',           'url' => 'catalogos/formas_pago.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Configuracion de Tickets', 'url' => 'catalogos/ticket.php', 'icono' => 'fa-layer-group'],
 		['titulo' => 'Clasificacion',            'url' => 'catalogos/clasificacion.php', 'icono' => 'fa-layer-group'],
@@ -527,7 +528,6 @@ require_once __DIR__ . '/../../app/auth_check.php';
             // PROCESOS
             'Procesos' => [
                 ['titulo' => 'Control de Incidencias (PQRS)', 'url' => 'procesos/incidencias.php', 'icono' => 'fa-flag'],
-                ['titulo' => 'Control de Activos', 'url' => 'procesos/control_activos.php', 'icono' => 'fa-screwdriver-wrench'],
                 ['titulo' => 'Logística Inversa', 'url' => 'procesos/logistica_inversa.php', 'icono' => 'fa-rotate-left'],
                 ['titulo' => 'Ajuste de Existencias', 'url' => 'procesos/ajuste_existencias', 'icono' => 'fa-rotate-left'],
             ],
@@ -542,10 +542,10 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // PUTAWAY
             'PutAway' => [
-                ['titulo' => 'PutAway (Acomodo)',          'url' => 'putaway/putaway.php',              'icono' => 'fa-right-left'],
-                ['titulo' => 'RTM (Pendiente de Acomodo)', 'url' => 'putaway/rtm.php',                  'icono' => 'fa-right-left'],
-                ['titulo' => 'Traslado',                   'url' => 'putaway/traslado.php',             'icono' => 'fa-box-archive'],
-                ['titulo' => 'Traslado entre Almacenes',   'url' => 'putaway/traslado_entre_almacenes.php', 'icono' => 'fa-box-archive'],
+                ['titulo' => 'RTM (Ready To Move)',        'url' => 'putaway/rtm_general.php',                       'icono' => 'fa-right-left'],
+                ['titulo' => 'PutAway (Acomodo)',          'url' => 'putaway/putaway_acomodo.php',                   'icono' => 'fa-right-left'],
+                ['titulo' => 'Traslado',                   'url' => 'putaway/traslado.php',                  'icono' => 'fa-box-archive'],
+                ['titulo' => 'Traslado entre Almacenes',   'url' => 'putaway/traslado_entre_almacenes.php',  'icono' => 'fa-box-archive'],
             ],
 
             // PICKING
@@ -589,11 +589,14 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // REPORTES SFA
             'Reportes SFA' => [
-                ['titulo' => 'Análisis de Ventas', 'url' => 'reportes_sfa/analisis_ventas.php', 'icono' => 'fa-arrow-right-arrow-left'],
+                ['titulo' => 'Análisis de Ventas', 'url' => 'reportes_sfa/ventas_analisis.php', 'icono' => 'fa-arrow-right-arrow-left'],
                 ['titulo' => 'Bitácora de Tiempos', 'url' => 'reportes_sfa/bitacora_tiempos.php', 'icono' => 'fa-timeline'],
                 ['titulo' => 'CXC | Cobranza ', 'url' => 'reportes_sfa/cobranza_analitico.php', 'icono' => 'fa-clipboard-list'],
                 ['titulo' => 'CXC | Cobranza Consolidado', 'url' => 'reportes_sfa/cobranza_consolidado', 'icono' => 'fa-right-left'],
                 ['titulo' => 'Liquidación', 'url' => 'reportes_sfa/liquidacion.php', 'icono' => 'fa-right-left'],
+		['titulo' => 'CXC|Consolidado', 'url' => 'reportes_sfa/cxc_consolidado.php', 'icono' => 'fa-right-left'],
+
+
 
                               ],
 

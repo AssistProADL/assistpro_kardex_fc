@@ -1,10 +1,10 @@
 <?php
-// public/procesos/ingresos_admin.php
-// Administración de Ingresos (OC, RL, CrossDocking) – UI AssistPro
+// /public/ingresos/ingresos_admin.php
 
 if (isset($_GET['ajax'])) {
     require_once __DIR__ . '/../../app/db.php';
     header('Content-Type: application/json; charset=utf-8');
+
     $act = $_GET['ajax'] ?? '';
 
     try {
@@ -15,17 +15,18 @@ if (isset($_GET['ajax'])) {
         exit;
     }
 
+    // ✅ Empresas: tomamos cve_cia desde c_almacenp (evita empresa_id inexistente en algunos entornos)
     if ($act === 'empresas') {
         try {
-            $rows = $pdo->query(
-                "SELECT DISTINCT 
-                        empresa_id AS id,
-                        empresa_id,
-                        CONCAT('Empresa ', empresa_id) AS nombre
-                 FROM c_almacenp
-                 WHERE empresa_id IS NOT NULL
-                 ORDER BY empresa_id"
-            )->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $pdo->query("
+                SELECT DISTINCT
+                    TRIM(COALESCE(cve_cia,'')) AS id,
+                    TRIM(COALESCE(cve_cia,'')) AS cve_cia,
+                    CONCAT('CIA ', TRIM(COALESCE(cve_cia,''))) AS nombre
+                FROM c_almacenp
+                WHERE COALESCE(cve_cia,'') <> ''
+                ORDER BY TRIM(COALESCE(cve_cia,''))
+            ")->fetchAll(PDO::FETCH_ASSOC);
 
             echo json_encode(['ok' => true, 'data' => $rows], JSON_UNESCAPED_UNICODE);
         } catch (Throwable $e) {
@@ -34,17 +35,24 @@ if (isset($_GET['ajax'])) {
         exit;
     }
 
+    // ✅ Almacenes filtrados por cve_cia
     if ($act === 'almacenes') {
-        $empresaId = $_GET['empresa_id'] ?? '';
-        $sql = "SELECT empresa_id, id, clave AS cve_almac, clave, nombre 
-                FROM c_almacenp
-                WHERE 1=1";
+        $cia = trim($_GET['empresa_id'] ?? ''); // (mantenemos nombre del parámetro para no tocar el JS)
+        $sql = "
+            SELECT
+                TRIM(COALESCE(id,''))    AS id,
+                TRIM(COALESCE(clave,'')) AS clave,
+                TRIM(COALESCE(nombre,'')) AS nombre,
+                TRIM(COALESCE(cve_cia,'')) AS cve_cia
+            FROM c_almacenp
+            WHERE 1=1
+        ";
         $params = [];
-        if ($empresaId !== '') {
-            $sql .= " AND empresa_id = :emp";
-            $params[':emp'] = $empresaId;
+        if ($cia !== '') {
+            $sql .= " AND TRIM(COALESCE(cve_cia,'')) = :cia ";
+            $params[':cia'] = $cia;
         }
-        $sql .= " ORDER BY clave";
+        $sql .= " ORDER BY TRIM(COALESCE(clave,'')) ";
 
         try {
             $st = $pdo->prepare($sql);
@@ -57,67 +65,70 @@ if (isset($_GET['ajax'])) {
         exit;
     }
 
+    // ✅ Buscar ingresos (evita cc.nombre / ap.empresa_id)
     if ($act === 'buscar') {
-        $tipo       = $_GET['tipo']       ?? '';
-        $empresaId  = $_GET['empresa_id'] ?? '';
-        $almacenId  = $_GET['almacen_id'] ?? '';
-        $q          = trim($_GET['q'] ?? '');
-        $fini       = $_GET['fini'] ?? '';
-        $ffin       = $_GET['ffin'] ?? '';
+        $tipo      = trim($_GET['tipo'] ?? '');
+        $cia       = trim($_GET['empresa_id'] ?? '');
+        $almacen   = trim($_GET['almacen_id'] ?? '');
+        $q         = trim($_GET['q'] ?? '');
+        $fini      = trim($_GET['fini'] ?? '');
+        $ffin      = trim($_GET['ffin'] ?? '');
 
-        $where  = [];
+        $where = [];
         $params = [];
 
-        if ($tipo !== '') {
-            $where[] = 'h.tipo = :tipo';
-            $params[':tipo'] = $tipo;
+        if ($tipo !== '') { $where[] = 'h.tipo = :tipo'; $params[':tipo'] = $tipo; }
+
+        // join a c_almacenp por clave/id para poder filtrar cia/almacen de forma robusta
+        if ($cia !== '') { $where[] = "TRIM(COALESCE(ap.cve_cia,'')) = :cia"; $params[':cia'] = $cia; }
+
+        if ($almacen !== '') {
+            $where[] = "(TRIM(COALESCE(ap.id,'')) = :alm OR TRIM(COALESCE(ap.clave,'')) = :alm OR TRIM(COALESCE(h.Cve_Almac,'')) = :alm)";
+            $params[':alm'] = $almacen;
         }
-        if ($empresaId !== '') {
-            $where[] = 'ap.empresa_id = :emp';
-            $params[':emp'] = $empresaId;
-        }
-        if ($almacenId !== '') {
-            // Puede llegar id o clave; se compara contra ambos + Cve_Almac del encabezado
-            $where[] = '(ap.id = :alm OR ap.clave = :alm OR h.Cve_Almac = :alm)';
-            $params[':alm'] = $almacenId;
-        }
-        if ($fini !== '') {
-            $where[] = 'DATE(h.Fec_Entrada) >= :fini';
-            $params[':fini'] = $fini;
-        }
-        if ($ffin !== '') {
-            $where[] = 'DATE(h.Fec_Entrada) <= :ffin';
-            $params[':ffin'] = $ffin;
-        }
+
         if ($q !== '') {
-            $where[] = '(h.Fol_Folio LIKE :q OR h.Proveedor LIKE :q OR h.Proyecto LIKE :q)';
-            $params[':q'] = '%' . $q . '%';
+            $where[] = "(h.Fol_Folio LIKE :q OR h.Factura LIKE :q OR h.Cve_Proveedor LIKE :q OR ap.nombre LIKE :q OR ap.clave LIKE :q)";
+            $params[':q'] = "%{$q}%";
         }
 
-        $sqlWhere = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+        if ($fini !== '') { $where[] = "DATE(h.Fec_Entrada) >= STR_TO_DATE(:fini,'%Y-%m-%d')"; $params[':fini'] = $fini; }
+        if ($ffin !== '') { $where[] = "DATE(h.Fec_Entrada) <= STR_TO_DATE(:ffin,'%Y-%m-%d')"; $params[':ffin'] = $ffin; }
 
-        $sql = "SELECT 
-                    h.Fol_Folio AS id,
-                    h.Fol_Folio AS folio,
-                    DATE(h.Fec_Entrada) AS fecha,
-                    h.tipo AS tipo_entrada,
-                    h.STATUS AS estatus,
-                    ap.empresa_id,
-                    CONCAT('Empresa ', ap.empresa_id) AS empresa_nombre,
-                    ap.clave AS cve_almac,
-                    ap.nombre AS almacen_nombre,
-                    COALESCE(SUM(d.CantidadRecibida), 0) AS total_pzas,
-                    COALESCE(SUM(d.CantidadRecibida * COALESCE(d.costoUnitario,0) * (1 + COALESCE(d.IVA,0)/100)), 0) AS total_importe,
-                    h.Cve_Usuario AS usuario_crea
-                FROM th_entalmacen h
-                LEFT JOIN td_entalmacen d ON d.fol_folio = h.Fol_Folio
-                LEFT JOIN c_almacenp ap   ON ap.clave = h.Cve_Almac
-                $sqlWhere
-                GROUP BY 
-                    h.Fol_Folio, h.Fec_Entrada, h.tipo, h.STATUS,
-                    ap.empresa_id, ap.clave, ap.nombre, h.Cve_Usuario
-                ORDER BY h.Fec_Entrada DESC, h.Fol_Folio DESC
-                LIMIT 500";
+        $w = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+        // Nota: th_aduana es tu encabezado de ingresos (OC/RL/CD en legacy).
+        // Si tu tabla real cambia, solo ajustamos FROM/joins sin tocar el front.
+        $sql = "
+            SELECT
+                h.ID_Aduana AS id,
+                h.Fol_Folio AS folio,
+                DATE_FORMAT(h.Fec_Entrada, '%Y-%m-%d %H:%i:%s') AS fecha,
+                h.tipo AS tipo_entrada,
+                h.STATUS AS estatus,
+                TRIM(COALESCE(ap.cve_cia,'')) AS empresa_id,
+                CONCAT('CIA ', TRIM(COALESCE(ap.cve_cia,''))) AS empresa_nombre,
+                CONCAT(TRIM(COALESCE(ap.clave,'')),' / ',TRIM(COALESCE(ap.nombre,''))) AS almacen_nombre,
+                COALESCE(h.Cve_Proveedor, '') AS proveedor,
+                COALESCE(h.Factura,'') AS factura,
+                COALESCE(h.cve_usuario,'') AS usuario_crea,
+                (
+                    SELECT COALESCE(SUM(d.cantidad),0)
+                    FROM td_aduana d
+                    WHERE d.ID_Aduana = h.ID_Aduana
+                ) AS total_pzas,
+                (
+                    SELECT COALESCE(SUM(d.cantidad * COALESCE(d.costo,0)),0)
+                    FROM td_aduana d
+                    WHERE d.ID_Aduana = h.ID_Aduana
+                ) AS total_importe
+            FROM th_aduana h
+            LEFT JOIN c_almacenp ap
+              ON (TRIM(COALESCE(ap.clave,'')) = TRIM(COALESCE(h.Cve_Almac,'')) OR TRIM(COALESCE(ap.id,'')) = TRIM(COALESCE(h.Cve_Almac,'')))
+            $w
+            ORDER BY h.ID_Aduana DESC
+            LIMIT 500
+        ";
 
         try {
             $st = $pdo->prepare($sql);
@@ -130,496 +141,221 @@ if (isset($_GET['ajax'])) {
         exit;
     }
 
-    if ($act === 'postear') {
-        // TODO: lógica real de posteo a Kardex (SP)
-        echo json_encode(['ok' => false, 'error' => 'Posteo no implementado en esta fase'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
-    echo json_encode(['ok' => false, 'error' => 'Acción no reconocida'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'error' => 'Acción no soportada'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-$TITLE = 'Administración de Ingresos';
-require_once __DIR__ . '/../bi/_menu_global.php';
+// ================= UI =================
+include __DIR__ . '/../bi/_menu_global.php';
 ?>
-<style>
-    .ap-card {
-        background: #ffffff;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-        border: 1px solid #e1e5eb;
-        margin-bottom: 15px;
-    }
-    .ap-card-header {
-        background: #0F5AAD;
-        color: #ffffff;
-        padding: 8px 12px;
-        font-size: 13px;
-        font-weight: 600;
-        border-radius: 8px 8px 0 0;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .ap-card-title {
-        margin: 0;
-    }
-    .ap-card-subtitle {
-        font-size: 11px;
-        opacity: 0.85;
-    }
-    .ap-card-body {
-        padding: 12px;
-    }
-    .ap-label {
-        font-size: 11px;
-        font-weight: 600;
-        color: #555;
-        margin-bottom: 2px;
-    }
-    .ap-form-control {
-        font-size: 12px;
-        height: 30px;
-        padding: 4px 8px;
-    }
-    .ap-small {
-        font-size: 10px;
-    }
+<div class="container-fluid" style="font-size:10px;">
 
-    .ap-btn-primary {
-        background-color: #0F5AAD;
-        border-color: #0F5AAD;
-        font-size: 12px;
-        padding: 5px 14px;
-        border-radius: 4px;
-        color: #fff;
-    }
-    
-    .ap-btn-secondary {
-        background-color: #ffffff;
-        border-color: #0F5AAD;
-        color: #0F5AAD;
-        font-size: 12px;
-        padding: 5px 14px;
-        border-radius: 4px;
-    }
-    .ap-btn-secondary:hover {
-        background-color: #0F5AAD;
-        color: #ffffff;
-    }
-
-    .ap-badge-status {
-        font-size: 10px;
-        border-radius: 999px;
-        padding: 3px 8px;
-    }
-
-    .ap-pill-radio label {
-        margin-right: 4px;
-        cursor: pointer;
-        border-radius: 999px;
-    }
-
-    .ap-pill-radio input[type="radio"] {
-        display: none;
-    }
-
-    .ap-pill-radio .btn {
-        font-size: 11px;
-        padding: 3px 8px;
-    }
-
-    .ap-pill-radio .btn-check:checked + .btn-outline-primary {
-        background-color: #0F5AAD;
-        color: #ffffff;
-    }
-
-    .ap-filter-hint {
-        font-size: 10px;
-        color: #777;
-    }
-
-    .table-ingresos thead th {
-        background-color: #f4f6f9;
-        font-size: 11px;
-        font-weight: 600;
-        color: #555;
-    }
-
-    .table-ingresos tbody td {
-        font-size: 11px;
-        vertical-align: middle;
-        padding-top: 4px;
-        padding-bottom: 4px;
-    }
-
-    .ap-badge-tipo {
-        font-size: 10px;
-        border-radius: 999px;
-    }
-
-    .ap-btn-postear {
-        font-size: 11px;
-        padding: 2px 6px;
-        border-radius: 999px;
-    }
-
-    .ap-legend {
-        font-size: 10px;
-        color: #777;
-    }
-
-    .dataTables_filter {
-        display: none;
-    }
-
-    .dataTables_length label,
-    .dataTables_info,
-    .dataTables_paginate {
-        font-size: 11px;
-    }
-
-    .dataTables_paginate .paginate_button {
-        padding: 3px 8px !important;
-        font-size: 11px;
-    }
-
-    .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-        background: #0F5AAD;
-        border-color: #0F5AAD;
-        color: #fff !important;
-    }
-
-    .ap-toggle-columnas .dropdown-menu {
-        font-size: 11px;
-        min-width: 220px;
-    }
-</style>
-
-<div class="container-fluid py-3">
-    <div class="ap-card">
-        <div class="ap-card-header">
-            <div>
-                <h5 class="ap-card-title mb-0">Administración de Ingresos</h5>
-                <div class="ap-card-subtitle">
-                    Control de ingresos por OC, RL, CrossDocking y otros tipos de entrada.
-                </div>
-            </div>
-            <div class="text-end">
-                <button type="button" class="btn btn-sm ap-btn-secondary" id="btnRefrescar">
-                    <i class="fa fa-sync-alt"></i> Refrescar
-                </button>
-            </div>
-        </div>
-        <div class="ap-card-body">
-            <div class="row g-2 align-items-end">
-                <div class="col-12 col-md-2">
-                    <label class="ap-label">Empresa</label>
-                    <select class="form-select ap-form-control" id="cboEmpresa"></select>
-                    <div class="ap-filter-hint">Determina el universo de almacenes.</div>
-                </div>
-                <div class="col-12 col-md-2">
-                    <label class="ap-label">Almacén</label>
-                    <select class="form-select ap-form-control" id="cboAlmacen"></select>
-                    <div class="ap-filter-hint">Filtra ingresos por almacén.</div>
-                </div>
-
-                <div class="col-12 col-md-3">
-                    <label class="ap-label">Rango de fechas (Fec. Entrada)</label>
-                    <div class="d-flex gap-1">
-                        <input type="date" class="form-control ap-form-control" id="fini">
-                        <input type="date" class="form-control ap-form-control" id="ffin">
-                    </div>
-                </div>
-
-                <div class="col-12 col-md-3">
-                    <label class="ap-label">Buscar</label>
-                    <input type="text" id="txtBuscar" class="form-control ap-form-control" placeholder="Folio, proveedor, proyecto...">
-                </div>
-
-                <div class="col-12 col-md-2">
-                    <label class="ap-label">Acciones</label>
-                    <div class="d-flex gap-1">
-                        <button type="button" class="btn btn-sm ap-btn-primary w-100" id="btnBuscar">
-                            <i class="fa fa-search"></i> Buscar
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row mt-2">
-                <div class="col-12 col-md-6">
-                    <label class="ap-label">Tipo de ingreso</label>
-                    <div class="btn-group ap-pill-radio" role="group" aria-label="Tipo de ingreso">
-                        <input type="radio" class="btn-check" name="tipo_ingreso" id="tipoTodos" value="" checked>
-                        <label class="btn btn-outline-primary btn-sm" for="tipoTodos">Todos</label>
-
-                        <input type="radio" class="btn-check" name="tipo_ingreso" id="tipoOC" value="OC">
-                        <label class="btn btn-outline-primary btn-sm" for="tipoOC">OC</label>
-
-                        <input type="radio" class="btn-check" name="tipo_ingreso" id="tipoRL" value="RL">
-                        <label class="btn btn-outline-primary btn-sm" for="tipoRL">RL</label>
-
-                        <input type="radio" class="btn-check" name="tipo_ingreso" id="tipoCD" value="CD">
-                        <label class="btn btn-outline-primary btn-sm" for="tipoCD">CrossDocking</label>
-
-                        <input type="radio" class="btn-check" name="tipo_ingreso" id="tipoTR" value="TR">
-                        <label class="btn btn-outline-primary btn-sm" for="tipoTR">Traslados</label>
-                    </div>
-                </div>
-                <div class="col-12 col-md-6 text-md-end mt-2 mt-md-0">
-                    <span class="ap-legend">
-                        <span class="badge bg-secondary ap-badge-status">Abierto</span> pendiente de posteo •
-                        <span class="badge bg-success ap-badge-status">Cerrado</span> ya posteado a Kardex
-                    </span>
-                </div>
-            </div>
-
-            <hr class="my-2">
-
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <div class="ap-filter-hint">
-                    Resultados limitados a 500 ingresos. Ajusta filtros para precisar la consulta.
-                </div>
-                <div class="dropdown ap-toggle-columnas">
-                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        Columnas
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" id="menuColumnas"></ul>
-                </div>
-            </div>
-
-            <div class="table-responsive">
-                <table id="tblIngresos" class="table table-striped table-bordered table-hover table-ingresos w-100">
-                    <thead>
-                        <tr>
-                            <th>Folio</th>
-                            <th>Fecha</th>
-                            <th>Tipo</th>
-                            <th>Estatus</th>
-                            <th>Empresa</th>
-                            <th>Almacén</th>
-                            <th class="text-end">Total piezas</th>
-                            <th class="text-end">Importe total</th>
-                            <th>Usuario</th>
-                            <th style="width: 70px;">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-
-        </div>
+  <div class="card shadow-sm mt-2">
+    <div class="card-header d-flex justify-content-between align-items-center" style="background:#0F5AAD;color:#fff;">
+      <div>
+        <div class="fw-semibold">Administración de Ingresos</div>
+        <div style="font-size:9px;opacity:.85;">Control de ingresos por OC, RL, CrossDocking y otros tipos de entrada.</div>
+      </div>
+      <button id="btnRefrescar" class="btn btn-outline-light btn-sm">Refrescar</button>
     </div>
+
+    <div class="card-body">
+
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label mb-0">Empresa</label>
+          <select id="cboEmpresa" class="form-select form-select-sm">
+            <option value="">(opcional)</option>
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label mb-0">Almacén</label>
+          <select id="cboAlmacen" class="form-select form-select-sm">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0">Tipo de ingreso</label>
+          <select id="tipo" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            <option value="OC">OC</option>
+            <option value="RL">RL</option>
+            <option value="CD">CrossDocking</option>
+            <option value="TR">Traslados</option>
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0">Desde</label>
+          <input id="fini" type="date" class="form-control form-control-sm">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0">Hasta</label>
+          <input id="ffin" type="date" class="form-control form-control-sm">
+        </div>
+
+        <div class="col-md-9">
+          <label class="form-label mb-0">Buscar</label>
+          <input id="txtBuscar" class="form-control form-control-sm" placeholder="Folio, proveedor, proyecto...">
+        </div>
+
+        <div class="col-md-3 d-flex gap-2">
+          <button id="btnBuscar" class="btn btn-primary btn-sm w-100">Buscar</button>
+          <button class="btn btn-outline-secondary btn-sm w-100" onclick="location.href='recepcion_materiales.php'">+ Nueva Recepción</button>
+        </div>
+      </div>
+
+      <hr class="my-2">
+
+      <div class="row g-2">
+        <div class="col-md-4">
+          <div class="card shadow-sm" style="border-left:4px solid #0F5AAD;">
+            <div class="card-body py-2">
+              <div class="text-muted">Ingresos encontrados</div>
+              <div class="fw-bold" id="kpiCount">0</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card shadow-sm" style="border-left:4px solid #22c55e;">
+            <div class="card-body py-2">
+              <div class="text-muted">Total piezas</div>
+              <div class="fw-bold" id="kpiPzas">0</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card shadow-sm" style="border-left:4px solid #f59e0b;">
+            <div class="card-body py-2">
+              <div class="text-muted">Importe total</div>
+              <div class="fw-bold" id="kpiImp">0.00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-responsive mt-2">
+        <table class="table table-sm table-bordered" id="tblIngresos" style="font-size:10px; width:100%;">
+          <thead class="table-light">
+          <tr>
+            <th>Folio</th>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>Estatus</th>
+            <th>Empresa</th>
+            <th>Almacén</th>
+            <th class="text-end">Total piezas</th>
+            <th class="text-end">Importe total</th>
+            <th>Usuario</th>
+            <th>Acciones</th>
+          </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
 </div>
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 
 <script>
 let dtIngresos = null;
 
 $(document).ready(function () {
-    dtIngresos = $('#tblIngresos').DataTable({
-        paging: true,
-        pageLength: 25,
-        lengthMenu: [10, 25, 50, 100],
-        ordering: true,
-        info: true,
-        searching: true,
-        language: {
-            url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-MX.json'
-        },
-        columnDefs: [
-            { targets: [6,7], className: 'text-end' },
-            { targets: [9], orderable: false }
-        ]
-    });
+  dtIngresos = $('#tblIngresos').DataTable({
+    pageLength: 25,
+    lengthChange: false,
+    searching: false,
+    ordering: true,
+    info: true,
+    scrollX: true,
+    language: { url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-MX.json' },
+    columnDefs: [{ targets: [6,7], className:'text-end' }, { targets:[9], orderable:false }]
+  });
 
-    construirMenuColumnas();
-    cargarEmpresas();
-    cargarAlmacenes();
-    buscarIngresos();
+  cargarEmpresas();
+  cargarAlmacenes();
+  buscarIngresos();
 
-    $('#btnBuscar').on('click', function () {
-        buscarIngresos();
-    });
-
-    $('#btnRefrescar').on('click', function () {
-        buscarIngresos();
-    });
-
-    $('#cboEmpresa').on('change', function () {
-        cargarAlmacenes();
-    });
-
-    // Buscar con Enter en el texto
-    $('#txtBuscar').on('keyup', function (e) {
-        if (e.key === 'Enter') {
-            buscarIngresos();
-        }
-    });
+  $('#btnBuscar').on('click', buscarIngresos);
+  $('#btnRefrescar').on('click', buscarIngresos);
+  $('#cboEmpresa').on('change', function(){ cargarAlmacenes(); });
+  $('#txtBuscar').on('keyup', function(e){ if(e.key==='Enter') buscarIngresos(); });
 });
 
-function construirMenuColumnas() {
-    const tbl = $('#tblIngresos').DataTable();
-    const headerCells = $('#tblIngresos thead th');
-    const $menu = $('#menuColumnas');
-    $menu.empty();
-
-    headerCells.each(function (i) {
-        const colTitle = $(this).text();
-        const checked = tbl.column(i).visible() ? 'checked' : '';
-        const item = `
-            <li>
-                <label class="dropdown-item">
-                    <input type="checkbox" class="form-check-input me-1" data-col="${i}" ${checked}>
-                    ${colTitle}
-                </label>
-            </li>
-        `;
-        $menu.append(item);
+function cargarEmpresas(){
+  $.getJSON('ingresos_admin.php', {ajax:'empresas'}, function(r){
+    if(!r || !r.ok) return;
+    const $cbo = $('#cboEmpresa');
+    $cbo.empty().append('<option value="">(opcional)</option>');
+    (r.data||[]).forEach(x=>{
+      $cbo.append($('<option>',{ value:x.id, text:x.nombre }));
     });
-
-    $menu.find('input[type="checkbox"]').on('change', function () {
-        const colIndex = $(this).data('col');
-        const visible = $(this).is(':checked');
-        $('#tblIngresos').DataTable().column(colIndex).visible(visible);
-    });
+  });
 }
 
-function cargarEmpresas() {
-    $.getJSON('ingresos_admin.php', {ajax: 'empresas'}, function (r) {
-        if (!r || !r.ok) return;
-        const $cbo = $('#cboEmpresa');
-        $cbo.empty().append('<option value="">Todas</option>');
-        (r.data || []).forEach(row => {
-            $cbo.append(
-                $('<option>', {
-                    value: row.id || row.empresa_id || '',
-                    text: row.nombre || row.descripcion || ''
-                })
-            );
-        });
+function cargarAlmacenes(){
+  $.getJSON('ingresos_admin.php', {ajax:'almacenes', empresa_id:$('#cboEmpresa').val()}, function(r){
+    if(!r || !r.ok) return;
+    const $cbo = $('#cboAlmacen');
+    $cbo.empty().append('<option value="">Todos</option>');
+    (r.data||[]).forEach(x=>{
+      $cbo.append($('<option>',{ value:x.id || x.clave, text:(x.clave||'')+' / '+(x.nombre||'') }));
     });
+  });
 }
 
-function cargarAlmacenes() {
-    $.getJSON('ingresos_admin.php', {ajax: 'almacenes', empresa_id: $('#cboEmpresa').val()}, function (r) {
-        if (!r || !r.ok) return;
-        const $cbo = $('#cboAlmacen');
-        $cbo.empty().append('<option value="">Todos</option>');
-        (r.data || []).forEach(row => {
-            $cbo.append(
-                $('<option>', {
-                    value: row.id || row.cve_almac || '',
-                    text: (row.clave || row.cve_almac || '') + ' - ' + (row.nombre || row.des_almac || '')
-                })
-            );
-        });
-    });
-}
+function buscarIngresos(){
+  const tipo = $('#tipo').val();
+  const empresa_id = $('#cboEmpresa').val();
+  const almacen_id = $('#cboAlmacen').val();
+  const q = $('#txtBuscar').val();
+  const fini = $('#fini').val();
+  const ffin = $('#ffin').val();
 
-function buscarIngresos() {
-    if (!dtIngresos) return;
+  $.getJSON('ingresos_admin.php', {
+    ajax:'buscar', tipo, empresa_id, almacen_id, q, fini, ffin
+  }, function(r){
+    dtIngresos.clear();
+    let count=0, pzas=0, imp=0;
 
-    const tipo = $('input[name="tipo_ingreso"]:checked').val() || '';
-    const empresa_id = $('#cboEmpresa').val();
-    const almacen_id = $('#cboAlmacen').val();
-    const q = $('#txtBuscar').val();
-    const fini = $('#fini').val();
-    const ffin = $('#ffin').val();
+    if(r && r.ok){
+      (r.data||[]).forEach(row=>{
+        count++;
+        pzas += Number(row.total_pzas||0);
+        imp  += Number(row.total_importe||0);
 
-    $.getJSON('ingresos_admin.php', {
-        ajax: 'buscar',
-        tipo: tipo,
-        empresa_id: empresa_id,
-        almacen_id: almacen_id,
-        q: q,
-        fini: fini,
-        ffin: ffin
-    }, function (r) {
-        dtIngresos.clear();
-        if (!r || !r.ok) {
-            dtIngresos.draw();
-            return;
-        }
-        (r.data || []).forEach(row => {
-            const tipoHtml = renderTipo(row.tipo_entrada || '');
-            dtIngresos.row.add([
-                row.folio || '',
-                row.fecha || '',
-                tipoHtml,
-                row.estatus || '',
-                row.empresa_nombre || '',
-                row.almacen_nombre || '',
-                Number(row.total_pzas || 0).toLocaleString(),
-                Number(row.total_importe || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}),
-                row.usuario_crea || '',
-                renderAcciones(row.id)
-            ]);
-        });
-        dtIngresos.draw();
-    });
-}
-
-function renderTipo(t) {
-    t = (t || '').toUpperCase();
-    let className = 'bg-secondary';
-    let text = t;
-
-    switch (t) {
-        case 'OC':
-            className = 'bg-primary';
-            text = 'OC';
-            break;
-        case 'RL':
-            className = 'bg-warning text-dark';
-            text = 'RL';
-            break;
-        case 'CD':
-            className = 'bg-info text-dark';
-            text = 'CD';
-            break;
-        case 'TR':
-            className = 'bg-success';
-            text = 'TR';
-            break;
+        dtIngresos.row.add([
+          row.folio||'',
+          row.fecha||'',
+          '<span class="badge bg-primary">'+(row.tipo_entrada||'')+'</span>',
+          row.estatus||'',
+          row.empresa_nombre||'',
+          row.almacen_nombre||'',
+          Number(row.total_pzas||0).toLocaleString(),
+          Number(row.total_importe||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}),
+          row.usuario_crea||'',
+          '<a class="btn btn-outline-primary btn-sm" href="recepcion_materiales.php"><i class="fa fa-eye"></i></a>'
+        ]);
+      });
     }
-    return '<span class="badge ap-badge-tipo ' + className + '">' + text + '</span>';
-}
 
-function renderAcciones(id) {
-    return '' +
-        '<button type="button" class="btn btn-outline-secondary btn-sm me-1" onclick="verIngreso(' + id + ')">' +
-            '<i class="fa fa-eye"></i>' +
-        '</button>' +
-        '<button type="button" class="btn btn-outline-success btn-sm ap-btn-postear" onclick="postearIngreso(' + id + ')">' +
-            '<i class="fa fa-check"></i>' +
-        '</button>';
-}
+    dtIngresos.draw();
 
-function verIngreso(id) {
-    if (!id) return;
-    // Enlazar después a un detalle o popup
-    alert('Detalle de ingreso ID: ' + id + ' (pendiente de implementar).');
-}
-
-function postearIngreso(id) {
-    if (!id) return;
-    if (!confirm('¿Cerrar y postear a Kardex este ingreso?')) return;
-
-    $.post('ingresos_admin.php?ajax=postear', {id: id}, function (r) {
-        if (r && r.ok) {
-            alert('Ingreso posteado correctamente (demo).');
-            buscarIngresos();
-        } else {
-            alert('No se pudo postear.\n' + (r && r.error ? r.error : 'Error desconocido.'));
-        }
-    }, 'json').fail(function () {
-        alert('Error de comunicación con el servidor.');
-    });
+    $('#kpiCount').text(count.toLocaleString());
+    $('#kpiPzas').text(pzas.toLocaleString());
+    $('#kpiImp').text(imp.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}));
+  }).fail(function(xhr){
+    alert('Error al buscar ingresos: '+(xhr.responseText||''));
+  });
 }
 </script>
 
-<?php
-require_once __DIR__ . '/../bi/_menu_global_end.php';
-?>
+<?php include __DIR__ . '/../bi/_menu_global_end.php'; ?>
