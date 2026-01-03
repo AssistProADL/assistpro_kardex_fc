@@ -1,10 +1,12 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) //@session_start();
+// Inicializar sesión correctamente
+require_once __DIR__ . '/../../app/bootstrap.php';
+\AssistPro\Helpers\SessionManager::init();
 
-  if (empty($_SESSION['username']) || empty($_SESSION['cve_almac'])) {
-    header('Location: /assistpro_kardex_fc/public/login.php?err=Inicie sesión');
-    exit;
-  }
+if (empty($_SESSION['username']) || empty($_SESSION['cve_almac'])) {
+  header('Location: /assistpro_kardex_fc/public/login.php?err=Inicie sesión');
+  exit;
+}
 
 function acl_where_emp_sql($alias = 'v')
 {

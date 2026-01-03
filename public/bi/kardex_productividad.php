@@ -1,6 +1,8 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) //@session_start();
-  require_once __DIR__ . '/../../app/db.php';
+// Inicializar sesión correctamente
+require_once __DIR__ . '/../../app/bootstrap.php';
+\AssistPro\Helpers\SessionManager::init();
+require_once __DIR__ . '/../../app/db.php';
 
 $alm_sesion = $_SESSION['cve_almac'] ?? $_SESSION['almacen'] ?? null;
 
