@@ -246,8 +246,7 @@ function url_with($changes)
   }
   return '?' . http_build_query($q);
 }
-?>
-<!doctype html>
+?><!doctype html>
 <html lang="es">
 
 <head>

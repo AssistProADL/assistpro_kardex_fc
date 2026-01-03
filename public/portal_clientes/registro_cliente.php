@@ -34,8 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $ok = true;
   }
 }
-?>
-<!DOCTYPE html>
+?><!DOCTYPE html>
 <html lang="es">
 
 <head>
