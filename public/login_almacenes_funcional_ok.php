@@ -1,6 +1,8 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) //@session_start();
-  require_once __DIR__ . '/../app/db.php';
+// Inicializar sesión correctamente
+require_once __DIR__ . '/../app/bootstrap.php';
+\AssistPro\Helpers\SessionManager::init();
+require_once __DIR__ . '/../app/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');

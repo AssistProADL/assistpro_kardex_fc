@@ -53,11 +53,12 @@ FROM base AS development
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Development PHP config
+# Development PHP config (match XAMPP behavior)
 RUN echo "display_errors=On" >> /usr/local/etc/php/conf.d/dev.ini \
     && echo "error_reporting=E_ALL" >> /usr/local/etc/php/conf.d/dev.ini \
     && echo "log_errors=On" >> /usr/local/etc/php/conf.d/dev.ini \
-    && echo "memory_limit=512M" >> /usr/local/etc/php/conf.d/dev.ini
+    && echo "memory_limit=512M" >> /usr/local/etc/php/conf.d/dev.ini \
+    && echo "output_buffering=4096" >> /usr/local/etc/php/conf.d/dev.ini
 
 # Install dependencies
 WORKDIR /var/www/html/assistpro_kardex_fc

@@ -1,8 +1,11 @@
 <?php
 // public/bi/resumen_basico.php
-if (session_status() === PHP_SESSION_NONE) //@session_start();
 
-  require_once __DIR__ . '/../../app/db.php';
+// Inicializar sesión ANTES de cualquier output
+require_once __DIR__ . '/../../app/bootstrap.php';
+\AssistPro\Helpers\SessionManager::init();
+
+require_once __DIR__ . '/../../app/db.php';
 
 function h($s)
 {
@@ -243,8 +246,7 @@ function url_with($changes)
   }
   return '?' . http_build_query($q);
 }
-?>
-<!doctype html>
+?><!doctype html>
 <html lang="es">
 
 <head>
