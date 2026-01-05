@@ -1,0 +1,194 @@
+<?php
+require_once __DIR__ . '/../../app/db.php';
+header('Content-Type: application/json; charset=utf-8');
+$pdo = db_pdo();
+
+$action = $_POST['action'] ?? $_GET['action'] ?? 'list';
+
+function s($v){ $v = trim((string)$v); return $v==='' ? null : $v; }
+function i0($v){ $v = trim((string)$v); return $v==='' ? 0 : (int)$v; }
+
+function validar($data){
+  $errs=[];
+  $cve = trim((string)($data['Cve_Proyecto'] ?? ''));
+  if($cve==='') $errs[]='Cve_Proyecto es obligatorio';
+  // id_almacen es requerido por estructura, pero default 0; dejamos flexible
+  return $errs;
+}
+
+/* =========================
+   EXPORT CSV
+========================= */
+if($action==='export_csv'){
+  $tipo = $_GET['tipo'] ?? 'layout';
+  header('Content-Type: text/csv; charset=utf-8');
+  header('Content-Disposition: attachment; filename=proyectos_cc_'.$tipo.'.csv');
+  $out = fopen('php://output','w');
+
+  $headers = ['Id','Cve_Proyecto','Des_Proyecto','id_almacen'];
+  fputcsv($out,$headers);
+
+  if($tipo==='datos'){
+    $sql = "SELECT ".implode(',',$headers)." FROM c_proyecto ORDER BY Id";
+    foreach($pdo->query($sql) as $row) fputcsv($out,$row);
+  }
+  fclose($out); exit;
+}
+
+/* =========================
+   IMPORT CSV (UPSERT por Cve_Proyecto)
+========================= */
+if($action==='import_csv'){
+  if(!isset($_FILES['file'])){ echo json_encode(['error'=>'Archivo no recibido']); exit; }
+  $fh = fopen($_FILES['file']['tmp_name'],'r');
+  if(!$fh){ echo json_encode(['error'=>'No se pudo leer el archivo']); exit; }
+
+  $headers = fgetcsv($fh);
+  $esperadas = ['Id','Cve_Proyecto','Des_Proyecto','id_almacen'];
+  if($headers !== $esperadas){
+    echo json_encode(['error'=>'Layout incorrecto','esperado'=>$esperadas,'recibido'=>$headers]); exit;
+  }
+
+  $stFind = $pdo->prepare("SELECT Id FROM c_proyecto WHERE Cve_Proyecto=? LIMIT 1");
+  $stIns  = $pdo->prepare("
+    INSERT INTO c_proyecto (Cve_Proyecto, Des_Proyecto, id_almacen)
+    VALUES (?,?,?)
+  ");
+  $stUpd  = $pdo->prepare("
+    UPDATE c_proyecto SET Des_Proyecto=?, id_almacen=?
+    WHERE Cve_Proyecto=? LIMIT 1
+  ");
+
+  $rows_ok=0; $rows_err=0; $errores=[];
+  $pdo->beginTransaction();
+  try{
+    $linea=1;
+    while(($r=fgetcsv($fh))!==false){
+      $linea++;
+      if(!$r || count($r)<count($esperadas)){
+        $rows_err++; $errores[]=['fila'=>$linea,'motivo'=>'Fila incompleta']; continue;
+      }
+      $data = array_combine($esperadas,$r);
+
+      $errs = validar($data);
+      if($errs){ $rows_err++; $errores[]=['fila'=>$linea,'motivo'=>implode('; ',$errs)]; continue; }
+
+      $cve = trim((string)$data['Cve_Proyecto']);
+      $des = s($data['Des_Proyecto'] ?? null);
+      $alm = i0($data['id_almacen'] ?? 0);
+
+      $stFind->execute([$cve]);
+      $existe = (int)($stFind->fetchColumn() ?: 0);
+
+      if($existe){
+        $stUpd->execute([$des, $alm, $cve]);
+      }else{
+        $stIns->execute([$cve, $des, $alm]);
+      }
+      $rows_ok++;
+    }
+    $pdo->commit();
+    echo json_encode(['success'=>true,'rows_ok'=>$rows_ok,'rows_err'=>$rows_err,'errores'=>$errores]); exit;
+  }catch(Throwable $e){
+    $pdo->rollBack();
+    echo json_encode(['error'=>$e->getMessage()]); exit;
+  }
+}
+
+/* =========================
+   LIST (paginado server-side)
+========================= */
+if($action==='list'){
+  $q = trim((string)($_GET['q'] ?? ''));
+  $id_almacen = (int)($_GET['id_almacen'] ?? 0);
+  $limit  = max(1, min(200, (int)($_GET['limit'] ?? 25)));
+  $offset = max(0, (int)($_GET['offset'] ?? 0));
+
+  $where = " WHERE 1=1 ";
+  if($id_almacen>0){
+    $where .= " AND id_almacen = :id_almacen ";
+  }
+  if($q!==''){
+    $where .= " AND (Cve_Proyecto LIKE :q OR Des_Proyecto LIKE :q) ";
+  }
+
+  $sqlCount = "SELECT COUNT(*) FROM c_proyecto $where";
+  $stc = $pdo->prepare($sqlCount);
+  if($id_almacen>0) $stc->bindValue(':id_almacen', $id_almacen, PDO::PARAM_INT);
+  if($q!=='') $stc->bindValue(':q', "%$q%", PDO::PARAM_STR);
+  $stc->execute();
+  $total = (int)$stc->fetchColumn();
+
+  $sql = "SELECT Id, Cve_Proyecto, Des_Proyecto, id_almacen
+          FROM c_proyecto
+          $where
+          ORDER BY Id DESC
+          LIMIT $limit OFFSET $offset";
+  $st = $pdo->prepare($sql);
+  if($id_almacen>0) $st->bindValue(':id_almacen', $id_almacen, PDO::PARAM_INT);
+  if($q!=='') $st->bindValue(':q', "%$q%", PDO::PARAM_STR);
+  $st->execute();
+
+  echo json_encode(['rows'=>$st->fetchAll(PDO::FETCH_ASSOC),'total'=>$total]); exit;
+}
+
+/* =========================
+   CRUD
+========================= */
+switch($action){
+  case 'get':{
+    $id = (int)($_GET['id'] ?? 0);
+    if(!$id){ echo json_encode(['error'=>'id requerido']); exit; }
+    $st=$pdo->prepare("SELECT * FROM c_proyecto WHERE Id=? LIMIT 1");
+    $st->execute([$id]);
+    echo json_encode($st->fetch(PDO::FETCH_ASSOC)); exit;
+  }
+
+  case 'create':{
+    $errs = validar($_POST);
+    if($errs){ echo json_encode(['error'=>'Validación','detalles'=>$errs]); exit; }
+
+    $st=$pdo->prepare("
+      INSERT INTO c_proyecto (Cve_Proyecto, Des_Proyecto, id_almacen)
+      VALUES (?,?,?)
+    ");
+    $st->execute([
+      trim((string)$_POST['Cve_Proyecto']),
+      s($_POST['Des_Proyecto'] ?? null),
+      i0($_POST['id_almacen'] ?? 0),
+    ]);
+    echo json_encode(['success'=>true,'id'=>$pdo->lastInsertId()]); exit;
+  }
+
+  case 'update':{
+    $id = (int)($_POST['Id'] ?? 0);
+    if(!$id){ echo json_encode(['error'=>'Id requerido']); exit; }
+
+    $errs = validar($_POST);
+    if($errs){ echo json_encode(['error'=>'Validación','detalles'=>$errs]); exit; }
+
+    $st=$pdo->prepare("
+      UPDATE c_proyecto SET
+        Cve_Proyecto=?, Des_Proyecto=?, id_almacen=?
+      WHERE Id=? LIMIT 1
+    ");
+    $st->execute([
+      trim((string)$_POST['Cve_Proyecto']),
+      s($_POST['Des_Proyecto'] ?? null),
+      i0($_POST['id_almacen'] ?? 0),
+      $id
+    ]);
+    echo json_encode(['success'=>true]); exit;
+  }
+
+  case 'delete':{
+    // No hay Activo en c_proyecto; hacemos delete físico controlado
+    $id = (int)($_POST['id'] ?? 0);
+    if(!$id){ echo json_encode(['error'=>'id requerido']); exit; }
+    $pdo->prepare("DELETE FROM c_proyecto WHERE Id=? LIMIT 1")->execute([$id]);
+    echo json_encode(['success'=>true]); exit;
+  }
+
+  default:
+    echo json_encode(['error'=>'Acción no válida']); exit;
+}

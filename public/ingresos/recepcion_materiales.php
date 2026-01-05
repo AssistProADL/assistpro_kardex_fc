@@ -1,454 +1,390 @@
 <?php
-/* ===========================================================
-   public/ingresos/recepcion_materiales.php
-   Recepción de Materiales (OC)
-   - th_aduana / td_aduana como fuente de OC
-   - Sin db_all(): solo PDO
-   - Empresa: c_compania.cve_cia / c_compania.des_cia
-   =========================================================== */
-
-require_once __DIR__ . '/../../app/db.php';
-
-$pdo = db_pdo();
-if (!$pdo) {
-  die('PDO no inicializado');
-}
-
-function jexit($payload, int $code = 200): void {
-  http_response_code($code);
-  header('Content-Type: application/json; charset=utf-8');
-  echo json_encode($payload, JSON_UNESCAPED_UNICODE);
-  exit;
-}
-function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
-function p($k, $d=null){ return $_POST[$k] ?? $_GET[$k] ?? $d; }
-
-/* =========================
-   ROUTER JSON (mismo archivo)
-   ========================= */
-$action = (string)p('action', '');
-if ($action !== '') {
-  try {
-    switch ($action) {
-
-      /* ===== Lista OCs pendientes por Proveedor + Almacén =====
-         Pendiente = existe detalle donde cantidad > Ingresado
-         Default status A (como acordaste para default).
-      */
-      case 'oc_list': {
-        $cve_almac = trim((string)p('cve_almac', ''));
-        $id_prov   = (int)p('id_proveedor', 0);
-
-        if ($cve_almac === '' || $id_prov <= 0) jexit(['ok'=>true,'data'=>[]]);
-
-        $sql = "
-          SELECT
-            h.ID_Aduana,
-            h.num_pedimento,
-            h.Pedimento,
-            h.Factura,
-            h.fech_pedimento,
-            h.status,
-            COUNT(d.Id_DetAduana) AS partidas,
-            COALESCE(SUM(d.cantidad),0) AS cantidad_total,
-            COALESCE(SUM(COALESCE(d.Ingresado,0)),0) AS cantidad_ingresada
-          FROM th_aduana h
-          INNER JOIN td_aduana d ON d.ID_Aduana = h.ID_Aduana
-          WHERE h.Activo = 1
-            AND h.status = 'A'
-            AND h.Cve_Almac = :alm
-            AND h.ID_Proveedor = :prov
-            AND COALESCE(d.cantidad,0) > COALESCE(d.Ingresado,0)
-          GROUP BY h.ID_Aduana, h.num_pedimento, h.Pedimento, h.Factura, h.fech_pedimento, h.status
-          ORDER BY h.ID_Aduana DESC
-          LIMIT 200
-        ";
-        $st = $pdo->prepare($sql);
-        $st->execute([':alm'=>$cve_almac, ':prov'=>$id_prov]);
-        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-
-        jexit(['ok'=>true,'data'=>$rows]);
-      } break;
-
-      /* ===== Detalle pendiente de OC ===== */
-      case 'oc_det': {
-        $idAduana = (int)p('id_aduana', 0);
-        if ($idAduana <= 0) jexit(['ok'=>false,'error'=>'id_aduana inválido'], 400);
-
-        $sqlH = "
-          SELECT
-            h.ID_Aduana,
-            h.num_pedimento,
-            h.Pedimento,
-            h.Factura,
-            h.fech_pedimento,
-            h.status,
-            h.Cve_Almac,
-            h.ID_Proveedor,
-            p.Nombre AS proveedor
-          FROM th_aduana h
-          LEFT JOIN c_proveedores p ON p.ID_Proveedor = h.ID_Proveedor
-          WHERE h.ID_Aduana = :id
-          LIMIT 1
-        ";
-        $st = $pdo->prepare($sqlH);
-        $st->execute([':id'=>$idAduana]);
-        $head = $st->fetch(PDO::FETCH_ASSOC);
-        if (!$head) jexit(['ok'=>false,'error'=>'OC no encontrada'], 404);
-
-        $sqlD = "
-          SELECT
-            d.Id_DetAduana,
-            d.cve_articulo,
-            a.des_articulo,
-            a.unidadMedida,
-            COALESCE(d.cantidad,0) AS solicitada,
-            COALESCE(d.Ingresado,0) AS ingresada,
-            (COALESCE(d.cantidad,0) - COALESCE(d.Ingresado,0)) AS pendiente,
-            d.cve_lote
-          FROM td_aduana d
-          LEFT JOIN c_articulo a ON a.cve_articulo = d.cve_articulo
-          WHERE d.ID_Aduana = :id
-            AND (COALESCE(d.cantidad,0) > COALESCE(d.Ingresado,0))
-          ORDER BY d.Id_DetAduana
-        ";
-        $st = $pdo->prepare($sqlD);
-        $st->execute([':id'=>$idAduana]);
-        $det = $st->fetchAll(PDO::FETCH_ASSOC);
-
-        jexit(['ok'=>true,'head'=>$head,'det'=>$det]);
-      } break;
-
-      default:
-        jexit(['ok'=>false,'error'=>'Acción no soportada: '.$action], 400);
-    }
-
-  } catch (Throwable $e) {
-    jexit(['ok'=>false,'error'=>$e->getMessage()], 500);
-  }
-}
-
-/* =========================
-   UI (HTML)
-   ========================= */
-
-$activeSection = 'ingresos';
-$activeItem    = 'recepcion_materiales';
-$pageTitle     = 'Recepción de Materiales';
-
+// /public/ingresos/recepcion_materiales.php
 include __DIR__ . '/../bi/_menu_global.php';
-
-/* ===== Catálogos UI (PDO directo, sin db_all) ===== */
-$empresas = [];
-$almacenes = [];
-$proveedores = [];
-$zonas = [];
-
-try {
-  $empresas = $pdo->query("
-    SELECT cve_cia, des_cia
-    FROM c_compania
-    WHERE COALESCE(Activo,1)=1
-    ORDER BY des_cia
-  ")->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) { $empresas = []; }
-
-try {
-  // Ajustado a tu esquema típico de c_almacenp (clave, nombre)
-  $almacenes = $pdo->query("
-    SELECT clave AS cve_almac, nombre
-    FROM c_almacenp
-    WHERE COALESCE(Activo,1)=1
-    ORDER BY nombre
-  ")->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) { $almacenes = []; }
-
-try {
-  $proveedores = $pdo->query("
-    SELECT ID_Proveedor, Nombre
-    FROM c_proveedores
-    WHERE COALESCE(Activo,1)=1
-    ORDER BY Nombre
-  ")->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) { $proveedores = []; }
-
-try {
-  // Si tu tabla tiene más campos, no pasa nada.
-  $zonas = $pdo->query("
-    SELECT cve_ubicacion, desc_ubicacion
-    FROM tubicacionesretencion
-    WHERE COALESCE(Activo,1)=1
-    ORDER BY desc_ubicacion
-  ")->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) { $zonas = []; }
-
-$idAduanaPreset = (int)($_GET['id_aduana'] ?? 0);
 ?>
+<div class="container-fluid" style="font-size:10px;">
 
-<style>
-.ap-container{padding:12px;font-size:12px}
-.ap-title{font-size:18px;font-weight:600;color:#0b5ed7;margin-bottom:10px}
-.ap-card{background:#fff;border:1px solid #d0d7e2;border-radius:10px;padding:10px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
-.table td,.table th{padding:6px 8px;vertical-align:middle}
-.small-note{font-size:11px;color:#6c757d}
-.kpis{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
-.kpi{width:170px;background:#f8fbff;border:1px solid #d0d7e2;border-radius:10px;padding:8px}
-.kpi b{font-size:16px}
-</style>
-
-<div class="ap-container">
-  <div class="ap-title">Recepción de Materiales <span class="text-muted" style="font-size:12px">OC</span></div>
-
-  <div class="ap-card">
-    <div class="row g-2 align-items-end">
-      <div class="col-12 col-md-3">
-        <label class="form-label">Empresa</label>
-        <select id="cboEmpresa" class="form-select form-select-sm">
-          <option value="">Seleccione</option>
-          <?php foreach($empresas as $e): ?>
-            <option value="<?=h($e['cve_cia'])?>"><?=h($e['des_cia'])?></option>
-          <?php endforeach; ?>
-        </select>
-        <div class="small-note">Fuente: c_compania (cve_cia / des_cia)</div>
+  <div class="card shadow-sm mt-2">
+    <div class="card-header d-flex justify-content-between align-items-center" style="background:#0F5AAD;color:#fff;">
+      <div>
+        <div class="fw-semibold">Recepción de Materiales</div>
+        <div style="font-size:9px;opacity:.85;">Orden de Compra, Recepción Libre y Cross Docking</div>
       </div>
-
-      <div class="col-12 col-md-3">
-        <label class="form-label">Almacén</label>
-        <select id="cboAlmacen" class="form-select form-select-sm">
-          <option value="">Seleccione</option>
-          <?php foreach($almacenes as $a): ?>
-            <option value="<?=h($a['cve_almac'])?>"><?=h('['.$a['cve_almac'].'] '.$a['nombre'])?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-
-      <div class="col-12 col-md-3">
-        <label class="form-label">Zona de Recepción</label>
-        <select id="cboZona" class="form-select form-select-sm">
-          <option value="">Seleccione una Zona de Recepción</option>
-          <?php foreach($zonas as $z): ?>
-            <option value="<?=h($z['cve_ubicacion'])?>"><?=h('['.$z['cve_ubicacion'].'] '.$z['desc_ubicacion'])?></option>
-          <?php endforeach; ?>
-        </select>
-        <div class="small-note">Fuente: tubicacionesretencion</div>
-      </div>
-
-      <div class="col-12 col-md-3">
-        <label class="form-label">Proveedor</label>
-        <select id="cboProveedor" class="form-select form-select-sm">
-          <option value="">Seleccione proveedor</option>
-          <?php foreach($proveedores as $p): ?>
-            <option value="<?= (int)$p['ID_Proveedor'] ?>"><?=h($p['Nombre'])?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-
-      <div class="col-12 col-md-6 mt-2">
-        <label class="form-label">Número de OC (pendiente)</label>
-        <select id="cboOC" class="form-select form-select-sm">
-          <option value="">Seleccione una OC</option>
-        </select>
-        <div class="small-note">Se listan OCs status = A, filtradas por Proveedor + Almacén, solo con partidas pendientes.</div>
-      </div>
-
-      <div class="col-12 col-md-6 mt-2">
-        <label class="form-label">Factura / Documento</label>
-        <input id="txtFactura" class="form-control form-control-sm" placeholder="Factura o documento comercial">
-      </div>
+      <button class="btn btn-outline-light btn-sm" onclick="location.href='ingresos_admin.php'">Cerrar</button>
     </div>
 
-    <div class="kpis">
-      <div class="kpi"><div class="small-note">Líneas pendientes</div><b id="kpiLineas">0</b></div>
-      <div class="kpi"><div class="small-note">Pendiente total</div><b id="kpiPendiente">0</b></div>
-      <div class="kpi"><div class="small-note">Capturadas</div><b id="kpiCaptura">0</b></div>
-      <div class="kpi"><div class="small-note">LPs</div><b>0</b></div>
-    </div>
-  </div>
+    <div class="card-body">
 
-  <div class="ap-card" id="cardPendientes" style="display:none;">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <div class="fw-semibold">Productos de la OC (pendientes)</div>
-      <button class="btn btn-sm btn-primary" type="button" onclick="guardarRecepcion()">Guardar recepción</button>
-    </div>
+      <div class="row g-2">
+        <div class="col-12">
+          <label class="form-label mb-0">Tipo</label><br>
+          <label class="me-3"><input type="radio" name="tipo" value="OC" checked> Orden de Compra</label>
+          <label class="me-3"><input type="radio" name="tipo" value="RL"> Recepción Libre</label>
+          <label class="me-3"><input type="radio" name="tipo" value="CD"> Cross Docking</label>
+        </div>
+      </div>
 
-    <div class="table-responsive">
-      <table class="table table-sm table-striped table-bordered" id="tblPend">
-        <thead class="table-light">
+      <hr class="my-2">
+
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label mb-0">Empresa</label>
+          <select id="empresa" class="form-select form-select-sm">
+            <option value="">Seleccione</option>
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label mb-0">Almacén</label>
+          <select id="almacen" class="form-select form-select-sm">
+            <option value="">[Seleccione un almacén]</option>
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label mb-0">Zona de Recepción *</label>
+          <select id="zona_recepcion" class="form-select form-select-sm">
+            <option value="">Seleccione una Zona de Recepción</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label mb-0">Zona de Almacenaje destino</label>
+          <select id="zona_destino" class="form-select form-select-sm">
+            <option value="">Seleccione Zona destino</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label mb-0">BL destino</label>
+          <select id="bl_destino" class="form-select form-select-sm">
+            <option value="">Seleccione BL destino</option>
+          </select>
+        </div>
+      </div>
+
+      <hr class="my-2">
+
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label mb-0">Proveedor</label>
+          <select id="proveedor" class="form-select form-select-sm">
+            <option value="">Seleccione</option>
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label mb-0">Número de Orden de Compra</label>
+          <select id="oc_folio" class="form-select form-select-sm">
+            <option value="">Seleccione una OC</option>
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label mb-0">Folio de Recepción RL</label>
+          <input id="folio_rl" class="form-control form-control-sm" placeholder="">
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label mb-0">Folio Recepción Cross Docking</label>
+          <input id="folio_cd" class="form-control form-control-sm" placeholder="">
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label mb-0">Factura / Remisión</label>
+          <input id="factura" class="form-control form-control-sm" placeholder="">
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label mb-0">Proyecto</label>
+          <input id="proyecto" class="form-control form-control-sm" placeholder="Seleccione">
+        </div>
+      </div>
+
+      <hr class="my-3">
+
+      <div class="d-flex justify-content-end mb-2">
+        <button id="btnAdd" class="btn btn-secondary btn-sm">
+          + Agregar Contenedor o Pallet
+        </button>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered" style="font-size:10px;">
+          <thead class="table-light">
           <tr>
-            <th style="width:50px">#</th>
-            <th style="width:140px">Clave</th>
+            <th>Usuario</th>
+            <th>Artículo</th>
             <th>Descripción</th>
-            <th style="width:80px">UM</th>
-            <th style="width:110px">Solicitada</th>
-            <th style="width:110px">Ingresada</th>
-            <th style="width:110px">Pendiente</th>
-            <th style="width:160px">Capturar</th>
+            <th>UOM</th>
+            <th>Lote o Serie</th>
+            <th>Caducidad</th>
+            <th class="text-end">Cant. Solicitada</th>
+            <th class="text-end">Cant. Recibida</th>
+            <th class="text-end">Costo</th>
+            <th>Contenedor</th>
+            <th>LP Contenedor</th>
+            <th>Pallet</th>
+            <th>LP Pallet</th>
+            <th style="width:60px;">Acciones</th>
           </tr>
-        </thead>
-        <tbody>
-          <tr><td colspan="8" class="text-center text-muted">Seleccione una OC para visualizar partidas.</td></tr>
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+          <tr>
+            <td><input id="usuario" class="form-control form-control-sm" value="Usuario" /></td>
+            <td><input id="articulo" class="form-control form-control-sm" value="" /></td>
+            <td><input id="descripcion" class="form-control form-control-sm" value="" /></td>
+            <td><input id="uom" class="form-control form-control-sm" value="UM" /></td>
+            <td><input id="lote" class="form-control form-control-sm" value="" /></td>
+            <td><input id="caducidad" class="form-control form-control-sm" placeholder="dd/mm/aaaa" /></td>
+            <td><input id="cant_sol" class="form-control form-control-sm text-end" value="0" /></td>
+            <td><input id="cant_rec" class="form-control form-control-sm text-end" value="0" /></td>
+            <td><input id="costo" class="form-control form-control-sm text-end" value="0.00" /></td>
+            <td><input id="contenedor" class="form-control form-control-sm" value="" /></td>
+            <td><input id="lp_contenedor" class="form-control form-control-sm" value="" /></td>
+            <td><input id="pallet" class="form-control form-control-sm" value="Pallet" /></td>
+            <td><input id="lp_pallet" class="form-control form-control-sm" value="" /></td>
+            <td class="text-center">
+              <button id="btnRecibir" class="btn btn-primary btn-sm">Recibir</button>
+            </td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
 
-    <div class="small-note">
-      Nota: en esta fase solo armamos el “payload” operativo. La persistencia en th_entalmacen/td_entalmacen la conectamos en el siguiente paso (con transacción y kardex).
+      <hr class="my-3">
+
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered" id="tblRecibido" style="font-size:10px;">
+          <thead class="table-light">
+          <tr>
+            <th>Estatus</th>
+            <th>Usuario</th>
+            <th>Artículo</th>
+            <th>Lote</th>
+            <th>Caducidad</th>
+            <th class="text-end">Cant. Recibida</th>
+            <th>Contenedor</th>
+            <th>LP Contenedor</th>
+            <th>Pallet</th>
+            <th>LP Pallet</th>
+            <th>Zona Recepción</th>
+            <th>DateStamp</th>
+            <th style="width:60px;">Acc.</th>
+          </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="mt-2 d-flex gap-2">
+        <button id="btnGuardar" class="btn btn-success btn-sm">Guardar</button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="location.href='ingresos_admin.php'">Cerrar</button>
+      </div>
+
     </div>
   </div>
 </div>
 
 <script>
-const SELF = 'recepcion_materiales.php';
-const presetOC = <?= (int)$idAduanaPreset ?>;
+// ✅ RUTAS REALES (según tu estructura /public/api/recepcion/*)
+const API = '../api/recepcion/recepcion_api.php';
+const API_EMPRESAS = '../api/empresas_api.php';
 
-async function api(action, params){
-  const u = new URL(window.location.href);
+function qs(id){ return document.getElementById(id); }
+function val(id){ return (qs(id).value||'').trim(); }
+
+async function apiGet(action, params={}){
+  const u = new URL(API, window.location.href);
   u.searchParams.set('action', action);
-  Object.keys(params||{}).forEach(k => u.searchParams.set(k, params[k]));
-  const r = await fetch(u.toString(), { headers:{'Accept':'application/json'} });
+  Object.keys(params).forEach(k=>u.searchParams.set(k, params[k]));
+  const r = await fetch(u.toString());
+  return await r.json();
+}
+async function apiPost(action, payload){
+  const r = await fetch(API+'?action='+encodeURIComponent(action), {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
   return await r.json();
 }
 
-function nf(v){ const n=parseFloat(v); return isNaN(n)?0:n; }
-function fmt(v){ return (Math.round(nf(v)*10000)/10000).toFixed(4); }
-
-async function cargarOCs(){
-  const alm  = (document.getElementById('cboAlmacen').value||'').trim();
-  const prov = (document.getElementById('cboProveedor').value||'').trim();
-  const cbo  = document.getElementById('cboOC');
-
-  cbo.innerHTML = '<option value="">Seleccione una OC</option>';
-  document.getElementById('cardPendientes').style.display = 'none';
-  document.getElementById('kpiLineas').textContent = '0';
-  document.getElementById('kpiPendiente').textContent = '0';
-  document.getElementById('kpiCaptura').textContent = '0';
-
-  if (!alm || !prov) return;
-
-  const r = await api('oc_list', { cve_almac: alm, id_proveedor: prov });
-  if (!r.ok) { alert('Error al cargar OCs: '+(r.error||'')); return; }
-
-  (r.data||[]).forEach(oc=>{
-    const op = document.createElement('option');
-    op.value = oc.ID_Aduana;
-    const fol = oc.Pedimento || oc.num_pedimento || oc.ID_Aduana;
-    const fac = oc.Factura ? (' — '+oc.Factura) : '';
-    op.textContent = `${fol}${fac} — Pend:${fmt(nf(oc.cantidad_total)-nf(oc.cantidad_ingresada))}`;
-    op.setAttribute('data-factura', oc.Factura || '');
-    cbo.appendChild(op);
-  });
-
-  if (presetOC){
-    cbo.value = String(presetOC);
-    await onOCChange();
+function fillSelect(sel, rows, map){
+  sel.innerHTML = '';
+  if(map?.placeholder){
+    const o=document.createElement('option');
+    o.value=map.placeholder.value; o.textContent=map.placeholder.text;
+    sel.appendChild(o);
   }
+  (rows||[]).forEach(x=>{
+    const o=document.createElement('option');
+    o.value = (x[map.value] ?? '');
+    o.textContent = (x[map.text] ?? '');
+    sel.appendChild(o);
+  });
+}
+
+async function loadEmpresas(){
+  // empresas_api.php debe responder JSON. Si responde HTML (404/login) te dará "token <"
+  const u = new URL(API_EMPRESAS, window.location.href);
+  u.searchParams.set('action','list');
+  const r = await fetch(u.toString());
+  const j = await r.json();
+  if(!j.ok) return alert(j.error||'Error cargando empresas');
+  fillSelect(qs('empresa'), j.data, {value:'id', text:'nombre', placeholder:{value:'',text:'Seleccione'}});
+}
+
+async function loadAlmacenes(){
+  const j = await apiGet('almacenes');
+  if(!j.ok) return alert(j.error||'Error');
+  fillSelect(qs('almacen'), j.data, {value:'id', text:'nombre', placeholder:{value:'',text:'[Seleccione un almacén]'}});
+  if(qs('almacen').options.length>1){
+    qs('almacen').selectedIndex = 1;
+    await onAlmacenChange();
+  }
+}
+
+async function loadProveedores(){
+  const j = await apiGet('proveedores');
+  if(!j.ok) return;
+  fillSelect(qs('proveedor'), j.data, {value:'id', text:'nombre', placeholder:{value:'',text:'Seleccione'}});
+}
+
+function getTipo(){
+  return document.querySelector('input[name="tipo"]:checked')?.value || 'OC';
+}
+
+async function loadZonas(){
+  const alm = val('almacen');
+  if(!alm){
+    fillSelect(qs('zona_recepcion'), [], {value:'zona',text:'zona', placeholder:{value:'',text:'Seleccione una Zona de Recepción'}});
+    fillSelect(qs('zona_destino'), [], {value:'zona',text:'zona', placeholder:{value:'',text:'Seleccione Zona destino'}});
+    return;
+  }
+  const j = await apiGet('zonas', {almacen: alm});
+  if(!j.ok) return alert(j.error||'Error');
+  fillSelect(qs('zona_recepcion'), j.data, {value:'zona', text:'zona', placeholder:{value:'',text:'Seleccione una Zona de Recepción'}});
+  fillSelect(qs('zona_destino'), j.data, {value:'zona', text:'zona', placeholder:{value:'',text:'Seleccione Zona destino'}});
+}
+
+async function loadBL(){
+  const alm = val('almacen');
+  const zona = val('zona_destino');
+  if(!alm || !zona){
+    fillSelect(qs('bl_destino'), [], {value:'bl', text:'bl', placeholder:{value:'',text:'Seleccione BL destino'}});
+    return;
+  }
+  const j = await apiGet('bl', {almacen: alm, zona: zona});
+  if(!j.ok) return alert(j.error||'Error');
+  fillSelect(qs('bl_destino'), j.data, {value:'bl', text:'bl', placeholder:{value:'',text:'Seleccione BL destino'}});
+}
+
+async function loadOCs(){
+  const tipo = getTipo();
+  const alm = val('almacen');
+  const prov = val('proveedor');
+  qs('oc_folio').disabled = (tipo!=='OC');
+
+  if(tipo!=='OC'){
+    fillSelect(qs('oc_folio'), [], {value:'folio',text:'folio', placeholder:{value:'',text:'N/A'}});
+    return;
+  }
+  const j = await apiGet('ocs', {almacen: alm, proveedor: prov});
+  if(!j.ok) return alert(j.error||'Error');
+  fillSelect(qs('oc_folio'), j.data, {value:'folio', text:'folio', placeholder:{value:'',text:'Seleccione una OC'}});
 }
 
 async function onOCChange(){
-  const cbo = document.getElementById('cboOC');
-  const id  = (cbo.value||'').trim();
-  const tb  = document.querySelector('#tblPend tbody');
-
-  if (!id){
-    tb.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Seleccione una OC para visualizar partidas.</td></tr>';
-    document.getElementById('cardPendientes').style.display = 'none';
-    return;
-  }
-
-  const fac = cbo.options[cbo.selectedIndex]?.getAttribute('data-factura') || '';
-  if (!document.getElementById('txtFactura').value) document.getElementById('txtFactura').value = fac;
-
-  const r = await api('oc_det', { id_aduana: id });
-  if (!r.ok){ alert('Error al cargar detalle: '+(r.error||'')); return; }
-
-  const det = r.det || [];
-  tb.innerHTML = '';
-
-  let totalPend = 0;
-  det.forEach((x, i)=>{
-    totalPend += nf(x.pendiente);
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${i+1}</td>
-      <td><b>${x.cve_articulo||''}</b></td>
-      <td>${x.des_articulo||''}</td>
-      <td>${x.unidadMedida||''}</td>
-      <td class="text-end">${fmt(x.solicitada)}</td>
-      <td class="text-end">${fmt(x.ingresada)}</td>
-      <td class="text-end"><b>${fmt(x.pendiente)}</b></td>
-      <td>
-        <input class="form-control form-control-sm cap"
-               type="number" step="0.0001" min="0"
-               value="0"
-               data-det="${x.Id_DetAduana}"
-               data-cve="${x.cve_articulo||''}"
-               data-pend="${fmt(x.pendiente)}">
-      </td>
-    `;
-    tb.appendChild(tr);
-  });
-
-  if (!det.length){
-    tb.innerHTML = '<tr><td colspan="8" class="text-center text-muted">La OC no tiene partidas pendientes.</td></tr>';
-  }
-
-  document.getElementById('kpiLineas').textContent = String(det.length);
-  document.getElementById('kpiPendiente').textContent = fmt(totalPend);
-  document.getElementById('kpiCaptura').textContent = '0';
-  document.getElementById('cardPendientes').style.display = 'block';
-
-  // KPI captura en vivo
-  document.querySelectorAll('input.cap').forEach(inp=>{
-    inp.addEventListener('input', ()=>{
-      let cap = 0;
-      document.querySelectorAll('input.cap').forEach(i2=> cap += nf(i2.value));
-      document.getElementById('kpiCaptura').textContent = fmt(cap);
-    });
-  });
+  const folio = val('oc_folio');
+  if(!folio) return;
+  const j = await apiGet('oc_detalle', {folio});
+  if(!j.ok) return alert(j.error||'Error');
+  // si tu API devuelve proveedor, se puede setear aquí (opcional)
 }
 
-function guardarRecepcion(){
-  const idOC = (document.getElementById('cboOC').value||'').trim();
-  if (!idOC){ alert('Selecciona una OC'); return; }
+function addLineaFromInputs(){
+  const tb = qs('tblRecibido').querySelector('tbody');
 
-  const caps = [...document.querySelectorAll('input.cap')].map(i=>({
-    Id_DetAduana: i.getAttribute('data-det'),
-    cve_articulo: i.getAttribute('data-cve'),
-    pendiente: nf(i.getAttribute('data-pend')||'0'),
-    captura: nf(i.value||'0')
-  })).filter(x=>x.captura>0);
+  const tr = document.createElement('tr');
+  const now = new Date().toISOString().slice(0,19).replace('T',' ');
+  tr.innerHTML = `
+    <td><span class="badge bg-success">OK</span></td>
+    <td>${(val('usuario')||'')}</td>
+    <td>${(val('articulo')||'')}</td>
+    <td>${(val('lote')||'')}</td>
+    <td>${(val('caducidad')||'')}</td>
+    <td class="text-end">${(val('cant_rec')||'0')}</td>
+    <td>${(val('contenedor')||'')}</td>
+    <td>${(val('lp_contenedor')||'')}</td>
+    <td>${(val('pallet')||'')}</td>
+    <td>${(val('lp_pallet')||'')}</td>
+    <td>${(val('zona_recepcion')||'')}</td>
+    <td>${now}</td>
+    <td class="text-center"><button class="btn btn-danger btn-sm">🗑</button></td>
+  `;
+  tr.querySelector('button').addEventListener('click', ()=>tr.remove());
+  tb.appendChild(tr);
+}
 
-  if (!caps.length){ alert('Captura al menos una cantidad recibida.'); return; }
-
-  // Validación: no exceder pendiente
-  for (const x of caps){
-    if (x.captura > x.pendiente + 0.0000001){
-      alert(`Captura excede pendiente para ${x.cve_articulo}. Pendiente: ${fmt(x.pendiente)}`);
-      return;
-    }
-  }
+async function onGuardar(){
+  const tb = qs('tblRecibido').querySelector('tbody');
+  if(!tb.children.length){ alert('No hay líneas recibidas'); return; }
 
   const payload = {
-    Empresa: (document.getElementById('cboEmpresa').value||'').trim(),
-    Almacen: (document.getElementById('cboAlmacen').value||'').trim(),
-    Zona: (document.getElementById('cboZona').value||'').trim(),
-    Proveedor: (document.getElementById('cboProveedor').value||'').trim(),
-    ID_Aduana: idOC,
-    Factura: (document.getElementById('txtFactura').value||'').trim(),
-    lineas: caps
+    tipo: getTipo(),
+    empresa: val('empresa'),
+    almacen: val('almacen'),
+    zona_recepcion: val('zona_recepcion'),
+    zona_destino: val('zona_destino'),
+    bl_destino: val('bl_destino'),
+    proveedor: val('proveedor'),
+    oc_folio: val('oc_folio'),
+    folio_rl: val('folio_rl'),
+    folio_cd: val('folio_cd'),
+    factura: val('factura'),
+    proyecto: val('proyecto'),
+    lineas: []
   };
 
-  console.log('Payload recepción listo', payload);
-  alert('Payload listo. Siguiente paso: persistir en th_entalmacen/td_entalmacen con transacción + kardex.');
+  [...tb.querySelectorAll('tr')].forEach(tr=>{
+    const tds = tr.querySelectorAll('td');
+    payload.lineas.push({
+      cve_articulo: tds[2].innerText.trim(),
+      cve_lote: tds[3].innerText.trim(),
+      caducidad: tds[4].innerText.trim(),
+      cantidad: parseFloat(tds[5].innerText.trim()||'0'),
+      contenedor: tds[6].innerText.trim(),
+      lp_contenedor: tds[7].innerText.trim(),
+      pallet: tds[8].innerText.trim(),
+      lp_pallet: tds[9].innerText.trim()
+    });
+  });
+
+  const j = await apiPost('guardar_recepcion', payload);
+  if(!j.ok){ alert((j.error||'Error') + (j.detail?(' | '+j.detail):'')); return; }
+  alert('Recepción guardada correctamente');
+  tb.innerHTML = '';
 }
 
-// wiring
-document.getElementById('cboAlmacen').addEventListener('change', cargarOCs);
-document.getElementById('cboProveedor').addEventListener('change', cargarOCs);
-document.getElementById('cboOC').addEventListener('change', onOCChange);
+async function onTipoChange(){ await loadOCs(); }
+async function onAlmacenChange(){ await loadZonas(); await loadOCs(); }
 
-// si viene OC preseleccionada por URL, necesitamos cargar lista tras elegir almacén/proveedor.
-// En esta fase, el preset lo ejecuta al cargarOCs() cuando ya hay filtros.
+document.addEventListener('DOMContentLoaded', async ()=>{
+  await loadEmpresas();
+  await loadAlmacenes();
+  await loadProveedores();
+
+  document.querySelectorAll('input[name="tipo"]').forEach(r=>r.addEventListener('change', onTipoChange));
+  qs('almacen').addEventListener('change', onAlmacenChange);
+  qs('zona_destino').addEventListener('change', loadBL);
+  qs('proveedor').addEventListener('change', loadOCs);
+  qs('oc_folio').addEventListener('change', onOCChange);
+
+  qs('btnAdd').addEventListener('click', (e)=>{ e.preventDefault(); /* placeholder modal */ });
+  qs('btnRecibir').addEventListener('click', (e)=>{ e.preventDefault(); addLineaFromInputs(); });
+  qs('btnGuardar').addEventListener('click', (e)=>{ e.preventDefault(); onGuardar(); });
+});
 </script>
 
 <?php include __DIR__ . '/../bi/_menu_global_end.php'; ?>

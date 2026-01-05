@@ -1,7 +1,9 @@
 /vendor/
-app/db.php
 .idea/
 storage/framework/views/
 
-app/db.php
-app/db.php
+# Docker
+docker-compose.override.yml
+
+# Logs
+storage/logs/*.log

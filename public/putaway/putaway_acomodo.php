@@ -1,436 +1,483 @@
 <?php
 require_once __DIR__ . '/../../app/db.php';
 
+// --- Helper HTML seguro (evita Deprecated por null en htmlspecialchars, PHP 8.2/8.3) ---
+if (!function_exists('h')) {
+  function h($v): string {
+    return htmlspecialchars((string)($v ?? ''), ENT_QUOTES, 'UTF-8');
+  }
+}
+
+// ----------------- CONFIG UI -----------------
 $activeSection = 'procesos';
-$activeItem = 'putaway_acomodo';
-$pageTitle = 'Put Away · Acomodo / Traslado / XD';
+$activeItem    = 'putaway';
+$pageTitle     = 'Put Away · Acomodo / Traslado / XD';
 include __DIR__ . '/../bi/_menu_global.php';
 
-$cve_usuario_sesion = $_SESSION['cve_usuario'] ?? ($_SESSION['username'] ?? 'SISTEMA');
-
-$almacen_sel = isset($_GET['almacen']) ? trim($_GET['almacen']) : '';
-$zona_recibo_sel = isset($_GET['zona_recibo']) ? trim($_GET['zona_recibo']) : '';
-$bl_origen_sel = isset($_GET['bl_origen']) ? trim($_GET['bl_origen']) : '';
-$bl_destino_sel = isset($_GET['bl_destino']) ? trim($_GET['bl_destino']) : '';
-$zona_embarque_sel = isset($_GET['zona_embarque']) ? trim($_GET['zona_embarque']) : '';
-$folio_sel = isset($_GET['folio_sel']) ? trim($_GET['folio_sel']) : '';
-
-$lp_filtro = isset($_GET['lp']) ? trim($_GET['lp']) : '';
-$clave_filtro = isset($_GET['clave']) ? trim($_GET['clave']) : '';
-$lote_filtro = isset($_GET['lote_serie']) ? trim($_GET['lote_serie']) : '';
-
-$modos_validos = ['ACOMODO', 'TRASLADO', 'XD'];
+// ----------------- INPUTS -----------------
 $modo = isset($_GET['modo']) ? strtoupper(trim($_GET['modo'])) : 'ACOMODO';
-if (!in_array($modo, $modos_validos)) $modo = 'ACOMODO';
+if(!in_array($modo, ['ACOMODO','TRASLADO','XD'], true)) $modo = 'ACOMODO';
 
-/* Catálogos */
-$cat_almac = db_all("SELECT id, clave FROM c_almacenp WHERE COALESCE(Activo,1)=1 ORDER BY clave");
+$almacen_sel       = isset($_GET['almacen']) ? trim($_GET['almacen']) : '';
+$zona_recibo_sel   = isset($_GET['zona_recibo']) ? trim($_GET['zona_recibo']) : '';
+$folio_sel         = isset($_GET['folio_sel']) ? trim($_GET['folio_sel']) : '';
+$bl_origen_sel     = isset($_GET['bl_origen']) ? trim($_GET['bl_origen']) : '';
+$bl_destino_sel    = isset($_GET['bl_destino']) ? trim($_GET['bl_destino']) : '';
+$zona_embarque_sel = isset($_GET['zona_embarque']) ? trim($_GET['zona_embarque']) : '';
 
-$cat_zonas_recibo = db_all("
-  SELECT r.cve_ubicacion, r.desc_ubicacion, a.clave AS cve_almac
-  FROM tubicacionesretencion r
-  LEFT JOIN c_almacenp a ON a.id = r.cve_almacp
-  WHERE COALESCE(r.Activo,1)=1
-  ORDER BY a.clave, r.cve_ubicacion
-");
+$modo_radio = isset($_GET['modo_radio']) ? strtoupper(trim($_GET['modo_radio'])) : $modo;
+if(!in_array($modo_radio, ['ACOMODO','TRASLADO','XD'], true)) $modo_radio = $modo;
 
-$cat_ubicaciones = db_all("
-  SELECT u.idy_ubica, u.Ubicacion, u.Seccion, u.cve_pasillo, u.cve_rack, a.clave AS cve_almac, u.CodigoCSD
-  FROM c_ubicacion u
-  JOIN c_almacenp a ON a.id = u.cve_almac
-  WHERE COALESCE(u.Activo,1)=1
-  ORDER BY a.clave, u.Ubicacion
-");
-
-$cat_zonas_embarque = db_all("
-  SELECT e.cve_ubicacion, e.descripcion, e.AreaStagging, a.clave AS cve_almac
-  FROM t_ubicacionembarque e
-  JOIN c_almacenp a ON a.id = e.cve_almac
-  WHERE COALESCE(e.Activo,1)=1
-  ORDER BY a.clave, e.cve_ubicacion
-");
-
-/* Helpers combos */
-function render_options_almacen(array $rows, string $selected = ''): string {
-  $html = '<option value="">Seleccione</option>';
-  foreach ($rows as $r) {
-    $clave = trim($r['clave']);
-    $sel = ($selected !== '' && $selected === $clave) ? ' selected' : '';
-    $html .= '<option value="'.htmlspecialchars($clave).'"'.$sel.'>'.htmlspecialchars($clave).'</option>';
-  }
-  return $html;
-}
-function render_options_zonas(array $rows, string $selected = '', string $almacen_sel = ''): string {
-  $html = '<option value="">Seleccione</option>';
-  $almacen_sel = trim($almacen_sel);
-  foreach ($rows as $r) {
-    $cve_ubi = trim($r['cve_ubicacion']);
-    $desc = trim($r['desc_ubicacion'] ?? '');
-    $cve_alm = trim($r['cve_almac'] ?? '');
-    if ($almacen_sel !== '' && $cve_alm !== '' && $cve_alm !== $almacen_sel) continue;
-    $sel = ($selected !== '' && $selected === $cve_ubi) ? ' selected' : '';
-    $text = $cve_ubi . ($desc !== '' ? ' - ' . $desc : '');
-    $html .= '<option value="'.htmlspecialchars($cve_ubi).'"'.$sel.'>'.htmlspecialchars($text).'</option>';
-  }
-  return $html;
-}
-function render_options_bl(array $rows, string $selected = '', string $almacen_sel = ''): string {
-  $html = '<option value="">Seleccione</option>';
-  $almacen_sel = trim($almacen_sel);
-  foreach ($rows as $r) {
-    $ubi = trim($r['Ubicacion'] ?? '');
-    $csd = trim($r['CodigoCSD'] ?? ''); // BL real
-    $sec = trim($r['Seccion'] ?? '');
-    $pas = trim($r['cve_pasillo'] ?? '');
-    $rack = trim($r['cve_rack'] ?? '');
-    $cve_alm = trim($r['cve_almac'] ?? '');
-
-    if ($almacen_sel !== '' && $cve_alm !== '' && $cve_alm !== $almacen_sel) continue;
-    if ($csd === '') continue;
-
-    $label = $csd . ' · ' . $ubi;
-    $parts = [];
-    if ($sec!=='') $parts[]=$sec;
-    if ($pas!=='') $parts[]='P:'.$pas;
-    if ($rack!=='') $parts[]='R:'.$rack;
-    if (!empty($parts)) $label .= ' ['.implode(' ',$parts).']';
-
-    $sel = ($selected !== '' && $selected === $csd) ? ' selected' : '';
-    $html .= '<option value="'.htmlspecialchars($csd).'"'.$sel.'>'.htmlspecialchars($label).'</option>';
-  }
-  return $html;
-}
-function render_options_embarque(array $rows, string $selected = '', string $almacen_sel = ''): string {
-  $html = '<option value="">Seleccione</option>';
-  $almacen_sel = trim($almacen_sel);
-  foreach ($rows as $r) {
-    $cve_ubi = trim($r['cve_ubicacion']);
-    $desc = trim($r['descripcion'] ?? '');
-    $cve_alm = trim($r['cve_almac'] ?? '');
-    $stag = trim($r['AreaStagging'] ?? '');
-    if ($almacen_sel !== '' && $cve_alm !== '' && $cve_alm !== $almacen_sel) continue;
-    if ($stag !== 'S') continue;
-    $sel = ($selected !== '' && $selected === $cve_ubi) ? ' selected' : '';
-    $text = $cve_ubi . ($desc !== '' ? ' - ' . $desc : '') . ' [Stagging]';
-    $html .= '<option value="'.htmlspecialchars($cve_ubi).'"'.$sel.'>'.htmlspecialchars($text).'</option>';
-  }
-  return $html;
-}
-
-/* Consulta pendientes (tu lógica) */
-$folios_resumen = [];
-$lineas_detalle = [];
-$total_unidades = 0.0;
 $error_msg = '';
-$limite_rows = 500;
 
-if (($modo === 'ACOMODO' || $modo === 'XD') && $almacen_sel !== '' && $zona_recibo_sel !== '') {
-  try {
-    $fromBase = "
-      FROM v_pendientesacomodo p
-      INNER JOIN td_entalmacen td
-         ON TRIM(td.cve_articulo) = TRIM(p.cve_articulo)
-        AND IFNULL(TRIM(td.cve_lote),'') = IFNULL(TRIM(p.Cve_Lote),'')
-        AND TRIM(td.cve_ubicacion) = TRIM(p.Cve_Ubicacion)
-      INNER JOIN th_entalmacen th
-         ON th.Fol_Folio  = td.fol_folio
-      LEFT JOIN c_articulo a
-         ON TRIM(a.cve_articulo) = TRIM(td.cve_articulo)
-      LEFT JOIN (
-        SELECT fol_folio, cve_articulo, cve_lote, MAX(ClaveEtiqueta) AS ClaveEtiqueta
-        FROM td_entalmacenxtarima
-        GROUP BY fol_folio, cve_articulo, cve_lote
-      ) tx
-        ON tx.fol_folio    = td.fol_folio
-       AND tx.cve_articulo = td.cve_articulo
-       AND IFNULL(tx.cve_lote,'') = IFNULL(td.cve_lote,'')
-      LEFT JOIN (
-        SELECT Fol_Folio, Cve_Articulo, Cve_Lote, MAX(ClaveEtiqueta) AS ClaveEtiqueta
-        FROM td_entalmacencaja
-        GROUP BY Fol_Folio, Cve_Articulo, Cve_Lote
-      ) cx
-        ON cx.Fol_Folio    = td.fol_folio
-       AND cx.Cve_Articulo = td.cve_articulo
-       AND IFNULL(cx.Cve_Lote,'') = IFNULL(td.cve_lote,'')
-    ";
+// ----------------- CATÁLOGOS -----------------
+$cat_almacenes = [];
+$cat_ubicaciones = [];
+$cat_zonas_recibo = [];
+$cat_zonas_embarque = [];
 
-    $whereBase = "
-      WHERE TRIM(th.Cve_Almac)    = TRIM(:almac)
-        AND TRIM(p.Cve_Ubicacion) = TRIM(:zona)
-        AND (td.CantidadUbicada+0) < (td.CantidadRecibida+0)
-    ";
+try{
+  // Almacenes (c_almacenp)
+  $cat_almacenes = db_all("
+    SELECT id, clave, nombre, cve_cia
+    FROM c_almacenp
+    WHERE COALESCE(Activo,1)=1
+    ORDER BY clave
+  ");
+}catch(Throwable $e){
+  $error_msg = 'Error cargando almacenes: '.$e->getMessage();
+}
 
-    $paramsBase = [':almac'=>$almacen_sel, ':zona'=>$zona_recibo_sel];
+// Helper renders
+function render_options_almacen(array $rows, string $selected = ''): string {
+  $html = '<option value="">Seleccione...</option>';
+  foreach ($rows as $r) {
+    $clave = trim((string)($r['clave'] ?? ''));
+    $nom   = trim((string)($r['nombre'] ?? ''));
+    if($clave==='') continue;
+    $sel = ($selected !== '' && $selected === $clave) ? ' selected' : '';
+    $lbl = $nom!=='' ? ($clave.' - '.$nom) : $clave;
+    $html .= '<option value="'.h($clave).'"'.$sel.'>'.h($lbl).'</option>';
+  }
+  return $html;
+}
 
-    $sqlResumen = "
-      SELECT
-        th.Fol_Folio AS folio_entrada,
-        td.tipo_entrada AS tipo_entrada,
-        th.Proyecto AS proyecto,
-        SUM((td.CantidadRecibida+0)-(td.CantidadUbicada+0)) AS cant_pendiente,
-        COUNT(*) AS num_lineas
-      $fromBase
-      $whereBase
-      GROUP BY th.Fol_Folio, td.tipo_entrada, th.Proyecto
-      ORDER BY th.Fol_Folio DESC
-      LIMIT {$limite_rows}
-    ";
-    $folios_resumen = db_all($sqlResumen, $paramsBase);
+function render_options_zonas(array $rows, string $selected = '', string $almacen_sel=''): string {
+  $html = '<option value="">Seleccione...</option>';
+  foreach($rows as $r){
+    $cve_ubi = trim((string)($r['cve_ubicacion'] ?? ($r['codigo'] ?? '')));
+    $desc    = trim((string)($r['desc_ubicacion'] ?? ($r['nombre'] ?? '')));
+    if($cve_ubi==='') continue;
+    $text = $desc!=='' ? ($cve_ubi.' - '.$desc) : $cve_ubi;
+    $sel = ($selected !== '' && $selected === $cve_ubi) ? ' selected' : '';
+    $html .= '<option value="'.h($cve_ubi).'"'.$sel.'>'.h($text).'</option>';
+  }
+  return $html;
+}
 
-    if ($folio_sel !== '') {
-      $sqlDetalle = "
-        SELECT
-          th.Cve_Almac,
-          th.Fol_Folio AS folio_entrada,
-          td.id AS id_det,
-          td.tipo_entrada AS tipo_entrada,
-          th.Proyecto AS proyecto,
-          CASE
-            WHEN cx.Fol_Folio IS NOT NULL THEN 'CONTENEDOR'
-            WHEN tx.fol_folio IS NOT NULL THEN 'PALLET'
-            ELSE 'PIEZA'
-          END AS nivel,
-          COALESCE(cx.ClaveEtiqueta, tx.ClaveEtiqueta) AS lp,
-          td.cve_articulo,
-          a.des_articulo,
-          td.cve_lote,
-          td.cve_ubicacion AS bl_origen,
-          (td.CantidadRecibida+0) AS cant_recibida,
-          (td.CantidadUbicada+0) AS cant_ubicada,
-          (td.CantidadRecibida+0) - (td.CantidadUbicada+0) AS cant_pendiente
-        $fromBase
-        $whereBase
-        AND th.Fol_Folio = :folio
-      ";
-      $paramsDetalle = $paramsBase;
-      $paramsDetalle[':folio'] = $folio_sel;
+function render_options_bl(array $rows, string $selected = '', string $almacen_sel=''): string {
+  $html = '<option value="">Seleccione...</option>';
+  foreach($rows as $r){
+    // BL = c_ubicacion.CodigoCSD (prioritario por convención)
+    $csd = trim((string)($r['CodigoCSD'] ?? $r['codigocsd'] ?? ''));
+    if($csd==='') continue;
+    $label = $csd;
+    $sel = ($selected !== '' && $selected === $csd) ? ' selected' : '';
+    $html .= '<option value="'.h($csd).'"'.$sel.'>'.h($label).'</option>';
+  }
+  return $html;
+}
 
-      if ($clave_filtro !== '') { $sqlDetalle .= " AND TRIM(td.cve_articulo)=TRIM(:cve_art) "; $paramsDetalle[':cve_art']=$clave_filtro; }
-      if ($lote_filtro !== '')  { $sqlDetalle .= " AND TRIM(td.cve_lote)=TRIM(:lote) "; $paramsDetalle[':lote']=$lote_filtro; }
-      if ($lp_filtro !== '')    { $sqlDetalle .= " AND COALESCE(cx.ClaveEtiqueta, tx.ClaveEtiqueta)=:lp "; $paramsDetalle[':lp']=$lp_filtro; }
+function render_options_embarque(array $rows, string $selected = '', string $almacen_sel=''): string {
+  $html = '<option value="">Seleccione...</option>';
+  foreach($rows as $r){
+    $cve_ubi = trim((string)($r['cve_ubicacion'] ?? ($r['codigo'] ?? '')));
+    $desc    = trim((string)($r['desc_ubicacion'] ?? ($r['nombre'] ?? '')));
+    if($cve_ubi==='') continue;
+    $text = $desc!=='' ? ($cve_ubi.' - '.$desc) : $cve_ubi;
+    $sel = ($selected !== '' && $selected === $cve_ubi) ? ' selected' : '';
+    $html .= '<option value="'.h($cve_ubi).'"'.$sel.'>'.h($text).'</option>';
+  }
+  return $html;
+}
 
-      $sqlDetalle .= " ORDER BY td.cve_articulo, td.cve_lote ";
-      $lineas_detalle = db_all($sqlDetalle, $paramsDetalle);
+// Cargar ubicaciones + zonas (solo si hay almacén)
+if($almacen_sel!==''){
+  try{
+    // Ubicaciones para BL (c_ubicacion)
+    // Nota: el filtro por almacén puede variar según tu modelo; aquí se usa cve_almac desde c_ubicacion.
+    // Si tu almacén es clave y no id, se ajusta posteriormente.
+    $cat_ubicaciones = db_all("
+      SELECT CodigoCSD
+      FROM c_ubicacion
+      WHERE COALESCE(Activo,1)=1
+      ORDER BY CodigoCSD
+      LIMIT 5000
+    ");
 
-      foreach($lineas_detalle as $r){ $total_unidades += (float)$r['cant_pendiente']; }
+    // Zonas de recibo (tubicacionesretencion) por c_almacenp.id (cve_almacp)
+    $alm_idp = db_val("
+      SELECT id
+      FROM c_almacenp
+      WHERE TRIM(clave)=TRIM(:alm)
+      LIMIT 1
+    ", [':alm'=>$almacen_sel]);
+
+    if($alm_idp){
+      $cat_zonas_recibo = db_all("
+        SELECT cve_ubicacion, desc_ubicacion, AreaStagging, B_Devolucion
+        FROM tubicacionesretencion
+        WHERE COALESCE(Activo,1)=1
+          AND cve_almacp = :idp
+        ORDER BY cve_ubicacion
+      ", [':idp'=>$alm_idp]);
+    }else{
+      $cat_zonas_recibo = [];
     }
 
-  } catch(Exception $e){
-    $error_msg = $e->getMessage();
-    $folios_resumen = [];
+    // Zonas embarque (placeholder: si tienes tabla/vista específica, aquí conectamos)
+    $cat_zonas_embarque = [];
+
+  }catch(Throwable $e){
+    $error_msg = 'Error cargando catálogos: '.$e->getMessage();
+  }
+}
+
+// ----------------- DATA OPERATIVA -----------------
+$folios_pendientes = [];
+$lineas_detalle = [];
+$total_unidades = 0.0;
+
+try{
+  if($modo==='ACOMODO' || $modo==='XD'){
+    // Folios con pendiente (th_entalmacen/td_entalmacen)
+    if($almacen_sel!==''){
+      $sqlFol = "
+        SELECT
+          th.Fol_Folio AS folio,
+          th.tipo      AS tipo_doc,
+          th.Fol_OEP   AS oc,
+          th.Fact_Prov AS factura,
+          th.Proveedor AS proveedor,
+          th.Proyecto  AS proyecto,
+          th.ID_Protocolo,
+          th.Consec_protocolo,
+          COUNT(td.id) AS partidas,
+          SUM(COALESCE(td.CantidadRecibida,0)) AS total_recibido,
+          SUM(COALESCE(td.CantidadUbicada,0))  AS total_acomodado,
+          SUM(GREATEST(COALESCE(td.CantidadRecibida,0) - COALESCE(td.CantidadUbicada,0),0)) AS pendiente,
+          ROUND(
+            (SUM(COALESCE(td.CantidadUbicada,0)) / NULLIF(SUM(COALESCE(td.CantidadRecibida,0)),0))*100
+          ,2) AS avance
+        FROM th_entalmacen th
+        INNER JOIN td_entalmacen td ON td.fol_folio = th.Fol_Folio
+        WHERE TRIM(th.Cve_Almac)=TRIM(:alm)
+      ";
+      $params = [':alm'=>$almacen_sel];
+
+      if($zona_recibo_sel!==''){
+        $sqlFol .= " AND TRIM(IFNULL(td.cve_ubicacion, th.cve_ubicacion))=TRIM(:zona) ";
+        $params[':zona'] = $zona_recibo_sel;
+      }
+
+      $sqlFol .= "
+        GROUP BY th.Fol_Folio, th.tipo, th.Fol_OEP, th.Fact_Prov, th.Proveedor, th.Proyecto, th.ID_Protocolo, th.Consec_protocolo
+        HAVING pendiente > 0
+        ORDER BY th.Fol_Folio DESC
+        LIMIT 500
+      ";
+
+      $folios_pendientes = db_all($sqlFol, $params);
+
+      if($folio_sel===''){
+        // Si viene vacío, dejamos que el usuario seleccione. No forzamos el primero.
+      }
+
+      // Detalle del folio seleccionado
+      if($folio_sel!==''){
+        $sqlDet = "
+          SELECT
+            th.Fol_Folio AS folio_entrada,
+            td.id        AS id_det,
+            COALESCE(td.Nivel,'PIEZA') AS nivel,
+            COALESCE(td.LP,'') AS lp,
+            td.cve_articulo,
+            COALESCE(a.des_articulo,'') AS des_articulo,
+            COALESCE(td.cve_lote,'') AS cve_lote,
+            COALESCE(td.bl_origen,'') AS bl_origen,
+            COALESCE(td.CantidadRecibida,0) AS cant_recibida,
+            COALESCE(td.CantidadUbicada,0)  AS cant_ubicada,
+            GREATEST(COALESCE(td.CantidadRecibida,0) - COALESCE(td.CantidadUbicada,0),0) AS cant_pendiente
+          FROM th_entalmacen th
+          INNER JOIN td_entalmacen td ON td.fol_folio = th.Fol_Folio
+          LEFT JOIN c_articulo a ON a.cve_articulo = td.cve_articulo
+          WHERE TRIM(th.Cve_Almac)=TRIM(:alm)
+            AND th.Fol_Folio = :folio
+        ";
+        $params = [':alm'=>$almacen_sel, ':folio'=>$folio_sel];
+
+        if($zona_recibo_sel!==''){
+          $sqlDet .= " AND TRIM(IFNULL(td.cve_ubicacion, th.cve_ubicacion))=TRIM(:zona) ";
+          $params[':zona'] = $zona_recibo_sel;
+        }
+
+        $sqlDet .= " HAVING cant_pendiente > 0 ORDER BY td.id LIMIT 3000";
+
+        $lineas_detalle = db_all($sqlDet, $params);
+
+        $total_unidades = 0.0;
+        foreach($lineas_detalle as $r){
+          $total_unidades += (float)($r['cant_pendiente'] ?? 0);
+        }
+      }
+    }
+
+  } elseif($modo==='TRASLADO'){
+    // Traslado: aquí tu lógica (origen/destino BL). Se deja UI, sin romper.
+    $folios_pendientes = [];
     $lineas_detalle = [];
     $total_unidades = 0.0;
   }
-}
-?>
 
+}catch(Throwable $e){
+  $error_msg = 'Error cargando operación: '.$e->getMessage();
+}
+
+?>
 <style>
-  .ap-container{padding:12px;font-size:10px}
+  .ap-page{font-size:10px;padding:12px}
   .ap-title{color:#0b5ed7;font-weight:800;margin:6px 0 10px 0}
-  table.dataTable tbody td{font-size:10px}
-  .btn-xs{padding:2px 8px;font-size:10px}
-  #loadingOverlay{position:fixed;z-index:2000;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,.7);display:none;align-items:center;justify-content:center}
+  .ap-card{background:#fff;border:1px solid #d0d7e2;border-radius:12px;padding:10px;margin-bottom:10px}
+  .ap-sub{color:#5b6777;font-size:11px;margin-top:-6px}
+  .btn-xs{padding:2px 8px;font-size:10px;border-radius:6px}
+  .table thead th{white-space:nowrap}
 </style>
 
-<div id="loadingOverlay">
-  <div class="text-center">
-    <div class="spinner-border" role="status"></div>
-    <div class="mt-2" style="font-size:12px;">Procesando…</div>
-  </div>
-</div>
+<div class="ap-page">
 
-<div class="container-fluid ap-container">
-
-  <h2 class="ap-title"><i class="fa-solid fa-boxes-stacked me-2"></i>Put Away · Acomodo / Traslado / XD</h2>
-
-  <?php if($error_msg!==''): ?>
-    <div class="alert alert-warning"><?= htmlspecialchars($error_msg) ?></div>
-  <?php endif; ?>
-
-  <form method="get" class="row g-2 mb-3" id="frmFiltrosPrincipal"
-        onsubmit="document.getElementById('loadingOverlay').style.display='flex';">
-    <input type="hidden" name="modo" id="hdnModo" value="<?= htmlspecialchars($modo) ?>">
-    <input type="hidden" name="folio_sel" value="<?= htmlspecialchars($folio_sel) ?>">
-
-    <div class="col-md-3">
-      <label class="form-label mb-0">Almacén*</label>
-      <select name="almacen" class="form-select form-select-sm"
-              onchange="document.getElementById('frmFiltrosPrincipal').submit();">
-        <?= render_options_almacen($cat_almac, $almacen_sel) ?>
-      </select>
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <div class="ap-title"><i class="fa-solid fa-warehouse me-2"></i>Put Away · Acomodo / Traslado / XD</div>
+      <div class="ap-sub">Consola operativa con RTM + confirmación a Kardex. (Modo ACOMODO/TRASLADO/XD)</div>
     </div>
-
-    <div class="col-md-3">
-      <label class="form-label mb-0">Usuario (movimiento)*</label>
-      <select id="cmbUsuario" class="form-select form-select-sm"></select>
-      <small class="text-muted">Se usa en Kardex (no puede quedar vacío).</small>
+    <div>
+      <a class="btn btn-outline-primary btn-xs" href="./rtm_general.php">RTM General</a>
     </div>
-
-    <div class="col-md-6">
-      <label class="form-label mb-0">Tipo de Movimiento</label>
-      <div class="d-flex flex-row flex-wrap mt-1">
-        <div class="form-check me-3">
-          <input class="form-check-input modo-mov" type="radio" name="modo_radio" value="ACOMODO" <?= $modo==='ACOMODO'?'checked':'' ?>>
-          <label class="form-check-label">Acomodo</label>
-        </div>
-        <div class="form-check me-3">
-          <input class="form-check-input modo-mov" type="radio" name="modo_radio" value="TRASLADO" <?= $modo==='TRASLADO'?'checked':'' ?>>
-          <label class="form-check-label">Traslado</label>
-        </div>
-        <div class="form-check me-3">
-          <input class="form-check-input modo-mov" type="radio" name="modo_radio" value="XD" <?= $modo==='XD'?'checked':'' ?>>
-          <label class="form-check-label">CrossDocking</label>
-        </div>
-      </div>
-    </div>
-
-    <?php
-      $cl_zona_origen = ($modo==='ACOMODO' || $modo==='XD') ? '' : 'd-none';
-      $cl_bl_origen   = ($modo==='TRASLADO') ? '' : 'd-none';
-      $cl_bl_destino  = ($modo==='ACOMODO' || $modo==='TRASLADO') ? '' : 'd-none';
-      $cl_zona_emb    = ($modo==='XD') ? '' : 'd-none';
-    ?>
-
-    <div class="col-md-3 mt-2 <?= $cl_zona_origen ?>" id="grpZonaOrigen">
-      <label class="form-label mb-0">Zona Origen (Recepción)</label>
-      <select name="zona_recibo" id="cmbZonaRecibo" class="form-select form-select-sm"
-              onchange="document.getElementById('frmFiltrosPrincipal').submit();">
-        <?= render_options_zonas($cat_zonas_recibo, $zona_recibo_sel, $almacen_sel) ?>
-      </select>
-    </div>
-
-    <div class="col-md-3 mt-2 <?= $cl_bl_origen ?>" id="grpBlOrigen">
-      <label class="form-label mb-0">BL Origen</label>
-      <select name="bl_origen" id="cmbBlOrigen" class="form-select form-select-sm">
-        <?= render_options_bl($cat_ubicaciones, $bl_origen_sel, $almacen_sel) ?>
-      </select>
-    </div>
-
-    <div class="col-md-3 mt-2 <?= $cl_bl_destino ?>" id="grpBlDestino">
-      <label class="form-label mb-0">BL Destino</label>
-      <select name="bl_destino" id="cmbBlDestino" class="form-select form-select-sm">
-        <?= render_options_bl($cat_ubicaciones, $bl_destino_sel, $almacen_sel) ?>
-      </select>
-      <small class="text-muted">BL = c_ubicacion.CodigoCSD</small>
-    </div>
-
-    <div class="col-md-3 mt-2 <?= $cl_zona_emb ?>" id="grpZonaEmbarque">
-      <label class="form-label mb-0">Zona Embarque Destino</label>
-      <select name="zona_embarque" id="cmbZonaEmbarque" class="form-select form-select-sm">
-        <?= render_options_embarque($cat_zonas_embarque, $zona_embarque_sel, $almacen_sel) ?>
-      </select>
-    </div>
-  </form>
-
-  <div class="row mb-2">
-    <div class="col-md-4"><div class="card"><div class="card-body py-2 text-center"><b>Modo</b><div><?= htmlspecialchars($modo) ?></div></div></div></div>
-    <div class="col-md-4"><div class="card"><div class="card-body py-2 text-center"><b>Folio</b><div><?= $folio_sel!==''?htmlspecialchars($folio_sel):'Ninguno' ?></div></div></div></div>
-    <div class="col-md-4"><div class="card"><div class="card-body py-2 text-center"><b>Pendiente</b><div><?= number_format($total_unidades,2) ?></div></div></div></div>
   </div>
 
-  <?php if($modo==='ACOMODO' || $modo==='XD'): ?>
-    <div class="row mb-2">
-      <div class="col-12">
-        <h6>Folios con pendiente</h6>
-        <div class="table-responsive">
-          <table id="tblFoliosPendientes" class="table table-sm table-bordered table-striped text-center align-middle" style="width:100%;">
-            <thead style="background:#eef3ff;">
-              <tr>
-                <th>Acciones</th>
-                <th>Folio</th>
-                <th>Tipo</th>
-                <th>Proyecto</th>
-                <th>Pendiente</th>
-                <th>Renglones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach($folios_resumen as $row): ?>
-                <?php
-                  $urlVer = 'putaway_acomodo.php?modo='.urlencode($modo)
-                    .'&almacen='.urlencode($almacen_sel)
-                    .'&zona_recibo='.urlencode($zona_recibo_sel)
-                    .'&folio_sel='.urlencode($row['folio_entrada']);
-                ?>
-                <tr>
-                  <td><a class="btn btn-outline-primary btn-xs" href="<?= htmlspecialchars($urlVer) ?>">Ver</a></td>
-                  <td><?= htmlspecialchars($row['folio_entrada']) ?></td>
-                  <td><?= htmlspecialchars($row['tipo_entrada']) ?></td>
-                  <td><?= htmlspecialchars($row['proyecto']) ?></td>
-                  <td class="text-end"><?= number_format((float)$row['cant_pendiente'],2) ?></td>
-                  <td class="text-end"><?= (int)$row['num_lineas'] ?></td>
-                </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-        <small class="text-muted">Selecciona un folio para ver el detalle y ejecutar acomodo.</small>
-      </div>
-    </div>
-  <?php endif; ?>
+  <div class="ap-card">
+    <?php if($error_msg!==''): ?>
+      <div class="alert alert-warning"><?= h($error_msg) ?></div>
+    <?php endif; ?>
 
-  <?php if($folio_sel!=='' && ($modo==='ACOMODO' || $modo==='XD')): ?>
-    <div class="row mb-2">
-      <div class="col-12 d-flex justify-content-between align-items-center">
-        <h6 class="m-0">Detalle folio <?= htmlspecialchars($folio_sel) ?></h6>
-        <button class="btn btn-success btn-xs" id="btnAcomodarSeleccion">
-          <i class="fa-solid fa-check me-1"></i>Acomodar selección
-        </button>
-      </div>
-    </div>
+    <form method="get" id="frmFiltrosPrincipal" class="row g-2 align-items-end">
+      <input type="hidden" name="modo" id="hdnModo" value="<?= h($modo) ?>">
+      <input type="hidden" name="folio_sel" value="<?= h($folio_sel) ?>">
 
-    <div class="table-responsive">
-      <table id="tblPendientesAcomodo" class="table table-sm table-bordered table-striped text-center align-middle" style="width:100%;">
-        <thead style="background:#eef3ff;">
-          <tr>
-            <th>Sel</th>
-            <th>Folio</th>
-            <th>ID Det</th>
-            <th>Nivel</th>
-            <th>LP</th>
-            <th>Clave</th>
-            <th>Descripción</th>
-            <th>Lote</th>
-            <th>BL Origen</th>
-            <th>Recibida</th>
-            <th>Ubicada</th>
-            <th>Pendiente</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach($lineas_detalle as $row): ?>
-            <tr
-              data-folio="<?= htmlspecialchars($row['folio_entrada']) ?>"
-              data-id_det="<?= (int)$row['id_det'] ?>"
-              data-nivel="<?= htmlspecialchars($row['nivel']) ?>"
-              data-lp="<?= htmlspecialchars($row['lp']) ?>"
-              data-art="<?= htmlspecialchars($row['cve_articulo']) ?>"
-              data-lote="<?= htmlspecialchars($row['cve_lote']) ?>"
-              data-pend="<?= htmlspecialchars($row['cant_pendiente']) ?>"
-            >
-              <td><input type="radio" name="selRow"></td>
-              <td><?= htmlspecialchars($row['folio_entrada']) ?></td>
-              <td><?= (int)$row['id_det'] ?></td>
-              <td><?= htmlspecialchars($row['nivel']) ?></td>
-              <td><?= htmlspecialchars($row['lp']) ?></td>
-              <td><?= htmlspecialchars($row['cve_articulo']) ?></td>
-              <td><?= htmlspecialchars($row['des_articulo']) ?></td>
-              <td><?= htmlspecialchars($row['cve_lote']) ?></td>
-              <td><?= htmlspecialchars($row['bl_origen']) ?></td>
-              <td class="text-end"><?= number_format((float)$row['cant_recibida'],2) ?></td>
-              <td class="text-end"><?= number_format((float)$row['cant_ubicada'],2) ?></td>
-              <td class="text-end"><span class="badge text-bg-warning"><?= number_format((float)$row['cant_pendiente'],2) ?></span></td>
-            </tr>
+      <div class="col-md-3">
+        <label class="form-label mb-0">Almacén*</label>
+        <select name="almacen" id="cmbAlmacen" class="form-select form-select-sm"
+                onchange="document.getElementById('frmFiltrosPrincipal').submit();">
+          <?= render_options_almacen($cat_almacenes, $almacen_sel) ?>
+        </select>
+      </div>
+
+      <?php
+        $cl_zona_origen = ($modo==='ACOMODO' || $modo==='XD') ? '' : 'd-none';
+        $cl_bl_origen   = ($modo==='TRASLADO') ? '' : 'd-none';
+        $cl_bl_destino  = ($modo==='ACOMODO' || $modo==='TRASLADO') ? '' : 'd-none';
+        $cl_zona_emb    = ($modo==='XD') ? '' : 'd-none';
+      ?>
+
+      <div class="col-md-3 mt-2 <?= $cl_zona_origen ?>" id="grpZonaOrigen">
+        <label class="form-label mb-0">Zona Origen (Recepción)</label>
+        <select name="zona_recibo" id="cmbZonaRecibo" class="form-select form-select-sm"
+                onchange="document.getElementById('frmFiltrosPrincipal').submit();">
+          <?= render_options_zonas($cat_zonas_recibo, $zona_recibo_sel, $almacen_sel) ?>
+        </select>
+      </div>
+
+      <div class="col-md-3 mt-2 <?= $cl_bl_origen ?>" id="grpBlOrigen">
+        <label class="form-label mb-0">BL Origen</label>
+        <select name="bl_origen" id="cmbBlOrigen" class="form-select form-select-sm">
+          <?= render_options_bl($cat_ubicaciones, $bl_origen_sel, $almacen_sel) ?>
+        </select>
+      </div>
+
+      <div class="col-md-3 mt-2 <?= $cl_bl_destino ?>" id="grpBlDestino">
+        <label class="form-label mb-0">BL Destino</label>
+        <select name="bl_destino" id="cmbBlDestino" class="form-select form-select-sm">
+          <?= render_options_bl($cat_ubicaciones, $bl_destino_sel, $almacen_sel) ?>
+        </select>
+        <small class="text-muted">BL = c_ubicacion.CodigoCSD</small>
+      </div>
+
+      <div class="col-md-3 mt-2 <?= $cl_zona_emb ?>" id="grpZonaEmbarque">
+        <label class="form-label mb-0">Zona Embarque Destino</label>
+        <select name="zona_embarque" id="cmbZonaEmbarque" class="form-select form-select-sm">
+          <?= render_options_embarque($cat_zonas_embarque, $zona_embarque_sel, $almacen_sel) ?>
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label mb-0">Folio (RTM)</label>
+        <select name="folio_sel" id="cmbFolio" class="form-select form-select-sm">
+          <option value="">Seleccione...</option>
+          <?php foreach($folios_pendientes as $f): ?>
+            <?php $fv = (string)($f['folio'] ?? ''); ?>
+            <option value="<?= h($fv) ?>" <?= ($folio_sel!=='' && $folio_sel===$fv)?'selected':'' ?>>
+              <?= h($fv) ?> · Pend <?= number_format((float)($f['pendiente'] ?? 0),2) ?>
+            </option>
           <?php endforeach; ?>
-        </tbody>
-      </table>
+        </select>
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label mb-0">Modo</label>
+        <div class="d-flex gap-2">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="modo_radio" id="rA" value="ACOMODO" <?= $modo_radio==='ACOMODO'?'checked':'' ?>>
+            <label class="form-check-label" for="rA">Acomodo</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="modo_radio" id="rT" value="TRASLADO" <?= $modo_radio==='TRASLADO'?'checked':'' ?>>
+            <label class="form-check-label" for="rT">Traslado</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="modo_radio" id="rX" value="XD" <?= $modo_radio==='XD'?'checked':'' ?>>
+            <label class="form-check-label" for="rX">CrossDocking</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-2 d-flex gap-2 justify-content-end">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="fa fa-search me-1"></i>Aplicar</button>
+        <a href="./putaway_acomodo.php" class="btn btn-outline-secondary btn-sm">Limpiar</a>
+      </div>
+    </form>
+
+    <div class="row mb-2 mt-2">
+      <div class="col-md-4"><div class="card"><div class="card-body py-2 text-center"><b>Modo</b><div><?= h($modo) ?></div></div></div></div>
+      <div class="col-md-4"><div class="card"><div class="card-body py-2 text-center"><b>Folio</b><div><?= $folio_sel!==''?h($folio_sel):'Ninguno' ?></div></div></div></div>
+      <div class="col-md-4"><div class="card"><div class="card-body py-2 text-center"><b>Pendiente</b><div><?= number_format($total_unidades,2) ?></div></div></div></div>
     </div>
 
-    <small class="text-muted">
-      Regla: si Nivel es CONTENEDOR o PALLET, el sistema mueve completo (qty = pendiente). No se desarma jerarquía.
-    </small>
-  <?php endif; ?>
+    <?php if($modo==='ACOMODO' || $modo==='XD'): ?>
+      <div class="row mb-2">
+        <div class="col-12">
+          <h6>Folios con pendiente</h6>
+          <div class="table-responsive">
+            <table id="tblFoliosPendientes" class="table table-sm table-bordered table-striped text-center align-middle" style="width:100%;">
+              <thead style="background:#eef3ff;">
+                <tr>
+                  <th>Acción</th>
+                  <th>Folio</th>
+                  <th>Tipo</th>
+                  <th>OC</th>
+                  <th>Factura</th>
+                  <th>Proveedor</th>
+                  <th>Proyecto</th>
+                  <th>Protocolo</th>
+                  <th>Partidas</th>
+                  <th>Recibido</th>
+                  <th>Ubicado</th>
+                  <th>Pendiente</th>
+                  <th>Avance %</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach($folios_pendientes as $r): ?>
+                  <?php
+                    $fol = (string)($r['folio'] ?? '');
+                    $urlVer = './putaway_acomodo.php?modo='.urlencode($modo)
+                            .'&almacen='.urlencode($almacen_sel)
+                            .'&zona_recibo='.urlencode($zona_recibo_sel)
+                            .'&folio_sel='.urlencode($fol)
+                            .'&modo_radio='.urlencode($modo_radio);
+                  ?>
+                  <tr>
+                    <td><a class="btn btn-outline-primary btn-xs" href="<?= h($urlVer) ?>">Ver</a></td>
+                    <td><span class="badge text-bg-primary"><?= (int)$fol ?></span></td>
+                    <td><?= h($r['tipo_doc'] ?? '') ?></td>
+                    <td><?= h($r['oc'] ?? '') ?></td>
+                    <td><?= h($r['factura'] ?? '') ?></td>
+                    <td><?= h($r['proveedor'] ?? '') ?></td>
+                    <td><?= h($r['proyecto'] ?? '') ?></td>
+                    <td><?= h(($r['ID_Protocolo'] ?? '').(($r['Consec_protocolo']??'')!==''?('-'.$r['Consec_protocolo']):'')) ?></td>
+                    <td class="text-end"><?= (int)($r['partidas'] ?? 0) ?></td>
+                    <td class="text-end"><?= number_format((float)($r['total_recibido'] ?? 0),2) ?></td>
+                    <td class="text-end"><?= number_format((float)($r['total_acomodado'] ?? 0),2) ?></td>
+                    <td class="text-end"><span class="badge text-bg-warning"><?= number_format((float)($r['pendiente'] ?? 0),2) ?></span></td>
+                    <td class="text-end"><?= number_format((float)($r['avance'] ?? 0),2) ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+          <small class="text-muted">Tip: selecciona un folio para ver sus líneas con pendiente.</small>
+        </div>
+      </div>
 
+      <div class="row mb-2">
+        <div class="col-12">
+          <h6>Detalle del folio</h6>
+          <div class="table-responsive">
+            <table id="tblLineasDetalle" class="table table-sm table-bordered table-striped text-center align-middle" style="width:100%;">
+              <thead style="background:#eef3ff;">
+                <tr>
+                  <th>Sel</th>
+                  <th>Folio</th>
+                  <th>ID Det</th>
+                  <th>Nivel</th>
+                  <th>LP</th>
+                  <th>Clave</th>
+                  <th>Descripción</th>
+                  <th>Lote</th>
+                  <th>BL Origen</th>
+                  <th>Recibida</th>
+                  <th>Ubicada</th>
+                  <th>Pendiente</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach($lineas_detalle as $row): ?>
+                  <tr
+                    data-folio="<?= h($row['folio_entrada'] ?? '') ?>"
+                    data-id_det="<?= (int)($row['id_det'] ?? 0) ?>"
+                    data-nivel="<?= h($row['nivel'] ?? '') ?>"
+                    data-lp="<?= h($row['lp'] ?? '') ?>"
+                    data-art="<?= h($row['cve_articulo'] ?? '') ?>"
+                    data-lote="<?= h($row['cve_lote'] ?? '') ?>"
+                    data-pend="<?= h($row['cant_pendiente'] ?? 0) ?>"
+                  >
+                    <td><input type="radio" name="selRow"></td>
+                    <td><?= h($row['folio_entrada'] ?? '') ?></td>
+                    <td><?= (int)($row['id_det'] ?? 0) ?></td>
+                    <td><?= h($row['nivel'] ?? '') ?></td>
+                    <td><?= h($row['lp'] ?? '') ?></td>
+                    <td><?= h($row['cve_articulo'] ?? '') ?></td>
+                    <td><?= h($row['des_articulo'] ?? '') ?></td>
+                    <td><?= h($row['cve_lote'] ?? '') ?></td>
+                    <td><?= h($row['bl_origen'] ?? '') ?></td>
+                    <td class="text-end"><?= number_format((float)($row['cant_recibida'] ?? 0),2) ?></td>
+                    <td class="text-end"><?= number_format((float)($row['cant_ubicada'] ?? 0),2) ?></td>
+                    <td class="text-end">
+                      <span class="badge text-bg-warning"><?= number_format((float)($row['cant_pendiente'] ?? 0),2) ?></span>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+
+          <small class="text-muted">
+            Regla: si Nivel es CONTENEDOR o PALLET, el sistema mueve completo (qty = pendiente). No se desarma jerarquía.
+          </small>
+        </div>
+      </div>
+    <?php endif; ?>
+
+  </div>
 </div>
 
 <!-- MODAL CONFIRMAR ACOMODO -->
@@ -460,15 +507,14 @@ if (($modo === 'ACOMODO' || $modo === 'XD') && $almacen_sel !== '' && $zona_reci
             <input id="mLP" class="form-control form-control-sm" readonly>
           </div>
 
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label class="form-label mb-0">Artículo</label>
             <input id="mArt" class="form-control form-control-sm" readonly>
           </div>
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label class="form-label mb-0">Lote</label>
             <input id="mLote" class="form-control form-control-sm" readonly>
           </div>
-
           <div class="col-md-4">
             <label class="form-label mb-0">Pendiente</label>
             <input id="mPend" class="form-control form-control-sm" readonly>
@@ -511,11 +557,19 @@ if (($modo === 'ACOMODO' || $modo === 'XD') && $almacen_sel !== '' && $zona_reci
   </div>
 </div>
 
+<div id="overlayWait" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;">
+  <div style="position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:18px 22px;border-radius:12px;">
+    <i class="fa-solid fa-circle-notch fa-spin me-2"></i>Procesando movimiento...
+  </div>
+</div>
+
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 
 <script>
+function showOverlay(on){ $('#overlayWait').css('display', on?'block':'none'); }
+
 function applyModoUI(modo){
   const grpZonaOrigen = $('#grpZonaOrigen');
   const grpBlOrigen   = $('#grpBlOrigen');
@@ -529,98 +583,70 @@ function applyModoUI(modo){
   if(modo==='XD'){ grpZonaOrigen.removeClass('d-none'); grpZonaEmb.removeClass('d-none'); }
 }
 
-async function cargarUsuarios(){
-  const sel = document.getElementById('cmbUsuario');
-  if(!sel) return;
-
-  const r = await fetch('../api/usuarios.php?action=list');
-  const j = await r.json();
-  const rows = (j && j.ok) ? (j.data||[]) : (Array.isArray(j) ? j : []);
-
-  sel.innerHTML = '';
-  rows.forEach(u=>{
-    const opt = document.createElement('option');
-    opt.value = (u.cve_usuario||'').trim();
-    opt.textContent = `${(u.cve_usuario||'').trim()} - ${(u.nombre_completo||u.nombre||'').trim()}`;
-    sel.appendChild(opt);
-  });
-
-  const uSesion = "<?= htmlspecialchars($cve_usuario_sesion) ?>".trim();
-  if(uSesion){
-    const found = [...sel.options].find(o=>o.value===uSesion);
-    if(found) sel.value = uSesion;
-  }
-  if(!sel.value && sel.options.length>0) sel.selectedIndex = 0;
-}
-
 function usuarioMovimiento(){
-  const sel = document.getElementById('cmbUsuario');
-  if(!sel) return "<?= htmlspecialchars($cve_usuario_sesion) ?>";
-  return sel.value || (sel.options[0] ? sel.options[0].value : "<?= htmlspecialchars($cve_usuario_sesion) ?>");
-}
-
-function getSelectedRow(){
-  const r = document.querySelector('#tblPendientesAcomodo input[name="selRow"]:checked');
-  if(!r) return null;
-  return r.closest('tr');
-}
-
-function showOverlay(on){
-  document.getElementById('loadingOverlay').style.display = on ? 'flex' : 'none';
+  // Si tu plataforma maneja sesión, aquí toma el usuario. Si no, déjalo en prompt.
+  let u = '';
+  try{
+    u = (window.ASSISTPRO_USER || '').trim();
+  }catch(e){}
+  if(!u){
+    // fallback (no cambia el diseño, sólo asegura dato)
+    u = prompt('Usuario (cve_usuario):','');
+    u = (u||'').trim();
+  }
+  return u;
 }
 
 $(function(){
-  cargarUsuarios();
-
-  if($('#tblFoliosPendientes').length){
+  // DataTables
+  if($.fn.DataTable){
     $('#tblFoliosPendientes').DataTable({
-      pageLength:25,lengthChange:false,scrollX:true,
-      language:{url:'//cdn.datatables.net/plug-ins/1.13.4/i18n/es-MX.json'}
+      pageLength: 10,
+      lengthChange:false,
+      searching:true,
+      ordering:true,
+      info:true,
+      scrollX:true,
+      scrollY:'28vh',
+      scrollCollapse:true,
+      language:{ url:'//cdn.datatables.net/plug-ins/1.13.4/i18n/es-MX.json' }
+    });
+
+    $('#tblLineasDetalle').DataTable({
+      pageLength: 25,
+      lengthChange:false,
+      searching:true,
+      ordering:true,
+      info:true,
+      scrollX:true,
+      scrollY:'45vh',
+      scrollCollapse:true,
+      language:{ url:'//cdn.datatables.net/plug-ins/1.13.4/i18n/es-MX.json' }
     });
   }
 
-  if($('#tblPendientesAcomodo').length){
-    $('#tblPendientesAcomodo').DataTable({
-      pageLength:25,lengthChange:false,scrollX:true,scrollY:'52vh',scrollCollapse:true,
-      language:{url:'//cdn.datatables.net/plug-ins/1.13.4/i18n/es-MX.json'}
-    });
-  }
-
-  $('.modo-mov').on('change', function(){
-    const modoSel = $('.modo-mov:checked').val() || 'ACOMODO';
-    $('#hdnModo').val(modoSel);
-    $('input[name="folio_sel"]').val('');
-    applyModoUI(modoSel);
-    showOverlay(true);
-    document.getElementById('frmFiltrosPrincipal').submit();
+  // Cambiar modo por radio y reflejarlo al hidden modo (mantiene tu flujo)
+  $('input[name="modo_radio"]').on('change', function(){
+    const m = $(this).val();
+    $('#hdnModo').val(m);
+    applyModoUI(m);
   });
+  applyModoUI($('#hdnModo').val());
 
-  applyModoUI($('#hdnModo').val() || 'ACOMODO');
+  // Selección de fila detalle -> abre modal
+  $('#tblLineasDetalle tbody').on('click', 'tr', function(){
+    const $tr = $(this);
+    $tr.find('input[type=radio]').prop('checked', true);
 
-  // Abrir modal
-  $('#btnAcomodarSeleccion').on('click', function(){
-    const tr = getSelectedRow();
-    if(!tr){ alert('Selecciona una línea.'); return; }
+    const folio = $tr.data('folio') || '';
+    const id_det = $tr.data('id_det') || '';
+    const nivel = ($tr.data('nivel') || '').toString();
+    const lp = ($tr.data('lp') || '').toString();
+    const art = ($tr.data('art') || '').toString();
+    const lote = ($tr.data('lote') || '').toString();
+    const pend = parseFloat($tr.data('pend') || '0');
 
-    const blDest = ($('#cmbBlDestino').val() || '').trim();
-    if(!blDest){ alert('Selecciona BL Destino.'); return; }
-
-    const folio = tr.dataset.folio;
-    const id_det = tr.dataset.id_det;
-    const nivel = tr.dataset.nivel;
-    const lp = tr.dataset.lp || '';
-    const art = tr.dataset.art;
-    const lote = tr.dataset.lote || '';
-    const pend = parseFloat(tr.dataset.pend || '0');
-
-    // regla: contenedor/pallet -> completo
-    let qty = pend;
-    if(nivel==='PIEZA'){
-      qty = pend; // default pendiente, editable
-      $('#mQty').prop('readonly', false);
-    } else {
-      $('#mQty').prop('readonly', true);
-    }
+    const destino = ($('#cmbBlDestino').val() || '').toString();
 
     $('#mFolio').val(folio);
     $('#mIdDet').val(id_det);
@@ -629,14 +655,14 @@ $(function(){
     $('#mArt').val(art);
     $('#mLote').val(lote);
     $('#mPend').val(pend.toFixed(4));
-    $('#mQty').val(qty.toFixed(4));
-    $('#mBL').val(blDest);
+    $('#mBL').val(destino);
+    $('#mQty').val(pend.toFixed(4));
     $('#mUsr').val(usuarioMovimiento());
 
     new bootstrap.Modal(document.getElementById('mdlConfirmAcomodo')).show();
   });
 
-  // Confirmar
+  // Confirmar movimiento
   $('#btnConfirmarAcomodo').on('click', async function(){
     const folio = $('#mFolio').val();
     const id_det = $('#mIdDet').val();
@@ -674,7 +700,7 @@ $(function(){
     if(nivel==='PALLET') fd.append('pallet_lp', lp);
 
     showOverlay(true);
-    const r = await fetch('../api/putaway_confirmar.php', { method:'POST', body: fd });
+    const r = await fetch('./api/putaway_confirmar.php', { method:'POST', body: fd });
     const j = await r.json();
     showOverlay(false);
 
