@@ -554,18 +554,19 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Registro de Pedidos', 'url' => 'pedidos/pedido.php', 'icono' => 'fa-right-left'],
                 ['titulo' => 'Administración de Pedidos', 'url' => 'pedidos/picking_admin.php', 'icono' => 'fa-right-left'],
                 ['titulo' => 'Secuencia de Surtido', 'url' => 'pedidos/secuencia_surtido.php', 'icono' => 'fa-box-archive'],
+
             ],
 
 
             // MANUFACTURA KITTING
             'Manufactura' => [
-                ['titulo' => 'Agregar Editar Componentes ', 'url' => 'manufactura/bom.php', 'icono' => 'fa-industry'],
-                ['titulo' => 'Planeacion OP', 'url' => 'manufactura/orden_produccion.php', 'icono' => 'fa-flag'],
-                ['titulo' => 'Importador OPs', 'url' => 'manufactura/ot_importar.php', 'icono' => 'fa-industry'],
-                ['titulo' => 'Administrador OP', 'url' => 'manufactura/orden_produccion_admin_base.php', 'icono' => 'fa-flag'],
-                ['titulo' => 'Monitor Producción', 'url' => 'manufactura/monitor_produccion.php', 'icono' => 'fa-flag'],
-
-            ],
+                ['titulo' => 'Agregar Editar Componentes ',   'url' => 'manufactura/bom.php',                      'icono' => 'fa-industry'],
+                ['titulo' => 'Planeacion OP',                 'url' => 'manufactura/orden_produccion.php',         'icono' => 'fa-flag'],
+                ['titulo' => 'Importador OPs',                'url' => 'manufactura/importador_op.php',              'icono' => 'fa-industry'],
+                ['titulo' => 'Administrador OP',              'url' => 'manufactura/orden_produccion_admin_base.php',         'icono' => 'fa-flag'],
+                ['titulo' => 'Monitor Producción',            'url' => 'manufactura/monitor_produccion.php',       'icono' => 'fa-flag'],
+                
+                             ],
 
             // QA AUDITORIA
             'QA Auditoría' => [

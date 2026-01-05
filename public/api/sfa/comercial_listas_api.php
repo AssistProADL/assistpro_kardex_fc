@@ -1,38 +1,51 @@
 <?php
-header('Content-Type: application/json; charset=utf-8');
+// public/api/sfa/comercial_listas_api.php
+// Catálogos para asignación comercial (listas de precio / promociones / descuentos)
+// GET ?almacen_id=XX
 
-require_once __DIR__ . '/../../../app/db.php';
+header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/../../app/db.php';
 
 try {
-    $alm = isset($_GET['almacen']) ? (int)$_GET['almacen'] : 0;
+  $almacen_id = isset($_GET['almacen_id']) ? (int)$_GET['almacen_id'] : 0;
 
-    $sql = "SELECT id, Lista, FechaIni, FechaFin, Cve_Almac FROM listap";
-    $params = [];
+  // Nota: listas pueden ser globales (Cve_Almac=0 o NULL) o por almacén.
+  $lp = db_all(
+    "SELECT Id, Clave, Nombre, Activo, Cve_Almac
+       FROM listap
+      WHERE Activo=1 AND (Cve_Almac IS NULL OR Cve_Almac=0 OR Cve_Almac=:a)
+      ORDER BY Nombre",
+    [':a'=>$almacen_id]
+  );
 
-    if ($alm > 0) {
-        $sql .= " WHERE (Cve_Almac = ? OR Cve_Almac IS NULL)";
-        $params[] = $alm;
-    }
+  $ld = db_all(
+    "SELECT Id, Clave, Nombre, Activo, Cve_Almac
+       FROM listad
+      WHERE Activo=1 AND (Cve_Almac IS NULL OR Cve_Almac=0 OR Cve_Almac=:a)
+      ORDER BY Nombre",
+    [':a'=>$almacen_id]
+  );
 
-    $sql .= " ORDER BY Lista";
+  $promo = db_all(
+    "SELECT Id, Clave, Nombre, Activo, Cve_Almac
+       FROM listapromo
+      WHERE Activo=1 AND (Cve_Almac IS NULL OR Cve_Almac=0 OR Cve_Almac=:a)
+      ORDER BY Nombre",
+    [':a'=>$almacen_id]
+  );
 
-    $rows = function_exists('db_all')
-        ? db_all($sql, $params)
-        : $GLOBALS['pdo']->prepare($sql)->execute($params)->fetchAll(PDO::FETCH_ASSOC);
-
-    $out = [];
-    foreach ($rows as $r) {
-        $out[] = [
-            "id"        => (string)$r['id'],
-            "nombre"    => (string)$r['Lista'],
-            "fecha_ini" => $r['FechaIni'],
-            "fecha_fin" => $r['FechaFin'],
-            "almacen"   => $r['Cve_Almac']
-        ];
-    }
-
-    echo json_encode(["ok"=>1,"data"=>$out], JSON_UNESCAPED_UNICODE);
-
+  echo json_encode([
+    'ok' => 1,
+    'almacen_id' => $almacen_id,
+    'listas_precio' => $lp,
+    'listas_descuento' => $ld,
+    'listas_promo' => $promo,
+  ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
-    echo json_encode(["ok"=>0,"error"=>"Error servidor","detalle"=>$e->getMessage()]);
+  http_response_code(500);
+  echo json_encode([
+    'ok' => 0,
+    'error' => 'Error servidor',
+    'detalle' => $e->getMessage(),
+  ], JSON_UNESCAPED_UNICODE);
 }

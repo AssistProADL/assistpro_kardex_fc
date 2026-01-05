@@ -1,85 +1,74 @@
 <?php
-header('Content-Type: application/json; charset=utf-8');
+// public/api/sfa/clientes_comercial_save.php
+// Guarda asignación comercial en relclilis.
+// POST JSON:
+// {
+//   "destinatarios": [424,444],
+//   "listap": 1,
+//   "listapromo": 2,
+//   "listad": 3,
+//   "mode": "replace" | "only_empty" (default replace)
+// }
 
-require_once __DIR__ . '/../../../app/db.php';
+header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/../../app/db.php';
+
+function read_json_body(): array {
+  $raw = file_get_contents('php://input');
+  if (!$raw) return [];
+  $j = json_decode($raw, true);
+  return is_array($j) ? $j : [];
+}
 
 try {
-    $raw = file_get_contents("php://input");
-    $j = json_decode($raw, true);
+  $body = read_json_body();
+  $destinatarios = $body['destinatarios'] ?? [];
+  if (!is_array($destinatarios)) $destinatarios = [];
+  $destinatarios = array_values(array_unique(array_filter(array_map('intval', $destinatarios))));
 
-    $ids = $j['ids'] ?? [];
-    if (!is_array($ids) || empty($ids)) {
-        echo json_encode(["ok"=>0,"error"=>"Sin destinatarios"]);
-        exit;
-    }
+  $listap = isset($body['listap']) ? (int)$body['listap'] : 0;
+  $listapromo = isset($body['listapromo']) ? (int)$body['listapromo'] : 0;
+  $listad = isset($body['listad']) ? (int)$body['listad'] : 0;
+  $mode = ($body['mode'] ?? 'replace');
+  if (!in_array($mode, ['replace','only_empty'], true)) $mode = 'replace';
 
-    $overwrite   = !empty($j['overwrite']) ? 1 : 0;
-    $ListaP      = ($j['ListaP']      ?? '') !== '' ? (int)$j['ListaP']      : null;
-    $ListaPromo  = ($j['ListaPromo']  ?? '') !== '' ? (int)$j['ListaPromo']  : null;
-    $ListaD      = ($j['ListaD']      ?? '') !== '' ? (int)$j['ListaD']      : null;
+  if (!$destinatarios) {
+    echo json_encode(['ok'=>0,'error'=>'Destinatarios requeridos']);
+    exit;
+  }
 
-    if ($ListaP===null && $ListaPromo===null && $ListaD===null) {
-        echo json_encode(["ok"=>0,"error"=>"Sin cambios"]);
-        exit;
-    }
+  // upsert por destinatario
+  $ok = 0; $err = 0; $detalle_err = [];
 
-    $idsInt = [];
-    foreach ($ids as $v) {
-        $v = (int)$v;
-        if ($v > 0) $idsInt[] = $v;
-    }
-    $idsInt = array_unique($idsInt);
+  db_tx(function() use ($destinatarios,$listap,$listapromo,$listad,$mode,&$ok,&$err,&$detalle_err) {
+    foreach ($destinatarios as $id_dest) {
+      try {
+        $row = db_one('SELECT Id_Destinatario, ListaP, ListaPromo, ListaD FROM relclilis WHERE Id_Destinatario = ? LIMIT 1', [$id_dest]);
 
-    $pdo = $GLOBALS['pdo'];
-    $pdo->beginTransaction();
-
-    $sel = $pdo->prepare("SELECT Id, ListaP, ListaPromo, ListaD FROM relclilis WHERE Id_Destinatario=? LIMIT 1");
-    $ins = $pdo->prepare("INSERT INTO relclilis (Id_Destinatario) VALUES (?)");
-    $upd = $pdo->prepare("UPDATE relclilis SET ListaP=?, ListaPromo=?, ListaD=? WHERE Id=?");
-
-    $ok=0; $skip=0;
-
-    foreach ($idsInt as $idDest) {
-        $sel->execute([$idDest]);
-        $row = $sel->fetch(PDO::FETCH_ASSOC);
-
-        if (!$row) {
-            $ins->execute([$idDest]);
-            $sel->execute([$idDest]);
-            $row = $sel->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+          if ($mode === 'only_empty') {
+            $newP = ($row['ListaP'] ? $row['ListaP'] : $listap);
+            $newPr = ($row['ListaPromo'] ? $row['ListaPromo'] : $listapromo);
+            $newD = ($row['ListaD'] ? $row['ListaD'] : $listad);
+          } else {
+            $newP = $listap;
+            $newPr = $listapromo;
+            $newD = $listad;
+          }
+          dbq('UPDATE relclilis SET ListaP = ?, ListaPromo = ?, ListaD = ? WHERE Id_Destinatario = ?', [$newP, $newPr, $newD, $id_dest]);
+        } else {
+          dbq('INSERT INTO relclilis (Id_Destinatario, ListaP, ListaPromo, ListaD, Activo) VALUES (?,?,?,?,1)', [$id_dest, $listap, $listapromo, $listad]);
         }
-
-        $newLP = $row['ListaP'];
-        $newPR = $row['ListaPromo'];
-        $newDS = $row['ListaD'];
-
-        if ($ListaP !== null && ($overwrite || !$newLP))     $newLP = $ListaP;
-        if ($ListaPromo !== null && ($overwrite || !$newPR)) $newPR = $ListaPromo;
-        if ($ListaD !== null && ($overwrite || !$newDS))     $newDS = $ListaD;
-
-        if (
-            (string)$newLP === (string)$row['ListaP'] &&
-            (string)$newPR === (string)$row['ListaPromo'] &&
-            (string)$newDS === (string)$row['ListaD']
-        ) {
-            $skip++;
-            continue;
-        }
-
-        $upd->execute([$newLP, $newPR, $newDS, $row['Id']]);
         $ok++;
+      } catch (Throwable $e) {
+        $err++;
+        $detalle_err[] = ['id_destinatario'=>$id_dest,'err'=>$e->getMessage()];
+      }
     }
+  });
 
-    $pdo->commit();
-
-    echo json_encode([
-        "ok"=>1,
-        "mensaje"=>"Asignación comercial aplicada",
-        "actualizados"=>$ok,
-        "sin_cambio"=>$skip
-    ], JSON_UNESCAPED_UNICODE);
-
+  echo json_encode(['ok'=>1,'total_ok'=>$ok,'total_err'=>$err,'errors'=>$detalle_err]);
 } catch (Throwable $e) {
-    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-    echo json_encode(["ok"=>0,"error"=>"Error servidor","detalle"=>$e->getMessage()]);
+  http_response_code(500);
+  echo json_encode(['ok'=>0,'error'=>'Error servidor','detalle'=>$e->getMessage()]);
 }

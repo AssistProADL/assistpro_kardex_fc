@@ -1,642 +1,453 @@
 <?php
-include __DIR__ . '/../bi/_menu_global.php';
+// Ruta esperada: /public/sfa/planeacion_rutas_destinatarios.php
+require_once __DIR__ . '/../bi/_menu_global.php';
+
+// Sin sesión por ahora.
 ?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Planeación de Rutas | Asignación de Clientes</title>
 
-<style>
-  .table-sm td, .table-sm th{ padding:.25rem; font-size:11px; white-space:nowrap; }
-  #map{ height: 520px; width: 100%; border-radius: 12px; border:1px solid #e6eef9; }
-  .ap-hint{ font-size:12px; color:#6c757d; }
-  .ap-box{ border:1px solid #e6eef9; border-radius:12px; }
-  .badge-soft{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; background:#f1f5ff; border:1px solid #dbe7ff; }
-  .mini{ font-size:12px; color:#6c757d; }
-  .map-tools .btn{ border-radius:10px; }
-  .ap-debug{ font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; white-space:pre-wrap; }
-</style>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 
-<!-- IMPORTANTE: drawing + geometry para geocerca -->
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC5xF7JtKzw9cTRRXcDAqTThbYnMCiYOVM&libraries=drawing,geometry&callback=initMap" async defer></script>
+  <style>
+    :root{ --ap-font:10px; }
+    body, .form-control, .form-select, .btn, .table { font-size: var(--ap-font) !important; }
+    .ap-title{ font-weight:700; font-size:18px !important; }
+    .ap-sub{ color:#6c757d; }
+    .kpi-pill{ display:inline-flex; gap:6px; align-items:center; padding:3px 10px; border-radius:999px; background:#f1f3f5; border:1px solid #e9ecef; }
+    .kpi-pill b{ font-size:11px !important; }
+    .grid-wrap{
+      border:1px solid #e9ecef; border-radius:10px; overflow:hidden;
+      background:#fff;
+    }
+    .grid-scroll{
+      max-height: 62vh;
+      overflow:auto;
+    }
+    table{ white-space:nowrap; }
+    th{ position:sticky; top:0; z-index:3; background:#f8f9fa; }
+    .w-ctrl{ min-width:34px; text-align:center; }
+    .w-small{ min-width:60px; }
+    .w-med{ min-width:160px; }
+    .w-big{ min-width:260px; }
+    .badge-yes{ background:#198754; }
+    .badge-no{ background:#6c757d; }
+    .muted{ color:#6c757d; }
+  </style>
+</head>
+<body class="bg-light">
 
-<div class="container-fluid">
-
-  <!-- HEADER -->
-  <div class="row mb-2">
-    <div class="col-md-6">
-      <h4 class="fw-bold mb-0">Planeación de Rutas | Asignación de Clientes</h4>
-      <div class="ap-hint">Selecciona Almacén → carga clientes → usa geocerca para seleccionar masivamente.</div>
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <div>
+      <div class="ap-title"><i class="fa-solid fa-route me-2"></i>Planeación de Rutas | Asignación de Clientes</div>
+      <div class="ap-sub">Almacén → Rutas (dependientes) → Clientes. Guardado de días de visita en <b>RelDayCli</b>.</div>
     </div>
-    <div class="col-md-6 text-end">
-      <a href="resumen_rutas.php" class="btn btn-outline-primary btn-sm">📊 Resumen</a>
-      <a href="geo_distribucion_clientes.php" class="btn btn-outline-success btn-sm">🌍 Georreferencia</a>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnRefrescar"><i class="fa-solid fa-rotate me-1"></i>Refrescar</button>
+      <button class="btn btn-success btn-sm" id="btnGuardarTop"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar planeación</button>
     </div>
   </div>
 
-  <!-- FILTROS -->
-  <div class="card mb-2 ap-box">
+  <div class="card shadow-sm">
     <div class="card-body">
       <div class="row g-2 align-items-end">
-        <div class="col-md-3">
-          <label class="form-label mb-1">Almacén (IdEmpresa)</label>
-          <select id="f_almacen" class="form-select form-select-sm">
-            <option value="">Cargando.</option>
-          </select>
-          <div class="ap-hint" id="hint_almacen"></div>
+        <div class="col-12 col-md-4">
+          <label class="form-label mb-1">Almacén</label>
+          <select class="form-select form-select-sm" id="selAlmacen"></select>
+          <div class="small muted mt-1">Fuente: <span class="text-danger">../api/sfa/catalogo_rutas.php?mode=almacenes</span></div>
         </div>
 
-        <div class="col-md-5">
+        <div class="col-12 col-md-4">
+          <label class="form-label mb-1">Ruta destino (global)</label>
+          <select class="form-select form-select-sm" id="selRuta" disabled>
+            <option value="">Seleccione Ruta</option>
+          </select>
+          <div class="small muted mt-1">Fuente: <span class="text-danger">../api/sfa/catalogo_rutas.php?almacen_id=...</span></div>
+        </div>
+
+        <div class="col-12 col-md-4">
           <label class="form-label mb-1">Buscar</label>
-          <input id="f_buscar" class="form-control form-control-sm"
-                 placeholder="Cliente / Destinatario / Colonia / CP">
-        </div>
-
-        <div class="col-md-2">
-          <button id="btn_buscar" class="btn btn-primary btn-sm w-100">Buscar</button>
-        </div>
-
-        <div class="col-md-2">
-          <button id="btn_refrescar" class="btn btn-outline-secondary btn-sm w-100">Refrescar</button>
-        </div>
-
-        <div class="col-12 mt-1">
-          <span class="badge-soft" id="k_total">0 clientes</span>
-          <span class="badge-soft" id="k_gps">0 con GPS</span>
-          <span class="badge-soft" id="k_sel">0 seleccionados</span>
-          <span class="ms-2 badge bg-light text-dark" id="badge_status">Sin consulta</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ACCIONES MASIVAS -->
-  <div class="card mb-2 ap-box">
-    <div class="card-body">
-      <div class="row g-2 align-items-end">
-
-        <div class="col-md-3">
-          <label class="form-label fw-bold mb-1">Ruta destino (global)</label>
-          <select id="ruta_global" class="form-select form-select-sm">
-            <option value="">Cargando.</option>
-          </select>
-          <div class="ap-hint" id="hint_rutas"></div>
-        </div>
-
-        <div class="col-md-5">
-          <label class="form-label fw-bold mb-1">Días de visita (global)</label><br>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Lu"> L</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Ma"> M</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Mi"> Mi</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Ju"> J</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Vi"> V</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Sa"> S</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Do"> Do</label>
-        </div>
-
-        <div class="col-md-4 text-end">
-          <button id="btn_asignar_comercial" class="btn btn-outline-primary btn-sm">🧾 Asignar Comercial</button>
-          <button id="btn_guardar" class="btn btn-success btn-sm">Guardar planeación</button>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <!-- LAYOUT: TABLA + MAPA -->
-  <div class="row g-2">
-    <div class="col-lg-8">
-      <div class="card ap-box">
-        <div class="card-body p-1">
-          <div style="max-height:520px; overflow:auto;">
-            <table class="table table-bordered table-sm align-middle mb-0">
-              <thead class="table-light" style="position:sticky; top:0; z-index:2;">
-                <tr>
-                  <th style="width:36px"><input type="checkbox" id="chk_all"></th>
-                  <th>Cliente</th>
-                  <th>Destinatario</th>
-
-                  <!-- NUEVO BLOQUE COMERCIAL -->
-                  <th>Lista Precio</th>
-                  <th>Promoción</th>
-                  <th>Descuento</th>
-
-                  <th>Dirección</th>
-                  <th>Colonia</th>
-                  <th>CP</th>
-                  <th>Ciudad</th>
-                  <th>Estado</th>
-                  <th>Lat</th>
-                  <th>Lng</th>
-                  <th>Ruta Act</th>
-                  <th>Ruta New</th>
-                  <th>Días</th>
-                  <th>Seq</th>
-                </tr>
-              </thead>
-              <tbody id="tabla_destinatarios">
-                <tr>
-                  <td colspan="17" class="text-center text-muted">Seleccione un almacén</td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="input-group input-group-sm">
+            <input type="text" id="txtBuscar" class="form-control" placeholder="Cliente / Destinatario / Colonia / CP">
+            <button class="btn btn-primary" id="btnBuscar"><i class="fa-solid fa-magnifying-glass me-1"></i>Buscar</button>
+            <button class="btn btn-outline-secondary" id="btnLimpiar"><i class="fa-solid fa-eraser me-1"></i>Limpiar</button>
           </div>
+          <div class="small muted mt-1">Tip: Enter ejecuta búsqueda. La grilla se alimenta por ruta seleccionada.</div>
         </div>
       </div>
 
-      <div class="card ap-box mt-2">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <div class="fw-bold">Diagnóstico</div>
-            <button class="btn btn-outline-secondary btn-sm" id="btn_toggle_debug">Mostrar/Ocultar</button>
-          </div>
-          <div id="debug_box" class="ap-debug mt-2" style="display:none;">(sin logs)</div>
+      <hr class="my-3">
+
+      <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <span class="kpi-pill"><b id="kpiClientes">0</b> clientes</span>
+          <span class="kpi-pill"><b id="kpiSel">0</b> seleccionados</span>
+          <span class="kpi-pill"><b id="kpiAsign">0</b> asignados a ruta</span>
+          <span class="kpi-pill" id="pillStatus"><b id="kpiStatus">OK</b></span>
+          <span class="kpi-pill"><span class="muted">Ruta cargada:</span>&nbsp;<b id="kpiRuta">—</b></span>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <div class="me-2"><b>Días visita (global)</b> <span class="muted">(si una fila no trae días, puedes aplicar estos a los seleccionados)</span></div>
+          <?php
+            $dias = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'];
+            foreach($dias as $d){
+              echo '<label class="form-check form-check-inline mb-0">
+                      <input class="form-check-input day-global" type="checkbox" value="'.$d.'">
+                      <span class="form-check-label">'.$d.'</span>
+                    </label>';
+            }
+          ?>
+          <button class="btn btn-outline-primary btn-sm" id="btnSelTodo"><i class="fa-solid fa-check-double me-1"></i>Seleccionar todo</button>
+          <button class="btn btn-outline-secondary btn-sm" id="btnClearSel"><i class="fa-solid fa-ban me-1"></i>Limpiar selección</button>
+          <button class="btn btn-success btn-sm" id="btnGuardar"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button>
         </div>
       </div>
-    </div>
 
-    <div class="col-lg-4">
-      <div class="card ap-box">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-end mb-2">
-            <div>
-              <div class="fw-bold">Mapa (Selección por Geocerca)</div>
-              <div class="mini">Dibuja polígono → selecciona clientes en la tabla.</div>
-            </div>
-            <div class="map-tools d-flex gap-2">
-              <button class="btn btn-outline-dark btn-sm" id="btn_geocerca">🧿 Geocerca</button>
-              <button class="btn btn-outline-danger btn-sm" id="btn_limpiar_geo">🧹 Limpiar</button>
-            </div>
-          </div>
-          <div id="map"></div>
+      <div class="grid-wrap mt-3">
+        <div class="grid-scroll">
+          <table class="table table-sm table-hover mb-0" id="tbl">
+            <thead>
+              <tr>
+                <th class="w-ctrl"><input type="checkbox" id="chkAll"></th>
+                <th class="w-big">Cliente</th>
+                <th class="w-big">Destinatario</th>
+                <th class="w-ctrl">Lu</th>
+                <th class="w-ctrl">Ma</th>
+                <th class="w-ctrl">Mi</th>
+                <th class="w-ctrl">Ju</th>
+                <th class="w-ctrl">Vi</th>
+                <th class="w-ctrl">Sa</th>
+                <th class="w-ctrl">Do</th>
+                <th class="w-small">Asignado</th>
+                <th class="w-med">Ruta New</th>
+                <th class="w-small">Sec</th>
+                <th class="w-big">Dirección</th>
+                <th class="w-med">Colonia</th>
+                <th class="w-small">CP</th>
+                <th class="w-med">Ciudad</th>
+                <th class="w-med">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="18" class="text-center muted p-4">Seleccione un almacén y una ruta y luego Buscar/Refrescar.</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
-    </div>
-  </div>
 
-</div>
-
-<!-- MODAL ASIGNAR COMERCIAL -->
-<div class="modal fade" id="mdlComercial" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content" style="border-radius:14px;">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold">Asignación Comercial (Listas / Promos / Descuentos)</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body">
-        <div class="ap-hint mb-2">
-          Alcance recomendado: aplicar sobre <b>seleccionados</b>. Para campañas masivas, usa geocerca y luego aplica.
-        </div>
-
-        <div class="row g-2 mb-2">
-          <div class="col-md-4">
-            <div class="badge bg-light text-dark w-100 text-start">Almacén: <span id="mdl_alm">-</span></div>
-          </div>
-          <div class="col-md-4">
-            <div class="badge bg-light text-dark w-100 text-start">Seleccionados: <span id="mdl_sel">0</span></div>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label mb-1">Modo</label>
-            <select id="mdl_scope" class="form-select form-select-sm">
-              <option value="selected">Solo seleccionados</option>
-              <option value="filtered">Todos los filtrados (página actual)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row g-2">
-          <div class="col-md-4">
-            <label class="form-label mb-1">Lista de Precios</label>
-            <select id="mdl_listaP" class="form-select form-select-sm">
-              <option value="">(Sin cambio)</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label mb-1">Promoción</label>
-            <select id="mdl_listaPromo" class="form-select form-select-sm">
-              <option value="">(Sin cambio)</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label mb-1">Descuento</label>
-            <select id="mdl_listaD" class="form-select form-select-sm">
-              <option value="">(Sin cambio)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-check mt-3">
-          <input class="form-check-input" type="checkbox" id="mdl_overwrite">
-          <label class="form-check-label" for="mdl_overwrite">Sobrescribir asignaciones existentes</label>
-        </div>
-
-        <div class="alert alert-info mt-3 mb-0" style="font-size:12px;">
-          <b>Gobierno de datos:</b> esta operación actualiza <code>relclilis</code> por destinatario (Id_Destinatario) y deja traza en API response.
-        </div>
-
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-        <button class="btn btn-primary btn-sm" id="mdl_apply">Aplicar</button>
+      <div class="small muted mt-2">
+        API clientes: <span class="text-danger">../api/sfa/clientes_asignacion_data.php</span> |
+        API guardado: <span class="text-danger">../api/sfa/clientes_asignacion_save.php</span>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-let pagina = 1;
-let RUTAS = [];
-let CLIENTES = [];
-let map, drawingManager, polygon = null;
-let markers = [];
-let selected = new Set();
+const $ = (id)=>document.getElementById(id);
 
-const API_ALMACENES_CANDIDATOS = [
-  "../api/almacenes.php",
-  "../api/catalogo_almacenes.php",
-  "../api/almacenes_api.php"
-];
-const API_RUTAS_CANDIDATOS = [
-  "../api/catalogo_rutas.php",
-  "../api/rutas_api.php"
-];
+const selAlmacen = $('selAlmacen');
+const selRuta    = $('selRuta');
+const txtBuscar  = $('txtBuscar');
+const tbody      = $('tbody');
 
-function logDebug(msg, obj=null){
-  const box = document.getElementById("debug_box");
-  const ts = new Date().toISOString().slice(11,19);
-  let line = `[${ts}] ${msg}`;
-  if(obj!==null){
-    try{ line += "\n" + JSON.stringify(obj, null, 2); }catch(e){}
-  }
-  box.textContent = (box.textContent === "(sin logs)") ? line : (box.textContent + "\n\n" + line);
+const kpiClientes = $('kpiClientes');
+const kpiSel      = $('kpiSel');
+const kpiAsign    = $('kpiAsign');
+const kpiStatus   = $('kpiStatus');
+const pillStatus  = $('pillStatus');
+const kpiRuta     = $('kpiRuta');
+
+function setStatus(ok, msg){
+  kpiStatus.textContent = msg || (ok ? 'OK' : 'Error API');
+  pillStatus.style.background = ok ? '#e8fff3' : '#fff1f1';
+  pillStatus.style.border = ok ? '1px solid #b7f0cf' : '1px solid #f3b7b7';
 }
 
-document.getElementById("btn_toggle_debug").addEventListener("click", ()=>{
-  const box = document.getElementById("debug_box");
-  box.style.display = (box.style.display === "none") ? "block" : "none";
-});
-
-function pickField(obj, names){
-  for(const n of names){
-    if(obj && Object.prototype.hasOwnProperty.call(obj, n)) return obj[n];
-  }
-  return null;
-}
-function normalizeAlmacenRow(a){
-  const id = pickField(a, ["IdEmpresa","id","ID","clave","Clave","empresa","cve_almacenp","cve_almac","Cve_Almac"]);
-  const nombre = pickField(a, ["nombre","Nombre","descripcion","Descripcion","razonsocial","RazonSocial","almacen","Almacen"]);
-  if(id===null) return null;
-  return { id: String(id), nombre: nombre ? String(nombre) : ("Almacén " + id) };
-}
-function normalizeRutaRow(r){
-  const id = pickField(r, ["ID_Ruta","id_ruta","id","IdRuta","ruta_id"]);
-  const nombre = pickField(r, ["descripcion","Descripcion","cve_ruta","Cve_Ruta","ruta","Ruta","nombre","Nombre"]);
-  if(id===null) return null;
-  return { id: String(id), nombre: nombre ? String(nombre) : ("Ruta " + id) };
+function getGlobalDays(){
+  const checked = Array.from(document.querySelectorAll('.day-global:checked')).map(x=>x.value);
+  const map = {Lu:0,Ma:0,Mi:0,Ju:0,Vi:0,Sa:0,Do:0};
+  checked.forEach(d=>map[d]=1);
+  return map;
 }
 
-async function fetchFirstOk(urls, opts=null){
-  for(const u of urls){
-    try{
-      const res = await fetch(u, opts || {cache:"no-store"});
-      if(!res.ok){ logDebug("Endpoint no OK: "+u, {status:res.status}); continue; }
-      const json = await res.json();
-      if(json && json.error){ logDebug("Endpoint error: "+u, json); continue; }
-      if(Array.isArray(json)) return {url:u, data:json};
-      if(json && Array.isArray(json.data)) return {url:u, data:json.data};
-      for(const k of ["almacenes","rutas","items","rows"]){
-        if(json && Array.isArray(json[k])) return {url:u, data:json[k]};
-      }
-      logDebug("Endpoint sin formato usable: "+u, json);
-    }catch(e){
-      logDebug("Fetch error: "+u, {error:String(e)});
-    }
-  }
-  return null;
-}
+function updateKpis(){
+  const rows = tbody.querySelectorAll('tr[data-dest]');
+  kpiClientes.textContent = rows.length;
 
-/* ===========================
-   MAPA + GEOCERCA
-   =========================== */
-function initMap(){
-  map = new google.maps.Map(document.getElementById('map'),{
-    zoom: 11,
-    center: {lat: 19.432608, lng: -99.133209}
+  let sel=0, asg=0;
+  rows.forEach(tr=>{
+    const cb = tr.querySelector('.row-sel');
+    if(cb && cb.checked) sel++;
+    const asign = tr.getAttribute('data-asignado') || '0';
+    if(asign==='1') asg++;
   });
-
-  drawingManager = new google.maps.drawing.DrawingManager({
-    drawingControl: false,
-    polygonOptions: {
-      fillColor: "#1f6feb",
-      fillOpacity: 0.12,
-      strokeWeight: 2,
-      clickable: false,
-      editable: true,
-      zIndex: 1
-    }
-  });
-  drawingManager.setMap(map);
-
-  google.maps.event.addListener(drawingManager, 'polygoncomplete', function(poly){
-    if (polygon) polygon.setMap(null);
-    polygon = poly;
-    drawingManager.setDrawingMode(null);
-    recomputeSelectionFromPolygon();
-
-    google.maps.event.addListener(polygon.getPath(), 'set_at', recomputeSelectionFromPolygon);
-    google.maps.event.addListener(polygon.getPath(), 'insert_at', recomputeSelectionFromPolygon);
-    google.maps.event.addListener(polygon.getPath(), 'remove_at', recomputeSelectionFromPolygon);
-  });
-
-  document.getElementById("btn_geocerca").addEventListener("click", ()=>{
-    if(!drawingManager) return;
-    drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
-  });
-
-  document.getElementById("btn_limpiar_geo").addEventListener("click", ()=>{
-    if(polygon){ polygon.setMap(null); polygon=null; }
-    selected.clear();
-    syncSelectedToTable();
-  });
+  kpiSel.textContent = sel;
+  kpiAsign.textContent = asg;
 }
 
-function normFloat(v){
-  if(v===null || v===undefined) return NaN;
-  const s = String(v).trim().replace(",",".");
-  return parseFloat(s);
-}
-
-function paintMarkers(rows){
-  markers.forEach(m=>m.setMap(null));
-  markers = [];
-
-  if(!rows || rows.length===0) return;
-
-  const bounds = new google.maps.LatLngBounds();
-  rows.forEach(r=>{
-    const lat = normFloat(r.latitud);
-    const lng = normFloat(r.longitud);
-    if(!isFinite(lat) || !isFinite(lng)) return;
-
-    const pos = {lat,lng};
-    bounds.extend(pos);
-
-    const marker = new google.maps.Marker({
-      position: pos,
-      map: map,
-      title: r.destinatario || r.cliente || ("Destinatario "+r.id)
-    });
-
-    marker.__id = String(r.id); // id_destinatario
-    markers.push(marker);
-  });
-
-  if(markers.length>0) map.fitBounds(bounds);
-
-  // 🔥 FIX: al repintar, re-sincroniza selección vs polígono (si existe)
-  if(polygon){
-    recomputeSelectionFromPolygon();
-  }else{
-    syncSelectedToTable();
+async function fetchJson(url, opts){
+  const res = await fetch(url, opts || {});
+  const txt = await res.text();
+  try {
+    return JSON.parse(txt);
+  } catch(e){
+    return {ok:0,error:'Respuesta no JSON', detalle: txt.substring(0,500)};
   }
 }
 
-function recomputeSelectionFromPolygon(){
-  if(!polygon) return;
-  selected.clear();
-
-  markers.forEach(m=>{
-    const inside = google.maps.geometry.poly.containsLocation(m.getPosition(), polygon);
-    if(inside) selected.add(String(m.__id));
-  });
-
-  syncSelectedToTable();
-}
-
-function syncSelectedToTable(){
-  document.querySelectorAll(".chk-row").forEach(chk=>{
-    chk.checked = selected.has(String(chk.dataset.id));
-  });
-  document.getElementById("k_sel").textContent = `${selected.size} seleccionados`;
-}
-
-/* ===========================
-   CARGA SELECTS
-   =========================== */
 async function cargarAlmacenes(){
-  const sel = document.getElementById("f_almacen");
-  sel.innerHTML = `<option value="">Cargando.</option>`;
-  document.getElementById("hint_almacen").textContent = "";
+  setStatus(true,'OK');
+  selAlmacen.innerHTML = '<option value="">Cargando...</option>';
+  selRuta.innerHTML = '<option value="">Seleccione Ruta</option>';
+  selRuta.disabled = true;
+  tbody.innerHTML = '<tr><td colspan="18" class="text-center muted p-4">Cargando almacenes...</td></tr>';
 
-  const resp = await fetchFirstOk(API_ALMACENES_CANDIDATOS);
-  if(!resp){
-    sel.innerHTML = `<option value="">(Sin almacenes)</option>`;
-    document.getElementById("hint_almacen").textContent = "No pude cargar almacenes (revisar endpoint).";
+  const url = '../api/sfa/catalogo_rutas.php?mode=almacenes';
+  const js = await fetchJson(url);
+  if(!js.success){
+    setStatus(false,'Error API');
+    tbody.innerHTML = '<tr><td colspan="18" class="text-danger p-3">Error cargando almacenes: '+(js.error||'')+'</td></tr>';
     return;
   }
 
-  const norm = (resp.data||[]).map(normalizeAlmacenRow).filter(x=>x);
-  norm.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+  const data = js.data || [];
+  if(!data.length){
+    selAlmacen.innerHTML = '<option value="">Sin almacenes con rutas</option>';
+    tbody.innerHTML = '<tr><td colspan="18" class="text-center muted p-4">No hay almacenes con rutas.</td></tr>';
+    return;
+  }
 
-  sel.innerHTML = `<option value="">Seleccione</option>`;
-  norm.forEach(a=>{
-    sel.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
-  });
+  selAlmacen.innerHTML = '<option value="">Seleccione</option>' + data.map(a=>(
+    `<option value="${a.id}">${a.nombre}</option>`
+  )).join('');
 
-  document.getElementById("hint_almacen").textContent = `Fuente: ${resp.url} | ${norm.length} almacenes`;
+  tbody.innerHTML = '<tr><td colspan="18" class="text-center muted p-4">Seleccione un almacén y una ruta y luego Buscar/Refrescar.</td></tr>';
+  updateKpis();
 }
 
-async function cargarRutas(almacen){
-  const sel = document.getElementById("ruta_global");
-  sel.innerHTML = `<option value="">Cargando...</option>`;
-  document.getElementById("hint_rutas").textContent = "";
+async function cargarRutas(){
+  const alm = selAlmacen.value;
+  selRuta.innerHTML = '<option value="">Cargando...</option>';
+  selRuta.disabled = true;
+  tbody.innerHTML = '<tr><td colspan="18" class="text-center muted p-4">Seleccione una ruta y luego Buscar/Refrescar.</td></tr>';
 
-  const urls = [];
-  API_RUTAS_CANDIDATOS.forEach(u=>{
-    urls.push(u);
-    if(almacen) urls.push(u + (u.includes("?") ? "&" : "?") + "almacen=" + encodeURIComponent(almacen));
-    if(almacen) urls.push(u + (u.includes("?") ? "&" : "?") + "IdEmpresa=" + encodeURIComponent(almacen));
-  });
-
-  const resp = await fetchFirstOk(urls);
-  if(!resp){
-    sel.innerHTML = `<option value="">(Sin rutas)</option>`;
-    document.getElementById("hint_rutas").textContent = "No pude cargar rutas (revisar endpoint).";
-    RUTAS = [];
+  if(!alm){
+    selRuta.innerHTML = '<option value="">Seleccione Ruta</option>';
     return;
   }
 
-  RUTAS = (resp.data||[]).map(normalizeRutaRow).filter(x=>x);
-  RUTAS.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+  const url = '../api/sfa/catalogo_rutas.php?almacen_id=' + encodeURIComponent(alm);
+  const js = await fetchJson(url);
 
-  sel.innerHTML = `<option value="">Seleccione Ruta</option>`;
-  RUTAS.forEach(r=>{
-    sel.innerHTML += `<option value="${r.id}">${r.nombre}</option>`;
-  });
+  if(!js.success){
+    setStatus(false,'Error API');
+    selRuta.innerHTML = '<option value="">Sin rutas</option>';
+    return;
+  }
 
-  document.getElementById("hint_rutas").textContent = `Fuente: ${resp.url} | ${RUTAS.length} rutas`;
+  const rutas = js.data || [];
+  if(!rutas.length){
+    selRuta.innerHTML = '<option value="">Sin rutas</option>';
+    selRuta.disabled = true;
+    return;
+  }
+
+  selRuta.innerHTML = '<option value="">Seleccione Ruta</option>' + rutas.map(r=>(
+    `<option value="${r.id}">${r.nombre}</option>`
+  )).join('');
+  selRuta.disabled = false;
+  setStatus(true,'OK');
 }
 
-/* ===========================
-   CARGA DATOS
-   =========================== */
-async function cargarDatos(){
-  const alm = document.getElementById('f_almacen').value;
-  if(!alm) return;
+async function cargarClientes(){
+  const alm = selAlmacen.value;
+  const ruta = selRuta.value;
+  const q = txtBuscar.value.trim();
 
-  const fd = new FormData();
-  fd.append('almacen', alm);
-  fd.append('IdEmpresa', alm);
-  fd.append('buscar', document.getElementById('f_buscar').value || '');
-  fd.append('pagina', pagina);
-
-  document.getElementById("badge_status").textContent = "Consultando.";
-  logDebug("POST clientes_asignacion_data.php", {almacen:alm, buscar:document.getElementById('f_buscar').value, pagina});
-
-  try{
-    const resp = await fetch('../api/clientes_asignacion_data.php',{method:'POST',body:fd});
-    const j = await resp.json();
-
-    if(j && j.error){
-      document.getElementById("badge_status").textContent = "Error API";
-      logDebug("API error clientes_asignacion_data.php", j);
-      renderTabla({data:[]}, j.error);
-      return;
-    }
-
-    document.getElementById("badge_status").textContent = "OK";
-    logDebug("API OK clientes_asignacion_data.php", j);
-    renderTabla(j);
-
-  }catch(e){
-    document.getElementById("badge_status").textContent = "Error fetch";
-    logDebug("Fetch exception", {error:String(e)});
-    renderTabla({data:[]}, "Error de comunicación con API.");
-  }
-}
-
-/* ===========================
-   RENDER TABLA + MAPA + COMERCIAL
-   =========================== */
-function renderTabla(resp, errMsg=null){
-  const tb = document.getElementById('tabla_destinatarios');
-  tb.innerHTML = '';
-
-  const rows = (resp && Array.isArray(resp.data)) ? resp.data : [];
-  CLIENTES = rows;
-
-  if(errMsg){
-    tb.innerHTML = `<tr><td colspan="17" class="text-center text-danger">${errMsg}</td></tr>`;
-    document.getElementById("k_total").textContent = `0 clientes`;
-    document.getElementById("k_gps").textContent = `0 con GPS`;
-    document.getElementById("k_sel").textContent = `0 seleccionados`;
-    paintMarkers([]);
+  if(!alm || !ruta){
+    setStatus(false,'Seleccione almacén y ruta');
+    tbody.innerHTML = '<tr><td colspan="18" class="text-center muted p-4">Seleccione un almacén y una ruta y luego Buscar/Refrescar.</td></tr>';
+    updateKpis();
     return;
   }
 
-  if(rows.length===0){
-    tb.innerHTML = `<tr><td colspan="17" class="text-center text-muted">Sin datos</td></tr>`;
-    document.getElementById("k_total").textContent = `0 clientes`;
-    document.getElementById("k_gps").textContent = `0 con GPS`;
-    document.getElementById("k_sel").textContent = `0 seleccionados`;
-    paintMarkers([]);
+  setStatus(true,'OK');
+  kpiRuta.textContent = ruta;
+  tbody.innerHTML = '<tr><td colspan="18" class="text-center muted p-4">Cargando clientes...</td></tr>';
+
+  const url = `../api/sfa/clientes_asignacion_data.php?almacen_id=${encodeURIComponent(alm)}&ruta_id=${encodeURIComponent(ruta)}&q=${encodeURIComponent(q)}`;
+  const js = await fetchJson(url);
+
+  if(js.ok !== 1){
+    setStatus(false,'Error API');
+    tbody.innerHTML = `<tr><td colspan="18" class="text-danger p-3">Error consultando clientes. ${js.error||''}<br><span class="small muted">${(js.detalle||'')}</span></td></tr>`;
+    updateKpis();
     return;
   }
 
-  // KPIs
-  let gps = 0;
-  rows.forEach(r=>{
-    if((r.latitud||'')!=='' && (r.longitud||'')!=='') gps++;
-  });
-  document.getElementById("k_total").textContent = `${rows.length} clientes`;
-  document.getElementById("k_gps").textContent = `${gps} con GPS`;
-  document.getElementById("k_sel").textContent = `${selected.size} seleccionados`;
+  const items = js.items || [];
+  if(!items.length){
+    tbody.innerHTML = '<tr><td colspan="18" class="text-center muted p-4">Sin resultados</td></tr>';
+    updateKpis();
+    return;
+  }
 
-  // Render
-  rows.forEach(r=>{
-    const id = String(r.id); // id_destinatario
-    const optRutas = [`<option value="">(global)</option>`]
-      .concat(RUTAS.map(x=>`<option value="${x.id}">${x.nombre}</option>`))
-      .join('');
-
-    tb.innerHTML += `
-      <tr data-id="${id}">
-        <td><input type="checkbox" class="chk-row" data-id="${id}"></td>
-        <td>[${r.clave_cliente ?? ''}] ${r.cliente ?? ''}</td>
-        <td>[${r.id}] ${r.clave_destinatario ?? ''} ${r.destinatario ?? ''}</td>
-
-        <!-- NUEVO: placeholders comerciales -->
-        <td class="c_lp" data-id="${id}"><span class="text-muted">—</span></td>
-        <td class="c_promo" data-id="${id}"><span class="text-muted">—</span></td>
-        <td class="c_desc" data-id="${id}"><span class="text-muted">—</span></td>
-
-        <td>${r.direccion ?? ''}</td>
-        <td>${r.colonia ?? ''}</td>
-        <td>${r.postal ?? ''}</td>
-        <td>${r.ciudad ?? ''}</td>
-        <td>${r.estado ?? ''}</td>
-        <td>${r.latitud ?? ''}</td>
-        <td>${r.longitud ?? ''}</td>
-        <td>${r.ruta ?? '--'}</td>
-        <td>
-          <select class="form-select form-select-sm ruta-fila">
-            ${optRutas}
-          </select>
-        </td>
-        <td class="dias-fila">
-          <label class="me-1"><input type="checkbox" value="Lu">L</label>
-          <label class="me-1"><input type="checkbox" value="Ma">M</label>
-          <label class="me-1"><input type="checkbox" value="Mi">Mi</label>
-          <label class="me-1"><input type="checkbox" value="Ju">J</label>
-          <label class="me-1"><input type="checkbox" value="Vi">V</label>
-          <label class="me-1"><input type="checkbox" value="Sa">S</label>
-          <label class="me-1"><input type="checkbox" value="Do">Do</label>
-        </td>
-        <td><input type="number" class="form-control form-control-sm secuencia" style="width:60px"></td>
+  tbody.innerHTML = items.map((it,idx)=>{
+    const cli = it.Cve_Clte ? `[${it.Cve_Clte}] ${it.Cliente||''}` : (it.Cliente||'');
+    const dest = it.Id_Destinatario ? `[${it.Id_Destinatario}] ${it.Destinatario||''}` : (it.Destinatario||'');
+    const asignado = (parseInt(it.Asignado||0)===1);
+    return `
+      <tr data-dest="${it.Id_Destinatario||''}" data-cli="${it.Cve_Cliente||''}" data-asignado="${asignado?1:0}">
+        <td class="w-ctrl"><input type="checkbox" class="row-sel"></td>
+        <td class="w-big">${cli}</td>
+        <td class="w-big">${dest}</td>
+        ${['Lu','Ma','Mi','Ju','Vi','Sa','Do'].map(d=>(
+          `<td class="w-ctrl"><input type="checkbox" class="day" data-day="${d}" ${parseInt(it[d]||0)===1?'checked':''}></td>`
+        )).join('')}
+        <td class="w-small">${asignado?'<span class="badge badge-yes">Sí</span>':'<span class="badge badge-no">No</span>'}</td>
+        <td class="w-med"><span class="muted">(global)</span></td>
+        <td class="w-small"><input type="text" class="form-control form-control-sm sec" value="${it.Sec||''}"></td>
+        <td class="w-big">${it.Direccion||''}</td>
+        <td class="w-med">${it.Colonia||''}</td>
+        <td class="w-small">${it.CP||''}</td>
+        <td class="w-med">${it.Ciudad||''}</td>
+        <td class="w-med">${it.Estado||''}</td>
       </tr>
     `;
-  });
+  }).join('');
 
-  // check individuales
-  document.querySelectorAll(".chk-row").forEach(chk=>{
-    chk.addEventListener("change", ()=>{
-      const id = String(chk.dataset.id);
-      if(chk.checked) selected.add(id); else selected.delete(id);
-      document.getElementById("k_sel").textContent = `${selected.size} seleccionados`;
+  setStatus(true,'OK');
+  updateKpis();
+}
+
+function aplicarDiasGlobalASeleccion(){
+  const g = getGlobalDays();
+  const rows = tbody.querySelectorAll('tr[data-dest]');
+  rows.forEach(tr=>{
+    const cb = tr.querySelector('.row-sel');
+    if(!cb || !cb.checked) return;
+    tr.querySelectorAll('input.day').forEach(chk=>{
+      const d = chk.getAttribute('data-day');
+      if(g[d] === 1) chk.checked = true;
+    });
+  });
+}
+
+async function guardarPlaneacion(){
+  const alm = selAlmacen.value;
+  const ruta = selRuta.value;
+
+  if(!alm || !ruta){
+    alert('Seleccione almacén y ruta.');
+    return;
+  }
+
+  // Aplica días globales a seleccionados (solo si el usuario marcó globales)
+  aplicarDiasGlobalASeleccion();
+
+  const payload = {
+    almacen_id: parseInt(alm),
+    ruta_id: parseInt(ruta),
+    items: []
+  };
+
+  const rows = tbody.querySelectorAll('tr[data-dest]');
+  rows.forEach(tr=>{
+    const cb = tr.querySelector('.row-sel');
+    if(!cb || !cb.checked) return;
+
+    const dest = parseInt(tr.getAttribute('data-dest')||0);
+    const cli  = parseInt(tr.getAttribute('data-cli')||0);
+    const sec  = (tr.querySelector('input.sec')?.value || '').trim();
+
+    const days = {Lu:0,Ma:0,Mi:0,Ju:0,Vi:0,Sa:0,Do:0};
+    tr.querySelectorAll('input.day').forEach(chk=>{
+      const d = chk.getAttribute('data-day');
+      days[d] = chk.checked ? 1 : 0;
+    });
+
+    payload.items.push({
+      Id_Destinatario: dest,
+      Cve_Cliente: cli,
+      Sec: sec,
+      ...days
     });
   });
 
-  // Pinta mapa
-  paintMarkers(rows);
+  if(payload.items.length===0){
+    alert('No hay filas seleccionadas para guardar.');
+    return;
+  }
 
-  // 🔥 Hidrata bloque comercial por lote (solo rows visibles)
-  cargarComercialDeTabla(rows);
+  const js = await fetchJson('../api/sfa/clientes_asignacion_save.php', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+
+  if(js.ok !== 1){
+    alert((js.error||'Error guardando') + (js.detalle?('\n'+js.detalle):''));
+    setStatus(false,'Error API');
+    return;
+  }
+
+  alert(js.message || 'Planeación guardada.');
+  // Refresca desde BD para validar que lo guardado se refleje
+  await cargarClientes();
 }
 
-async function cargarComercialDeTabla(rows){
-  try{
-    const ids = rows.map(r=>String(r.id)).filter(x=>x);
-    if(ids.length===0) return;
+$('btnRefrescar').addEventListener('click', cargarClientes);
+$('btnBuscar').addEventListener('click', cargarClientes);
+$('btnLimpiar').addEventListener('click', ()=>{ txtBuscar.value=''; cargarClientes(); });
+$('btnSelTodo').addEventListener('click', ()=>{
+  tbody.querySelectorAll('.row-sel').forEach(cb=>cb.checked=true);
+  $('chkAll').checked=true;
+  updateKpis();
+});
+$('btnClearSel').addEventListener('click', ()=>{
+  tbody.querySelectorAll('.row-sel').forEach(cb=>cb.checked=false);
+  $('chkAll').checked=false;
+  updateKpis();
+});
+$('btnGuardar').addEventListener('click', guardarPlaneacion);
+$('btnGuardarTop').addEventListener('click', guardarPlaneacion);
 
-    const resp = await fetch('../api/clientes_comercial_data.php',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ids: ids })
-    }).then(r=>r.json());
+selAlmacen.addEventListener('change', async ()=>{
+  await cargarRutas();
+  kpiRuta.textContent = '—';
+  setStatus(true,'OK');
+});
 
-    if(resp && resp.ok && resp.data){
-      // resp.data: { "443": {lp:{id,nombre}, promo:{...}, desc:{...}} }
-      Object.keys(resp.data).forEach(id=>{
-        const d = resp.data[id] || {};
-        const elLP = document.querySelector(`td.c_lp[data-id="${id}"]`);
-        const elPR = document.querySelector(`td.c_promo[data-id="${id}"]`);
-        const elDS = document.querySelector(`td.c_desc[data-id="${id}"]`);
+selRuta.addEventListener('change', ()=>{
+  kpiRuta.textContent = selRuta.value || '—';
+  setStatus(true,'OK');
+});
 
-        const fmt = (x)=> x && x.id ? `[${x.id}] ${x.nombre||''}` : '—';
+$('chkAll').addEventListener('change', (e)=>{
+  tbody.querySelectorAll('.row-sel').forEach(cb=>cb.checked=e.target.checked);
+  updateKpis();
+});
 
-        if(elLP) elLP.innerHTML = `<span class="${d.lp && d.lp.id ? 'badge-soft':''}">${fmt(d.lp)}</span>`;
-        if(elPR) elPR.innerHTML = `<span class="${d.promo && d.promo.id ? 'badge-soft':''}">${fmt(d.promo)}</span>`;
-        if(elDS) elDS.innerHTML = `<span class="${d.desc && d.desc.id ? 'badge-soft':''}">${fmt(d.desc)}</span>`;
-      });
-    }else{
-      logDebug("clientes_comercial_data.php sin ok", resp);
-    }
-  }catch(e){
-    logDebug
+txtBuscar.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); cargarClientes(); } });
+
+tbody.addEventListener('change', (e)=>{
+  if(e.target.classList.contains('row-sel')) updateKpis();
+});
+
+// Init
+(async function init(){
+  await cargarAlmacenes();
+})();
+</script>
+
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
+</body>
+</html>
