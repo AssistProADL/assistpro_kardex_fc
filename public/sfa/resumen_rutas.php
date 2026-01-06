@@ -1,45 +1,67 @@
 <?php
-include __DIR__ . '/../bi/_menu_global.php';
+// public/sfa/resumen_rutas.php
+// Dashboard Corporativo | Resumen de Rutas
 ?>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard Corporativo | Resumen de Rutas</title>
 
-<style>
-  .kpi-card{
-    border-radius: 12px;
-    padding: 14px 14px;
-    text-align:center;
-    border:1px solid #e6eef9;
-    box-shadow: 0 1px 2px rgba(0,0,0,.04);
-    min-height: 86px;
-  }
-  .kpi-card h3{ margin:0; font-size:26px; font-weight:800; }
-  .kpi-card small{ color:#6c757d; font-size:12px; }
-  .estado-verde{ color:#198754; font-weight:700; }
-  .estado-amarillo{ color:#ffc107; font-weight:700; }
-  .estado-rojo{ color:#dc3545; font-weight:700; }
+  <!-- Bootstrap 5 (usa el que ya tengas en tu proyecto) -->
+  <link href="../assets/bootstrap.min.css" rel="stylesheet">
+  <script src="../assets/bootstrap.bundle.min.js"></script>
 
-  .table-sm td, .table-sm th{
-    font-size: 12px;
-    padding: .35rem;
-    white-space: nowrap;
-    vertical-align: middle;
-  }
-  .ap-hint{ font-size:12px; color:#6c757d; }
-  .ap-box{ border:1px solid #e6eef9; border-radius:12px; }
-  .ap-actions .btn{ border-radius:10px; }
-  .ap-debug{
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    font-size: 12px;
-    white-space: pre-wrap;
-  }
-</style>
+  <!-- (Opcional) FontAwesome si ya lo usas en otras vistas -->
+  <link href="../assets/fontawesome/css/all.min.css" rel="stylesheet">
 
-<div class="container-fluid">
+  <style>
+    :root{
+      --ap-blue:#0b2c6f;
+      --ap-blue-2:#0d47a1;
+      --ap-border:#e6e9ef;
+      --ap-muted:#6c757d;
+      --ap-bg:#f7f9fc;
+    }
+    body{ background: var(--ap-bg); }
+    .ap-title{ font-weight:800; font-size:20px; }
+    .ap-sub{ color:var(--ap-muted); font-size:12px; }
+    .ap-hint{ color:var(--ap-muted); font-size:11px; }
+    .ap-box{ border:1px solid var(--ap-border); border-radius:12px; }
+    .ap-kpi{
+      border:1px solid var(--ap-border);
+      border-radius:14px;
+      background:#fff;
+      padding:18px 16px;
+      text-align:center;
+      min-height:92px;
+    }
+    .ap-kpi .v{ font-weight:900; font-size:26px; line-height:1; }
+    .ap-kpi .l{ color:var(--ap-muted); font-size:12px; margin-top:6px; }
+    .ap-topbar{
+      display:flex; align-items:flex-start; justify-content:space-between;
+      gap:12px; margin-bottom:14px;
+    }
+    .ap-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+    .table-sm td, .table-sm th{ font-size:12px; }
+    .badge-ok{ background:#e8fff0; color:#0a7a2f; border:1px solid #b7f0c8; }
+    .badge-warn{ background:#fff7e6; color:#8a5a00; border:1px solid #ffe0a3; }
+    .badge-bad{ background:#ffecec; color:#a30000; border:1px solid #ffb3b3; }
+    .btn-ap{ background:var(--ap-blue-2); border-color:var(--ap-blue-2); color:#fff; }
+    .btn-ap:hover{ filter:brightness(.95); color:#fff; }
+    .ap-link{ text-decoration:none; }
+  </style>
+</head>
 
-  <!-- HEADER -->
-  <div class="d-flex justify-content-between align-items-end mb-2">
+<body>
+<?php include __DIR__ . "/../bi/_menu_global.php"; ?>
+
+<div class="container-fluid" style="max-width: 1400px;">
+  <div class="ap-topbar mt-3">
     <div>
-      <h4 class="fw-bold mb-0">Dashboard Corporativo | Resumen de Rutas</h4>
-      <div class="ap-hint">Planeación semanal + cobertura geográfica. (No carga datos hasta aplicar filtros)</div>
+      <div class="ap-title">Dashboard Corporativo | Resumen de Rutas</div>
+      <div class="ap-sub">Planeación semanal + cobertura geográfica. (No carga datos hasta aplicar filtros)</div>
     </div>
     <div class="ap-actions">
       <a href="planeacion_rutas_destinatarios.php" class="btn btn-outline-primary btn-sm">✏ Asignar Clientes</a>
@@ -53,51 +75,49 @@ include __DIR__ . '/../bi/_menu_global.php';
       <div class="row g-2 align-items-end">
         <div class="col-md-3">
           <label class="form-label mb-1">Empresa / Almacén</label>
-          <select id="f_empresa" class="form-select form-select-sm">
+          <select id="f_almacen" class="form-select form-select-sm">
             <option value="">Cargando...</option>
           </select>
-          <div class="ap-hint mt-1" id="hint_empresa"></div>
+          <div class="ap-hint mt-1">Fuente: <span class="text-muted">../api/catalogo_almacenes.php</span></div>
         </div>
 
         <div class="col-md-3">
           <label class="form-label mb-1">Ruta</label>
-          <select id="f_ruta" class="form-select form-select-sm">
-            <option value="0">(Todas)</option>
+          <select id="f_ruta" class="form-select form-select-sm" disabled>
+            <option value="">Seleccione almacén</option>
           </select>
-          <div class="ap-hint mt-1" id="hint_ruta"></div>
+          <div class="ap-hint mt-1">Fuente: <span class="text-muted">../api/rutas_api.php</span></div>
         </div>
 
         <div class="col-md-2">
           <label class="form-label mb-1">Desde</label>
-          <input id="f_desde" type="date" class="form-control form-control-sm" />
+          <input id="f_desde" type="date" class="form-control form-control-sm">
         </div>
 
         <div class="col-md-2">
           <label class="form-label mb-1">Hasta</label>
-          <input id="f_hasta" type="date" class="form-control form-control-sm" />
+          <input id="f_hasta" type="date" class="form-control form-control-sm">
         </div>
 
         <div class="col-md-2">
           <label class="form-label mb-1">Tipo venta</label>
-          <select id="f_tipovta" class="form-select form-select-sm">
+          <select id="f_tipo" class="form-select form-select-sm">
             <option value="">(Todas)</option>
-            <option value="CONTADO">Contado</option>
-            <option value="CREDITO">Crédito</option>
+            <option value="ENTREGA">Entrega</option>
+            <option value="PREVENTA">Preventa</option>
           </select>
         </div>
 
-        <div class="col-md-2 d-grid">
-          <button id="btn_actualizar" class="btn btn-primary btn-sm">Actualizar</button>
-        </div>
-
-        <div class="col-md-2 d-grid">
-          <button id="btn_limpiar" class="btn btn-outline-secondary btn-sm">Limpiar</button>
-        </div>
-
-        <div class="col-12 mt-2">
-          <div class="ap-hint">
-            Endpoint datos: <span class="badge bg-light text-dark" id="badge_api">../api/resumen_rutas_data.php</span>
-            <span class="ms-2 badge bg-light text-dark" id="badge_status">Sin consulta</span>
+        <div class="col-md-12 mt-2 d-flex gap-2 flex-wrap">
+          <button id="btn_actualizar" class="btn btn-ap btn-sm" type="button">
+            <i class="fa-solid fa-rotate"></i> Actualizar
+          </button>
+          <button id="btn_limpiar" class="btn btn-outline-secondary btn-sm" type="button">
+            Limpiar
+          </button>
+          <div class="ap-hint align-self-center ms-2">
+            Endpoint datos: <span class="text-muted">../api/resumen_rutas_data.php</span>
+            &nbsp; <span id="txt_estado_endpoint" class="badge text-bg-light">OK</span>
           </div>
         </div>
       </div>
@@ -107,44 +127,44 @@ include __DIR__ . '/../bi/_menu_global.php';
   <!-- KPIs -->
   <div class="row g-3 mb-3">
     <div class="col-md-2">
-      <div class="kpi-card">
-        <h3 id="kpi_rutas">—</h3>
-        <small>Rutas activas</small>
+      <div class="ap-kpi">
+        <div class="v" id="kpi_rutas">0</div>
+        <div class="l">Rutas activas</div>
       </div>
     </div>
     <div class="col-md-2">
-      <div class="kpi-card">
-        <h3 id="kpi_clientes">—</h3>
-        <small>Clientes asignados</small>
+      <div class="ap-kpi">
+        <div class="v" id="kpi_clientes">0</div>
+        <div class="l">Clientes asignados</div>
       </div>
     </div>
     <div class="col-md-2">
-      <div class="kpi-card">
-        <h3 id="kpi_pendientes">—</h3>
-        <small>Clientes sin ruta</small>
+      <div class="ap-kpi">
+        <div class="v" id="kpi_sinruta">0</div>
+        <div class="l">Clientes sin ruta</div>
       </div>
     </div>
     <div class="col-md-2">
-      <div class="kpi-card">
-        <h3 id="kpi_geo">—</h3>
-        <small>Cobertura geo</small>
+      <div class="ap-kpi">
+        <div class="v" id="kpi_geo">0%</div>
+        <div class="l">Cobertura geo</div>
       </div>
     </div>
     <div class="col-md-2">
-      <div class="kpi-card">
-        <h3 id="kpi_docs">—</h3>
-        <small>Documentos</small>
+      <div class="ap-kpi">
+        <div class="v" id="kpi_docs">0</div>
+        <div class="l">Documentos</div>
       </div>
     </div>
     <div class="col-md-2">
-      <div class="kpi-card">
-        <h3 id="kpi_total">$—</h3>
-        <small>Total ventas</small>
+      <div class="ap-kpi">
+        <div class="v" id="kpi_ventas">$0.00</div>
+        <div class="l">Total ventas</div>
       </div>
     </div>
   </div>
 
-  <!-- TABLA RESUMEN -->
+  <!-- RESUMEN POR RUTA -->
   <div class="card mb-3 ap-box">
     <div class="card-body">
       <div class="d-flex justify-content-between align-items-center mb-2">
@@ -156,422 +176,356 @@ include __DIR__ . '/../bi/_menu_global.php';
         <table class="table table-sm table-bordered align-middle">
           <thead class="table-light">
             <tr>
-              <th style="width:120px">Acciones</th>
+              <th style="width:110px">Acciones</th>
               <th>Ruta</th>
-              <th class="text-center">Clientes</th>
-              <th class="text-center">Días</th>
-              <th class="text-center">CPs</th>
-              <th class="text-center">Geo %</th>
-              <th>Estado</th>
+              <th style="width:110px" class="text-end">Clientes</th>
+              <th style="width:90px" class="text-center">Días</th>
+              <th style="width:90px" class="text-end">CPs</th>
+              <th style="width:90px" class="text-end">Geo %</th>
+              <th style="width:90px" class="text-center">Estado</th>
             </tr>
           </thead>
-          <tbody id="tabla_rutas">
-            <tr>
-              <td colspan="7" class="text-center text-muted">Seleccione filtros y presione Actualizar.</td>
-            </tr>
+          <tbody id="tb_rutas">
+            <tr><td colspan="7" class="text-muted">Aplique filtros y presione Actualizar.</td></tr>
           </tbody>
         </table>
       </div>
-
-      <div class="d-flex justify-content-end gap-2 mt-2">
-        <button class="btn btn-outline-secondary btn-sm" id="btn_prev">‹ Anterior</button>
-        <button class="btn btn-outline-secondary btn-sm" id="btn_next">Siguiente ›</button>
+      <div class="ap-hint mt-2">
+        Nota: Se consolida automáticamente cualquier duplicado por Ruta (si el endpoint devuelve más de un renglón por la misma ruta).
       </div>
-      <div class="ap-hint mt-1" id="txt_paginacion">Página —</div>
     </div>
   </div>
 
   <!-- DISTRIBUCIÓN POR DÍA -->
-  <div class="card ap-box">
+  <div class="card mb-3 ap-box">
     <div class="card-body">
-      <h6 class="fw-bold mb-2">Distribución por Día</h6>
-      <div class="table-responsive">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="fw-bold mb-0">Distribución por Día</h6>
+        <div class="ap-hint" id="txt_total_dias">Sin consulta</div>
+      </div>
+
+      <div class="table-responsive" style="max-height: 320px; overflow:auto;">
         <table class="table table-sm table-bordered align-middle">
           <thead class="table-light">
             <tr>
               <th>Día</th>
-              <th class="text-center">Rutas</th>
-              <th class="text-center">Clientes</th>
+              <th class="text-end" style="width:120px">Rutas</th>
+              <th class="text-end" style="width:120px">Clientes</th>
             </tr>
           </thead>
-          <tbody id="tabla_dias">
-            <tr><td colspan="3" class="text-center text-muted">Sin consulta</td></tr>
+          <tbody id="tb_dias">
+            <tr><td colspan="3" class="text-muted">Aplique filtros y presione Actualizar.</td></tr>
           </tbody>
         </table>
       </div>
-    </div>
-  </div>
-
-  <!-- DEBUG -->
-  <div class="card mt-3 ap-box">
-    <div class="card-body">
-      <div class="d-flex justify-content-between align-items-center">
-        <div class="fw-bold">Diagnóstico</div>
-        <button class="btn btn-outline-secondary btn-sm" id="btn_toggle_debug">Mostrar/Ocultar</button>
-      </div>
-      <div id="debug_box" class="ap-debug mt-2" style="display:none;">(sin logs)</div>
     </div>
   </div>
 
 </div>
 
+<?php include __DIR__ . "/../bi/_menu_global_end.php"; ?>
+
 <script>
-/* =========================
-   Configuración endpoints (fallbacks)
-   ========================= */
-const API_RESUMEN = "../api/resumen_rutas_data.php";
-const API_RUTAS_CANDIDATOS = [
-  "../api/catalogo_rutas.php",
-  "../api/rutas_api.php",
-  "../api/catalogo_rutas_data.php"
-];
-const API_ALMACENES_CANDIDATOS = [
-  "../api/almacenes.php",
-  "../api/catalogo_almacenes.php",
-  "../api/almacenes_api.php"
-];
+(function(){
+  const $ = (id)=>document.getElementById(id);
 
-document.getElementById("badge_api").textContent = API_RESUMEN;
+  const elAlmacen = $('f_almacen');
+  const elRuta    = $('f_ruta');
+  const elDesde   = $('f_desde');
+  const elHasta   = $('f_hasta');
+  const elTipo    = $('f_tipo');
 
-let rutasCache = [];
-let page = 1;
-const pageSize = 10;
+  const tbRutas = $('tb_rutas');
+  const tbDias  = $('tb_dias');
 
-function logDebug(msg, obj=null){
-  const box = document.getElementById("debug_box");
-  const ts = new Date().toISOString().slice(11,19);
-  let line = `[${ts}] ${msg}`;
-  if(obj!==null){
-    try{ line += "\n" + JSON.stringify(obj, null, 2); }catch(e){}
+  // Defaults de fechas: últimos 7 días (si no hay valor)
+  function iso(d){ return d.toISOString().slice(0,10); }
+  function setDefaultDates(){
+    const now = new Date();
+    const past = new Date(now.getTime() - (7*24*60*60*1000));
+    if(!elHasta.value) elHasta.value = iso(now);
+    if(!elDesde.value) elDesde.value = iso(past);
   }
-  box.textContent = (box.textContent === "(sin logs)") ? line : (box.textContent + "\n\n" + line);
-}
+  setDefaultDates();
 
-function toggleDebug(){
-  const box = document.getElementById("debug_box");
-  box.style.display = (box.style.display === "none") ? "block" : "none";
-}
-document.getElementById("btn_toggle_debug").addEventListener("click", toggleDebug);
-
-/* =========================
-   Helpers para autodetectar estructura
-   ========================= */
-function pickField(obj, names){
-  for(const n of names){
-    if(obj && Object.prototype.hasOwnProperty.call(obj, n)) return obj[n];
-  }
-  return null;
-}
-function normalizeAlmacenRow(a){
-  const id = pickField(a, ["id","ID","clave","Clave","IdEmpresa","empresa","cve_almacenp","cve_almac","Cve_Almac"]);
-  const nombre = pickField(a, ["nombre","Nombre","descripcion","Descripcion","razonsocial","RazonSocial","almacen","Almacen"]);
-  if(id===null) return null;
-  return { id: String(id), nombre: nombre ? String(nombre) : ("Almacén " + id) };
-}
-function normalizeRutaRow(r){
-  const id = pickField(r, ["ID_Ruta","id_ruta","id","IdRuta","ruta_id"]);
-  const nombre = pickField(r, ["descripcion","Descripcion","cve_ruta","Cve_Ruta","ruta","Ruta"]);
-  if(id===null) return null;
-  return { id: String(id), nombre: nombre ? String(nombre) : ("Ruta " + id) };
-}
-
-/* =========================
-   Fetch con fallbacks
-   ========================= */
-async function fetchFirstOk(urls){
-  for(const u of urls){
+  // ====== CARGA CATÁLOGOS ======
+  async function loadAlmacenes(){
     try{
-      const res = await fetch(u, {cache:"no-store"});
-      if(!res.ok) { logDebug("Endpoint no OK: " + u + " ("+res.status+")"); continue; }
-      const json = await res.json();
-      if(json && !json.error) return {url:u, data:json};
-      // algunos APIs regresan {data:[...]}
-      if(json && json.data && Array.isArray(json.data)) return {url:u, data:json.data};
-      if(Array.isArray(json)) return {url:u, data:json};
-      logDebug("Endpoint responde pero sin data usable: " + u, json);
+      elAlmacen.innerHTML = '<option value="">Cargando...</option>';
+      const r = await fetch('../api/catalogo_almacenes.php', {cache:'no-store'});
+      const j = await r.json();
+      const data = (j.data || j.almacenes || j || []);
+      elAlmacen.innerHTML = '<option value="">Seleccione almacén</option>';
+      data.forEach(a=>{
+        const id = a.id_almacen ?? a.id ?? a.IdEmpresa ?? a.IdAlmacen ?? a.almacen_id ?? a.Id;
+        const nombre = a.nombre ?? a.almacen ?? a.Nombre ?? a.descripcion ?? a.Descripcion ?? '';
+        const clave = a.clave ?? a.cve ?? a.Cve ?? a.Cve_Alm ?? a.Cve_Almac ?? '';
+        const label = (clave ? (clave + ' - ') : '') + nombre;
+        if(id !== undefined && id !== null && String(id).trim() !== ''){
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = label || ('Almacén ' + id);
+          elAlmacen.appendChild(opt);
+        }
+      });
     }catch(e){
-      logDebug("Error fetch: " + u, {error:String(e)});
+      elAlmacen.innerHTML = '<option value="">Error cargando almacenes</option>';
+      $('txt_estado_endpoint').className = 'badge text-bg-danger';
+      $('txt_estado_endpoint').textContent = 'ERROR';
     }
   }
-  return null;
-}
 
-/* =========================
-   Cargar almacenes
-   ========================= */
-async function cargarAlmacenes(){
-  const sel = document.getElementById("f_empresa");
-  sel.innerHTML = `<option value="">Cargando...</option>`;
-  document.getElementById("hint_empresa").textContent = "";
-
-  const resp = await fetchFirstOk(API_ALMACENES_CANDIDATOS);
-  if(!resp){
-    sel.innerHTML = `<option value="">(Sin almacenes)</option>`;
-    document.getElementById("hint_empresa").textContent = "No pude cargar almacenes. Revisa endpoint almacenes.php / catalogo_almacenes.php.";
-    return;
+  async function loadRutas(almacenId){
+    elRuta.disabled = true;
+    elRuta.innerHTML = '<option value="">Cargando...</option>';
+    if(!almacenId){
+      elRuta.innerHTML = '<option value="">Seleccione almacén</option>';
+      return;
+    }
+    try{
+      const r = await fetch('../api/rutas_api.php?almacen_id=' + encodeURIComponent(almacenId), {cache:'no-store'});
+      const j = await r.json();
+      const data = (j.data || j.rutas || j || []);
+      elRuta.innerHTML = '<option value="">(Todas)</option>';
+      data.forEach(x=>{
+        const id = x.id_ruta ?? x.ID_Ruta ?? x.id ?? x.IdRuta ?? x.ruta_id;
+        const cve = x.cve_ruta ?? x.Cve_Ruta ?? x.cve ?? x.clave ?? '';
+        const desc = x.descripcion ?? x.Descripcion ?? x.ruta ?? x.nombre ?? '';
+        const label = (cve ? (cve + ' - ') : '') + (desc || ('Ruta ' + id));
+        if(id !== undefined && id !== null && String(id).trim() !== ''){
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = label;
+          elRuta.appendChild(opt);
+        }
+      });
+      elRuta.disabled = false;
+    }catch(e){
+      elRuta.innerHTML = '<option value="">Error cargando rutas</option>';
+      elRuta.disabled = true;
+    }
   }
 
-  let arr = resp.data;
-  if(resp.data && resp.data.data && Array.isArray(resp.data.data)) arr = resp.data.data;
-  if(!Array.isArray(arr)) arr = [];
+  // ====== NORMALIZACIÓN (ANTI-DUPLICADOS) ======
+  // Consolida filas duplicadas por la misma ruta (clave: id_ruta/cve/ruta texto)
+  function dedupeRutas(list){
+    const map = new Map();
+    (list || []).forEach(r=>{
+      const key = String(
+        r.id_ruta ?? r.ID_Ruta ?? r.ruta_id ?? r.cve_ruta ?? r.Cve_Ruta ?? r.ruta ?? r.Ruta ?? ''
+      ).trim() || JSON.stringify(r);
 
-  const norm = arr.map(normalizeAlmacenRow).filter(x=>x);
-  norm.sort((a,b)=>a.nombre.localeCompare(b.nombre, "es"));
+      const clientes = Number(r.clientes ?? r.Clientes ?? 0) || 0;
+      const cps      = Number(r.cps ?? r.CPs ?? r.cp ?? 0) || 0;
+      const geo      = Number(r.geo_pct ?? r.geo ?? r.Geo ?? 0) || 0;
 
-  sel.innerHTML = `<option value="">Seleccione</option>`;
-  norm.forEach(a=>{
-    sel.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
-  });
+      if(!map.has(key)){
+        map.set(key, {
+          ...r,
+          _clientes: clientes,
+          _cps: cps,
+          _geo_max: geo,
+          _dias: r.dias ?? r.Dias ?? '-',
+          _ruta_txt: r.ruta ?? r.Ruta ?? r.descripcion ?? r.Descripcion ?? '',
+          _estado: (r.estado ?? r.Estado ?? 'OK')
+        });
+      }else{
+        const cur = map.get(key);
+        cur._clientes += clientes;
+        cur._cps += cps;
+        cur._geo_max = Math.max(cur._geo_max, geo);
+        // Mantén días/estado más “crítico” si aparece
+        const est = (r.estado ?? r.Estado ?? 'OK');
+        if(String(est).toUpperCase() !== 'OK') cur._estado = est;
+        map.set(key, cur);
+      }
+    });
 
-  document.getElementById("hint_empresa").textContent = `Fuente: ${resp.url} | ${norm.length} almacenes`;
-
-  // si hay exactamente 1 almacén, lo seleccionamos (modo demo) y cargamos rutas
-  if(norm.length === 1){
-    sel.value = norm[0].id;
-    await cargarRutas();
-  }
-}
-
-/* =========================
-   Cargar rutas
-   ========================= */
-async function cargarRutas(){
-  const selEmp = document.getElementById("f_empresa");
-  const idEmp = selEmp.value;
-
-  const selRuta = document.getElementById("f_ruta");
-  selRuta.innerHTML = `<option value="0">(Todas)</option>`;
-  document.getElementById("hint_ruta").textContent = "";
-
-  // Muchas veces catalogo_rutas regresa todas; si tu endpoint requiere filtro lo agregas aquí:
-  // const urls = API_RUTAS_CANDIDATOS.map(u => u + (u.includes("?") ? "&" : "?") + "IdEmpresa=" + encodeURIComponent(idEmp));
-  const urls = API_RUTAS_CANDIDATOS;
-
-  const resp = await fetchFirstOk(urls);
-  if(!resp){
-    document.getElementById("hint_ruta").textContent = "No pude cargar rutas (endpoint).";
-    return;
-  }
-
-  let arr = resp.data;
-  if(resp.data && resp.data.data && Array.isArray(resp.data.data)) arr = resp.data.data;
-  if(!Array.isArray(arr)) arr = [];
-
-  const norm = arr.map(normalizeRutaRow).filter(x=>x);
-  norm.sort((a,b)=>a.nombre.localeCompare(b.nombre, "es"));
-  norm.forEach(r=>{
-    selRuta.innerHTML += `<option value="${r.id}">${r.nombre}</option>`;
-  });
-
-  document.getElementById("hint_ruta").textContent = `Fuente: ${resp.url} | ${norm.length} rutas`;
-}
-
-/* =========================
-   Formato moneda
-   ========================= */
-function money(v){
-  const n = Number(v || 0);
-  return n.toLocaleString("es-MX", {style:"currency", currency:"MXN"});
-}
-
-/* =========================
-   Pintar tablas + paginación
-   ========================= */
-function renderRutas(){
-  const tb = document.getElementById("tabla_rutas");
-  tb.innerHTML = "";
-
-  const total = rutasCache.length;
-  if(total === 0){
-    tb.innerHTML = `<tr><td colspan="7" class="text-center text-muted">Sin datos para el filtro.</td></tr>`;
-    document.getElementById("txt_total_rutas").textContent = "0 rutas";
-    document.getElementById("txt_paginacion").textContent = "Página —";
-    return;
-  }
-
-  const pages = Math.max(1, Math.ceil(total / pageSize));
-  if(page > pages) page = pages;
-  if(page < 1) page = 1;
-
-  const start = (page-1)*pageSize;
-  const slice = rutasCache.slice(start, start + pageSize);
-
-  slice.forEach(r=>{
-    let estadoTxt = "", estadoCls = "";
-    if(r.estado === "verde"){ estadoTxt="🟢 OK"; estadoCls="estado-verde"; }
-    if(r.estado === "amarillo"){ estadoTxt="🟡 Parcial"; estadoCls="estado-amarillo"; }
-    if(r.estado === "rojo"){ estadoTxt="🔴 Atención"; estadoCls="estado-rojo"; }
-
-    const rutaLabel = r.ruta || r.cve_ruta || "Ruta";
-    const rutaId = r.cve_ruta || "";
-
-    tb.innerHTML += `
-      <tr>
-        <td>
-          <a class="btn btn-outline-success btn-sm" href="geo_distribucion_clientes.php?ruta_id=${encodeURIComponent(rutaId)}">Mapa</a>
-        </td>
-        <td>${rutaLabel}</td>
-        <td class="text-center">${Number(r.clientes||0)}</td>
-        <td class="text-center">${r.dias || "-"}</td>
-        <td class="text-center">${Number(r.cps||0)}</td>
-        <td class="text-center">${Number(r.geo_pct||0)}%</td>
-        <td class="${estadoCls}">${estadoTxt}</td>
-      </tr>
-    `;
-  });
-
-  document.getElementById("txt_total_rutas").textContent =
-    `${total.toLocaleString("es-MX")} rutas (página ${page}/${Math.ceil(total/pageSize)})`;
-
-  document.getElementById("txt_paginacion").textContent =
-    `Página ${page} de ${Math.ceil(total/pageSize)} | Mostrando ${slice.length} de ${total}`;
-}
-
-/* =========================
-   Pintar dashboard (respuesta API)
-   ========================= */
-function pintarDashboard(resp){
-  // KPIs
-  const k = resp.kpis || {};
-  document.getElementById("kpi_rutas").textContent = (k.rutas_activas ?? "—");
-  document.getElementById("kpi_clientes").textContent = (k.clientes_asignados ?? "—");
-  document.getElementById("kpi_pendientes").textContent = (k.clientes_sin_ruta ?? "—");
-  document.getElementById("kpi_geo").textContent = (k.cobertura_geo ?? "—") + "%";
-  document.getElementById("kpi_docs").textContent = (k.documentos ?? "—");
-  document.getElementById("kpi_total").textContent = money(k.total_ventas ?? 0);
-
-  // Rutas
-  rutasCache = Array.isArray(resp.rutas) ? resp.rutas : [];
-  page = 1;
-  renderRutas();
-
-  // Días
-  const tbDias = document.getElementById("tabla_dias");
-  tbDias.innerHTML = "";
-  const dias = Array.isArray(resp.dias) ? resp.dias : [];
-  if(dias.length === 0){
-    tbDias.innerHTML = `<tr><td colspan="3" class="text-center text-muted">Sin datos</td></tr>`;
-  }else{
-    dias.forEach(d=>{
-      tbDias.innerHTML += `
-        <tr>
-          <td>${d.dia}</td>
-          <td class="text-center">${Number(d.rutas||0)}</td>
-          <td class="text-center">${Number(d.clientes||0)}</td>
-        </tr>
-      `;
+    // Devuelve una lista “limpia”
+    return Array.from(map.values()).map(x=>{
+      const out = {...x};
+      out.clientes = x._clientes;
+      out.cps = x._cps;
+      out.geo_pct = x._geo_max;
+      out.dias = x._dias;
+      out.ruta = x._ruta_txt || (x.cve_ruta ? x.cve_ruta : (x.id_ruta ? ('Ruta ' + x.id_ruta) : ''));
+      out.estado = x._estado || 'OK';
+      return out;
     });
   }
-}
 
-/* =========================
-   Consultar API
-   ========================= */
-async function cargarDashboard(){
-  const idEmp = document.getElementById("f_empresa").value;
-  const idRuta = document.getElementById("f_ruta").value || "0";
-  const desde = document.getElementById("f_desde").value;
-  const hasta = document.getElementById("f_hasta").value;
-  const tipoVta = document.getElementById("f_tipovta").value;
-
-  if(!idEmp){
-    document.getElementById("badge_status").textContent = "Seleccione Empresa/Almacén";
-    return;
+  // ====== RENDER ======
+  function badgeEstado(v){
+    const s = String(v||'').toUpperCase();
+    if(s === 'OK') return '<span class="badge badge-ok">● OK</span>';
+    if(s === 'WARN' || s === 'WARNING') return '<span class="badge badge-warn">● WARN</span>';
+    return '<span class="badge badge-bad">● ' + (v||'ERR') + '</span>';
   }
 
-  const fd = new FormData();
-  fd.append("IdEmpresa", idEmp);
-  fd.append("IdRuta", idRuta);
-  if(desde) fd.append("fecha_ini", desde);
-  if(hasta) fd.append("fecha_fin", hasta);
-  if(tipoVta) fd.append("TipoVta", tipoVta);
+  function renderRutas(raw){
+    const rutas = dedupeRutas(raw);
 
-  document.getElementById("badge_status").textContent = "Consultando...";
-  logDebug("POST " + API_RESUMEN, {IdEmpresa:idEmp, IdRuta:idRuta, fecha_ini:desde, fecha_fin:hasta, TipoVta:tipoVta});
+    tbRutas.innerHTML = '';
+    if(!rutas.length){
+      tbRutas.innerHTML = '<tr><td colspan="7" class="text-muted">Sin datos para los filtros seleccionados.</td></tr>';
+      $('txt_total_rutas').textContent = '0 rutas (página 1/1)';
+      return rutas;
+    }
 
-  try{
-    const r = await fetch(API_RESUMEN, {method:"POST", body:fd});
-    const j = await r.json();
+    rutas.forEach(r=>{
+      const rutaTxt = r.ruta ?? r.descripcion ?? '';
+      const idRuta = r.id_ruta ?? r.ID_Ruta ?? r.ruta_id ?? r.id ?? '';
+      const geo = Number(r.geo_pct ?? 0) || 0;
 
-    if(j && j.error){
-      document.getElementById("badge_status").textContent = "Error API";
-      logDebug("API error", j);
-      // limpiar UI pero mostrar mensaje
-      document.getElementById("tabla_rutas").innerHTML = `<tr><td colspan="7" class="text-center text-danger">${j.error}</td></tr>`;
-      document.getElementById("tabla_dias").innerHTML  = `<tr><td colspan="3" class="text-center text-danger">${j.error}</td></tr>`;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <a class="btn btn-sm btn-outline-success" href="geo_distribucion_clientes.php?ruta_id=${encodeURIComponent(idRuta)}&almacen_id=${encodeURIComponent(elAlmacen.value)}" title="Ver mapa">
+            Mapa
+          </a>
+        </td>
+        <td>${(rutaTxt || '').toString()}</td>
+        <td class="text-end">${Number(r.clientes ?? 0).toLocaleString('es-MX')}</td>
+        <td class="text-center">${(r.dias ?? '-')}</td>
+        <td class="text-end">${Number(r.cps ?? 0).toLocaleString('es-MX')}</td>
+        <td class="text-end">${geo.toFixed(0)}%</td>
+        <td class="text-center">${badgeEstado(r.estado)}</td>
+      `;
+      tbRutas.appendChild(tr);
+    });
+
+    $('txt_total_rutas').textContent = rutas.length + ' rutas (página 1/1)';
+    return rutas;
+  }
+
+  function renderDias(list){
+    tbDias.innerHTML = '';
+    const rows = (list || []);
+    if(!rows.length){
+      tbDias.innerHTML = '<tr><td colspan="3" class="text-muted">Sin datos de distribución.</td></tr>';
+      $('txt_total_dias').textContent = '0 días';
+      return;
+    }
+    rows.forEach(d=>{
+      const dia = d.dia ?? d.Dia ?? d.nombre ?? '';
+      const rutas = Number(d.rutas ?? d.Rutas ?? 0) || 0;
+      const clientes = Number(d.clientes ?? d.Clientes ?? 0) || 0;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${dia}</td>
+        <td class="text-end">${rutas.toLocaleString('es-MX')}</td>
+        <td class="text-end">${clientes.toLocaleString('es-MX')}</td>
+      `;
+      tbDias.appendChild(tr);
+    });
+    $('txt_total_dias').textContent = rows.length + ' días';
+  }
+
+  function money(n){
+    const v = Number(n||0) || 0;
+    return v.toLocaleString('es-MX',{style:'currency',currency:'MXN'});
+  }
+
+  function setKPIs(resp, rutasClean){
+    // Preferir valores del endpoint si existen, pero recalcular rutas si venían duplicadas
+    const k = resp.kpis || resp.resumen || resp || {};
+    const rutasActivas = (rutasClean ? rutasClean.length : (Number(k.rutas_activas ?? k.rutas ?? 0) || 0));
+    const clientes = Number(k.clientes_asignados ?? k.clientes ?? 0) || 0;
+    const sinruta = Number(k.clientes_sin_ruta ?? k.sin_ruta ?? 0) || 0;
+    const geo = Number(k.cobertura_geo ?? k.geo_pct ?? 0) || 0;
+    const docs = Number(k.documentos ?? k.docs ?? 0) || 0;
+    const ventas = Number(k.total_ventas ?? k.ventas ?? 0) || 0;
+
+    $('kpi_rutas').textContent = rutasActivas.toLocaleString('es-MX');
+    $('kpi_clientes').textContent = clientes.toLocaleString('es-MX');
+    $('kpi_sinruta').textContent = sinruta.toLocaleString('es-MX');
+    $('kpi_geo').textContent = geo.toFixed(0) + '%';
+    $('kpi_docs').textContent = docs.toLocaleString('es-MX');
+    $('kpi_ventas').textContent = money(ventas);
+  }
+
+  // ====== CONSULTA ======
+  async function consultar(){
+    const almacen_id = elAlmacen.value;
+    const ruta_id = elRuta.value;
+    const desde = elDesde.value;
+    const hasta = elHasta.value;
+    const tipo = elTipo.value;
+
+    if(!almacen_id){
+      alert('Seleccione un almacén.');
+      return;
+    }
+    if(!desde || !hasta){
+      alert('Defina rango de fechas.');
       return;
     }
 
-    document.getElementById("badge_status").textContent = "OK";
-    logDebug("API OK", j);
-    pintarDashboard(j);
+    // Construcción de query (ruta es opcional)
+    const qs = new URLSearchParams();
+    qs.set('almacen_id', almacen_id);
+    if(ruta_id) qs.set('ruta_id', ruta_id);
+    qs.set('desde', desde);
+    qs.set('hasta', hasta);
+    if(tipo) qs.set('tipo_venta', tipo);
 
-  }catch(e){
-    document.getElementById("badge_status").textContent = "Error fetch";
-    logDebug("Fetch exception", {error:String(e)});
+    tbRutas.innerHTML = '<tr><td colspan="7" class="text-muted">Consultando...</td></tr>';
+    tbDias.innerHTML  = '<tr><td colspan="3" class="text-muted">Consultando...</td></tr>';
+
+    try{
+      const r = await fetch('../api/resumen_rutas_data.php?' + qs.toString(), {cache:'no-store'});
+      const resp = await r.json();
+
+      // Compatibilidad: algunas APIs devuelven {ok:1,data:{...}} o {success:true,...}
+      const payload = resp.data || resp;
+
+      const rutasRaw = payload.rutas || payload.resumen_ruta || [];
+      const rutasClean = renderRutas(rutasRaw);
+
+      renderDias(payload.distribucion_dia || payload.dias || []);
+      setKPIs(payload, rutasClean);
+
+      $('txt_estado_endpoint').className = 'badge text-bg-success';
+      $('txt_estado_endpoint').textContent = 'OK';
+    }catch(e){
+      $('txt_estado_endpoint').className = 'badge text-bg-danger';
+      $('txt_estado_endpoint').textContent = 'ERROR';
+      tbRutas.innerHTML = '<tr><td colspan="7" class="text-danger">Error consultando datos.</td></tr>';
+      tbDias.innerHTML  = '<tr><td colspan="3" class="text-danger">Error consultando datos.</td></tr>';
+      console.error(e);
+    }
   }
-}
 
-/* =========================
-   Limpiar
-   ========================= */
-function limpiar(){
-  document.getElementById("f_empresa").value = "";
-  document.getElementById("f_ruta").value = "0";
-  document.getElementById("f_desde").value = "";
-  document.getElementById("f_hasta").value = "";
-  document.getElementById("f_tipovta").value = "";
+  function limpiar(){
+    elRuta.value = '';
+    elTipo.value = '';
+    setDefaultDates();
+    $('kpi_rutas').textContent = '0';
+    $('kpi_clientes').textContent = '0';
+    $('kpi_sinruta').textContent = '0';
+    $('kpi_geo').textContent = '0%';
+    $('kpi_docs').textContent = '0';
+    $('kpi_ventas').textContent = '$0.00';
+    tbRutas.innerHTML = '<tr><td colspan="7" class="text-muted">Aplique filtros y presione Actualizar.</td></tr>';
+    tbDias.innerHTML  = '<tr><td colspan="3" class="text-muted">Aplique filtros y presione Actualizar.</td></tr>';
+    $('txt_total_rutas').textContent = 'Sin consulta';
+    $('txt_total_dias').textContent = 'Sin consulta';
+  }
 
-  document.getElementById("kpi_rutas").textContent="—";
-  document.getElementById("kpi_clientes").textContent="—";
-  document.getElementById("kpi_pendientes").textContent="—";
-  document.getElementById("kpi_geo").textContent="—";
-  document.getElementById("kpi_docs").textContent="—";
-  document.getElementById("kpi_total").textContent="$—";
+  // ====== EVENTOS ======
+  elAlmacen.addEventListener('change', ()=>{
+    loadRutas(elAlmacen.value);
+  });
+  $('btn_actualizar').addEventListener('click', consultar);
+  $('btn_limpiar').addEventListener('click', limpiar);
 
-  rutasCache = [];
-  document.getElementById("tabla_rutas").innerHTML = `<tr><td colspan="7" class="text-center text-muted">Seleccione filtros y presione Actualizar.</td></tr>`;
-  document.getElementById("tabla_dias").innerHTML  = `<tr><td colspan="3" class="text-center text-muted">Sin consulta</td></tr>`;
-  document.getElementById("badge_status").textContent = "Sin consulta";
-  document.getElementById("txt_total_rutas").textContent = "Sin consulta";
-  document.getElementById("txt_paginacion").textContent = "Página —";
-}
+  // Init
+  loadAlmacenes().then(()=>{
+    // no auto-consulta (tu nota: “No carga datos hasta aplicar filtros”)
+  });
 
-/* =========================
-   Paginación
-   ========================= */
-document.getElementById("btn_prev").addEventListener("click", ()=>{
-  page--; renderRutas();
-});
-document.getElementById("btn_next").addEventListener("click", ()=>{
-  page++; renderRutas();
-});
-
-/* =========================
-   Eventos
-   ========================= */
-document.getElementById("btn_actualizar").addEventListener("click", cargarDashboard);
-document.getElementById("btn_limpiar").addEventListener("click", limpiar);
-document.getElementById("f_empresa").addEventListener("change", async ()=>{
-  await cargarRutas();
-});
-
-/* =========================
-   Init
-   ========================= */
-document.addEventListener("DOMContentLoaded", async ()=>{
-  // Fechas default (últimos 7 días)
-  const today = new Date();
-  const toISO = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
-  const d7 = new Date(today); d7.setDate(d7.getDate()-7);
-
-  document.getElementById("f_hasta").value = toISO(today);
-  document.getElementById("f_desde").value = toISO(d7);
-
-  await cargarAlmacenes();
-});
+})();
 </script>
 
-<?php
-include __DIR__ . '/../bi/_menu_global_end.php';
-?>
+</body>
+</html>

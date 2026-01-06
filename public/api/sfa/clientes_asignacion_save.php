@@ -1,123 +1,203 @@
 <?php
-// Ruta esperada: /public/api/sfa/clientes_asignacion_save.php
-// Guarda días de visita en reldaycli (UPSERT por almacen+ruta+destinatario).
-
+// public/api/sfa/clientes_asignacion_save.php
 declare(strict_types=1);
-
-ini_set('display_errors', '0');
-ini_set('log_errors', '1');
 
 header('Content-Type: application/json; charset=utf-8');
 
-while (ob_get_level()) { @ob_end_clean(); }
-ob_start();
+// ---- Helpers de respuesta
+function jexit(array $arr): void {
+  echo json_encode($arr, JSON_UNESCAPED_UNICODE);
+  exit;
+}
+
+// ---- Cargar conexión PDO (ajusta rutas si tu proyecto difiere)
+$pdo = null;
+$tryPaths = [
+  __DIR__ . '/../../../app/db.php',
+  __DIR__ . '/../../app/db.php',
+  __DIR__ . '/../../../includes/db.php',
+  __DIR__ . '/../../includes/db.php',
+];
+
+foreach ($tryPaths as $p) {
+  if (file_exists($p)) { require_once $p; break; }
+}
+
+// Intentar detectar variable PDO típica
+if (isset($pdo) && $pdo instanceof PDO) {
+  // ok
+} elseif (isset($db) && $db instanceof PDO) {
+  $pdo = $db;
+} elseif (function_exists('db')) {
+  $pdo = db();
+} elseif (function_exists('db_conn')) {
+  $pdo = db_conn();
+}
+
+if (!$pdo || !($pdo instanceof PDO)) {
+  jexit(['ok'=>0,'error'=>'No se pudo inicializar PDO (db.php).']);
+}
+
+// ---- Leer payload (JSON o POST)
+$raw = file_get_contents('php://input');
+$payload = null;
+
+if ($raw && strlen(trim($raw)) > 0) {
+  $payload = json_decode($raw, true);
+  if ($payload === null && json_last_error() !== JSON_ERROR_NONE) {
+    jexit(['ok'=>0,'error'=>'JSON inválido en body','detalle'=>json_last_error_msg()]);
+  }
+} else {
+  $payload = $_POST ?: [];
+}
+
+// Normalizar params
+$almacen_id = (int)($payload['almacen_id'] ?? $payload['almacen'] ?? $payload['id_almacen'] ?? 0);
+$ruta_id    = (int)($payload['ruta_id']    ?? $payload['ruta']    ?? $payload['id_ruta']    ?? 0);
+
+// items puede venir como array ya decodificado o como string JSON en POST
+$items = $payload['items'] ?? $payload['data'] ?? [];
+if (is_string($items)) {
+  $tmp = json_decode($items, true);
+  if (is_array($tmp)) $items = $tmp;
+}
+
+if ($almacen_id <= 0 || $ruta_id <= 0 || !is_array($items) || count($items) === 0) {
+  jexit([
+    'ok'=>0,
+    'error'=>'Parámetros incompletos (almacen_id/ruta_id/items).',
+    'debug'=>[
+      'almacen_id'=>$almacen_id,
+      'ruta_id'=>$ruta_id,
+      'items_type'=>gettype($items),
+      'items_count'=>is_array($items)?count($items):0
+    ]
+  ]);
+}
+
+// ---- Funciones para días
+function daysFromItem(array $it): array {
+  // Prioridad:
+  // 1) flags Lu..Do explícitos
+  // 2) dias_bits (ej "1010100")
+  // 3) days_bits
+  // 4) dias (array)
+  $Lu=$Ma=$Mi=$Ju=$Vi=$Sa=$Do=0;
+
+  $hasExplicit = false;
+  foreach (['Lu','Ma','Mi','Ju','Vi','Sa','Do'] as $k) {
+    if (array_key_exists($k, $it)) { $hasExplicit = true; }
+  }
+
+  if ($hasExplicit) {
+    $Lu = !empty($it['Lu']) ? 1 : 0;
+    $Ma = !empty($it['Ma']) ? 1 : 0;
+    $Mi = !empty($it['Mi']) ? 1 : 0;
+    $Ju = !empty($it['Ju']) ? 1 : 0;
+    $Vi = !empty($it['Vi']) ? 1 : 0;
+    $Sa = !empty($it['Sa']) ? 1 : 0;
+    $Do = !empty($it['Do']) ? 1 : 0;
+    return compact('Lu','Ma','Mi','Ju','Vi','Sa','Do');
+  }
+
+  $bits = $it['dias_bits'] ?? $it['days_bits'] ?? '';
+  if (is_string($bits) && strlen($bits) >= 7) {
+    $bits = substr($bits, 0, 7);
+    $Lu = ($bits[0] === '1') ? 1 : 0;
+    $Ma = ($bits[1] === '1') ? 1 : 0;
+    $Mi = ($bits[2] === '1') ? 1 : 0;
+    $Ju = ($bits[3] === '1') ? 1 : 0;
+    $Vi = ($bits[4] === '1') ? 1 : 0;
+    $Sa = ($bits[5] === '1') ? 1 : 0;
+    $Do = ($bits[6] === '1') ? 1 : 0;
+    return compact('Lu','Ma','Mi','Ju','Vi','Sa','Do');
+  }
+
+  if (!empty($it['dias']) && is_array($it['dias'])) {
+    $d = $it['dias'];
+    $Lu = !empty($d['Lu'] ?? $d['lu'] ?? 0) ? 1 : 0;
+    $Ma = !empty($d['Ma'] ?? $d['ma'] ?? 0) ? 1 : 0;
+    $Mi = !empty($d['Mi'] ?? $d['mi'] ?? 0) ? 1 : 0;
+    $Ju = !empty($d['Ju'] ?? $d['ju'] ?? 0) ? 1 : 0;
+    $Vi = !empty($d['Vi'] ?? $d['vi'] ?? 0) ? 1 : 0;
+    $Sa = !empty($d['Sa'] ?? $d['sa'] ?? 0) ? 1 : 0;
+    $Do = !empty($d['Do'] ?? $d['do'] ?? 0) ? 1 : 0;
+    return compact('Lu','Ma','Mi','Ju','Vi','Sa','Do');
+  }
+
+  return compact('Lu','Ma','Mi','Ju','Vi','Sa','Do');
+}
+
+// ---- Guardado transaccional, anti-duplicados
+$okCount = 0;
+$errCount = 0;
+$errors = [];
 
 try {
-    require_once __DIR__ . '/../../../app/db.php'; // public/api/sfa -> projectRoot/app/db.php
+  $pdo->beginTransaction();
 
-    $raw = file_get_contents('php://input');
-    $data = json_decode($raw ?? '', true);
+  // Statements preparados
+  $delDup = $pdo->prepare("
+    DELETE FROM reldaycli
+    WHERE Cve_Almac = ? AND Cve_Ruta = ? AND Id_Destinatario = ?
+  ");
 
-    if (!is_array($data)) {
-        ob_clean();
-        echo json_encode(['ok'=>0,'error'=>'JSON inválido'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
+  $ins = $pdo->prepare("
+    INSERT INTO reldaycli
+      (Cve_Almac, Cve_Ruta, Cve_Cliente, Id_Destinatario, Cve_Vendedor, Lu, Ma, Mi, Ju, Vi, Sa, Do)
+    VALUES
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ");
 
-    $almacen_id = (int)($data['almacen_id'] ?? $data['almacen'] ?? 0);
-    $ruta_id    = (int)($data['ruta_id'] ?? $data['ruta'] ?? 0);
-    $items      = $data['items'] ?? [];
+  foreach ($items as $idx => $it) {
+    if (!is_array($it)) { $errCount++; $errors[]="Item#$idx no es objeto"; continue; }
 
-    if ($almacen_id <= 0 || $ruta_id <= 0 || !is_array($items) || count($items) === 0) {
-        ob_clean();
-        echo json_encode([
-            'ok' => 0,
-            'error' => 'Parámetros incompletos (almacen_id/ruta_id/items).',
-            'debug' => ['almacen_id'=>$almacen_id,'ruta_id'=>$ruta_id,'items_count'=>is_array($items)?count($items):null]
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
+    $id_dest = (int)($it['id_destinatario'] ?? $it['Id_Destinatario'] ?? $it['destinatario_id'] ?? 0);
+    $cve_cte = (string)($it['Cve_Cte'] ?? $it['Cve_Cliente'] ?? $it['cve_cliente'] ?? $it['cliente'] ?? '');
+    $cve_vend = (string)($it['Cve_Vendedor'] ?? $it['cve_vendedor'] ?? '');
 
-    // Recomendado: índice único para que ON DUPLICATE funcione perfecto:
-    // ALTER TABLE reldaycli ADD UNIQUE KEY uk_reldaycli (Cve_Almac, Cve_Ruta, Id_Destinatario);
-    //
-    // Aun así, blindamos: primero DELETE por llave y luego INSERT, evitando duplicados aunque no exista índice.
+    if ($id_dest <= 0) { $errCount++; $errors[]="Item#$idx sin id_destinatario"; continue; }
+    if ($cve_cte === '') { $cve_cte = '0'; } // fallback seguro si no viene
 
-    $ok = 0;
-    $del = 0;
+    $days = daysFromItem($it);
 
-    db_tx(function() use ($almacen_id, $ruta_id, $items, &$ok, &$del) {
+    // 1) eliminar cualquier duplicado previo para esta combinación
+    $delDup->execute([$almacen_id, $ruta_id, $id_dest]);
 
-        $sqlDel = "DELETE FROM reldaycli
-                   WHERE Cve_Almac = :alm AND Cve_Ruta = :rut AND Id_Destinatario = :dest";
+    // 2) insertar 1 sola fila con los días correctos
+    $ins->execute([
+      $almacen_id,
+      $ruta_id,
+      $cve_cte,
+      $id_dest,
+      $cve_vend,
+      $days['Lu'], $days['Ma'], $days['Mi'], $days['Ju'], $days['Vi'], $days['Sa'], $days['Do']
+    ]);
 
-        // Si tu tabla NO tiene Sec, elimina Sec en INSERT/UPDATE y en el data.php
-        $sqlIns = "INSERT INTO reldaycli
-                    (Cve_Almac, Cve_Ruta, Cve_Cliente, Id_Destinatario, Cve_Vendedor,
-                     Lu, Ma, Mi, Ju, Vi, Sa, `Do`, Sec)
-                   VALUES
-                    (:alm, :rut, :cli, :dest, :vend,
-                     :Lu, :Ma, :Mi, :Ju, :Vi, :Sa, :Do, :Sec)";
+    $okCount++;
+  }
 
-        foreach ($items as $it) {
-            if (!is_array($it)) continue;
+  if ($errCount > 0 && $okCount === 0) {
+    $pdo->rollBack();
+    jexit(['ok'=>0,'error'=>'No se pudo guardar ningún registro','detalle'=>$errors]);
+  }
 
-            $dest = (int)($it['Id_Destinatario'] ?? $it['id_destinatario'] ?? 0);
-            $cli  = (int)($it['Cve_Cliente'] ?? $it['cve_cliente'] ?? 0);
-            $vend = (int)($it['Cve_Vendedor'] ?? $it['cve_vendedor'] ?? 0);
-            $sec  = (string)($it['Sec'] ?? $it['sec'] ?? '');
+  $pdo->commit();
 
-            if ($dest <= 0) continue;
-
-            $Lu = (int)($it['Lu'] ?? 0);
-            $Ma = (int)($it['Ma'] ?? 0);
-            $Mi = (int)($it['Mi'] ?? 0);
-            $Ju = (int)($it['Ju'] ?? 0);
-            $Vi = (int)($it['Vi'] ?? 0);
-            $Sa = (int)($it['Sa'] ?? 0);
-            $Do = (int)($it['Do'] ?? 0);
-
-            $sum = $Lu+$Ma+$Mi+$Ju+$Vi+$Sa+$Do;
-
-            // Si ya no hay días marcados, se elimina asignación
-            if ($sum === 0) {
-                $aff = dbq($sqlDel, [':alm'=>$almacen_id,':rut'=>$ruta_id,':dest'=>$dest]);
-                $del += (int)$aff;
-                continue;
-            }
-
-            // Elimina duplicados por llave (si existían)
-            dbq($sqlDel, [':alm'=>$almacen_id,':rut'=>$ruta_id,':dest'=>$dest]);
-
-            // Inserta nuevo (estado final)
-            dbq($sqlIns, [
-                ':alm'=>$almacen_id,
-                ':rut'=>$ruta_id,
-                ':cli'=>$cli,
-                ':dest'=>$dest,
-                ':vend'=>$vend,
-                ':Lu'=>$Lu, ':Ma'=>$Ma, ':Mi'=>$Mi, ':Ju'=>$Ju, ':Vi'=>$Vi, ':Sa'=>$Sa, ':Do'=>$Do,
-                ':Sec'=>$sec
-            ]);
-
-            $ok++;
-        }
-    });
-
-    ob_clean();
-    echo json_encode([
-        'ok' => 1,
-        'message' => 'Planeación guardada.',
-        'total_ok' => $ok,
-        'total_deleted' => $del,
-        'debug' => ['almacen_id'=>$almacen_id,'ruta_id'=>$ruta_id]
-    ], JSON_UNESCAPED_UNICODE);
+  jexit([
+    'ok'=>1,
+    'almacen_id'=>$almacen_id,
+    'ruta_id'=>$ruta_id,
+    'total_ok'=>$okCount,
+    'total_err'=>$errCount,
+    'errors'=>$errors
+  ]);
 
 } catch (Throwable $e) {
-    ob_clean();
-    echo json_encode([
-        'ok' => 0,
-        'error' => 'Error guardando planeación.',
-        'detalle' => $e->getMessage(),
-    ], JSON_UNESCAPED_UNICODE);
+  if ($pdo->inTransaction()) $pdo->rollBack();
+  jexit([
+    'ok'=>0,
+    'error'=>'Error guardando asignación',
+    'detalle'=>$e->getMessage()
+  ]);
 }

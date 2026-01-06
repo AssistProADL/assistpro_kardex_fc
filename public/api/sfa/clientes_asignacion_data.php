@@ -1,131 +1,115 @@
 <?php
-// Ruta esperada: /public/api/sfa/clientes_asignacion_data.php
-// Devuelve destinatarios/clientes + días planeados desde reldaycli.
-
-declare(strict_types=1);
-
-ini_set('display_errors', '0');
-ini_set('log_errors', '1');
+// api/sfa/clientes_asignacion_data.php
+// Devuelve destinatarios para planeación:
+// - La grilla NO se filtra por ruta (un destinatario puede estar en varias)
+// - Se calcula: rutas actuales (por almacén) y si está asignado a la ruta seleccionada
 
 header('Content-Type: application/json; charset=utf-8');
 
-// Evita que cualquier warning/noticia rompa el JSON
-while (ob_get_level()) { @ob_end_clean(); }
-ob_start();
+require_once __DIR__ . '/../../../app/db.php';
 
 try {
-    // Ajusta si tu app/db.php está en otra ruta
-    require_once __DIR__ . '/../../../app/db.php'; // public/api/sfa -> projectRoot/app/db.php
+    $almacen_id = isset($_GET['almacen_id']) ? (int)$_GET['almacen_id'] : 0;
+    $ruta_id    = isset($_GET['ruta_id']) ? (int)$_GET['ruta_id'] : 0;
+    $q          = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
 
-    // Parámetros aceptados (compatibles)
-    $almacen_id = (int)($_GET['almacen_id'] ?? $_GET['almacen'] ?? 0);
-    $ruta_id    = (int)($_GET['ruta_id']    ?? $_GET['ruta']    ?? 0);
-    $q          = trim((string)($_GET['q'] ?? ''));
-
-    if ($almacen_id <= 0 || $ruta_id <= 0) {
-        ob_clean();
+    if ($almacen_id <= 0) {
         echo json_encode([
             'ok' => 0,
-            'error' => 'Parámetros incompletos (almacen_id/ruta_id).',
-            'debug' => ['almacen_id' => $almacen_id, 'ruta_id' => $ruta_id]
-        ], JSON_UNESCAPED_UNICODE);
+            'error' => 'almacen_id requerido'
+        ]);
         exit;
     }
 
-    // Estrategia:
-    // 1) Base de listado = destinatarios que existan en reldaycli PARA ese almacén+ruta
-    //    (porque tu modelo actual no tiene una fuente 100% confiable para "todos los posibles"
-    //     sin arriesgar traer miles y duplicar).
-    // 2) Se une contra c_cliente y c_destinatarios para nombre/dirección.
-    // 3) No rompe JSON aunque falte alguna columna (se reporta en ok:0).
+    // Para evitar HY093 por reuso de parámetros nombrados (PDO), inyectamos ints ya casteados.
+    // (Son valores controlados por UI y casteados a int.)
+    $A = $almacen_id;
+    $R = $ruta_id;
 
-    // OJO: Si quieres listar "todos los posibles" por ruta/almacén, hay que amarrarlo a una tabla
-    // tipo RelClirutas (ruta->destinatario). Aquí dejamos el comportamiento seguro y consistente.
-
-    $params = [
-        ':alm' => $almacen_id,
-        ':rut' => $ruta_id,
-    ];
-
-    $whereQ = "";
+    $params = [];
+    $whereQ = '';
     if ($q !== '') {
-        $whereQ = " AND (
-            UPPER(c.Cve_Clte) LIKE :q OR
-            UPPER(c.RazonSocial) LIKE :q OR
-            UPPER(d.razonsocial) LIKE :q OR
-            UPPER(IFNULL(d.colonia,'')) LIKE :q OR
-            UPPER(IFNULL(d.cp,'')) LIKE :q
-        )";
-        $params[':q'] = '%' . mb_strtoupper($q, 'UTF-8') . '%';
+        $whereQ = " AND (d.razonsocial LIKE :q OR d.Cve_Clte LIKE :q OR d.colonia LIKE :q OR d.postal LIKE :q) ";
+        $params['q'] = '%' . $q . '%';
     }
 
-    // Lee días ya guardados (incluye Sec si existe en tu tabla; si no existe, quítalo aquí y en save)
     $sql = "
         SELECT
-            r.Cve_Cliente,
-            c.Cve_Clte,
-            c.RazonSocial AS Cliente,
-            r.Id_Destinatario,
-            d.razonsocial AS Destinatario,
+            d.id_destinatario,
+            d.Cve_Clte,
+            d.razonsocial,
+            d.direccion,
+            d.colonia,
+            d.postal AS cp,
+            d.ciudad,
+            d.estado,
+            d.latitud AS lat,
+            d.longitud AS lng,
 
-            IFNULL(d.direccion,'') AS Direccion,
-            IFNULL(d.colonia,'')   AS Colonia,
-            IFNULL(d.cp,'')        AS CP,
-            IFNULL(d.ciudad,'')    AS Ciudad,
-            IFNULL(d.estado,'')    AS Estado,
+            -- Rutas actuales del destinatario (por almacén)
+            (
+                SELECT GROUP_CONCAT(DISTINCT CONCAT(r2.cve_ruta) ORDER BY r2.cve_ruta SEPARATOR ', ')
+                FROM reldaycli rdc2
+                JOIN t_ruta r2 ON r2.ID_Ruta = rdc2.Cve_Ruta
+                WHERE rdc2.Id_Destinatario = d.id_destinatario
+                  AND rdc2.Cve_Almac = {$A}
+            ) AS rutas_actuales,
 
-            COALESCE(r.Lu,0) AS Lu,
-            COALESCE(r.Ma,0) AS Ma,
-            COALESCE(r.Mi,0) AS Mi,
-            COALESCE(r.Ju,0) AS Ju,
-            COALESCE(r.Vi,0) AS Vi,
-            COALESCE(r.Sa,0) AS Sa,
-            COALESCE(r.Do,0) AS Do,
+            -- Bandera si está asignado a la ruta seleccionada (en este almacén)
+            (
+                SELECT COUNT(*)
+                FROM reldaycli rdc3
+                WHERE rdc3.Id_Destinatario = d.id_destinatario
+                  AND rdc3.Cve_Almac = {$A}
+                  AND ({$R} = 0 OR rdc3.Cve_Ruta = {$R})
+            ) AS asignado_esta_ruta,
 
-            1 AS Asignado,
-            COALESCE(r.Sec,'') AS Sec
-        FROM reldaycli r
-        LEFT JOIN c_cliente c ON c.id_cliente = r.Cve_Cliente
-        LEFT JOIN c_destinatarios d ON d.id_destinatario = r.Id_Destinatario
-        WHERE r.Cve_Almac = :alm
-          AND r.Cve_Ruta  = :rut
-          $whereQ
-        ORDER BY c.RazonSocial, d.razonsocial, r.Id DESC
+            -- Días actuales (si existe registro para ruta seleccionada; si ruta_id=0, toma cualquiera del almacén)
+            (
+                SELECT CONCAT(
+                    IFNULL(rdc4.Lu,0), IFNULL(rdc4.Ma,0), IFNULL(rdc4.Mi,0), IFNULL(rdc4.Ju,0),
+                    IFNULL(rdc4.Vi,0), IFNULL(rdc4.Sa,0), IFNULL(rdc4.Do,0)
+                )
+                FROM reldaycli rdc4
+                WHERE rdc4.Id_Destinatario = d.id_destinatario
+                  AND rdc4.Cve_Almac = {$A}
+                  AND ({$R} = 0 OR rdc4.Cve_Ruta = {$R})
+                ORDER BY rdc4.Id DESC
+                LIMIT 1
+            ) AS dias_bits
+
+        FROM c_destinatarios d
+        WHERE d.Activo = '1'
+        {$whereQ}
+        ORDER BY d.Cve_Clte, d.razonsocial
         LIMIT 1000
     ";
 
     $rows = db_all($sql, $params);
 
     // Normaliza tipos
-    foreach ($rows as &$it) {
-        $it['Lu'] = (int)$it['Lu'];
-        $it['Ma'] = (int)$it['Ma'];
-        $it['Mi'] = (int)$it['Mi'];
-        $it['Ju'] = (int)$it['Ju'];
-        $it['Vi'] = (int)$it['Vi'];
-        $it['Sa'] = (int)$it['Sa'];
-        $it['Do'] = (int)$it['Do'];
-        $it['Asignado'] = (int)$it['Asignado'];
+    foreach ($rows as &$r) {
+        $r['id_destinatario'] = (int)$r['id_destinatario'];
+        $r['asignado_esta_ruta'] = (int)$r['asignado_esta_ruta'];
+        $r['lat'] = ($r['lat'] === null || $r['lat'] === '') ? null : (float)$r['lat'];
+        $r['lng'] = ($r['lng'] === null || $r['lng'] === '') ? null : (float)$r['lng'];
+        $r['dias_bits'] = $r['dias_bits'] ?? '';
+        $r['rutas_actuales'] = $r['rutas_actuales'] ?? '';
     }
-    unset($it);
 
-    ob_clean();
     echo json_encode([
         'ok' => 1,
-        'items' => $rows,
-        'count' => count($rows),
-        'debug' => [
-            'almacen_id' => $almacen_id,
-            'ruta_id' => $ruta_id,
-            'q' => $q,
-        ]
-    ], JSON_UNESCAPED_UNICODE);
+        'almacen_id' => $almacen_id,
+        'ruta_id' => $ruta_id,
+        'q' => $q,
+        'total' => count($rows),
+        'data' => $rows
+    ]);
 
 } catch (Throwable $e) {
-    ob_clean();
     echo json_encode([
         'ok' => 0,
-        'error' => 'Error consultando clientes.',
-        'detalle' => $e->getMessage(),
-    ], JSON_UNESCAPED_UNICODE);
+        'error' => 'Error consultando clientes',
+        'detalle' => $e->getMessage()
+    ]);
 }

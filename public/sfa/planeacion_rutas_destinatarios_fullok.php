@@ -230,19 +230,19 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
     const rutasAct = escapeHtml(r.rutas_actuales ?? r.rutas ?? '');
 
-    const asig = (r.asignado_esta_ruta ?? r.asignado ?? r.asig ?? 0) ? 1 : 0;
+    const asig = (r.asignado_esta_ruta ?? r.asignado ?? 0) ? 1:0;
+    const dias = parseDias(r);
+
     const badge = asig
       ? `<span class="badge badge-ok text-white">Sí</span>`
       : `<span class="badge badge-no text-white">No</span>`;
 
-    const dias = parseDias(r);
-
-    const mkDay = (k, v) => `<input type="checkbox" class="form-check-input daybox d-${k}" ${v? 'checked':''}>`;
+    const mkDay = (k,v) => `<input type="checkbox" class="form-check-input daybox d-${k}" ${v? 'checked':''}>`;
 
     return `
-      <tr class="tiny" data-id-dest="${idDest}" data-cve-clte="${escapeHtml(cveClte)}" data-cve-vend="${cveVend}">
-        <td class="text-center"><input type="checkbox" class="form-check-input rowSel"></td>
-        <td>${clienteTxt}</td>
+      <tr class="tiny" data-id-dest="${idDest}" data-cve-clte="${escapeHtml(cveClte)}" data-cve-vend="${escapeHtml(cveVend)}">
+        <td><input type="checkbox" class="form-check-input rowSel"></td>
+        <td>${clienteTxt || escapeHtml(cveClte)}</td>
         <td>${destTxt}</td>
         <td class="text-center">${mkDay('Lu',dias.Lu)}</td>
         <td class="text-center">${mkDay('Ma',dias.Ma)}</td>
@@ -279,34 +279,11 @@ require_once __DIR__ . '/../bi/_menu_global.php';
   async function cargarAlmacenes(){
     try{
       setEstado('Cargando...', true);
-
-      // ✅ FILTRO: solo almacenes con rutas (sin tocar APIs)
-      // 1) obtenemos ids de almacenes con rutas desde modo soportado
-      let idsConRutas = new Set();
-      try{
-        const resR = await fetch('../api/sfa/catalogo_rutas.php?mode=almacenes', {cache:'no-store'});
-        const jsR  = await resR.json();
-        const arrR = Array.isArray(jsR) ? jsR : (jsR.data ?? jsR.almacenes ?? jsR.rows ?? []);
-        arrR.forEach(a=>{
-          const id = a.id ?? a.IdEmpresa ?? a.idempresa ?? a.almacen_id ?? a.id_almacen ?? a.IdAlmacen ?? '';
-          const n  = parseInt(id||'0',10);
-          if(n) idsConRutas.add(n);
-        });
-      }catch(_e){ /* fallback silencioso: si no existe mode=almacenes, no rompemos */ }
-
-      // 2) cargamos catálogo general y filtramos por idsConRutas
       const res = await fetch('../api/catalogo_almacenes.php', {cache:'no-store'});
       const js = await res.json();
 
-      let data = Array.isArray(js) ? js : (js.data ?? js.almacenes ?? []);
-      if(idsConRutas.size){
-        data = data.filter(a=>{
-          const id = a.id ?? a.Id ?? a.almacen_id ?? a.id_almacen ?? a.IdAlmacen ?? '';
-          const n  = parseInt(id||'0',10);
-          return n && idsConRutas.has(n);
-        });
-      }
-
+      // Soporta formatos: {success:true,data:[...]} o {ok:1,data:[...]} o directamente [...]
+      const data = Array.isArray(js) ? js : (js.data ?? js.almacenes ?? []);
       selAlmacen.innerHTML = `<option value="">Seleccione almacén</option>`;
 
       data.forEach(a=>{
