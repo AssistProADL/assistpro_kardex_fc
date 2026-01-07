@@ -590,6 +590,15 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Administración', 'url' => 'embarques/admin_embarques.php', 'icono' => 'fa-briefcase'],
             ],
 
+            // VAS
+            'Modulo VAS' => [
+                ['titulo' => 'Servicios', 'url' => 'vas/servicios_vas.php', 'icono' => 'fa-calendar-check'],
+                ['titulo' => 'Clientes', 'url' => 'vas/vas_cliente.php', 'icono' => 'fa-calendar-check'],
+                ['titulo' => 'Cobranza', 'url' => 'vas/vas_cobranza.php', 'icono' => 'fa-calendar-check'],
+	        ['titulo' => 'Pedidos', 'url' => 'vas/vas_pedido.php', 'icono' => 'fa-calendar-check'],
+
+            ],
+
             // REPORTES SFA
             'Reportes SFA' => [
                 ['titulo' => 'Análisis de Ventas', 'url' => 'reportes_sfa/ventas_analisis.php', 'icono' => 'fa-arrow-right-arrow-left'],
