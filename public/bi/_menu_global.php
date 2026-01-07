@@ -494,6 +494,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Resumen Ejecutivo',             'url' => 'sfa/resumen_rutas.php',              'icono' => 'fa-tags'],
                 ['titulo' => 'Planeación de Rutas',           'url' => 'sfa/planeacion_rutas_destinatarios.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Configuración Rutas',           'url' => 'sfa/rutas_planning.php',             'icono' => 'fa-tags'],
+                ['titulo' => 'Administración Comercial',      'url' => 'sfa/destinatarios_config.php',       'icono' => 'fa-tags'],
                 ['titulo' => 'Lista de Precios',              'url' => 'sfa/lista_precios.php',              'icono' => 'fa-tags'],
                 ['titulo' => 'Lista de Descuentos',           'url' => 'sfa/lista_descuentos.php',           'icono' => 'fa-percent'],
                 ['titulo' => 'Promociones',                   'url' => 'promociones/promociones.php',        'icono' => 'fa-gift'],
