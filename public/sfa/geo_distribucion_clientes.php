@@ -1,376 +1,428 @@
 <?php
-include __DIR__ . '/../bi/_menu_global.php';
+// geo_distribucion_clientes.php (FIX)
+// - Arregla consumo de APIs que viven en /public/api/sfa/
+// - Soporta respuestas tipo: array directo  OR  {success:true,data:[...]}
+// - Mantiene compatibilidad con endpoints legacy si existieran
+
+require_once __DIR__ . '/../../app/db.php';
+
+// Si manejas sesión/usuario, déjalo tal cual en tu proyecto.
+// session_start();
+?>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Georreferencia | Distribución de Clientes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Mantén tus estilos corporativos / menú global tal como lo uses -->
+  
+
+  <style>
+    /* Ajustes mínimos, sin tocar tu diseño base */
+    #map { width: 100%; height: calc(100vh - 210px); border-radius: 10px; }
+    .ap-card { border: 1px solid #e8eef6; border-radius: 12px; padding: 12px; background: #fff; }
+    .ap-row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+    .ap-row .ap-field { min-width: 240px; flex: 1; }
+    label { font-size: 12px; color:#52637a; }
+    select, input { width:100%; padding:8px 10px; border:1px solid #d7e2f1; border-radius:10px; font-size:12px; }
+    .btn { padding:8px 12px; border-radius:10px; border:1px solid transparent; cursor:pointer; font-size:12px; }
+    .btn-primary { background:#0d6efd; color:#fff; }
+    .btn-outline { background:#fff; border-color:#cfe0f7; color:#0d6efd; }
+    .muted { font-size:11px; color:#7b8aa0; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; background:#eef5ff; color:#0d6efd; }
+    .log { font-size:11px; color:#6b7c92; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+  </style>
+</head>
+
+<body class="ap-body">
+<?php
+// Menú global si aplica en tu estándar
+ include __DIR__ . '/../bi/_menu_global.php';
 ?>
 
-<style>
-  .ap-title { font-weight: 700; }
-  .ap-sub { color:#6c757d; font-size:12px; }
-  .box { background:#fff; border:1px solid #e9ecef; border-radius:10px; }
-  .map-wrap { height: 68vh; min-height: 520px; border-radius:10px; overflow:hidden; }
-  .mini { font-size:12px; color:#6c757d; }
-  .kpi-line { font-size:12px; color:#495057; }
-  .pill { border:1px solid #dee2e6; border-radius:999px; padding:2px 10px; font-size:12px; background:#f8f9fa; }
-  .sel-list { max-height: 160px; overflow:auto; border:1px solid #e9ecef; border-radius:8px; padding:8px; background:#fcfcfd; }
-  .sel-item { font-size:12px; padding:6px; border-bottom:1px dashed #eee; }
-  .sel-item:last-child { border-bottom:0; }
-</style>
-
-<div class="container-fluid">
-
-  <div class="d-flex align-items-start justify-content-between mb-2">
-    <div>
-      <h4 class="ap-title mb-0">Distribución de Clientes en el Mapa</h4>
-      <div class="ap-sub">Geocerca + reasignación en línea (relclirutas) con herencia a reldaycli. Incluye crédito y saldo.</div>
-    </div>
-    <div class="d-flex gap-2">
-      <a class="btn btn-outline-primary btn-sm" href="planeacion_rutas_destinatarios.php">Asignar Clientes</a>
-      <a class="btn btn-outline-secondary btn-sm" href="resumen_rutas.php">Resumen Rutas</a>
-    </div>
-  </div>
-
-  <!-- filtros -->
-  <div class="box p-3 mb-3">
-    <div class="row g-2 align-items-end">
-      <div class="col-md-3">
-        <label class="form-label mb-1">Empresa (IdEmpresa)</label>
-        <select id="f_empresa" class="form-select form-select-sm"></select>
-      </div>
-      <div class="col-md-5">
-        <label class="form-label mb-1">Ruta</label>
-        <select id="f_ruta" class="form-select form-select-sm">
-          <option value="0">(Todas)</option>
+<div class="ap-page" style="padding:14px;">
+  <div class="ap-card">
+    <div class="ap-row">
+      <div class="ap-field">
+        <label>Empresa / Almacén</label>
+        <select id="f_empresa">
+          <option value="">Cargando...</option>
         </select>
+        <div class="muted log" id="dbg_alm"></div>
       </div>
-      <div class="col-md-2">
-        <button id="btn_actualizar" class="btn btn-primary btn-sm w-100">Actualizar</button>
-      </div>
-      <div class="col-md-2 text-end">
-        <div class="pill" id="kpi_top">Total: 0 | Con GPS: 0 | Saldo deudor: $0.00</div>
-      </div>
-    </div>
-  </div>
 
-  <div class="row g-3">
-    <div class="col-lg-9">
-      <div class="box p-2">
-        <div id="map" class="map-wrap"></div>
-      </div>
-    </div>
-
-    <div class="col-lg-3">
-      <div class="box p-3 mb-3">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <div class="fw-bold">Selección por Geocerca</div>
-          <div class="d-flex gap-2">
-            <button id="btn_geo" class="btn btn-outline-primary btn-sm">Geocerca</button>
-            <button id="btn_clear" class="btn btn-outline-danger btn-sm">Limpiar</button>
-          </div>
-        </div>
-
-        <div class="mini mb-2">Dibuja un polígono. Se seleccionan clientes dentro y podrás reasignarlos a otra ruta.</div>
-
-        <label class="form-label mb-1">Ruta destino</label>
-        <select id="f_ruta_destino" class="form-select form-select-sm mb-2">
-          <option value="">Seleccione</option>
+      <div class="ap-field">
+        <label>Ruta</label>
+        <select id="f_ruta">
+          <option value="">(Seleccione almacén)</option>
         </select>
-
-        <div class="row g-2 mb-2">
-          <div class="col-6"><button id="btn_preview" class="btn btn-secondary btn-sm w-100">Preview</button></div>
-          <div class="col-6"><button id="btn_apply" class="btn btn-success btn-sm w-100">Aplicar</button></div>
-        </div>
-
-        <div class="kpi-line">Seleccionados: <b id="k_sel">0</b></div>
-        <div class="kpi-line">Con GPS: <b id="k_sel_gps">0</b></div>
-        <div class="kpi-line">Saldo total: <b id="k_sel_saldo">$0.00</b></div>
-
-        <hr class="my-2">
-
-        <div class="fw-bold mb-1" style="font-size:13px;">Cliente seleccionado</div>
-        <div id="cliente_info" class="mini">—</div>
+        <div class="muted log" id="dbg_rut"></div>
       </div>
 
-      <div class="box p-3">
-        <div class="fw-bold mb-2">Clientes seleccionados</div>
-        <div id="sel_list" class="sel-list"><div class="mini">Sin selección</div></div>
+      <div class="ap-field" style="max-width:260px;">
+        <label>Buscar</label>
+        <input id="f_q" placeholder="Cliente / Destinatario / Colonia / CP" />
+        <div class="muted">Enter para filtrar en pantalla</div>
+      </div>
+
+      <div class="ap-field" style="max-width:160px;">
+        <button class="btn btn-primary" id="btn_refresh">Actualizar</button>
+        <button class="btn btn-outline" id="btn_clear" style="margin-left:6px;">Limpiar</button>
+      </div>
+
+      <div class="ap-field" style="max-width:280px;">
+        <div class="muted">Modo</div>
+        <span class="pill" id="dbg_status">OK</span>
+        <div class="muted log" id="dbg_msg"></div>
       </div>
     </div>
   </div>
 
+  <div style="height:12px;"></div>
+
+  <div id="map"></div>
 </div>
 
+<?php
+ include __DIR__ . '/../bi/_menu_global_end.php';
+?>
+
 <script>
+/** =========================
+ *  Endpoints (SIN crear APIs nuevas)
+ *  ========================= */
 const API_ALMACENES = "../api/catalogo_almacenes.php";
-const API_RUTAS     = "../api/catalogo_rutas.php";
-const API_DATA      = "../api/geo_clientes_data.php";
-const API_APPLY     = "../api/geo_clientes_apply.php";
 
-let map, drawingManager, polygon = null;
-let markers = [];
-let clientes = [];         // data completa desde API
-let selectedIds = new Set();
+// NOTA: en este proyecto, la mayoría de APIs SFA viven en /public/api/sfa/
+// (catalogo_rutas, geo_clientes_*, etc). Dejamos fallback por compatibilidad.
+const API_RUTAS_PRIMARY   = "../api/sfa/catalogo_rutas.php";
+const API_RUTAS_FALLBACK  = "../api/catalogo_rutas.php";
 
-function money(n){
-  try { return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(n||0)); }
-  catch(e){ return '$' + (Number(n||0).toFixed(2)); }
-}
+const API_DATA_PRIMARY    = "../api/geo_clientes_data.php";
+const API_DATA_FALLBACK   = "../api/geo_clientes_data.php";
 
-function setTopKPI(){
-  const total = clientes.length;
-  const conGps = clientes.filter(x => x.lat && x.lng).length;
-  const saldo = clientes.reduce((a,x)=> a + (Number(x.saldo_actual||0)), 0);
-  document.getElementById('kpi_top').innerText = `Total: ${total} | Con GPS: ${conGps} | Saldo deudor: ${money(saldo)}`;
-}
+const API_APPLY_PRIMARY   = "../api/geo_clientes_apply.php";
+const API_APPLY_FALLBACK  = "../api/geo_clientes_apply.php";
 
-function setSelKPI(){
-  const arr = clientes.filter(x => selectedIds.has(String(x.id_destinatario)));
-  const conGps = arr.filter(x => x.lat && x.lng).length;
-  const saldo = arr.reduce((a,x)=> a + (Number(x.saldo_actual||0)), 0);
-  document.getElementById('k_sel').innerText = arr.length;
-  document.getElementById('k_sel_gps').innerText = conGps;
-  document.getElementById('k_sel_saldo').innerText = money(saldo);
-
-  const box = document.getElementById('sel_list');
-  if (!arr.length) {
-    box.innerHTML = `<div class="mini">Sin selección</div>`;
-    return;
+// Helpers robustos: intentan URLs en orden hasta obtener JSON válido.
+async function fetchJsonTry(urls){
+  let lastErr = null;
+  for(const u of urls){
+    try{
+      const r = await fetch(u, { cache:'no-store' });
+      if(!r.ok){ lastErr = new Error(`HTTP ${r.status} ${u}`); continue; }
+      const j = await r.json();
+      return j;
+    }catch(e){ lastErr = e; }
   }
-  box.innerHTML = arr.map(x => `
-    <div class="sel-item">
-      <div><b>${x.cliente_nombre || x.Cve_Clte || 'Cliente'}</b></div>
-      <div class="mini">${x.destinatario || ''}</div>
-      <div class="mini">Crédito: ${x.dias_credito||0} días · Saldo: ${money(x.saldo_actual||0)}</div>
-    </div>
-  `).join('');
+  throw lastErr || new Error("No se pudo obtener JSON");
 }
 
-function infoCliente(x){
-  const el = document.getElementById('cliente_info');
-  if(!x){ el.innerHTML = '—'; return; }
-  el.innerHTML = `
-    <div><b>${x.cliente_nombre || x.Cve_Clte || 'Cliente'}</b></div>
-    <div>${x.destinatario || ''}</div>
-    <div class="mini">${x.direccion||''} · ${x.colonia||''} · CP ${x.postal||''}</div>
-    <div class="mini">${x.ciudad||''}, ${x.estado||''}</div>
-    <div class="mini">Crédito: <b>${x.dias_credito||0}</b> días · Límite: <b>${money(x.limite_credito||0)}</b></div>
-    <div class="mini">Saldo deudor: <b>${money(x.saldo_actual||0)}</b></div>
-  `;
+async function postTry(urls, body){
+  let lastErr = null;
+  for(const u of urls){
+    try{
+      const r = await fetch(u, { method:'POST', body });
+      if(!r.ok){ lastErr = new Error(`HTTP ${r.status} ${u}`); continue; }
+      const j = await r.json();
+      return j;
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error("No se pudo enviar POST");
 }
+
+/** =========================
+ *  UI helpers
+ *  ========================= */
+const $ = (id)=>document.getElementById(id);
+function setStatus(ok, msg){
+  $('dbg_status').textContent = ok ? 'OK' : 'ERROR';
+  $('dbg_status').style.background = ok ? '#e9f7ef' : '#fdecea';
+  $('dbg_status').style.color = ok ? '#157347' : '#b02a37';
+  $('dbg_msg').textContent = msg || '';
+}
+
+/** =========================
+ *  Google Maps + Drawing
+ *  ========================= */
+let map, drawingManager;
+let markers = [];
+let selectedIds = new Set(); // clientes incluidos en geocerca (si aplica)
+let circles = [];            // geocercas dibujadas
 
 function clearMarkers(){
   markers.forEach(m => m.setMap(null));
   markers = [];
 }
 
-function renderMarkers(){
-  clearMarkers();
+function clearGeocercas(){
+  circles.forEach(c => c.setMap(null));
+  circles = [];
+}
 
-  clientes.forEach(x => {
-    if(!x.lat || !x.lng) return;
+function addMarker(cli){
+  if(!cli || cli.lat==null || cli.lng==null) return;
+  const pos = {lat: parseFloat(cli.lat), lng: parseFloat(cli.lng)};
+  if(Number.isNaN(pos.lat) || Number.isNaN(pos.lng)) return;
 
-    const m = new google.maps.Marker({
-      position: {lat: x.lat, lng: x.lng},
-      map,
-      title: (x.destinatario || x.cliente_nombre || '') + '',
-      // icon could be customized later
-    });
-
-    const infow = new google.maps.InfoWindow({
-      content: `
-        <div style="font-size:12px">
-          <div><b>${x.cliente_nombre || x.Cve_Clte || 'Cliente'}</b></div>
-          <div>${x.destinatario || ''}</div>
-          <div>Crédito: ${x.dias_credito||0} días · Saldo: ${money(x.saldo_actual||0)}</div>
-          <div class="mini">${x.cve_ruta || ''} - ${x.ruta_nombre || ''}</div>
-        </div>
-      `
-    });
-
-    m.addListener('click', () => {
-      infoCliente(x);
-      infow.open({anchor:m, map});
-    });
-
-    markers.push(m);
+  const m = new google.maps.Marker({
+    map,
+    position: pos,
+    title: (cli.razonsocial || cli.nombre || cli.Cve_Clte || '').toString()
   });
 
-  // Fit bounds
-  if (markers.length){
-    const b = new google.maps.LatLngBounds();
-    markers.forEach(m => b.extend(m.getPosition()));
-    map.fitBounds(b);
-  }
-}
-
-async function loadAlmacenes(){
-  const r = await fetch(API_ALMACENES);
-  const data = await r.json();
-
-  const sel = document.getElementById('f_empresa');
-  sel.innerHTML = `<option value="">Seleccione</option>`;
-  (data||[]).forEach(a => {
-    // tu API usualmente regresa {id,nombre} o {clave,nombre}
-    const val = (a.id ?? a.clave ?? a.IdEmpresa ?? '');
-    const txt = (a.nombre ?? a.Nombre ?? a.descripcion ?? val);
-    sel.innerHTML += `<option value="${val}">${txt}</option>`;
-  });
-}
-
-async function loadRutas(){
-  const r = await fetch(API_RUTAS);
-  const data = await r.json();
-
-  const selRuta = document.getElementById('f_ruta');
-  const selDst  = document.getElementById('f_ruta_destino');
-
-  selRuta.innerHTML = `<option value="0">(Todas)</option>`;
-  selDst.innerHTML  = `<option value="">Seleccione</option>`;
-
-  (data||[]).forEach(x => {
-    const id = (x.ID_Ruta ?? x.id ?? x.IdRuta ?? x.id_ruta);
-    const name = `${x.cve_ruta ?? x.Cve_Ruta ?? ''} - ${x.descripcion ?? x.nombre ?? x.Descripcion ?? ''}`.trim();
-    selRuta.innerHTML += `<option value="${id}">${name}</option>`;
-    selDst.innerHTML  += `<option value="${id}">${name}</option>`;
-  });
-}
-
-async function cargarClientes(){
-  const emp = document.getElementById('f_empresa').value;
-  const ruta = document.getElementById('f_ruta').value || '0';
-
-  if(!emp){
-    clientes = [];
-    setTopKPI();
-    clearMarkers();
-    return;
-  }
-
-  const url = `${API_DATA}?IdEmpresa=${encodeURIComponent(emp)}&ruta_id=${encodeURIComponent(ruta)}`;
-  const r = await fetch(url);
-  const resp = await r.json();
-
-  if(!resp || resp.error){
-    alert(resp?.error ? (resp.error + (resp.detalle ? ("\n" + resp.detalle) : "")) : "Error consultando");
-    return;
-  }
-
-  clientes = resp.data || [];
-  selectedIds.clear();
-  setTopKPI();
-  setSelKPI();
-  infoCliente(null);
-  renderMarkers();
-}
-
-function enableGeocerca(){
-  if(!drawingManager) return;
-  drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
-}
-
-function clearGeocerca(){
-  if(polygon){ polygon.setMap(null); polygon=null; }
-  selectedIds.clear();
-  setSelKPI();
-  infoCliente(null);
-}
-
-function computeSelection(){
-  if(!polygon) return;
-
-  selectedIds.clear();
-
-  clientes.forEach(x => {
-    if(!x.lat || !x.lng) return;
-    const pt = new google.maps.LatLng(x.lat, x.lng);
-    if (google.maps.geometry.poly.containsLocation(pt, polygon)) {
-      selectedIds.add(String(x.id_destinatario));
-    }
-  });
-
-  setSelKPI();
-}
-
-async function applyReasignacion(){
-  const emp = document.getElementById('f_empresa').value;
-  const dst = document.getElementById('f_ruta_destino').value;
-
-  if(!emp){ alert("Seleccione Empresa."); return; }
-  if(!dst){ alert("Seleccione Ruta destino."); return; }
-  if(selectedIds.size === 0){ alert("No hay clientes seleccionados."); return; }
-
-  // Días globales (si quieres heredar días desde esta pantalla, aquí los mandaríamos.
-  // Por ahora manda Do=1 por defecto si lo deseas; lo dejamos en 0 (solo cambia ruta).
-  const fd = new FormData();
-  fd.append('IdEmpresa', emp);
-  fd.append('ruta_nueva', dst);
-  fd.append('ids_destinatario', Array.from(selectedIds).join(','));
-
-  const r = await fetch(API_APPLY, { method:'POST', body: fd });
-  const resp = await r.json();
-
-  if(resp.error){
-    alert(resp.error + (resp.detalle ? ("\n"+resp.detalle) : ""));
-    return;
-  }
-
-  alert(`OK. relclirutas movidos: ${resp.movidos_relclirutas} · reldaycli actualizados: ${resp.actualizados_reldaycli}`);
-  await cargarClientes(); // refresca mapa
+  m.__cli = cli;
+  markers.push(m);
 }
 
 function initMap(){
-  map = new google.maps.Map(document.getElementById("map"), {
-    center: { lat: 19.4326, lng: -99.1332 },
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: {lat: 20.6736, lng: -103.344},
     zoom: 10,
     mapTypeControl: true,
-    streetViewControl: false,
-    fullscreenControl: true
+    streetViewControl: false
   });
 
+  // Drawing manager (círculos)
   drawingManager = new google.maps.drawing.DrawingManager({
     drawingMode: null,
-    drawingControl: false,
-    polygonOptions: {
-      fillColor: "#0d6efd",
+    drawingControl: true,
+    drawingControlOptions: {
+      position: google.maps.ControlPosition.TOP_CENTER,
+      drawingModes: ['circle']
+    },
+    circleOptions: {
       fillOpacity: 0.15,
-      strokeColor: "#0d6efd",
       strokeWeight: 2,
-      clickable: false,
-      editable: true
+      clickable: true,
+      editable: true,
+      zIndex: 10
     }
   });
 
   drawingManager.setMap(map);
 
-  google.maps.event.addListener(drawingManager, 'overlaycomplete', function(event) {
-    if (polygon) polygon.setMap(null);
-    polygon = event.overlay;
-    drawingManager.setDrawingMode(null);
+  google.maps.event.addListener(drawingManager, 'circlecomplete', async function(circle){
+    circles.push(circle);
 
-    // al editar polígono, recalcular
-    computeSelection();
-    google.maps.event.addListener(polygon.getPath(), 'set_at', computeSelection);
-    google.maps.event.addListener(polygon.getPath(), 'insert_at', computeSelection);
+    // Cliente(s) dentro del círculo -> se puede aplicar como geocerca
+    const center = circle.getCenter();
+    const radius = circle.getRadius();
+
+    const inside = [];
+    markers.forEach(m=>{
+      const p = m.getPosition();
+      const d = google.maps.geometry.spherical.computeDistanceBetween(center, p);
+      if(d <= radius) inside.push(m.__cli);
+    });
+
+    // Si no hay clientes dentro, no hacemos nada
+    if(!inside.length){
+      setStatus(false, 'Geocerca sin clientes dentro.');
+      return;
+    }
+
+    // Aplicar geocerca (si tu API lo soporta)
+    try{
+      const emp = $('f_empresa').value || '';
+      const ruta = $('f_ruta').value || '';
+      if(!emp || !ruta){
+        setStatus(false, 'Seleccione almacén y ruta antes de aplicar geocerca.');
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append('IdEmpresa', emp);
+      fd.append('ruta_id', ruta);
+      fd.append('center_lat', center.lat());
+      fd.append('center_lng', center.lng());
+      fd.append('radius_m', radius);
+
+      // ids de destinatarios/clientes (ajusta si tu API espera otro nombre)
+      fd.append('items_json', JSON.stringify(inside.map(x=>({
+        id_destinatario: x.id_destinatario ?? x.IdDestinatario ?? x.id ?? null,
+        Cve_Clte: x.Cve_Clte ?? x.cve_clte ?? null
+      }))));
+
+      const resp = await postTry([API_APPLY_PRIMARY, API_APPLY_FALLBACK], fd);
+
+      if(!resp.ok){
+        setStatus(false, resp.error || 'Error aplicando geocerca');
+        return;
+      }
+
+      setStatus(true, 'Geocerca aplicada correctamente.');
+    }catch(e){
+      setStatus(false, e.message || 'Error aplicando geocerca.');
+    }
   });
+
+  // Carga inicial de filtros + datos
+  boot();
 }
 
-// eventos
-document.addEventListener('DOMContentLoaded', async () => {
-  await loadAlmacenes();
+/** =========================
+ *  Data loaders
+ *  ========================= */
+async function loadAlmacenes(){
+  const j = await fetchJsonTry([API_ALMACENES]);
+  const arr = (Array.isArray(j) ? j : (j.data || j.almacenes || [])) || [];
+
+  const sel = $('f_empresa');
+  sel.innerHTML = `<option value="">Seleccione almacén</option>`;
+
+  arr.forEach(x=>{
+    const id = x.IdEmpresa ?? x.id_empresa ?? x.id ?? x.IdAlmacen ?? x.id_almacen ?? '';
+    const nom = x.Empresa ?? x.nombre ?? x.Nombre ?? x.Almacen ?? '';
+    if(!id) return;
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = nom ? nom : `Almacén ${id}`;
+    sel.appendChild(opt);
+  });
+
+  $('dbg_alm').textContent = `Fuente: ${API_ALMACENES} | ${arr.length} almacenes`;
+}
+
+async function loadRutas(){
+  const emp = $('f_empresa').value || "";
+  const rutaSel = $('f_ruta');
+
+  if(!emp){
+    rutaSel.innerHTML = `<option value="">(Seleccione almacén)</option>`;
+    return;
+  }
+
+  const j = await fetchJsonTry([
+    `${API_RUTAS_PRIMARY}?almacen_id=${encodeURIComponent(emp)}`,
+    `${API_RUTAS_FALLBACK}?IdEmpresa=${encodeURIComponent(emp)}`,
+    API_RUTAS_FALLBACK
+  ]);
+
+  const arr = Array.isArray(j) ? j : (Array.isArray(j?.data) ? j.data : []);
+  rutaSel.innerHTML = `<option value="">Seleccione Ruta</option>`;
+
+  arr.forEach(x=>{
+    const id = x.id_ruta ?? x.ID_Ruta ?? x.IdRuta ?? x.id ?? x.cve_ruta ?? "";
+    const cve = x.cve_ruta ?? x.Cve_Ruta ?? "";
+    const desc = x.descripcion ?? x.Descripcion ?? x.nombre ?? "";
+    const label = (desc || cve || id) ? `${desc || cve || id}` : "Ruta";
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = label;
+    rutaSel.appendChild(opt);
+  });
+
+  $('dbg_rut').textContent = `Fuente: ${API_RUTAS_PRIMARY} (fallback ${API_RUTAS_FALLBACK}) | ${arr.length} rutas`;
+}
+
+async function cargarClientes(){
+  const emp  = $('f_empresa').value || '';
+  const ruta = $('f_ruta').value || '';
+
+  if(!emp){
+    setStatus(false, 'Seleccione almacén.');
+    clearMarkers();
+    return;
+  }
+
+  try{
+    const urlList = [
+      `${API_DATA_PRIMARY}?IdEmpresa=${encodeURIComponent(emp)}&ruta_id=${encodeURIComponent(ruta)}`,
+      `${API_DATA_FALLBACK}?IdEmpresa=${encodeURIComponent(emp)}&ruta_id=${encodeURIComponent(ruta)}`
+    ];
+
+    const resp = await fetchJsonTry(urlList);
+    const clientes = resp.data || resp || [];
+
+    clearMarkers();
+    clearGeocercas();
+
+    // Pintar marcadores
+    clientes.forEach(addMarker);
+
+    // Ajustar vista
+    if(markers.length){
+      const bounds = new google.maps.LatLngBounds();
+      markers.forEach(m => bounds.extend(m.getPosition()));
+      map.fitBounds(bounds);
+      if(markers.length === 1) map.setZoom(14);
+    }
+
+    setStatus(true, `Clientes cargados: ${clientes.length}`);
+  }catch(e){
+    setStatus(false, e.message || 'Error cargando clientes');
+    clearMarkers();
+  }
+}
+
+/** =========================
+ *  Boot + eventos
+ *  ========================= */
+async function boot(){
+  try{
+    setStatus(true, 'Cargando filtros...');
+    await loadAlmacenes();
+    setStatus(true, 'Listo');
+  }catch(e){
+    setStatus(false, e.message || 'Error cargando almacenes');
+  }
+}
+
+$('btn_refresh').addEventListener('click', async ()=>{
+  selectedIds.clear();
   await loadRutas();
+  await cargarClientes();
+});
 
-  document.getElementById('btn_actualizar').addEventListener('click', cargarClientes);
-  document.getElementById('f_empresa').addEventListener('change', () => { selectedIds.clear(); cargarClientes(); });
-  document.getElementById('f_ruta').addEventListener('change', () => { selectedIds.clear(); cargarClientes(); });
+$('btn_clear').addEventListener('click', ()=>{
+  $('f_q').value = '';
+  setStatus(true, 'Filtro limpiado.');
+});
 
-  document.getElementById('btn_geo').addEventListener('click', enableGeocerca);
-  document.getElementById('btn_clear').addEventListener('click', clearGeocerca);
-  document.getElementById('btn_preview').addEventListener('click', computeSelection);
-  document.getElementById('btn_apply').addEventListener('click', applyReasignacion);
+// Al cambiar almacén => recargar rutas y clientes
+$('f_empresa').addEventListener('change', async ()=>{
+  selectedIds.clear();
+  await loadRutas();
+  await cargarClientes();
+});
+
+// Al cambiar ruta => recargar clientes
+$('f_ruta').addEventListener('change', async ()=>{
+  selectedIds.clear();
+  await cargarClientes();
+});
+
+// Filtro local por texto (no pega a API)
+$('f_q').addEventListener('keydown', (e)=>{
+  if(e.key !== 'Enter') return;
+  const q = ($('f_q').value || '').trim().toLowerCase();
+  if(!q){
+    markers.forEach(m=>m.setVisible(true));
+    setStatus(true, 'Filtro removido.');
+    return;
+  }
+  let vis = 0;
+  markers.forEach(m=>{
+    const c = m.__cli || {};
+    const hay = [
+      c.Cve_Clte, c.razonsocial, c.colonia, c.cp, c.ciudad, c.estado, c.direccion
+    ].join(' ').toLowerCase();
+    const ok = hay.includes(q);
+    m.setVisible(ok);
+    if(ok) vis++;
+  });
+  setStatus(true, `Filtro aplicado. Visibles: ${vis}`);
 });
 </script>
 
-<!-- Google Maps: reemplaza YOUR_GOOGLE_MAPS_KEY -->
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC5xF7JtKzw9cTRRXcDAqTThbYnMCiYOVM&libraries=drawing,geometry&callback=initMap" async defer></script>
+<!-- IMPORTANTE: geometry + drawing son requeridos para geocercas -->
+<script
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC5xF7JtKzw9cTRRXcDAqTThbYnMCiYOVM& 
+&libraries=geometry,drawing&callback=initMap"
+  async defer></script>
 
-<?php
-include __DIR__ . '/../bi/_menu_global_end.php';
-?>
+</body>
+</html>

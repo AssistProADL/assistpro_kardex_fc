@@ -489,15 +489,17 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // SFA
             'SFA' => [
-                ['titulo' => 'Dashboard Activos', 'url' => 'sfa/dashboard_activos.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Geolocalización Activos', 'url' => 'sfa/activos_geocercas.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Resumen Ejecutivo', 'url' => 'sfa/resumen_rutas.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Planeación de Rutas', 'url' => 'sfa/planeacion_rutas_destinatarios.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Configuración Rutas', 'url' => 'sfa/rutas_planning.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Lista de Precios', 'url' => 'sfa/lista_precios.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Lista de Descuentos', 'url' => 'sfa/lista_descuentos.php', 'icono' => 'fa-percent'],
-                ['titulo' => 'Promociones', 'url' => 'sfa/promociones.php', 'icono' => 'fa-gift'],
-                ['titulo' => 'Grupo Promociones', 'url' => 'sfa/grupo_promociones.php', 'icono' => 'fa-layer-group'],
+                ['titulo' => 'Dashboard Activos',             'url' => 'sfa/dashboard_activos.php',          'icono' => 'fa-tags'],
+                ['titulo' => 'Geolocalización Activos',       'url' => 'sfa/activos_geocercas.php',          'icono' => 'fa-tags'],
+                ['titulo' => 'Resumen Ejecutivo',             'url' => 'sfa/resumen_rutas.php',              'icono' => 'fa-tags'],
+                ['titulo' => 'Planeación de Rutas',           'url' => 'sfa/planeacion_rutas_destinatarios.php', 'icono' => 'fa-tags'],
+                ['titulo' => 'Configuración Rutas',           'url' => 'sfa/rutas_planning.php',             'icono' => 'fa-tags'],
+                ['titulo' => 'Administración Comercial',      'url' => 'sfa/destinatarios_config.php',       'icono' => 'fa-tags'],
+                ['titulo' => 'Lista de Precios',              'url' => 'sfa/lista_precios.php',              'icono' => 'fa-tags'],
+                ['titulo' => 'Lista de Descuentos',           'url' => 'sfa/lista_descuentos.php',           'icono' => 'fa-percent'],
+                ['titulo' => 'Promociones',                   'url' => 'promociones/promociones.php',        'icono' => 'fa-gift'],
+                ['titulo' => 'Simulador Promociones',         'url' => 'promociones/reglas_form.php',        'icono' => 'fa-gift'],
+                ['titulo' => 'Grupo Promociones'   ,          'url' => 'sfa/grupo_promociones.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Asignación de Activos', 'url' => 'sfa/activos_control.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Activos', 'url' => 'sfa/activos.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Tipos de Activos', 'url' => 'sfa/activo_tipos.php', 'icono' => 'fa-tags'],
@@ -554,18 +556,19 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Registro de Pedidos', 'url' => 'pedidos/pedido.php', 'icono' => 'fa-right-left'],
                 ['titulo' => 'Administración de Pedidos', 'url' => 'pedidos/picking_admin.php', 'icono' => 'fa-right-left'],
                 ['titulo' => 'Secuencia de Surtido', 'url' => 'pedidos/secuencia_surtido.php', 'icono' => 'fa-box-archive'],
+
             ],
 
 
             // MANUFACTURA KITTING
             'Manufactura' => [
-                ['titulo' => 'Agregar Editar Componentes ', 'url' => 'manufactura/bom.php', 'icono' => 'fa-industry'],
-                ['titulo' => 'Planeacion OP', 'url' => 'manufactura/orden_produccion.php', 'icono' => 'fa-flag'],
-                ['titulo' => 'Importador OPs', 'url' => 'manufactura/ot_importar.php', 'icono' => 'fa-industry'],
-                ['titulo' => 'Administrador OP', 'url' => 'manufactura/orden_produccion_admin_base.php', 'icono' => 'fa-flag'],
-                ['titulo' => 'Monitor Producción', 'url' => 'manufactura/monitor_produccion.php', 'icono' => 'fa-flag'],
-
-            ],
+                ['titulo' => 'Agregar Editar Componentes ',   'url' => 'manufactura/bom.php',                      'icono' => 'fa-industry'],
+                ['titulo' => 'Planeacion OP',                 'url' => 'manufactura/orden_produccion.php',         'icono' => 'fa-flag'],
+                ['titulo' => 'Importador OPs',                'url' => 'manufactura/importador_op.php',              'icono' => 'fa-industry'],
+                ['titulo' => 'Administrador OP',              'url' => 'manufactura/orden_produccion_admin_base.php',         'icono' => 'fa-flag'],
+                ['titulo' => 'Monitor Producción',            'url' => 'manufactura/monitor_produccion.php',       'icono' => 'fa-flag'],
+                
+                             ],
 
             // QA AUDITORIA
             'QA Auditoría' => [
@@ -586,6 +589,15 @@ require_once __DIR__ . '/../../app/auth_check.php';
             'Embarques' => [
                 ['titulo' => 'Planeación', 'url' => 'embarques/planeacion_embarques.php', 'icono' => 'fa-calendar-check'],
                 ['titulo' => 'Administración', 'url' => 'embarques/admin_embarques.php', 'icono' => 'fa-briefcase'],
+            ],
+
+            // VAS
+            'Modulo VAS' => [
+                ['titulo' => 'Servicios', 'url' => 'vas/servicios_vas.php', 'icono' => 'fa-calendar-check'],
+                ['titulo' => 'Clientes', 'url' => 'vas/vas_cliente.php', 'icono' => 'fa-calendar-check'],
+                ['titulo' => 'Cobranza', 'url' => 'vas/vas_cobranza.php', 'icono' => 'fa-calendar-check'],
+	        ['titulo' => 'Pedidos', 'url' => 'vas/vas_pedido.php', 'icono' => 'fa-calendar-check'],
+
             ],
 
             // REPORTES SFA

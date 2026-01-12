@@ -36,11 +36,32 @@ try {
         $where = "";
         $params = [];
 
+        // 🔒 Blindaje collation + 🔧 evitar HY093 (param duplicado)
         if ($search !== '') {
-            $where = " WHERE (clave LIKE :s OR nombre LIKE :s OR apellido LIKE :s OR correo LIKE :s 
-                        OR telefono1 LIKE :s OR telefono2 LIKE :s OR pais LIKE :s OR estado LIKE :s 
-                        OR ciudad LIKE :s OR direccion LIKE :s)";
-            $params[':s'] = "%{$search}%";
+            $where = " WHERE ("
+                   . " clave     COLLATE utf8mb4_unicode_ci LIKE CONVERT(:s1  USING utf8mb4) COLLATE utf8mb4_unicode_ci OR"
+                   . " nombre    COLLATE utf8mb4_unicode_ci LIKE CONVERT(:s2  USING utf8mb4) COLLATE utf8mb4_unicode_ci OR"
+                   . " apellido  COLLATE utf8mb4_unicode_ci LIKE CONVERT(:s3  USING utf8mb4) COLLATE utf8mb4_unicode_ci OR"
+                   . " correo    COLLATE utf8mb4_unicode_ci LIKE CONVERT(:s4  USING utf8mb4) COLLATE utf8mb4_unicode_ci OR"
+                   . " telefono1 COLLATE utf8mb4_unicode_ci LIKE CONVERT(:s5  USING utf8mb4) COLLATE utf8mb4_unicode_ci OR"
+                   . " telefono2 COLLATE utf8mb4_unicode_ci LIKE CONVERT(:s6  USING utf8mb4) COLLATE utf8mb4_unicode_ci OR"
+                   . " pais      COLLATE utf8mb4_unicode_ci LIKE CONVERT(:s7  USING utf8mb4) COLLATE utf8mb4_unicode_ci OR"
+                   . " estado    COLLATE utf8mb4_unicode_ci LIKE CONVERT(:s8  USING utf8mb4) COLLATE utf8mb4_unicode_ci OR"
+                   . " ciudad    COLLATE utf8mb4_unicode_ci LIKE CONVERT(:s9  USING utf8mb4) COLLATE utf8mb4_unicode_ci OR"
+                   . " direccion COLLATE utf8mb4_unicode_ci LIKE CONVERT(:s10 USING utf8mb4) COLLATE utf8mb4_unicode_ci"
+                   . ")";
+
+            $like = "%{$search}%";
+            $params[':s1']  = $like;
+            $params[':s2']  = $like;
+            $params[':s3']  = $like;
+            $params[':s4']  = $like;
+            $params[':s5']  = $like;
+            $params[':s6']  = $like;
+            $params[':s7']  = $like;
+            $params[':s8']  = $like;
+            $params[':s9']  = $like;
+            $params[':s10'] = $like;
         }
 
         $total = (int)$pdo->query("SELECT COUNT(*) FROM c_contactos")->fetchColumn();
@@ -239,7 +260,6 @@ try {
         $header = array_map('trim', $header);
         $expected = ['clave','nombre','apellido','correo','telefono1','telefono2','pais','estado','ciudad','direccion'];
 
-        // Validación flexible (mismos nombres)
         $map = [];
         foreach ($expected as $col) {
             $idx = array_search($col, $header, true);
