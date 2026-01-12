@@ -4,21 +4,8 @@ declare(strict_types=1);
 /**
  * app/db.php
  * Conexión centralizada PDO + helpers + compatibilidad legacy.
- *
- * Uso moderno:
- * $rows = db_all("SELECT * FROM tabla WHERE id=?", [$id]);
- * $row  = db_row("SELECT * FROM tabla WHERE id=?", [$id]);
- * $val  = db_val("SELECT COUNT(*) FROM tabla");
- * dbq("UPDATE tabla SET x=? WHERE id=?", [$x, $id]);
- * $pdo  = db_pdo(); // o usar $GLOBALS['pdo']
- *
- * Legacy cubierto:
- * db(), db_one(), db_first(), db_scalar(), db_conn()
  */
 
-/* =========================
- * Configuración por defecto
- * ========================= */
 const DB_DEFAULT = [
     'host' => '89.117.146.27',
     'name' => 'assistpro_etl_fc_dev',
@@ -29,11 +16,6 @@ const DB_DEFAULT = [
     'timezone' => '-06:00', // CDMX
 ];
 
-/**
- * Lee configuración desde:
- * - app/db.local.ini (no versionado)
- * - variables de entorno
- */
 function db_config(): array
 {
     $cfg = DB_DEFAULT;
@@ -66,9 +48,6 @@ function db_config(): array
     return $cfg;
 }
 
-/* =========================
- * Conexión PDO (singleton)
- * ========================= */
 function db_pdo(): PDO
 {
     static $pdo = null;
@@ -98,8 +77,8 @@ function db_pdo(): PDO
         ]
     );
 
-    // Ajustes de sesión MySQL
-    $pdo->exec("SET NAMES {$cfg['charset']}");
+    // Ajustes de sesión MySQL (blindaje collation para evitar 1267)
+    $pdo->exec("SET NAMES {$cfg['charset']} COLLATE utf8mb4_unicode_ci");
     $tz = $cfg['timezone'] ?: '+00:00';
     $pdo->exec("SET time_zone = '{$tz}'");
     $pdo->exec("SET collation_connection = 'utf8mb4_unicode_ci'");

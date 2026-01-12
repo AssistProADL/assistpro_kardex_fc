@@ -6,9 +6,10 @@ require_once __DIR__ . '/../../app/db.php';
 
 $pdo = db_pdo();
 
-function jexit($ok, $msg = '', $extra = []) {
+function jexit($ok, $msg = '', $extra = [])
+{
     echo json_encode(array_merge([
-        'ok' => (bool)$ok,
+        'ok' => (bool) $ok,
         'msg' => $msg
     ], $extra), JSON_UNESCAPED_UNICODE);
     exit;
@@ -20,7 +21,7 @@ try {
 
     if ($action === 'empresas') {
         $sql = "SELECT DISTINCT IFNULL(IdEmpresa,'') AS IdEmpresa
-                FROM FormasPag
+                FROM formaspag
                 WHERE IFNULL(IdEmpresa,'') <> ''
                 ORDER BY IdEmpresa";
         $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
@@ -28,32 +29,34 @@ try {
     }
 
     if ($action === 'get') {
-        $id = (int)($_GET['id'] ?? 0);
-        if ($id <= 0) jexit(false, 'ID inválido');
+        $id = (int) ($_GET['id'] ?? 0);
+        if ($id <= 0)
+            jexit(false, 'ID inválido');
 
         $stmt = $pdo->prepare("SELECT IdFpag, Forma, Clave, Status, IFNULL(IdEmpresa,'') AS IdEmpresa
-                               FROM FormasPag
+                               FROM formaspag
                                WHERE IdFpag = ?");
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$row) jexit(false, 'Registro no encontrado');
+        if (!$row)
+            jexit(false, 'Registro no encontrado');
         jexit(true, '', ['data' => $row]);
     }
 
     if ($action === 'save') {
-        $id        = (int)($_POST['IdFpag'] ?? 0);
-        $Forma     = trim((string)($_POST['Forma'] ?? ''));
-        $Clave     = trim((string)($_POST['Clave'] ?? ''));
-        $IdEmpresa = trim((string)($_POST['IdEmpresa'] ?? ''));
-        $Status    = (int)($_POST['Status'] ?? 1);
+        $id = (int) ($_POST['IdFpag'] ?? 0);
+        $Forma = trim((string) ($_POST['Forma'] ?? ''));
+        $Clave = trim((string) ($_POST['Clave'] ?? ''));
+        $IdEmpresa = trim((string) ($_POST['IdEmpresa'] ?? ''));
+        $Status = (int) ($_POST['Status'] ?? 1);
 
         if ($Forma === '' || $Clave === '') {
             jexit(false, 'Forma y Clave son obligatorios.');
         }
 
         if ($id > 0) {
-            $sql = "UPDATE FormasPag
+            $sql = "UPDATE formaspag
                     SET Forma = :Forma,
                         Clave = :Clave,
                         IdEmpresa = :IdEmpresa,
@@ -69,7 +72,7 @@ try {
             ]);
             jexit(true, 'Actualizado correctamente.');
         } else {
-            $sql = "INSERT INTO FormasPag (Forma, Clave, Status, IdEmpresa)
+            $sql = "INSERT INTO formaspag (Forma, Clave, Status, IdEmpresa)
                     VALUES (:Forma, :Clave, :Status, :IdEmpresa)";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
@@ -78,32 +81,35 @@ try {
                 ':Status' => $Status,
                 ':IdEmpresa' => $IdEmpresa
             ]);
-            jexit(true, 'Creado correctamente.', ['id' => (int)$pdo->lastInsertId()]);
+            jexit(true, 'Creado correctamente.', ['id' => (int) $pdo->lastInsertId()]);
         }
     }
 
     if ($action === 'toggle') {
-        $id = (int)($_POST['id'] ?? 0);
-        if ($id <= 0) jexit(false, 'ID inválido');
+        $id = (int) ($_POST['id'] ?? 0);
+        if ($id <= 0)
+            jexit(false, 'ID inválido');
 
-        $stmt = $pdo->prepare("SELECT Status FROM FormasPag WHERE IdFpag = ?");
+        $stmt = $pdo->prepare("SELECT Status FROM formaspag WHERE IdFpag = ?");
         $stmt->execute([$id]);
         $cur = $stmt->fetchColumn();
-        if ($cur === false) jexit(false, 'Registro no encontrado');
+        if ($cur === false)
+            jexit(false, 'Registro no encontrado');
 
-        $new = ((int)$cur === 1) ? 0 : 1;
+        $new = ((int) $cur === 1) ? 0 : 1;
 
-        $upd = $pdo->prepare("UPDATE FormasPag SET Status = ? WHERE IdFpag = ?");
+        $upd = $pdo->prepare("UPDATE formaspag SET Status = ? WHERE IdFpag = ?");
         $upd->execute([$new, $id]);
 
         jexit(true, $new === 1 ? 'Recuperado correctamente.' : 'Inactivado correctamente.', ['Status' => $new]);
     }
 
     if ($action === 'delete') {
-        $id = (int)($_POST['id'] ?? 0);
-        if ($id <= 0) jexit(false, 'ID inválido');
+        $id = (int) ($_POST['id'] ?? 0);
+        if ($id <= 0)
+            jexit(false, 'ID inválido');
 
-        $del = $pdo->prepare("DELETE FROM FormasPag WHERE IdFpag = ?");
+        $del = $pdo->prepare("DELETE FROM formaspag WHERE IdFpag = ?");
         $del->execute([$id]);
 
         jexit(true, 'Eliminado (Hard Delete) correctamente.');
@@ -122,11 +128,13 @@ try {
 
         $tmp = $_FILES['file']['tmp_name'];
         $fh = fopen($tmp, 'r');
-        if (!$fh) jexit(false, 'No se pudo leer el archivo.');
+        if (!$fh)
+            jexit(false, 'No se pudo leer el archivo.');
 
         $pdo->beginTransaction();
 
-        $ok = 0; $err = 0;
+        $ok = 0;
+        $err = 0;
         $errors = [];
 
         // Leer primer renglón (puede ser header)
@@ -137,7 +145,7 @@ try {
         }
 
         // Detectar header
-        $lower = array_map(fn($x)=> strtolower(trim((string)$x)), $first);
+        $lower = array_map(fn($x) => strtolower(trim((string) $x)), $first);
         $hasHeader = in_array('clave', $lower, true) || in_array('forma', $lower, true);
 
         if (!$hasHeader) {
@@ -146,15 +154,15 @@ try {
         }
 
         // Upsert por (Clave + IdEmpresa) para evitar duplicados operativos
-        $sqlFind = "SELECT IdFpag FROM FormasPag WHERE Clave = ? AND IFNULL(IdEmpresa,'') = ?";
+        $sqlFind = "SELECT IdFpag FROM formaspag WHERE Clave = ? AND IFNULL(IdEmpresa,'') = ?";
         $stmtFind = $pdo->prepare($sqlFind);
 
-        $sqlUpd = "UPDATE FormasPag
+        $sqlUpd = "UPDATE formaspag
                    SET Forma = ?, Status = ?
                    WHERE IdFpag = ?";
         $stmtUpd = $pdo->prepare($sqlUpd);
 
-        $sqlIns = "INSERT INTO FormasPag (Forma, Clave, Status, IdEmpresa)
+        $sqlIns = "INSERT INTO formaspag (Forma, Clave, Status, IdEmpresa)
                    VALUES (?,?,?,?)";
         $stmtIns = $pdo->prepare($sqlIns);
 
@@ -164,10 +172,10 @@ try {
 
             // Permitir CSV con 4 columnas: Clave,Forma,IdEmpresa,Status
             // Si vienen más columnas, tomamos las primeras 4
-            $Clave     = trim((string)($row[0] ?? ''));
-            $Forma     = trim((string)($row[1] ?? ''));
-            $IdEmpresa = trim((string)($row[2] ?? ''));
-            $Status    = trim((string)($row[3] ?? '1'));
+            $Clave = trim((string) ($row[0] ?? ''));
+            $Forma = trim((string) ($row[1] ?? ''));
+            $IdEmpresa = trim((string) ($row[2] ?? ''));
+            $Status = trim((string) ($row[3] ?? '1'));
 
             if ($Clave === '' || $Forma === '') {
                 $err++;
@@ -175,14 +183,14 @@ try {
                 continue;
             }
 
-            $StatusInt = ((string)$Status === '0') ? 0 : 1;
+            $StatusInt = ((string) $Status === '0') ? 0 : 1;
 
             try {
                 $stmtFind->execute([$Clave, $IdEmpresa]);
                 $id = $stmtFind->fetchColumn();
 
                 if ($id) {
-                    $stmtUpd->execute([$Forma, $StatusInt, (int)$id]);
+                    $stmtUpd->execute([$Forma, $StatusInt, (int) $id]);
                 } else {
                     $stmtIns->execute([$Forma, $Clave, $StatusInt, $IdEmpresa]);
                 }
@@ -214,18 +222,19 @@ try {
     // =========================
     if ($action === 'list') {
 
-        $draw  = (int)($_GET['draw'] ?? 1);
-        $start = (int)($_GET['start'] ?? 0);
-        $len   = (int)($_GET['length'] ?? 25);
-        if ($len > 25) $len = 25; // max 25 como estándar AssistPro
+        $draw = (int) ($_GET['draw'] ?? 1);
+        $start = (int) ($_GET['start'] ?? 0);
+        $len = (int) ($_GET['length'] ?? 25);
+        if ($len > 25)
+            $len = 25; // max 25 como estándar AssistPro
 
-        $search = trim((string)($_GET['search']['value'] ?? ''));
+        $search = trim((string) ($_GET['search']['value'] ?? ''));
 
-        $fEmpresa = trim((string)($_GET['fEmpresa'] ?? ''));
-        $fStatus  = trim((string)($_GET['fStatus'] ?? ''));
+        $fEmpresa = trim((string) ($_GET['fEmpresa'] ?? ''));
+        $fStatus = trim((string) ($_GET['fStatus'] ?? ''));
 
-        $orderCol = (int)($_GET['order'][0]['column'] ?? 1);
-        $orderDir = strtolower((string)($_GET['order'][0]['dir'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
+        $orderCol = (int) ($_GET['order'][0]['column'] ?? 1);
+        $orderDir = strtolower((string) ($_GET['order'][0]['dir'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
 
         $cols = [
             1 => 'IdFpag',
@@ -245,7 +254,7 @@ try {
         }
         if ($fStatus !== '' && ($fStatus === '0' || $fStatus === '1')) {
             $where[] = "Status = :Status";
-            $params[':Status'] = (int)$fStatus;
+            $params[':Status'] = (int) $fStatus;
         }
         if ($search !== '') {
             $where[] = "(Forma LIKE :q OR Clave LIKE :q OR IFNULL(IdEmpresa,'') LIKE :q)";
@@ -254,20 +263,21 @@ try {
 
         $whereSql = $where ? (" WHERE " . implode(" AND ", $where)) : "";
 
-        $total = (int)$pdo->query("SELECT COUNT(*) FROM FormasPag")->fetchColumn();
+        $total = (int) $pdo->query("SELECT COUNT(*) FROM formaspag")->fetchColumn();
 
-        $stmtCnt = $pdo->prepare("SELECT COUNT(*) FROM FormasPag {$whereSql}");
+        $stmtCnt = $pdo->prepare("SELECT COUNT(*) FROM formaspag {$whereSql}");
         $stmtCnt->execute($params);
-        $filtered = (int)$stmtCnt->fetchColumn();
+        $filtered = (int) $stmtCnt->fetchColumn();
 
         $sql = "SELECT IdFpag, Forma, Clave, Status, IFNULL(IdEmpresa,'') AS IdEmpresa
-                FROM FormasPag
+                FROM formaspag
                 {$whereSql}
                 ORDER BY {$orderBy} {$orderDir}
                 LIMIT :start, :len";
         $stmt = $pdo->prepare($sql);
 
-        foreach ($params as $k => $v) $stmt->bindValue($k, $v);
+        foreach ($params as $k => $v)
+            $stmt->bindValue($k, $v);
         $stmt->bindValue(':start', $start, PDO::PARAM_INT);
         $stmt->bindValue(':len', $len, PDO::PARAM_INT);
         $stmt->execute();
@@ -286,6 +296,7 @@ try {
     jexit(false, 'Acción no reconocida.');
 
 } catch (Throwable $e) {
-    if ($pdo && $pdo->inTransaction()) $pdo->rollBack();
+    if ($pdo && $pdo->inTransaction())
+        $pdo->rollBack();
     jexit(false, 'Error: ' . $e->getMessage());
 }

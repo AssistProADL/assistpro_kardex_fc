@@ -1,3 +1,4 @@
+ 
 <?php
 // /public/ingresos/recepcion_materiales.php
 include __DIR__ . '/../bi/_menu_global.php';
@@ -33,14 +34,12 @@ include __DIR__ . '/../bi/_menu_global.php';
             <option value="">Seleccione</option>
           </select>
         </div>
-
         <div class="col-md-4">
           <label class="form-label mb-0">Almacén</label>
           <select id="almacen" class="form-select form-select-sm">
-            <option value="">[Seleccione un almacén]</option>
+            <option value="">Seleccione</option>
           </select>
         </div>
-
         <div class="col-md-4">
           <label class="form-label mb-0">Zona de Recepción *</label>
           <select id="zona_recepcion" class="form-select form-select-sm">
@@ -48,24 +47,19 @@ include __DIR__ . '/../bi/_menu_global.php';
           </select>
         </div>
 
-        <div class="col-md-6">
+        <div class="col-md-4">
           <label class="form-label mb-0">Zona de Almacenaje destino</label>
           <select id="zona_destino" class="form-select form-select-sm">
             <option value="">Seleccione Zona destino</option>
           </select>
         </div>
-
-        <div class="col-md-6">
+        <div class="col-md-4">
           <label class="form-label mb-0">BL destino</label>
           <select id="bl_destino" class="form-select form-select-sm">
             <option value="">Seleccione BL destino</option>
           </select>
         </div>
-      </div>
 
-      <hr class="my-2">
-
-      <div class="row g-2">
         <div class="col-md-4">
           <label class="form-label mb-0">Proveedor</label>
           <select id="proveedor" class="form-select form-select-sm">
@@ -82,35 +76,35 @@ include __DIR__ . '/../bi/_menu_global.php';
 
         <div class="col-md-4">
           <label class="form-label mb-0">Folio de Recepción RL</label>
-          <input id="folio_rl" class="form-control form-control-sm" placeholder="">
+          <input id="folio_rl" class="form-control form-control-sm" />
         </div>
 
-        <div class="col-md-6">
+        <div class="col-md-4">
           <label class="form-label mb-0">Folio Recepción Cross Docking</label>
-          <input id="folio_cd" class="form-control form-control-sm" placeholder="">
+          <input id="folio_cd" class="form-control form-control-sm" />
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-4">
           <label class="form-label mb-0">Factura / Remisión</label>
-          <input id="factura" class="form-control form-control-sm" placeholder="">
+          <input id="factura" class="form-control form-control-sm" />
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-4">
           <label class="form-label mb-0">Proyecto</label>
-          <input id="proyecto" class="form-control form-control-sm" placeholder="Seleccione">
+          <select id="proyecto" class="form-select form-select-sm">
+            <option value="">Seleccione</option>
+          </select>
         </div>
       </div>
 
       <hr class="my-3">
 
       <div class="d-flex justify-content-end mb-2">
-        <button id="btnAdd" class="btn btn-secondary btn-sm">
-          + Agregar Contenedor o Pallet
-        </button>
+        <button id="btnAdd" class="btn btn-outline-secondary btn-sm">+ Agregar Contenedor o Pallet</button>
       </div>
 
       <div class="table-responsive">
-        <table class="table table-sm table-bordered" style="font-size:10px;">
+        <table class="table table-sm table-bordered align-middle mb-0">
           <thead class="table-light">
           <tr>
             <th>Usuario</th>
@@ -126,7 +120,7 @@ include __DIR__ . '/../bi/_menu_global.php';
             <th>LP Contenedor</th>
             <th>Pallet</th>
             <th>LP Pallet</th>
-            <th style="width:60px;">Acciones</th>
+            <th style="width:80px;">Acciones</th>
           </tr>
           </thead>
           <tbody>
@@ -155,7 +149,7 @@ include __DIR__ . '/../bi/_menu_global.php';
       <hr class="my-3">
 
       <div class="table-responsive">
-        <table class="table table-sm table-bordered" id="tblRecibido" style="font-size:10px;">
+        <table id="tblRecibido" class="table table-sm table-striped table-bordered align-middle">
           <thead class="table-light">
           <tr>
             <th>Estatus</th>
@@ -177,9 +171,9 @@ include __DIR__ . '/../bi/_menu_global.php';
         </table>
       </div>
 
-      <div class="mt-2 d-flex gap-2">
+      <div class="mt-2">
         <button id="btnGuardar" class="btn btn-success btn-sm">Guardar</button>
-        <button class="btn btn-outline-secondary btn-sm" onclick="location.href='ingresos_admin.php'">Cerrar</button>
+        <button class="btn btn-secondary btn-sm" onclick="location.href='ingresos_admin.php'">Cerrar</button>
       </div>
 
     </div>
@@ -187,9 +181,13 @@ include __DIR__ . '/../bi/_menu_global.php';
 </div>
 
 <script>
-// ✅ RUTAS REALES (según tu estructura /public/api/recepcion/*)
-const API = '../api/recepcion/recepcion_api.php';
-const API_EMPRESAS = '../api/empresas_api.php';
+// ✅ API correcto: /api/recepcion/recepcion_api.php
+const PROJECT_BASE = window.location.pathname.includes('/public/')
+  ? window.location.pathname.split('/public/')[0]
+  : '';
+
+const API = PROJECT_BASE + '/public/api/recepcion/recepcion_api.php';
+const API_EMPRESAS = PROJECT_BASE + '/public/api/empresas_api.php';
 
 function qs(id){ return document.getElementById(id); }
 function val(id){ return (qs(id).value||'').trim(); }
@@ -201,6 +199,7 @@ async function apiGet(action, params={}){
   const r = await fetch(u.toString());
   return await r.json();
 }
+
 async function apiPost(action, payload){
   const r = await fetch(API+'?action='+encodeURIComponent(action), {
     method:'POST',
@@ -217,18 +216,22 @@ function fillSelect(sel, rows, map){
     o.value=map.placeholder.value; o.textContent=map.placeholder.text;
     sel.appendChild(o);
   }
-  (rows||[]).forEach(x=>{
+  (rows||[]).forEach(r=>{
     const o=document.createElement('option');
-    o.value = (x[map.value] ?? '');
-    o.textContent = (x[map.text] ?? '');
+    o.value = r[map.value];
+    o.textContent = r[map.text];
     sel.appendChild(o);
   });
 }
 
+function getTipo(){
+  const r = document.querySelector('input[name="tipo"]:checked');
+  return r ? r.value : 'OC';
+}
+
 async function loadEmpresas(){
-  // empresas_api.php debe responder JSON. Si responde HTML (404/login) te dará "token <"
   const u = new URL(API_EMPRESAS, window.location.href);
-  u.searchParams.set('action','list');
+  u.searchParams.set('action','empresas');
   const r = await fetch(u.toString());
   const j = await r.json();
   if(!j.ok) return alert(j.error||'Error cargando empresas');
@@ -236,23 +239,32 @@ async function loadEmpresas(){
 }
 
 async function loadAlmacenes(){
-  const j = await apiGet('almacenes');
-  if(!j.ok) return alert(j.error||'Error');
-  fillSelect(qs('almacen'), j.data, {value:'id', text:'nombre', placeholder:{value:'',text:'[Seleccione un almacén]'}});
-  if(qs('almacen').options.length>1){
-    qs('almacen').selectedIndex = 1;
-    await onAlmacenChange();
-  }
+  const j = await apiGet('almacenes', {});
+  if(!j.ok) return alert(j.error||'Error cargando almacenes');
+  fillSelect(qs('almacen'), j.data, {value:'id', text:'nombre', placeholder:{value:'',text:'Seleccione'}});
 }
 
 async function loadProveedores(){
-  const j = await apiGet('proveedores');
-  if(!j.ok) return;
+  const j = await apiGet('proveedores', {});
+  if(!j.ok) return alert(j.error||'Error cargando proveedores');
   fillSelect(qs('proveedor'), j.data, {value:'id', text:'nombre', placeholder:{value:'',text:'Seleccione'}});
 }
 
-function getTipo(){
-  return document.querySelector('input[name="tipo"]:checked')?.value || 'OC';
+async function loadOCs(){
+  const tipo = getTipo();
+  if(tipo !== 'OC'){
+    fillSelect(qs('oc_folio'), [], {value:'folio', text:'folio', placeholder:{value:'',text:'N/A'}});
+    return;
+  }
+  const prov = val('proveedor');
+  const alm = val('almacen');
+  if(!alm){
+    fillSelect(qs('oc_folio'), [], {value:'folio', text:'folio', placeholder:{value:'',text:'Seleccione una OC'}});
+    return;
+  }
+  const j = await apiGet('ocs', {almacen: alm, proveedor: prov});
+  if(!j.ok) return alert(j.error||'Error');
+  fillSelect(qs('oc_folio'), j.data, {value:'folio', text:'folio', placeholder:{value:'',text:'Seleccione una OC'}});
 }
 
 async function loadZonas(){
@@ -262,10 +274,15 @@ async function loadZonas(){
     fillSelect(qs('zona_destino'), [], {value:'zona',text:'zona', placeholder:{value:'',text:'Seleccione Zona destino'}});
     return;
   }
-  const j = await apiGet('zonas', {almacen: alm});
-  if(!j.ok) return alert(j.error||'Error');
-  fillSelect(qs('zona_recepcion'), j.data, {value:'zona', text:'zona', placeholder:{value:'',text:'Seleccione una Zona de Recepción'}});
-  fillSelect(qs('zona_destino'), j.data, {value:'zona', text:'zona', placeholder:{value:'',text:'Seleccione Zona destino'}});
+
+  // ✅ acciones correctas en API
+  const jr = await apiGet('zonas_recepcion', {almacen: alm});
+  if(!jr.ok) return alert(jr.error||'Error');
+  const jd = await apiGet('zonas_destino', {almacen: alm});
+  if(!jd.ok) return alert(jd.error||'Error');
+
+  fillSelect(qs('zona_recepcion'), jr.data, {value:'zona', text:'zona', placeholder:{value:'',text:'Seleccione una Zona de Recepción'}});
+  fillSelect(qs('zona_destino'), jd.data, {value:'zona', text:'zona', placeholder:{value:'',text:'Seleccione Zona destino'}});
 }
 
 async function loadBL(){
@@ -275,24 +292,10 @@ async function loadBL(){
     fillSelect(qs('bl_destino'), [], {value:'bl', text:'bl', placeholder:{value:'',text:'Seleccione BL destino'}});
     return;
   }
-  const j = await apiGet('bl', {almacen: alm, zona: zona});
+  // ✅ acción correcta en API
+  const j = await apiGet('bl_destino', {almacen: alm, zona: zona});
   if(!j.ok) return alert(j.error||'Error');
   fillSelect(qs('bl_destino'), j.data, {value:'bl', text:'bl', placeholder:{value:'',text:'Seleccione BL destino'}});
-}
-
-async function loadOCs(){
-  const tipo = getTipo();
-  const alm = val('almacen');
-  const prov = val('proveedor');
-  qs('oc_folio').disabled = (tipo!=='OC');
-
-  if(tipo!=='OC'){
-    fillSelect(qs('oc_folio'), [], {value:'folio',text:'folio', placeholder:{value:'',text:'N/A'}});
-    return;
-  }
-  const j = await apiGet('ocs', {almacen: alm, proveedor: prov});
-  if(!j.ok) return alert(j.error||'Error');
-  fillSelect(qs('oc_folio'), j.data, {value:'folio', text:'folio', placeholder:{value:'',text:'Seleccione una OC'}});
 }
 
 async function onOCChange(){
@@ -300,7 +303,7 @@ async function onOCChange(){
   if(!folio) return;
   const j = await apiGet('oc_detalle', {folio});
   if(!j.ok) return alert(j.error||'Error');
-  // si tu API devuelve proveedor, se puede setear aquí (opcional)
+  // opcional: auto-llenar líneas si tu API devuelve detalle
 }
 
 function addLineaFromInputs(){
@@ -321,9 +324,10 @@ function addLineaFromInputs(){
     <td>${(val('lp_pallet')||'')}</td>
     <td>${(val('zona_recepcion')||'')}</td>
     <td>${now}</td>
-    <td class="text-center"><button class="btn btn-danger btn-sm">🗑</button></td>
+    <td class="text-center"><button class="btn btn-outline-danger btn-sm btnDel">X</button></td>
   `;
-  tr.querySelector('button').addEventListener('click', ()=>tr.remove());
+
+  tr.querySelector('.btnDel').addEventListener('click', ()=> tr.remove());
   tb.appendChild(tr);
 }
 
@@ -344,47 +348,8 @@ async function onGuardar(){
     folio_cd: val('folio_cd'),
     factura: val('factura'),
     proyecto: val('proyecto'),
+    usuario: val('usuario') || 'WMS',
     lineas: []
   };
 
-  [...tb.querySelectorAll('tr')].forEach(tr=>{
-    const tds = tr.querySelectorAll('td');
-    payload.lineas.push({
-      cve_articulo: tds[2].innerText.trim(),
-      cve_lote: tds[3].innerText.trim(),
-      caducidad: tds[4].innerText.trim(),
-      cantidad: parseFloat(tds[5].innerText.trim()||'0'),
-      contenedor: tds[6].innerText.trim(),
-      lp_contenedor: tds[7].innerText.trim(),
-      pallet: tds[8].innerText.trim(),
-      lp_pallet: tds[9].innerText.trim()
-    });
-  });
-
-  const j = await apiPost('guardar_recepcion', payload);
-  if(!j.ok){ alert((j.error||'Error') + (j.detail?(' | '+j.detail):'')); return; }
-  alert('Recepción guardada correctamente');
-  tb.innerHTML = '';
-}
-
-async function onTipoChange(){ await loadOCs(); }
-async function onAlmacenChange(){ await loadZonas(); await loadOCs(); }
-
-document.addEventListener('DOMContentLoaded', async ()=>{
-  await loadEmpresas();
-  await loadAlmacenes();
-  await loadProveedores();
-
-  document.querySelectorAll('input[name="tipo"]').forEach(r=>r.addEventListener('change', onTipoChange));
-  qs('almacen').addEventListener('change', onAlmacenChange);
-  qs('zona_destino').addEventListener('change', loadBL);
-  qs('proveedor').addEventListener('change', loadOCs);
-  qs('oc_folio').addEventListener('change', onOCChange);
-
-  qs('btnAdd').addEventListener('click', (e)=>{ e.preventDefault(); /* placeholder modal */ });
-  qs('btnRecibir').addEventListener('click', (e)=>{ e.preventDefault(); addLineaFromInputs(); });
-  qs('btnGuardar').addEventListener('click', (e)=>{ e.preventDefault(); onGuardar(); });
-});
-</script>
-
-<?php include __DIR__ . '/../bi/_menu_global_end.php'; ?>
+  [...tb.children].forEach(tr=>

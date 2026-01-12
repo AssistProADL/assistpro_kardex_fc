@@ -5,146 +5,217 @@ $pdo = db_pdo();
 
 $action = $_POST['action'] ?? $_GET['action'] ?? 'list';
 
-function s($v){ $v = trim((string)$v); return $v==='' ? null : $v; }
-function i1($v){ return ($v==='' || $v===null) ? 1 : (int)$v; }
-function i0($v){ $v = trim((string)$v); return $v==='' ? 0 : (int)$v; }
+function s($v)
+{
+  $v = trim((string) $v);
+  return $v === '' ? null : $v;
+}
+function i1($v)
+{
+  return ($v === '' || $v === null) ? 1 : (int) $v;
+}
+function i0($v)
+{
+  $v = trim((string) $v);
+  return $v === '' ? 0 : (int) $v;
+}
 
-function tipo_guardar($v){
-  $v = trim((string)$v);
+function tipo_guardar($v)
+{
+  $v = trim((string) $v);
   // En este catálogo Tipo_Cat es fijo A (Ajustes)
   return 'A';
 }
 
-function regla_dev_proveedor($v){
+function regla_dev_proveedor($v)
+{
   // UI manda 'DP' (Devolver Proveedor) o 'CI' (Cierre Incidencia)
-  $v = trim((string)$v);
-  if($v==='DP') return 1;
-  if($v==='CI') return 0;
+  $v = trim((string) $v);
+  if ($v === 'DP')
+    return 1;
+  if ($v === 'CI')
+    return 0;
   // si ya viene 0/1, respetar
-  if($v==='1' || $v===1) return 1;
+  if ($v === '1' || $v === 1)
+    return 1;
   return 0;
 }
 
-function validar($data){
-  $errs=[];
-  $mot = trim((string)($data['Des_Motivo'] ?? ''));
-  if($mot==='') $errs[]='Des_Motivo es obligatorio';
+function validar($data)
+{
+  $errs = [];
+  $mot = trim((string) ($data['Des_Motivo'] ?? ''));
+  if ($mot === '')
+    $errs[] = 'Des_Motivo es obligatorio';
   return $errs;
 }
 
 /* =========================
    EXPORT CSV
 ========================= */
-if($action==='export_csv'){
+if ($action === 'export_csv') {
   $tipo = $_GET['tipo'] ?? 'layout';
   header('Content-Type: text/csv; charset=utf-8');
-  header('Content-Disposition: attachment; filename=ajustes_incidencias_'.$tipo.'.csv');
-  $out = fopen('php://output','w');
+  header('Content-Disposition: attachment; filename=ajustes_incidencias_' . $tipo . '.csv');
+  $out = fopen('php://output', 'w');
 
-  $headers = ['id','Tipo_Cat','Des_Motivo','dev_proveedor','Activo'];
-  fputcsv($out,$headers);
+  // Human Readable Headers
+  $headers = ['ID', 'Tipo', 'Motivo', 'Clasificación', 'Activo'];
+  fputcsv($out, $headers);
 
-  if($tipo==='datos'){
-    $sql = "SELECT ".implode(',',$headers)." FROM c_motivo WHERE IFNULL(Tipo_Cat,'A')='A' ORDER BY id";
-    foreach($pdo->query($sql) as $row) fputcsv($out,$row);
+  if ($tipo === 'datos') {
+    $sql = "SELECT id, Tipo_Cat, Des_Motivo, dev_proveedor, Activo FROM c_motivo WHERE IFNULL(Tipo_Cat,'A')='A' ORDER BY id";
+    foreach ($pdo->query($sql) as $row) {
+      // Map values to human readable
+      $clasif = ($row['dev_proveedor'] == 1) ? 'Devolver a Proveedor' : 'Cierre de Incidencia';
+      $activo = ($row['Activo'] == 1) ? 'Sí' : 'No';
+
+      fputcsv($out, [
+        $row['id'],
+        $row['Tipo_Cat'],
+        $row['Des_Motivo'],
+        $clasif,
+        $activo
+      ]);
+    }
   }
-  fclose($out); exit;
+  fclose($out);
+  exit;
 }
 
 /* =========================
    IMPORT CSV (UPSERT por (Tipo_Cat + Des_Motivo))
 ========================= */
-if($action==='import_csv'){
-  if(!isset($_FILES['file'])){ echo json_encode(['error'=>'Archivo no recibido']); exit; }
-  $fh = fopen($_FILES['file']['tmp_name'],'r');
-  if(!$fh){ echo json_encode(['error'=>'No se pudo leer el archivo']); exit; }
+if ($action === 'import_csv') {
+  if (!isset($_FILES['file'])) {
+    echo json_encode(['error' => 'Archivo no recibido']);
+    exit;
+  }
+  $fh = fopen($_FILES['file']['tmp_name'], 'r');
+  if (!$fh) {
+    echo json_encode(['error' => 'No se pudo leer el archivo']);
+    exit;
+  }
+
+  // Check BOM
+  $bom = fread($fh, 3);
+  if ($bom !== "\xEF\xBB\xBF") {
+    rewind($fh);
+  }
 
   $headers = fgetcsv($fh);
-  $esperadas = ['id','Tipo_Cat','Des_Motivo','dev_proveedor','Activo'];
-  if($headers !== $esperadas){
-    echo json_encode(['error'=>'Layout incorrecto','esperado'=>$esperadas,'recibido'=>$headers]); exit;
+  // Normalize headers (trim, lowercase check if needed, but we expect precise)
+
+  // Mapping expected headers
+  $map = [
+    'ID' => 'id',
+    'Tipo' => 'Tipo_Cat',
+    'Motivo' => 'Des_Motivo',
+    'Clasificación' => 'dev_proveedor',
+    'Activo' => 'Activo'
+  ];
+
+  // Verify mandatory headers exist
+  $missing = [];
+  foreach (['Motivo', 'Clasificación'] as $req) {
+    if (!in_array($req, $headers))
+      $missing[] = $req;
+  }
+
+  if (!empty($missing)) {
+    echo json_encode(['error' => 'Faltan columnas requeridas: ' . implode(', ', $missing)]);
+    exit;
   }
 
   $stFind = $pdo->prepare("SELECT id FROM c_motivo WHERE Tipo_Cat=? AND Des_Motivo=? LIMIT 1");
-  $stIns  = $pdo->prepare("
-    INSERT INTO c_motivo (Tipo_Cat, Des_Motivo, dev_proveedor, Activo)
-    VALUES (?,?,?,?)
-  ");
-  $stUpd  = $pdo->prepare("
-    UPDATE c_motivo SET Tipo_Cat=?, Des_Motivo=?, dev_proveedor=?, Activo=?
-    WHERE id=? LIMIT 1
-  ");
+  $stIns = $pdo->prepare("INSERT INTO c_motivo (Tipo_Cat, Des_Motivo, dev_proveedor, Activo) VALUES (?,?,?,?)");
+  $stUpd = $pdo->prepare("UPDATE c_motivo SET Tipo_Cat=?, Des_Motivo=?, dev_proveedor=?, Activo=? WHERE id=? LIMIT 1");
 
-  $rows_ok=0; $rows_err=0; $errores=[];
+  $rows_ok = 0;
+  $rows_err = 0;
+  $errores = [];
   $pdo->beginTransaction();
-  try{
-    $linea=1;
-    while(($r=fgetcsv($fh))!==false){
+  try {
+    $linea = 1;
+    while (($r = fgetcsv($fh)) !== false) {
       $linea++;
-      if(!$r || count($r)<count($esperadas)){
-        $rows_err++; $errores[]=['fila'=>$linea,'motivo'=>'Fila incompleta']; continue;
+      // Skip empty lines
+      if (!$r || (count($r) === 1 && is_null($r[0])))
+        continue;
+
+      $rowMap = array_combine($headers, $r);
+
+      // Extract values
+      $motivo = trim($rowMap['Motivo'] ?? '');
+      if ($motivo === '') {
+        $rows_err++;
+        $errores[] = ['fila' => $linea, 'motivo' => 'Motivo vacío'];
+        continue;
       }
-      $data = array_combine($esperadas,$r);
 
-      // Normalizamos: Tipo_Cat siempre 'A'
-      $tipoCat = 'A';
-      $data['Tipo_Cat'] = 'A';
+      $tipoCat = 'A'; // Fixed
 
-      $errs = validar($data);
-      if($errs){ $rows_err++; $errores[]=['fila'=>$linea,'motivo'=>implode('; ',$errs)]; continue; }
+      // Parse Clasificación
+      $clRaw = trim($rowMap['Clasificación'] ?? '');
+      $devProv = 0; // Default Cierre
+      if (stripos($clRaw, 'Devolver') !== false || stripos($clRaw, 'Proveedor') !== false || $clRaw == '1' || $clRaw == 'DP') {
+        $devProv = 1;
+      }
 
-      $motivo = trim((string)$data['Des_Motivo']);
+      // Parse Activo
+      $actRaw = trim($rowMap['Activo'] ?? 'Sí');
+      $activo = (stripos($actRaw, 'No') !== false || $actRaw == '0') ? 0 : 1;
 
       $stFind->execute([$tipoCat, $motivo]);
-      $id = (int)($stFind->fetchColumn() ?: 0);
+      $id = (int) ($stFind->fetchColumn() ?: 0);
 
-      $dev = i0($data['dev_proveedor'] ?? 0);
-      $act = i1($data['Activo'] ?? 1);
-
-      if($id>0){
-        $stUpd->execute([$tipoCat, $motivo, $dev, $act, $id]);
-      }else{
-        $stIns->execute([$tipoCat, $motivo, $dev, $act]);
+      if ($id > 0) {
+        $stUpd->execute([$tipoCat, $motivo, $devProv, $activo, $id]);
+      } else {
+        $stIns->execute([$tipoCat, $motivo, $devProv, $activo]);
       }
       $rows_ok++;
     }
 
     $pdo->commit();
-    echo json_encode(['success'=>true,'rows_ok'=>$rows_ok,'rows_err'=>$rows_err,'errores'=>$errores]); exit;
-  }catch(Throwable $e){
+    echo json_encode(['success' => true, 'rows_ok' => $rows_ok, 'rows_err' => $rows_err, 'errores' => $errores]);
+    exit;
+  } catch (Throwable $e) {
     $pdo->rollBack();
-    echo json_encode(['error'=>$e->getMessage()]); exit;
+    echo json_encode(['error' => $e->getMessage()]);
+    exit;
   }
 }
 
 /* =========================
    LIST (paginado server-side)
 ========================= */
-if($action==='list'){
-  $inactivos = (int)($_GET['inactivos'] ?? 0);
-  $q = trim((string)($_GET['q'] ?? ''));
-  $scope = trim((string)($_GET['scope'] ?? '')); // '' | 'DP' | 'CI'
-  $limit  = max(1, min(200, (int)($_GET['limit'] ?? 25)));
-  $offset = max(0, (int)($_GET['offset'] ?? 0));
+if ($action === 'list') {
+  $inactivos = (int) ($_GET['inactivos'] ?? 0);
+  $q = trim((string) ($_GET['q'] ?? ''));
+  $scope = trim((string) ($_GET['scope'] ?? '')); // '' | 'DP' | 'CI'
+  $limit = max(1, min(200, (int) ($_GET['limit'] ?? 25)));
+  $offset = max(0, (int) ($_GET['offset'] ?? 0));
 
   $where = " WHERE IFNULL(Tipo_Cat,'A')='A' AND IFNULL(Activo,1)=:activo ";
 
-  if($scope==='DP'){
+  if ($scope === 'DP') {
     $where .= " AND IFNULL(dev_proveedor,0)=1 ";
-  }elseif($scope==='CI'){
+  } elseif ($scope === 'CI') {
     $where .= " AND IFNULL(dev_proveedor,0)=0 ";
   }
 
-  if($q!==''){
+  if ($q !== '') {
     $where .= " AND (Des_Motivo LIKE :q OR CAST(dev_proveedor AS CHAR) LIKE :q OR Tipo_Cat LIKE :q) ";
   }
 
   $sqlCount = "SELECT COUNT(*) FROM c_motivo $where";
   $stc = $pdo->prepare($sqlCount);
-  $stc->bindValue(':activo', $inactivos?0:1, PDO::PARAM_INT);
-  if($q!=='') $stc->bindValue(':q', "%$q%", PDO::PARAM_STR);
+  $stc->bindValue(':activo', $inactivos ? 0 : 1, PDO::PARAM_INT);
+  if ($q !== '')
+    $stc->bindValue(':q', "%$q%", PDO::PARAM_STR);
   $stc->execute();
-  $total = (int)$stc->fetchColumn();
+  $total = (int) $stc->fetchColumn();
 
   $sql = "SELECT id, Tipo_Cat, Des_Motivo, dev_proveedor, Activo
           FROM c_motivo
@@ -152,31 +223,40 @@ if($action==='list'){
           ORDER BY id DESC
           LIMIT $limit OFFSET $offset";
   $st = $pdo->prepare($sql);
-  $st->bindValue(':activo', $inactivos?0:1, PDO::PARAM_INT);
-  if($q!=='') $st->bindValue(':q', "%$q%", PDO::PARAM_STR);
+  $st->bindValue(':activo', $inactivos ? 0 : 1, PDO::PARAM_INT);
+  if ($q !== '')
+    $st->bindValue(':q', "%$q%", PDO::PARAM_STR);
   $st->execute();
 
-  echo json_encode(['rows'=>$st->fetchAll(PDO::FETCH_ASSOC),'total'=>$total]); exit;
+  echo json_encode(['rows' => $st->fetchAll(PDO::FETCH_ASSOC), 'total' => $total]);
+  exit;
 }
 
 /* =========================
    CRUD
 ========================= */
-switch($action){
-  case 'get':{
-    $id = (int)($_GET['id'] ?? 0);
-    if(!$id){ echo json_encode(['error'=>'id requerido']); exit; }
-    $st=$pdo->prepare("SELECT * FROM c_motivo WHERE id=? LIMIT 1");
+switch ($action) {
+  case 'get': {
+    $id = (int) ($_GET['id'] ?? 0);
+    if (!$id) {
+      echo json_encode(['error' => 'id requerido']);
+      exit;
+    }
+    $st = $pdo->prepare("SELECT * FROM c_motivo WHERE id=? LIMIT 1");
     $st->execute([$id]);
-    echo json_encode($st->fetch(PDO::FETCH_ASSOC)); exit;
+    echo json_encode($st->fetch(PDO::FETCH_ASSOC));
+    exit;
   }
 
-  case 'create':{
+  case 'create': {
     $errs = validar($_POST);
-    if($errs){ echo json_encode(['error'=>'Validación','detalles'=>$errs]); exit; }
+    if ($errs) {
+      echo json_encode(['error' => 'Validación', 'detalles' => $errs]);
+      exit;
+    }
 
     $tipoCat = 'A';
-    $st=$pdo->prepare("
+    $st = $pdo->prepare("
       INSERT INTO c_motivo (Tipo_Cat, Des_Motivo, dev_proveedor, Activo)
       VALUES (?,?,?,?)
     ");
@@ -188,18 +268,25 @@ switch($action){
       i1($_POST['Activo'] ?? 1),
     ]);
 
-    echo json_encode(['success'=>true,'id'=>$pdo->lastInsertId()]); exit;
+    echo json_encode(['success' => true, 'id' => $pdo->lastInsertId()]);
+    exit;
   }
 
-  case 'update':{
-    $id = (int)($_POST['id'] ?? 0);
-    if(!$id){ echo json_encode(['error'=>'id requerido']); exit; }
+  case 'update': {
+    $id = (int) ($_POST['id'] ?? 0);
+    if (!$id) {
+      echo json_encode(['error' => 'id requerido']);
+      exit;
+    }
 
     $errs = validar($_POST);
-    if($errs){ echo json_encode(['error'=>'Validación','detalles'=>$errs]); exit; }
+    if ($errs) {
+      echo json_encode(['error' => 'Validación', 'detalles' => $errs]);
+      exit;
+    }
 
     $tipoCat = 'A';
-    $st=$pdo->prepare("
+    $st = $pdo->prepare("
       UPDATE c_motivo SET
         Tipo_Cat=?, Des_Motivo=?, dev_proveedor=?, Activo=?
       WHERE id=? LIMIT 1
@@ -212,23 +299,33 @@ switch($action){
       $id
     ]);
 
-    echo json_encode(['success'=>true]); exit;
+    echo json_encode(['success' => true]);
+    exit;
   }
 
-  case 'delete':{
-    $id = (int)($_POST['id'] ?? 0);
-    if(!$id){ echo json_encode(['error'=>'id requerido']); exit; }
+  case 'delete': {
+    $id = (int) ($_POST['id'] ?? 0);
+    if (!$id) {
+      echo json_encode(['error' => 'id requerido']);
+      exit;
+    }
     $pdo->prepare("UPDATE c_motivo SET Activo=0 WHERE id=?")->execute([$id]);
-    echo json_encode(['success'=>true]); exit;
+    echo json_encode(['success' => true]);
+    exit;
   }
 
-  case 'restore':{
-    $id = (int)($_POST['id'] ?? 0);
-    if(!$id){ echo json_encode(['error'=>'id requerido']); exit; }
+  case 'restore': {
+    $id = (int) ($_POST['id'] ?? 0);
+    if (!$id) {
+      echo json_encode(['error' => 'id requerido']);
+      exit;
+    }
     $pdo->prepare("UPDATE c_motivo SET Activo=1 WHERE id=?")->execute([$id]);
-    echo json_encode(['success'=>true]); exit;
+    echo json_encode(['success' => true]);
+    exit;
   }
 
   default:
-    echo json_encode(['error'=>'Acción no válida']); exit;
+    echo json_encode(['error' => 'Acción no válida']);
+    exit;
 }

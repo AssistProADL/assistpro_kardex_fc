@@ -19,7 +19,7 @@ try {
     exit;
 }
 
-$input  = json_decode(file_get_contents('php://input'), true) ?? [];
+$input = json_decode(file_get_contents('php://input'), true) ?? [];
 $action = $_GET['action'] ?? $input['action'] ?? 'list';
 $inactivos = intval($_GET['inactivos'] ?? 0);
 
@@ -29,24 +29,48 @@ try {
 
         /* ================= LISTAR ================= */
         case 'list':
+            $page = max(1, intval($_GET['page'] ?? 1));
+            $limit = max(1, intval($_GET['limit'] ?? 25));
+            $offset = ($page - 1) * $limit;
+            $q = $_GET['q'] ?? '';
 
-            $stmt = $pdo->prepare("
-                SELECT
-                    id,
-                    cve_ssgpoart,
-                    cve_sgpoart,
-                    des_ssgpoart,
-                    id_almacen,
-                    Activo
-                FROM c_ssgpoarticulo
-                WHERE Activo = ?
-                ORDER BY des_ssgpoart
-            ");
-            $stmt->execute([$inactivos ? 0 : 1]);
+            $where = ["Activo = ?"];
+            $params = [$inactivos ? 0 : 1];
+
+            if ($q !== '') {
+                $where[] = "(cve_ssgpoart LIKE ? OR des_ssgpoart LIKE ?)";
+                $params[] = "%$q%";
+                $params[] = "%$q%";
+            }
+
+            $wStr = implode(" AND ", $where);
+
+            // Count
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM c_ssgpoarticulo WHERE $wStr");
+            $stmt->execute($params);
+            $total = $stmt->fetchColumn();
+            $pages = ceil($total / $limit);
+
+            // Data
+            $sql = "SELECT id, cve_ssgpoart, cve_sgpoart, des_ssgpoart, id_almacen, Activo 
+                    FROM c_ssgpoarticulo 
+                    WHERE $wStr 
+                    ORDER BY des_ssgpoart 
+                    LIMIT $limit OFFSET $offset";
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+
+            // Check if there are any inactive records in total (to show/hide the toggle button)
+            $hasInactives = $pdo->query("SELECT COUNT(*) FROM c_ssgpoarticulo WHERE Activo = 0")->fetchColumn() > 0;
 
             echo json_encode([
                 'success' => true,
-                'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)
+                'rows' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+                'total' => $total,
+                'pages' => $pages,
+                'page' => $page,
+                'hasInactives' => $hasInactives
             ]);
             break;
 
@@ -116,15 +140,16 @@ try {
         case 'export':
 
             header('Content-Type: text/csv; charset=UTF-8');
-            header('Content-Disposition: attachment; filename=tipo_articulos.csv');
+            header('Content-Disposition: attachment; filename=tipos_articulos.csv');
             echo "\xEF\xBB\xBF"; // BOM UTF-8
 
             $out = fopen('php://output', 'w');
 
-            fputcsv($out, ['Clave','Grupo','Descripción','Almacén'], ';');
+            // Human Readable Headers
+            fputcsv($out, ['Clave', 'Descripción', 'Grupo', 'Almacén'], ',');
 
             $rows = $pdo->query("
-                SELECT cve_ssgpoart, cve_sgpoart, des_ssgpoart, id_almacen
+                SELECT cve_ssgpoart, des_ssgpoart, cve_sgpoart, id_almacen
                 FROM c_ssgpoarticulo
                 WHERE Activo = 1
                 ORDER BY des_ssgpoart
@@ -133,10 +158,10 @@ try {
             foreach ($rows as $r) {
                 fputcsv($out, [
                     $r['cve_ssgpoart'],
-                    $r['cve_sgpoart'],
                     $r['des_ssgpoart'],
+                    $r['cve_sgpoart'],
                     $r['id_almacen']
-                ], ';');
+                ], ',');
             }
 
             fclose($out);

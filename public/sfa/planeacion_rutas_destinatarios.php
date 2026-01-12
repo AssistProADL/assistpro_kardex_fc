@@ -1,642 +1,578 @@
 <?php
-include __DIR__ . '/../bi/_menu_global.php';
+// /public/sfa/planeacion_rutas_destinatarios.php
+// UI: Planeación de rutas (Asignación de clientes/destinatarios)
+// NOTA: NO modifica APIs. Solo arma correctamente los parámetros (almacen_id / ruta_id).
+
+require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Planeación de Rutas | Asignación de Clientes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<style>
-  .table-sm td, .table-sm th{ padding:.25rem; font-size:11px; white-space:nowrap; }
-  #map{ height: 520px; width: 100%; border-radius: 12px; border:1px solid #e6eef9; }
-  .ap-hint{ font-size:12px; color:#6c757d; }
-  .ap-box{ border:1px solid #e6eef9; border-radius:12px; }
-  .badge-soft{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; background:#f1f5ff; border:1px solid #dbe7ff; }
-  .mini{ font-size:12px; color:#6c757d; }
-  .map-tools .btn{ border-radius:10px; }
-  .ap-debug{ font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; white-space:pre-wrap; }
-</style>
+  <!-- Bootstrap (usa el que ya tengas en tu proyecto; si falla, al menos no rompe JS) -->
+  <style>
+    body { font-size: 10px; }
+    .ap-title { font-size: 18px; font-weight: 700; }
+    .ap-sub  { font-size: 11px; color:#6b7280; }
+    .kpi-pill { display:inline-block; padding:4px 10px; border-radius:999px; background:#f3f4f6; margin-right:6px; }
+    .table thead th { position: sticky; top: 0; background: #fff; z-index: 2; }
+    .table-responsive { max-height: 62vh; overflow:auto; }
+    .daybox { transform: scale(1.05); }
+    .muted { color:#9ca3af; }
+    .tiny { font-size: 10px; }
+    .badge-ok { background:#16a34a; }
+    .badge-no { background:#6b7280; }
+  </style>
+</head>
 
-<!-- IMPORTANTE: drawing + geometry para geocerca -->
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC5xF7JtKzw9cTRRXcDAqTThbYnMCiYOVM&libraries=drawing,geometry&callback=initMap" async defer></script>
+<body>
+<div class="container-fluid py-2">
 
-<div class="container-fluid">
-
-  <!-- HEADER -->
-  <div class="row mb-2">
-    <div class="col-md-6">
-      <h4 class="fw-bold mb-0">Planeación de Rutas | Asignación de Clientes</h4>
-      <div class="ap-hint">Selecciona Almacén → carga clientes → usa geocerca para seleccionar masivamente.</div>
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <div>
+      <div class="ap-title">📍 Planeación de Rutas | Asignación de Clientes</div>
+      <div class="ap-sub">Almacén → Rutas (dependientes) → Clientes. Guardado de días de visita en <b>RelDayCli</b>.</div>
     </div>
-    <div class="col-md-6 text-end">
-      <a href="resumen_rutas.php" class="btn btn-outline-primary btn-sm">📊 Resumen</a>
-      <a href="geo_distribucion_clientes.php" class="btn btn-outline-success btn-sm">🌍 Georreferencia</a>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnRefrescar">⟳ Refrescar</button>
+      <button class="btn btn-success btn-sm" id="btnGuardarTop">💾 Guardar planeación</button>
     </div>
   </div>
 
-  <!-- FILTROS -->
-  <div class="card mb-2 ap-box">
+  <div class="card mb-2">
     <div class="card-body">
+
       <div class="row g-2 align-items-end">
-        <div class="col-md-3">
-          <label class="form-label mb-1">Almacén (IdEmpresa)</label>
-          <select id="f_almacen" class="form-select form-select-sm">
-            <option value="">Cargando.</option>
+        <div class="col-md-4">
+          <label class="form-label mb-1"><b>Almacén</b></label>
+          <select class="form-select form-select-sm" id="selAlmacen">
+            <option value="">Cargando...</option>
           </select>
-          <div class="ap-hint" id="hint_almacen"></div>
+          <div class="tiny mt-1 muted">
+            Fuente: <span class="text-danger">../api/catalogo_almacenes.php</span> + filtro rutas: <span class="text-danger">../api/sfa/catalogo_rutas.php?almacen_id=...</span>
+          </div>
         </div>
 
-        <div class="col-md-5">
-          <label class="form-label mb-1">Buscar</label>
-          <input id="f_buscar" class="form-control form-control-sm"
-                 placeholder="Cliente / Destinatario / Colonia / CP">
-        </div>
-
-        <div class="col-md-2">
-          <button id="btn_buscar" class="btn btn-primary btn-sm w-100">Buscar</button>
-        </div>
-
-        <div class="col-md-2">
-          <button id="btn_refrescar" class="btn btn-outline-secondary btn-sm w-100">Refrescar</button>
-        </div>
-
-        <div class="col-12 mt-1">
-          <span class="badge-soft" id="k_total">0 clientes</span>
-          <span class="badge-soft" id="k_gps">0 con GPS</span>
-          <span class="badge-soft" id="k_sel">0 seleccionados</span>
-          <span class="ms-2 badge bg-light text-dark" id="badge_status">Sin consulta</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ACCIONES MASIVAS -->
-  <div class="card mb-2 ap-box">
-    <div class="card-body">
-      <div class="row g-2 align-items-end">
-
-        <div class="col-md-3">
-          <label class="form-label fw-bold mb-1">Ruta destino (global)</label>
-          <select id="ruta_global" class="form-select form-select-sm">
-            <option value="">Cargando.</option>
+        <div class="col-md-4">
+          <label class="form-label mb-1"><b>Ruta destino (global)</b></label>
+          <select class="form-select form-select-sm" id="selRuta" disabled>
+            <option value="">Seleccione almacén</option>
           </select>
-          <div class="ap-hint" id="hint_rutas"></div>
+          <div class="tiny mt-1 muted">
+            Fuente: <span class="text-danger">../api/sfa/catalogo_rutas.php?almacen_id=...</span>
+          </div>
         </div>
 
-        <div class="col-md-5">
-          <label class="form-label fw-bold mb-1">Días de visita (global)</label><br>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Lu"> L</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Ma"> M</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Mi"> Mi</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Ju"> J</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Vi"> V</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Sa"> S</label>
-          <label class="me-2"><input type="checkbox" class="dia-global" value="Do"> Do</label>
+        <div class="col-md-4">
+          <label class="form-label mb-1"><b>Buscar</b></label>
+          <div class="input-group input-group-sm">
+            <input type="text" class="form-control" id="txtBuscar" placeholder="Cliente / Destinatario / Colonia / CP">
+            <button class="btn btn-primary" id="btnBuscar">🔎 Buscar</button>
+            <button class="btn btn-outline-secondary" id="btnLimpiar">Limpiar</button>
+          </div>
+          <div class="tiny mt-1 muted">Tip: Enter ejecuta búsqueda. La grilla se alimenta por la ruta seleccionada.</div>
+        </div>
+      </div>
+
+      <hr class="my-2">
+
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <span class="kpi-pill"><span id="kpiTotal">0</span> clientes</span>
+        <span class="kpi-pill"><span id="kpiSel">0</span> seleccionados</span>
+        <span class="kpi-pill"><span id="kpiAsig">0</span> asignados a ruta</span>
+        <span class="kpi-pill"><span class="badge badge-ok text-white" id="badgeEstado">OK</span></span>
+        <span class="kpi-pill">Ruta cargada: <b id="lblRutaCargada">—</b></span>
+      </div>
+
+      <div class="d-flex flex-wrap align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <div class="tiny"><b>Días visita (global)</b> <span class="muted">(si una fila no trae días, puedes aplicar estos a los seleccionados)</span></div>
+          <label class="form-check form-check-inline tiny mb-0"><input class="form-check-input daybox" type="checkbox" id="gLu"> Lu</label>
+          <label class="form-check form-check-inline tiny mb-0"><input class="form-check-input daybox" type="checkbox" id="gMa"> Ma</label>
+          <label class="form-check form-check-inline tiny mb-0"><input class="form-check-input daybox" type="checkbox" id="gMi"> Mi</label>
+          <label class="form-check form-check-inline tiny mb-0"><input class="form-check-input daybox" type="checkbox" id="gJu"> Ju</label>
+          <label class="form-check form-check-inline tiny mb-0"><input class="form-check-input daybox" type="checkbox" id="gVi"> Vi</label>
+          <label class="form-check form-check-inline tiny mb-0"><input class="form-check-input daybox" type="checkbox" id="gSa"> Sa</label>
+          <label class="form-check form-check-inline tiny mb-0"><input class="form-check-input daybox" type="checkbox" id="gDo"> Do</label>
         </div>
 
-        <div class="col-md-4 text-end">
-          <button id="btn_asignar_comercial" class="btn btn-outline-primary btn-sm">🧾 Asignar Comercial</button>
-          <button id="btn_guardar" class="btn btn-success btn-sm">Guardar planeación</button>
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn btn-outline-primary btn-sm" id="btnSelTodo">✓ Seleccionar todo</button>
+          <button class="btn btn-outline-secondary btn-sm" id="btnClearSel">Limpiar selección</button>
+          <button class="btn btn-success btn-sm" id="btnGuardar">💾 Guardar</button>
         </div>
+      </div>
 
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead>
+            <tr class="tiny">
+              <th style="width:24px;"><input type="checkbox" id="chkAll"></th>
+              <th style="min-width:220px;">Cliente</th>
+              <th style="min-width:260px;">Destinatario</th>
+              <th style="width:38px;">Lu</th>
+              <th style="width:38px;">Ma</th>
+              <th style="width:38px;">Mi</th>
+              <th style="width:38px;">Ju</th>
+              <th style="width:38px;">Vi</th>
+              <th style="width:38px;">Sa</th>
+              <th style="width:38px;">Do</th>
+              <th style="width:80px;">Asignado</th>
+              <th style="min-width:260px;">Rutas actuales</th>
+              <th style="min-width:180px;">Dirección</th>
+              <th style="min-width:160px;">Colonia</th>
+              <th style="width:90px;">CP</th>
+              <th style="min-width:140px;">Ciudad</th>
+              <th style="min-width:120px;">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="17" class="text-center tiny muted py-3">Seleccione un almacén y una ruta y luego Buscar/Refrescar.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tiny p-2">
+        API clientes: <span class="text-danger">../api/sfa/clientes_asignacion_data.php</span> |
+        API guardado: <span class="text-danger">../api/sfa/clientes_asignacion_save.php</span>
       </div>
     </div>
   </div>
 
-  <!-- LAYOUT: TABLA + MAPA -->
-  <div class="row g-2">
-    <div class="col-lg-8">
-      <div class="card ap-box">
-        <div class="card-body p-1">
-          <div style="max-height:520px; overflow:auto;">
-            <table class="table table-bordered table-sm align-middle mb-0">
-              <thead class="table-light" style="position:sticky; top:0; z-index:2;">
-                <tr>
-                  <th style="width:36px"><input type="checkbox" id="chk_all"></th>
-                  <th>Cliente</th>
-                  <th>Destinatario</th>
-
-                  <!-- NUEVO BLOQUE COMERCIAL -->
-                  <th>Lista Precio</th>
-                  <th>Promoción</th>
-                  <th>Descuento</th>
-
-                  <th>Dirección</th>
-                  <th>Colonia</th>
-                  <th>CP</th>
-                  <th>Ciudad</th>
-                  <th>Estado</th>
-                  <th>Lat</th>
-                  <th>Lng</th>
-                  <th>Ruta Act</th>
-                  <th>Ruta New</th>
-                  <th>Días</th>
-                  <th>Seq</th>
-                </tr>
-              </thead>
-              <tbody id="tabla_destinatarios">
-                <tr>
-                  <td colspan="17" class="text-center text-muted">Seleccione un almacén</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div class="card ap-box mt-2">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <div class="fw-bold">Diagnóstico</div>
-            <button class="btn btn-outline-secondary btn-sm" id="btn_toggle_debug">Mostrar/Ocultar</button>
-          </div>
-          <div id="debug_box" class="ap-debug mt-2" style="display:none;">(sin logs)</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-lg-4">
-      <div class="card ap-box">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-end mb-2">
-            <div>
-              <div class="fw-bold">Mapa (Selección por Geocerca)</div>
-              <div class="mini">Dibuja polígono → selecciona clientes en la tabla.</div>
-            </div>
-            <div class="map-tools d-flex gap-2">
-              <button class="btn btn-outline-dark btn-sm" id="btn_geocerca">🧿 Geocerca</button>
-              <button class="btn btn-outline-danger btn-sm" id="btn_limpiar_geo">🧹 Limpiar</button>
-            </div>
-          </div>
-          <div id="map"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- MODAL ASIGNAR COMERCIAL -->
-<div class="modal fade" id="mdlComercial" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content" style="border-radius:14px;">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold">Asignación Comercial (Listas / Promos / Descuentos)</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body">
-        <div class="ap-hint mb-2">
-          Alcance recomendado: aplicar sobre <b>seleccionados</b>. Para campañas masivas, usa geocerca y luego aplica.
-        </div>
-
-        <div class="row g-2 mb-2">
-          <div class="col-md-4">
-            <div class="badge bg-light text-dark w-100 text-start">Almacén: <span id="mdl_alm">-</span></div>
-          </div>
-          <div class="col-md-4">
-            <div class="badge bg-light text-dark w-100 text-start">Seleccionados: <span id="mdl_sel">0</span></div>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label mb-1">Modo</label>
-            <select id="mdl_scope" class="form-select form-select-sm">
-              <option value="selected">Solo seleccionados</option>
-              <option value="filtered">Todos los filtrados (página actual)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row g-2">
-          <div class="col-md-4">
-            <label class="form-label mb-1">Lista de Precios</label>
-            <select id="mdl_listaP" class="form-select form-select-sm">
-              <option value="">(Sin cambio)</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label mb-1">Promoción</label>
-            <select id="mdl_listaPromo" class="form-select form-select-sm">
-              <option value="">(Sin cambio)</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label mb-1">Descuento</label>
-            <select id="mdl_listaD" class="form-select form-select-sm">
-              <option value="">(Sin cambio)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-check mt-3">
-          <input class="form-check-input" type="checkbox" id="mdl_overwrite">
-          <label class="form-check-label" for="mdl_overwrite">Sobrescribir asignaciones existentes</label>
-        </div>
-
-        <div class="alert alert-info mt-3 mb-0" style="font-size:12px;">
-          <b>Gobierno de datos:</b> esta operación actualiza <code>relclilis</code> por destinatario (Id_Destinatario) y deja traza en API response.
-        </div>
-
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-        <button class="btn btn-primary btn-sm" id="mdl_apply">Aplicar</button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <script>
-let pagina = 1;
-let RUTAS = [];
-let CLIENTES = [];
-let map, drawingManager, polygon = null;
-let markers = [];
-let selected = new Set();
+(function(){
+  const el = id => document.getElementById(id);
 
-const API_ALMACENES_CANDIDATOS = [
-  "../api/almacenes.php",
-  "../api/catalogo_almacenes.php",
-  "../api/almacenes_api.php"
-];
-const API_RUTAS_CANDIDATOS = [
-  "../api/catalogo_rutas.php",
-  "../api/rutas_api.php"
-];
+  const selAlmacen = el('selAlmacen');
+  const selRuta    = el('selRuta');
+  const tbody      = el('tbody');
 
-function logDebug(msg, obj=null){
-  const box = document.getElementById("debug_box");
-  const ts = new Date().toISOString().slice(11,19);
-  let line = `[${ts}] ${msg}`;
-  if(obj!==null){
-    try{ line += "\n" + JSON.stringify(obj, null, 2); }catch(e){}
+  const badgeEstado = el('badgeEstado');
+  const lblRutaCargada = el('lblRutaCargada');
+
+  const kpiTotal = el('kpiTotal');
+  const kpiSel   = el('kpiSel');
+  const kpiAsig  = el('kpiAsig');
+
+  const setEstado = (txt, ok=true) => {
+    badgeEstado.textContent = txt;
+    badgeEstado.className = ok ? 'badge badge-ok text-white' : 'badge bg-danger text-white';
+  };
+
+  const escapeHtml = (s) => (s??'').toString()
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
+
+  function getEmpresaFromAlmacenOption(){
+    const opt = selAlmacen.options[selAlmacen.selectedIndex];
+    if(!opt) return '';
+    return opt.dataset.empresa || opt.dataset.idempresa || opt.dataset.idEmpresa || '';
   }
-  box.textContent = (box.textContent === "(sin logs)") ? line : (box.textContent + "\n\n" + line);
-}
 
-document.getElementById("btn_toggle_debug").addEventListener("click", ()=>{
-  const box = document.getElementById("debug_box");
-  box.style.display = (box.style.display === "none") ? "block" : "none";
-});
-
-function pickField(obj, names){
-  for(const n of names){
-    if(obj && Object.prototype.hasOwnProperty.call(obj, n)) return obj[n];
+  function getGlobalDays(){
+    return {
+      Lu: el('gLu').checked ? 1:0,
+      Ma: el('gMa').checked ? 1:0,
+      Mi: el('gMi').checked ? 1:0,
+      Ju: el('gJu').checked ? 1:0,
+      Vi: el('gVi').checked ? 1:0,
+      Sa: el('gSa').checked ? 1:0,
+      Do: el('gDo').checked ? 1:0
+    };
   }
-  return null;
-}
-function normalizeAlmacenRow(a){
-  const id = pickField(a, ["IdEmpresa","id","ID","clave","Clave","empresa","cve_almacenp","cve_almac","Cve_Almac"]);
-  const nombre = pickField(a, ["nombre","Nombre","descripcion","Descripcion","razonsocial","RazonSocial","almacen","Almacen"]);
-  if(id===null) return null;
-  return { id: String(id), nombre: nombre ? String(nombre) : ("Almacén " + id) };
-}
-function normalizeRutaRow(r){
-  const id = pickField(r, ["ID_Ruta","id_ruta","id","IdRuta","ruta_id"]);
-  const nombre = pickField(r, ["descripcion","Descripcion","cve_ruta","Cve_Ruta","ruta","Ruta","nombre","Nombre"]);
-  if(id===null) return null;
-  return { id: String(id), nombre: nombre ? String(nombre) : ("Ruta " + id) };
-}
 
-async function fetchFirstOk(urls, opts=null){
-  for(const u of urls){
-    try{
-      const res = await fetch(u, opts || {cache:"no-store"});
-      if(!res.ok){ logDebug("Endpoint no OK: "+u, {status:res.status}); continue; }
-      const json = await res.json();
-      if(json && json.error){ logDebug("Endpoint error: "+u, json); continue; }
-      if(Array.isArray(json)) return {url:u, data:json};
-      if(json && Array.isArray(json.data)) return {url:u, data:json.data};
-      for(const k of ["almacenes","rutas","items","rows"]){
-        if(json && Array.isArray(json[k])) return {url:u, data:json[k]};
-      }
-      logDebug("Endpoint sin formato usable: "+u, json);
-    }catch(e){
-      logDebug("Fetch error: "+u, {error:String(e)});
+  function parseDias(row){
+    // Soporta: Lu/Ma/Mi/Ju/Vi/Sa/Do directos o dias_bits (7 chars)
+    const d = {Lu:0,Ma:0,Mi:0,Ju:0,Vi:0,Sa:0,Do:0};
+
+    const hasDirect = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'].some(k => row[k] !== undefined);
+    if(hasDirect){
+      d.Lu = row.Lu ? 1:0; d.Ma = row.Ma ? 1:0; d.Mi = row.Mi ? 1:0;
+      d.Ju = row.Ju ? 1:0; d.Vi = row.Vi ? 1:0; d.Sa = row.Sa ? 1:0; d.Do = row.Do ? 1:0;
+      return d;
     }
-  }
-  return null;
-}
 
-/* ===========================
-   MAPA + GEOCERCA
-   =========================== */
-function initMap(){
-  map = new google.maps.Map(document.getElementById('map'),{
-    zoom: 11,
-    center: {lat: 19.432608, lng: -99.133209}
-  });
-
-  drawingManager = new google.maps.drawing.DrawingManager({
-    drawingControl: false,
-    polygonOptions: {
-      fillColor: "#1f6feb",
-      fillOpacity: 0.12,
-      strokeWeight: 2,
-      clickable: false,
-      editable: true,
-      zIndex: 1
+    const bits = (row.dias_bits ?? row.diasBits ?? '').toString();
+    if(bits.length >= 7){
+      d.Lu = bits[0]==='1'?1:0;
+      d.Ma = bits[1]==='1'?1:0;
+      d.Mi = bits[2]==='1'?1:0;
+      d.Ju = bits[3]==='1'?1:0;
+      d.Vi = bits[4]==='1'?1:0;
+      d.Sa = bits[5]==='1'?1:0;
+      d.Do = bits[6]==='1'?1:0;
     }
-  });
-  drawingManager.setMap(map);
+    return d;
+  }
 
-  google.maps.event.addListener(drawingManager, 'polygoncomplete', function(poly){
-    if (polygon) polygon.setMap(null);
-    polygon = poly;
-    drawingManager.setDrawingMode(null);
-    recomputeSelectionFromPolygon();
+  function rowTemplate(r){
+    const idDest = r.id_destinatario ?? r.Id_Destinatario ?? r.idDestinatario ?? 0;
+    const cveClte = r.Cve_Clte ?? r.cve_clte ?? r.cve_cliente ?? r.Cve_Cliente ?? '';
+    const cveVend = r.Cve_Vendedor ?? r.cve_vendedor ?? 0;
 
-    google.maps.event.addListener(polygon.getPath(), 'set_at', recomputeSelectionFromPolygon);
-    google.maps.event.addListener(polygon.getPath(), 'insert_at', recomputeSelectionFromPolygon);
-    google.maps.event.addListener(polygon.getPath(), 'remove_at', recomputeSelectionFromPolygon);
-  });
+    const clienteTxt = (cveClte ? `[${escapeHtml(cveClte)}] ` : '') + escapeHtml(r.cliente ?? r.Cliente ?? '');
+    const destTxt = escapeHtml(r.razonsocial ?? r.Destinatario ?? r.destinatario ?? '');
 
-  document.getElementById("btn_geocerca").addEventListener("click", ()=>{
-    if(!drawingManager) return;
-    drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
-  });
+    const dir = escapeHtml(r.direccion ?? '');
+    const col = escapeHtml(r.colonia ?? '');
+    const cp  = escapeHtml(r.cp ?? '');
+    const cd  = escapeHtml(r.ciudad ?? '');
+    const edo = escapeHtml(r.estado ?? '');
 
-  document.getElementById("btn_limpiar_geo").addEventListener("click", ()=>{
-    if(polygon){ polygon.setMap(null); polygon=null; }
-    selected.clear();
-    syncSelectedToTable();
-  });
-}
+    const rutasAct = escapeHtml(r.rutas_actuales ?? r.rutas ?? '');
 
-function normFloat(v){
-  if(v===null || v===undefined) return NaN;
-  const s = String(v).trim().replace(",",".");
-  return parseFloat(s);
-}
+    const asig = (r.asignado_esta_ruta ?? r.asignado ?? r.asig ?? 0) ? 1 : 0;
+    const badge = asig
+      ? `<span class="badge badge-ok text-white">Sí</span>`
+      : `<span class="badge badge-no text-white">No</span>`;
 
-function paintMarkers(rows){
-  markers.forEach(m=>m.setMap(null));
-  markers = [];
+    const dias = parseDias(r);
 
-  if(!rows || rows.length===0) return;
+    const mkDay = (k, v) => `<input type="checkbox" class="form-check-input daybox d-${k}" ${v? 'checked':''}>`;
 
-  const bounds = new google.maps.LatLngBounds();
-  rows.forEach(r=>{
-    const lat = normFloat(r.latitud);
-    const lng = normFloat(r.longitud);
-    if(!isFinite(lat) || !isFinite(lng)) return;
+    return `
+      <tr class="tiny" data-id-dest="${idDest}" data-cve-clte="${escapeHtml(cveClte)}" data-cve-vend="${cveVend}">
+        <td class="text-center"><input type="checkbox" class="form-check-input rowSel"></td>
+        <td>${clienteTxt}</td>
+        <td>${destTxt}</td>
+        <td class="text-center">${mkDay('Lu',dias.Lu)}</td>
+        <td class="text-center">${mkDay('Ma',dias.Ma)}</td>
+        <td class="text-center">${mkDay('Mi',dias.Mi)}</td>
+        <td class="text-center">${mkDay('Ju',dias.Ju)}</td>
+        <td class="text-center">${mkDay('Vi',dias.Vi)}</td>
+        <td class="text-center">${mkDay('Sa',dias.Sa)}</td>
+        <td class="text-center">${mkDay('Do',dias.Do)}</td>
+        <td class="text-center">${badge}</td>
+        <td>${rutasAct}</td>
+        <td>${dir}</td>
+        <td>${col}</td>
+        <td>${cp}</td>
+        <td>${cd}</td>
+        <td>${edo}</td>
+      </tr>
+    `;
+  }
 
-    const pos = {lat,lng};
-    bounds.extend(pos);
-
-    const marker = new google.maps.Marker({
-      position: pos,
-      map: map,
-      title: r.destinatario || r.cliente || ("Destinatario "+r.id)
+  function updateKPIs(){
+    const rows = tbody.querySelectorAll('tr[data-id-dest]');
+    const sel  = tbody.querySelectorAll('tr[data-id-dest] .rowSel:checked');
+    let asig = 0;
+    rows.forEach(tr=>{
+      const badge = tr.querySelector('td:nth-child(11) .badge');
+      if(badge && badge.textContent.trim().toLowerCase()==='sí') asig++;
     });
 
-    marker.__id = String(r.id); // id_destinatario
-    markers.push(marker);
-  });
-
-  if(markers.length>0) map.fitBounds(bounds);
-
-  // 🔥 FIX: al repintar, re-sincroniza selección vs polígono (si existe)
-  if(polygon){
-    recomputeSelectionFromPolygon();
-  }else{
-    syncSelectedToTable();
-  }
-}
-
-function recomputeSelectionFromPolygon(){
-  if(!polygon) return;
-  selected.clear();
-
-  markers.forEach(m=>{
-    const inside = google.maps.geometry.poly.containsLocation(m.getPosition(), polygon);
-    if(inside) selected.add(String(m.__id));
-  });
-
-  syncSelectedToTable();
-}
-
-function syncSelectedToTable(){
-  document.querySelectorAll(".chk-row").forEach(chk=>{
-    chk.checked = selected.has(String(chk.dataset.id));
-  });
-  document.getElementById("k_sel").textContent = `${selected.size} seleccionados`;
-}
-
-/* ===========================
-   CARGA SELECTS
-   =========================== */
-async function cargarAlmacenes(){
-  const sel = document.getElementById("f_almacen");
-  sel.innerHTML = `<option value="">Cargando.</option>`;
-  document.getElementById("hint_almacen").textContent = "";
-
-  const resp = await fetchFirstOk(API_ALMACENES_CANDIDATOS);
-  if(!resp){
-    sel.innerHTML = `<option value="">(Sin almacenes)</option>`;
-    document.getElementById("hint_almacen").textContent = "No pude cargar almacenes (revisar endpoint).";
-    return;
+    kpiTotal.textContent = rows.length;
+    kpiSel.textContent   = sel.length;
+    kpiAsig.textContent  = asig;
   }
 
-  const norm = (resp.data||[]).map(normalizeAlmacenRow).filter(x=>x);
-  norm.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+  async function cargarAlmacenes(){
+    try{
+      setEstado('Cargando...', true);
 
-  sel.innerHTML = `<option value="">Seleccione</option>`;
-  norm.forEach(a=>{
-    sel.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
-  });
+      // ✅ FILTRO: solo almacenes con rutas (sin tocar APIs)
+      // 1) obtenemos ids de almacenes con rutas desde modo soportado
+      let idsConRutas = new Set();
+      try{
+        const resR = await fetch('../api/sfa/catalogo_rutas.php?mode=almacenes', {cache:'no-store'});
+        const jsR  = await resR.json();
+        const arrR = Array.isArray(jsR) ? jsR : (jsR.data ?? jsR.almacenes ?? jsR.rows ?? []);
+        arrR.forEach(a=>{
+          const id = a.id ?? a.IdEmpresa ?? a.idempresa ?? a.almacen_id ?? a.id_almacen ?? a.IdAlmacen ?? '';
+          const n  = parseInt(id||'0',10);
+          if(n) idsConRutas.add(n);
+        });
+      }catch(_e){ /* fallback silencioso: si no existe mode=almacenes, no rompemos */ }
 
-  document.getElementById("hint_almacen").textContent = `Fuente: ${resp.url} | ${norm.length} almacenes`;
-}
+      // 2) cargamos catálogo general y filtramos por idsConRutas
+      const res = await fetch('../api/catalogo_almacenes.php', {cache:'no-store'});
+      const js = await res.json();
 
-async function cargarRutas(almacen){
-  const sel = document.getElementById("ruta_global");
-  sel.innerHTML = `<option value="">Cargando...</option>`;
-  document.getElementById("hint_rutas").textContent = "";
+      let data = Array.isArray(js) ? js : (js.data ?? js.almacenes ?? []);
+      if(idsConRutas.size){
+        data = data.filter(a=>{
+          const id = a.id ?? a.Id ?? a.almacen_id ?? a.id_almacen ?? a.IdAlmacen ?? '';
+          const n  = parseInt(id||'0',10);
+          return n && idsConRutas.has(n);
+        });
+      }
 
-  const urls = [];
-  API_RUTAS_CANDIDATOS.forEach(u=>{
-    urls.push(u);
-    if(almacen) urls.push(u + (u.includes("?") ? "&" : "?") + "almacen=" + encodeURIComponent(almacen));
-    if(almacen) urls.push(u + (u.includes("?") ? "&" : "?") + "IdEmpresa=" + encodeURIComponent(almacen));
-  });
+      selAlmacen.innerHTML = `<option value="">Seleccione almacén</option>`;
 
-  const resp = await fetchFirstOk(urls);
-  if(!resp){
-    sel.innerHTML = `<option value="">(Sin rutas)</option>`;
-    document.getElementById("hint_rutas").textContent = "No pude cargar rutas (revisar endpoint).";
-    RUTAS = [];
-    return;
+      data.forEach(a=>{
+        const id = a.id ?? a.Id ?? a.almacen_id ?? a.id_almacen ?? a.IdAlmacen ?? '';
+        const nombre = a.nombre ?? a.Nombre ?? a.descripcion ?? a.Descripcion ?? '';
+        const clave = a.clave ?? a.Clave ?? '';
+        const idempresa = a.idempresa ?? a.IdEmpresa ?? a.id_empresa ?? '';
+
+        if(!id) return;
+        const label = (clave ? `${clave} - ` : '') + (nombre || `Almacén ${id}`);
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = label;
+        if(idempresa) opt.dataset.empresa = idempresa;
+        selAlmacen.appendChild(opt);
+      });
+
+      setEstado('OK', true);
+    }catch(e){
+      console.error(e);
+      setEstado('Error', false);
+      selAlmacen.innerHTML = `<option value="">Error cargando almacenes</option>`;
+    }
   }
 
-  RUTAS = (resp.data||[]).map(normalizeRutaRow).filter(x=>x);
-  RUTAS.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+  async function cargarRutasPorAlmacen(){
+    const almacenId = parseInt(selAlmacen.value||'0',10);
+    selRuta.innerHTML = `<option value="">Seleccione Ruta</option>`;
+    selRuta.disabled = true;
+    lblRutaCargada.textContent = '—';
 
-  sel.innerHTML = `<option value="">Seleccione Ruta</option>`;
-  RUTAS.forEach(r=>{
-    sel.innerHTML += `<option value="${r.id}">${r.nombre}</option>`;
-  });
+    tbody.innerHTML = `<tr><td colspan="17" class="text-center tiny muted py-3">Seleccione un almacén y una ruta y luego Buscar/Refrescar.</td></tr>`;
+    updateKPIs();
 
-  document.getElementById("hint_rutas").textContent = `Fuente: ${resp.url} | ${RUTAS.length} rutas`;
-}
+    if(!almacenId){ return; }
 
-/* ===========================
-   CARGA DATOS
-   =========================== */
-async function cargarDatos(){
-  const alm = document.getElementById('f_almacen').value;
-  if(!alm) return;
+    try{
+      setEstado('Cargando rutas...', true);
+      const url = `../api/sfa/catalogo_rutas.php?almacen_id=${encodeURIComponent(almacenId)}`;
+      const res = await fetch(url, {cache:'no-store'});
+      const js = await res.json();
 
-  const fd = new FormData();
-  fd.append('almacen', alm);
-  fd.append('IdEmpresa', alm);
-  fd.append('buscar', document.getElementById('f_buscar').value || '');
-  fd.append('pagina', pagina);
+      const rutas = js.data ?? js.rutas ?? (Array.isArray(js)? js : []);
+      rutas.forEach(r=>{
+        const id = r.id_ruta ?? r.id ?? r.ID_Ruta ?? r.IdRuta ?? '';
+        const desc = r.descripcion ?? r.Descripcion ?? r.nombre ?? r.Nombre ?? '';
+        const cve  = r.cve_ruta ?? r.Cve_Ruta ?? r.clave ?? r.Clave ?? '';
+        if(!id) return;
 
-  document.getElementById("badge_status").textContent = "Consultando.";
-  logDebug("POST clientes_asignacion_data.php", {almacen:alm, buscar:document.getElementById('f_buscar').value, pagina});
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = desc ? desc : (cve ? cve : `Ruta ${id}`);
+        if(cve) opt.dataset.cve = cve;
+        selRuta.appendChild(opt);
+      });
 
-  try{
-    const resp = await fetch('../api/clientes_asignacion_data.php',{method:'POST',body:fd});
-    const j = await resp.json();
+      selRuta.disabled = false;
+      setEstado('OK', true);
+    }catch(e){
+      console.error(e);
+      setEstado('Error rutas', false);
+      selRuta.innerHTML = `<option value="">Error cargando rutas</option>`;
+      selRuta.disabled = true;
+    }
+  }
 
-    if(j && j.error){
-      document.getElementById("badge_status").textContent = "Error API";
-      logDebug("API error clientes_asignacion_data.php", j);
-      renderTabla({data:[]}, j.error);
+  async function cargarDestinatarios(){
+    const almacenId = parseInt(selAlmacen.value||'0',10);
+    const rutaId = parseInt(selRuta.value||'0',10);
+    const q = (el('txtBuscar').value||'').trim();
+
+    if(!almacenId || !rutaId){
+      tbody.innerHTML = `<tr><td colspan="17" class="text-center tiny muted py-3">Seleccione un almacén y una ruta y luego Buscar/Refrescar.</td></tr>`;
+      updateKPIs();
       return;
     }
 
-    document.getElementById("badge_status").textContent = "OK";
-    logDebug("API OK clientes_asignacion_data.php", j);
-    renderTabla(j);
+    try{
+      setEstado('Cargando clientes...', true);
 
-  }catch(e){
-    document.getElementById("badge_status").textContent = "Error fetch";
-    logDebug("Fetch exception", {error:String(e)});
-    renderTabla({data:[]}, "Error de comunicación con API.");
-  }
-}
+      const empresa = getEmpresaFromAlmacenOption();
 
-/* ===========================
-   RENDER TABLA + MAPA + COMERCIAL
-   =========================== */
-function renderTabla(resp, errMsg=null){
-  const tb = document.getElementById('tabla_destinatarios');
-  tb.innerHTML = '';
+      // ✅ Compatibilidad: manda ambos nombres de parámetros (los que tú pides + los que algunos scripts usan)
+      const url =
+        `../api/sfa/clientes_asignacion_data.php?` +
+        `almacen_id=${encodeURIComponent(almacenId)}` +
+        `&ruta_id=${encodeURIComponent(rutaId)}` +
+        `&almacen=${encodeURIComponent(almacenId)}` +
+        `&ruta=${encodeURIComponent(rutaId)}` +
+        `&empresa=${encodeURIComponent(empresa)}` +
+        `&q=${encodeURIComponent(q)}`;
 
-  const rows = (resp && Array.isArray(resp.data)) ? resp.data : [];
-  CLIENTES = rows;
+      const res = await fetch(url, {cache:'no-store'});
+      const js = await res.json();
 
-  if(errMsg){
-    tb.innerHTML = `<tr><td colspan="17" class="text-center text-danger">${errMsg}</td></tr>`;
-    document.getElementById("k_total").textContent = `0 clientes`;
-    document.getElementById("k_gps").textContent = `0 con GPS`;
-    document.getElementById("k_sel").textContent = `0 seleccionados`;
-    paintMarkers([]);
-    return;
-  }
+      // Soporta formatos: {ok:1,data:[...]} o {success:true,data:[...]}
+      const ok = (js.ok==1) || (js.success===true) || (js.ok===true);
+      if(!ok){
+        const msg = js.error || js.msg || 'Error consultando clientes';
+        tbody.innerHTML = `<tr><td colspan="17" class="text-danger tiny p-2">${escapeHtml(msg)}</td></tr>`;
+        setEstado('Error API', false);
+        updateKPIs();
+        return;
+      }
 
-  if(rows.length===0){
-    tb.innerHTML = `<tr><td colspan="17" class="text-center text-muted">Sin datos</td></tr>`;
-    document.getElementById("k_total").textContent = `0 clientes`;
-    document.getElementById("k_gps").textContent = `0 con GPS`;
-    document.getElementById("k_sel").textContent = `0 seleccionados`;
-    paintMarkers([]);
-    return;
-  }
+      const data = js.data ?? [];
+      lblRutaCargada.textContent = selRuta.options[selRuta.selectedIndex]?.textContent || rutaId;
 
-  // KPIs
-  let gps = 0;
-  rows.forEach(r=>{
-    if((r.latitud||'')!=='' && (r.longitud||'')!=='') gps++;
-  });
-  document.getElementById("k_total").textContent = `${rows.length} clientes`;
-  document.getElementById("k_gps").textContent = `${gps} con GPS`;
-  document.getElementById("k_sel").textContent = `${selected.size} seleccionados`;
+      if(!Array.isArray(data) || data.length===0){
+        tbody.innerHTML = `<tr><td colspan="17" class="text-center tiny muted py-3">Sin resultados.</td></tr>`;
+        setEstado('OK', true);
+        updateKPIs();
+        return;
+      }
 
-  // Render
-  rows.forEach(r=>{
-    const id = String(r.id); // id_destinatario
-    const optRutas = [`<option value="">(global)</option>`]
-      .concat(RUTAS.map(x=>`<option value="${x.id}">${x.nombre}</option>`))
-      .join('');
+      tbody.innerHTML = data.map(rowTemplate).join('');
+      setEstado('OK', true);
+      updateKPIs();
 
-    tb.innerHTML += `
-      <tr data-id="${id}">
-        <td><input type="checkbox" class="chk-row" data-id="${id}"></td>
-        <td>[${r.clave_cliente ?? ''}] ${r.cliente ?? ''}</td>
-        <td>[${r.id}] ${r.clave_destinatario ?? ''} ${r.destinatario ?? ''}</td>
-
-        <!-- NUEVO: placeholders comerciales -->
-        <td class="c_lp" data-id="${id}"><span class="text-muted">—</span></td>
-        <td class="c_promo" data-id="${id}"><span class="text-muted">—</span></td>
-        <td class="c_desc" data-id="${id}"><span class="text-muted">—</span></td>
-
-        <td>${r.direccion ?? ''}</td>
-        <td>${r.colonia ?? ''}</td>
-        <td>${r.postal ?? ''}</td>
-        <td>${r.ciudad ?? ''}</td>
-        <td>${r.estado ?? ''}</td>
-        <td>${r.latitud ?? ''}</td>
-        <td>${r.longitud ?? ''}</td>
-        <td>${r.ruta ?? '--'}</td>
-        <td>
-          <select class="form-select form-select-sm ruta-fila">
-            ${optRutas}
-          </select>
-        </td>
-        <td class="dias-fila">
-          <label class="me-1"><input type="checkbox" value="Lu">L</label>
-          <label class="me-1"><input type="checkbox" value="Ma">M</label>
-          <label class="me-1"><input type="checkbox" value="Mi">Mi</label>
-          <label class="me-1"><input type="checkbox" value="Ju">J</label>
-          <label class="me-1"><input type="checkbox" value="Vi">V</label>
-          <label class="me-1"><input type="checkbox" value="Sa">S</label>
-          <label class="me-1"><input type="checkbox" value="Do">Do</label>
-        </td>
-        <td><input type="number" class="form-control form-control-sm secuencia" style="width:60px"></td>
-      </tr>
-    `;
-  });
-
-  // check individuales
-  document.querySelectorAll(".chk-row").forEach(chk=>{
-    chk.addEventListener("change", ()=>{
-      const id = String(chk.dataset.id);
-      if(chk.checked) selected.add(id); else selected.delete(id);
-      document.getElementById("k_sel").textContent = `${selected.size} seleccionados`;
-    });
-  });
-
-  // Pinta mapa
-  paintMarkers(rows);
-
-  // 🔥 Hidrata bloque comercial por lote (solo rows visibles)
-  cargarComercialDeTabla(rows);
-}
-
-async function cargarComercialDeTabla(rows){
-  try{
-    const ids = rows.map(r=>String(r.id)).filter(x=>x);
-    if(ids.length===0) return;
-
-    const resp = await fetch('../api/clientes_comercial_data.php',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ids: ids })
-    }).then(r=>r.json());
-
-    if(resp && resp.ok && resp.data){
-      // resp.data: { "443": {lp:{id,nombre}, promo:{...}, desc:{...}} }
-      Object.keys(resp.data).forEach(id=>{
-        const d = resp.data[id] || {};
-        const elLP = document.querySelector(`td.c_lp[data-id="${id}"]`);
-        const elPR = document.querySelector(`td.c_promo[data-id="${id}"]`);
-        const elDS = document.querySelector(`td.c_desc[data-id="${id}"]`);
-
-        const fmt = (x)=> x && x.id ? `[${x.id}] ${x.nombre||''}` : '—';
-
-        if(elLP) elLP.innerHTML = `<span class="${d.lp && d.lp.id ? 'badge-soft':''}">${fmt(d.lp)}</span>`;
-        if(elPR) elPR.innerHTML = `<span class="${d.promo && d.promo.id ? 'badge-soft':''}">${fmt(d.promo)}</span>`;
-        if(elDS) elDS.innerHTML = `<span class="${d.desc && d.desc.id ? 'badge-soft':''}">${fmt(d.desc)}</span>`;
-      });
-    }else{
-      logDebug("clientes_comercial_data.php sin ok", resp);
+    }catch(e){
+      console.error(e);
+      tbody.innerHTML = `<tr><td colspan="17" class="text-danger tiny p-2">Error consultando clientes: ${escapeHtml(e.message||e)}</td></tr>`;
+      setEstado('Error', false);
+      updateKPIs();
     }
-  }catch(e){
-    logDebug
+  }
+
+  function seleccionarTodo(flag){
+    tbody.querySelectorAll('.rowSel').forEach(chk => chk.checked = flag);
+    updateKPIs();
+  }
+
+  function aplicarDiasGlobalASel(){
+    const g = getGlobalDays();
+    const selected = tbody.querySelectorAll('tr[data-id-dest] .rowSel:checked');
+    selected.forEach(chk=>{
+      const tr = chk.closest('tr');
+      if(!tr) return;
+      tr.querySelector('.d-Lu').checked = !!g.Lu;
+      tr.querySelector('.d-Ma').checked = !!g.Ma;
+      tr.querySelector('.d-Mi').checked = !!g.Mi;
+      tr.querySelector('.d-Ju').checked = !!g.Ju;
+      tr.querySelector('.d-Vi').checked = !!g.Vi;
+      tr.querySelector('.d-Sa').checked = !!g.Sa;
+      tr.querySelector('.d-Do').checked = !!g.Do;
+    });
+  }
+
+  async function guardar(){
+    const almacenId = parseInt(selAlmacen.value||'0',10);
+    const rutaId = parseInt(selRuta.value||'0',10);
+    if(!almacenId || !rutaId){
+      alert('Seleccione almacén y ruta.');
+      return;
+    }
+
+    // Regla ejecutiva: guarda filas seleccionadas; si no hay seleccionadas, guarda las que tengan algún día marcado.
+    const rows = Array.from(tbody.querySelectorAll('tr[data-id-dest]'));
+    const selectedRows = rows.filter(tr => tr.querySelector('.rowSel')?.checked);
+    const candidate = selectedRows.length ? selectedRows : rows.filter(tr=>{
+      return ['Lu','Ma','Mi','Ju','Vi','Sa','Do'].some(k => tr.querySelector('.d-'+k)?.checked);
+    });
+
+    if(candidate.length===0){
+      alert('No hay filas para guardar (seleccione filas o marque días).');
+      return;
+    }
+
+    // Si hay global days marcados y la fila seleccionada no tiene ninguno, aplica global
+    candidate.forEach(tr=>{
+      const any = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'].some(k => tr.querySelector('.d-'+k)?.checked);
+      if(!any){
+        const g = getGlobalDays();
+        tr.querySelector('.d-Lu').checked = !!g.Lu;
+        tr.querySelector('.d-Ma').checked = !!g.Ma;
+        tr.querySelector('.d-Mi').checked = !!g.Mi;
+        tr.querySelector('.d-Ju').checked = !!g.Ju;
+        tr.querySelector('.d-Vi').checked = !!g.Vi;
+        tr.querySelector('.d-Sa').checked = !!g.Sa;
+        tr.querySelector('.d-Do').checked = !!g.Do;
+      }
+    });
+
+    const items = candidate.map(tr=>{
+      return {
+        id_destinatario: parseInt(tr.dataset.idDest||'0',10),
+        cve_cliente: tr.dataset.cveClte || '',
+        cve_vendedor: parseInt(tr.dataset.cveVend||'0',10),
+        Lu: tr.querySelector('.d-Lu').checked ? 1:0,
+        Ma: tr.querySelector('.d-Ma').checked ? 1:0,
+        Mi: tr.querySelector('.d-Mi').checked ? 1:0,
+        Ju: tr.querySelector('.d-Ju').checked ? 1:0,
+        Vi: tr.querySelector('.d-Vi').checked ? 1:0,
+        Sa: tr.querySelector('.d-Sa').checked ? 1:0,
+        Do: tr.querySelector('.d-Do').checked ? 1:0
+      };
+    }).filter(x=>x.id_destinatario>0);
+
+    try{
+      setEstado('Guardando...', true);
+
+      const payload = { almacen: almacenId, ruta: rutaId, items: items };
+      const res = await fetch('../api/sfa/clientes_asignacion_save.php', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const js = await res.json();
+
+      if(!(js.ok==1 || js.ok===true)){
+        setEstado('Error guardando', false);
+        alert((js.error||'Error guardando') + (js.detalle?('\n'+js.detalle):''));
+        return;
+      }
+
+      setEstado('OK', true);
+      // Estrategia: recargar para ver persistencia real (lo que manda el API)
+      await cargarDestinatarios();
+      alert(`Guardado correcto. Registros: ${js.saved||0}`);
+
+    }catch(e){
+      console.error(e);
+      setEstado('Error guardando', false);
+      alert('Error guardando: ' + (e.message||e));
+    }
+  }
+
+  // Eventos
+  selAlmacen.addEventListener('change', async ()=>{
+    await cargarRutasPorAlmacen();
+  });
+
+  selRuta.addEventListener('change', async ()=>{
+    const txt = selRuta.options[selRuta.selectedIndex]?.textContent || '—';
+    lblRutaCargada.textContent = txt;
+    await cargarDestinatarios();
+  });
+
+  el('btnBuscar').addEventListener('click', cargarDestinatarios);
+  el('btnLimpiar').addEventListener('click', ()=>{ el('txtBuscar').value=''; cargarDestinatarios(); });
+  el('txtBuscar').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); cargarDestinatarios(); } });
+
+  el('btnRefrescar').addEventListener('click', cargarDestinatarios);
+  el('btnGuardarTop').addEventListener('click', guardar);
+  el('btnGuardar').addEventListener('click', guardar);
+
+  el('btnSelTodo').addEventListener('click', ()=>seleccionarTodo(true));
+  el('btnClearSel').addEventListener('click', ()=>seleccionarTodo(false));
+  el('chkAll').addEventListener('change', (e)=>seleccionarTodo(e.target.checked));
+
+  // Si cambias días globales, aplícalos a seleccionados como acción táctica
+  ['gLu','gMa','gMi','gJu','gVi','gSa','gDo'].forEach(id=>{
+    el(id).addEventListener('change', ()=>aplicarDiasGlobalASel());
+  });
+
+  // Boot
+  (async function init(){
+    await cargarAlmacenes();
+    setEstado('OK', true);
+  })();
+
+})();
+</script>
+
+</body>
+</html>
+
+<?php
+require_once __DIR__ . '/../bi/_menu_global_end.php';

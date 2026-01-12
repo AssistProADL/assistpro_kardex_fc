@@ -182,26 +182,52 @@ if ($op) {
         exit;
     }
 
-    // BL Manufactura por Zona (c_ubicacion) — solo AreaProduccion = 'S'
+    // BL Manufactura por Zona (c_ubicacion)
     // BL = CodigoCSD (Bin Location)
+    // Regla: preferir ubicaciones marcadas como AreaProduccion='S' (o equivalentes).
+    // Si no existen, hacemos fallback a BL activos de la zona para no bloquear la operación.
     if ($op === 'bl_by_zona') {
         header('Content-Type: application/json; charset=utf-8');
         try {
             $zona = trim($_GET['zona'] ?? $_POST['zona'] ?? '');
-            if ($zona === '')
-                throw new Exception('Zona requerida');
+            if ($zona === '') {
+                echo json_encode(['ok' => true, 'data' => []], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
 
+            // 1) Intento estricto: área de producción
             $rows = db_all("
-        SELECT
-          idy_ubica,
-          CodigoCSD AS bl
-        FROM c_ubicacion
-        WHERE cve_almac = ?
-          AND AreaProduccion = 'S'
-          AND (Activo = 1 OR Activo IS NULL)
-          AND CodigoCSD IS NOT NULL AND CodigoCSD <> ''
-        ORDER BY CodigoCSD
-      ", [(int) $zona]);
+                SELECT
+                  idy_ubica,
+                  CodigoCSD AS bl
+                FROM c_ubicacion
+                WHERE cve_almac = ?
+                  AND (AreaProduccion = 'S' OR AreaProduccion = 1 OR AreaProduccion = '1' OR AreaProduccion = 'SI' OR AreaProduccion = 'Y')
+                  AND (Activo = 1 OR Activo IS NULL)
+                  AND CodigoCSD IS NOT NULL AND CodigoCSD <> ''
+                ORDER BY CodigoCSD
+            ", [(int) $zona]);
+
+            // 2) Fallback: si no hay BL de producción, mostrar BL activos de la zona (sin bloqueo)
+            if (!$rows || count($rows) === 0) {
+                $rows = db_all("
+                    SELECT
+                      idy_ubica,
+                      CodigoCSD AS bl
+                    FROM c_ubicacion
+                    WHERE cve_almac = ?
+                      AND (Activo = 1 OR Activo IS NULL)
+                      AND CodigoCSD IS NOT NULL AND CodigoCSD <> ''
+                    ORDER BY CodigoCSD
+                ", [(int) $zona]);
+
+                echo json_encode([
+                    'ok' => true,
+                    'msg' => 'No existen BL marcados como AreaProduccion en la zona; se muestran BL activos como fallback.',
+                    'data' => $rows
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
 
             echo json_encode(['ok' => true, 'data' => $rows], JSON_UNESCAPED_UNICODE);
         } catch (Throwable $e) {
@@ -856,24 +882,67 @@ include __DIR__ . '/../bi/_menu_global.php';
             function loadAlmacenes() {
                 $.getJSON('../api/filtros_almacenes.php', function (r) {
                     const $s = $('#selAlmacen').empty().append('<option value="">Seleccione almacén</option>');
-                    (r || []).forEach(a => {
-                        $s.append(`<option value="${String(a.id).replaceAll('"', '&quot;')}">${(a.nombre || a.id)}</option>`);
+
+                    // Soporta: [ ... ]  ó  {ok:true, data:[...]}
+                    const arr = Array.isArray(r) ? r : (r && r.data ? r.data : []);
+
+                    arr.forEach(a => {
+                        const id  = String(a.almacenp_id ?? a.almacenep_id ?? a.id ?? a.cve_almacenp ?? '');
+                        const txt = (`${a.clave ? '(' + a.clave + ') ' : ''}${a.nombre ?? ''}`).trim() || id;
+                        if(!id) return;
+                        $s.append(`<option value="${id.replaceAll('"', '&quot;')}">${txt}</option>`);
                     });
+
+                    // Autoselección corporativa: si ya hay valor (p.ej. navegador recuerda), lo respeta;
+                    // si no hay, selecciona el primer almacén disponible con value no vacío.
+                    let current = ($s.val() || '').toString().trim();
+                    if (!current) {
+                        // 1) intenta con el primer registro del array
+                        const firstValArr = String(arr?.[0]?.almacenep_id ?? arr?.[0]?.id ?? arr?.[0]?.cve_almacenp ?? '').trim();
+                        if (firstValArr) $s.val(firstValArr);
+
+                        // 2) si aún está vacío, toma el primer <option> con value != ""
+                        current = ($s.val() || '').toString().trim();
+                        if (!current) {
+                            const firstOpt = $s.find('option').filter(function(){ return (this.value||'').toString().trim()!==''; }).first().val();
+                            if (firstOpt) $s.val(firstOpt);
+                        }
+                    }
+
+                    // Dispara cambio para cargar Zonas/BL en cascada (y fuerza llamada directa con un pequeño delay)
+                    $s.trigger('change');
+                    if (typeof loadZonas === 'function') { setTimeout(loadZonas, 50); }
+                }).fail(function (xhr) {
+                    console.error('Error filtros_almacenes.php', xhr && xhr.responseText ? xhr.responseText : xhr);
+                    toast('Error cargando almacenes', 'danger');
                 });
             }
 
             // --- Zonas por almacén lógico (cve_almacenp)
             function loadZonas() {
                 const almacenp = $('#selAlmacen').val();
+                console.log('loadZonas almacenp=', almacenp);
                 const $z = $('#selZona').empty().append('<option value="">Seleccione zona de almacén</option>');
-                $('#selBLManu').empty().append('<option value="">Seleccione BL de manufactura</option>');
+                const $bl = $('#selBLManu').empty().append('<option value="">Seleccione BL de manufactura</option>');
                 if (!almacenp) return;
 
                 $.getJSON('orden_produccion.php', { op: 'zonas_by_almacenp', almacenp }, function (r) {
                     if (!r || !r.ok) { toast(r.msg || 'Error cargando zonas', 'danger'); return; }
-                    (r.data || []).forEach(z => {
+
+                    const arr = (r.data || []);
+                    arr.forEach(z => {
                         $z.append(`<option value="${z.cve_almac}">(${z.clave_almacen}) ${z.des_almac}</option>`);
                     });
+
+                    // Autoselección: primera zona y disparo de BL
+                    const current = ($z.val() || '').toString();
+                    if (!current && arr.length > 0) {
+                        $z.val(String(arr[0].cve_almac ?? ''));
+                    }
+                    $z.trigger('change');
+                }).fail(function (xhr) {
+                    console.error('Error zonas_by_almacenp', xhr && xhr.responseText ? xhr.responseText : xhr);
+                    toast('Error cargando zonas', 'danger');
                 });
             }
 

@@ -11,8 +11,13 @@ function json_err($msg, $detail=null, $code=400) {
   exit;
 }
 
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
+$action = $_GET['action'] ?? $_POST['action'] ?? $_POST['accion'] ?? $_GET['accion'] ?? '';
 
+$action = trim((string)$action);
+$action = strtolower($action);
+// Aliases legacy para compatibilidad con vistas antiguas
+if ($action === 'zonas') $action = 'zonas_recepcion';
+if ($action === 'bl') $action = 'bl_destino';
 /**
  * Helpers de introspección (para sobrevivir a variaciones legacy)
  */

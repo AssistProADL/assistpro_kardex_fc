@@ -5,307 +5,394 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 if (session_status() === PHP_SESSION_NONE) { @session_start(); }
 
+// ROOT del proyecto (pedidos -> api -> public -> raíz)
 $root = realpath(__DIR__ . '/../../../');
 if (!$root) {
   http_response_code(500);
-  echo json_encode(['ok'=>0,'error'=>'No se pudo resolver ROOT'], JSON_UNESCAPED_UNICODE);
+  echo json_encode(['ok'=>0,'error'=>'No se pudo resolver ROOT del proyecto'], JSON_UNESCAPED_UNICODE);
   exit;
 }
+
 require_once $root . '/app/db.php';
 
-function jexit(array $a, int $code=200): void {
+// ---------- helpers ----------
+function jexit(array $arr, int $code=200): void {
   http_response_code($code);
-  echo json_encode($a, JSON_UNESCAPED_UNICODE);
+  echo json_encode($arr, JSON_UNESCAPED_UNICODE);
   exit;
 }
 function get_json_body(): array {
   $raw = file_get_contents('php://input');
-  $j = json_decode($raw ?: '[]', true);
-  return is_array($j) ? $j : [];
+  $data = json_decode($raw ?: '[]', true);
+  return is_array($data) ? $data : [];
 }
 
-$action = strtolower(trim((string)($_GET['action'] ?? $_POST['action'] ?? '')));
-if ($action === '') {
-  jexit(['ok'=>0,'error'=>'Acción no soportada','debug'=>['action'=>$action,'get'=>$_GET,'post'=>$_POST]], 400);
-}
+// Acción
+$action = $_GET['action'] ?? $_POST['action'] ?? '';
+$action = strtolower(trim((string)$action));
+
+// Alias opcionales
+if ($action === 'cliente') $action = 'clientes';
+if ($action === 'producto' || $action === 'productos') $action = 'articulos';
 
 try {
   /** @var PDO $pdo */
-  $pdo = db();
+  $pdo = db(); // si tu db.php no expone db(), dime y lo ajusto al patrón $pdo global
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (Throwable $e) {
-  jexit(['ok'=>0,'error'=>'DB','detalle'=>$e->getMessage()], 500);
+  jexit(['ok'=>0,'error'=>'No hay conexión a BD','detalle'=>$e->getMessage()], 500);
 }
 
 try {
 
-  // =========================
-  // ALMACENES
-  // =========================
+  // ==========================
+  // EMPRESAS (si no existe c_compania, regresamos demo)
+  // ==========================
+  if ($action === 'empresas') {
+    try {
+      $st = $pdo->query("SELECT id_compania AS id, nombre AS nombre FROM c_compania WHERE COALESCE(activo,1)=1 ORDER BY nombre");
+      $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+      jexit(['ok'=>1,'rows'=>$rows]);
+    } catch (Throwable $e) {
+      jexit(['ok'=>1,'rows'=>[
+        ['id'=>1,'nombre'=>'FOAM CREATIONS MEXICO SA DE CV']
+      ],'nota'=>'c_compania no disponible; usando demo']);
+    }
+  }
+
+  // ==========================
+  // ALMACENES (c_almacenp)
+  // ==========================
   if ($action === 'almacenes') {
     $empresa = trim((string)($_GET['empresa_id'] ?? ''));
     $empresa = ctype_digit($empresa) ? (int)$empresa : 0;
 
     $sql = "
-      SELECT a.id, a.clave AS cve, a.nombre
+      SELECT a.id AS id, a.clave AS cve, a.nombre AS nombre
       FROM c_almacenp a
       WHERE COALESCE(a.Activo,1)=1
     ";
-    $p = [];
+
+    $params = [];
     if ($empresa > 0) {
-      $sql .= " AND (COALESCE(a.cve_cia,0)=:emp OR COALESCE(a.empresa_id,0)=:emp) ";
-      $p['emp'] = $empresa;
+      $sql .= " AND COALESCE(a.cve_cia,0)=? ";
+      $params[] = $empresa;
     }
+
     $sql .= " ORDER BY a.nombre ";
 
     $st = $pdo->prepare($sql);
-    $st->execute($p);
+    $st->execute($params);
     jexit(['ok'=>1,'rows'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
   }
 
-  // =========================
-  // CLIENTES (sin HY093)
-  // =========================
+  // ==========================
+  // CLIENTES (c_cliente)  ✅ POSICIONAL (evita HY093)
+  // ==========================
   if ($action === 'clientes') {
     $q = trim((string)($_GET['q'] ?? ''));
     $limit = (int)($_GET['limit'] ?? 20);
     if ($limit <= 0 || $limit > 50) $limit = 20;
+
     $qLike = '%' . $q . '%';
 
     $sql = "
-      SELECT id_cliente, Cve_Clte, RazonSocial, RazonComercial, RFC
+      SELECT
+        id_cliente,
+        Cve_Clte,
+        RazonSocial,
+        RazonComercial,
+        RFC,
+        Id_Vendedor,
+        cve_ruta,
+        Cve_Almacenp
       FROM c_cliente
       WHERE COALESCE(Activo,1)=1
         AND (
-          :q1='' OR
-          Cve_Clte LIKE :qLike OR
-          RazonSocial LIKE :qLike OR
-          COALESCE(RazonComercial,'') LIKE :qLike OR
-          COALESCE(RFC,'') LIKE :qLike
+          ? = '' OR
+          Cve_Clte LIKE ? OR
+          RazonSocial LIKE ? OR
+          COALESCE(RazonComercial,'') LIKE ? OR
+          COALESCE(RFC,'') LIKE ?
         )
       ORDER BY
-        CASE WHEN Cve_Clte=:q2 THEN 0 ELSE 1 END,
-        RazonSocial
+        CASE WHEN Cve_Clte = ? THEN 0 ELSE 1 END,
+        RazonSocial ASC
       LIMIT $limit
     ";
+
     $st = $pdo->prepare($sql);
-    $st->execute(['q1'=>$q,'q2'=>$q,'qLike'=>$qLike]);
+    $st->execute([$q, $qLike, $qLike, $qLike, $qLike, $qLike, $q]);
+
     jexit(['ok'=>1,'rows'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
   }
 
-  // =========================
-  // ARTICULOS (sin HY093)
-  // =========================
+  // ==========================
+  // ARTICULOS (c_articulo) ✅ POSICIONAL
+  // ==========================
   if ($action === 'articulos') {
     $q = trim((string)($_GET['q'] ?? ''));
     $limit = (int)($_GET['limit'] ?? 20);
     if ($limit <= 0 || $limit > 50) $limit = 20;
+
     $qLike = '%' . $q . '%';
 
     $sql = "
-      SELECT id, cve_articulo, des_articulo, cve_umed, mav_pctiva, PrecioVenta
+      SELECT
+        id,
+        cve_articulo,
+        des_articulo,
+        cve_umed,
+        cve_almac,
+        mav_pctiva,
+        PrecioVenta,
+        control_lotes,
+        control_numero_series,
+        barras2,
+        barras3
       FROM c_articulo
       WHERE COALESCE(Activo,1)=1
         AND (
-          :q1='' OR
-          cve_articulo LIKE :qLike OR
-          des_articulo LIKE :qLike OR
-          COALESCE(barras2,'') LIKE :qLike OR
-          COALESCE(barras3,'') LIKE :qLike
+          ? = '' OR
+          cve_articulo LIKE ? OR
+          des_articulo LIKE ? OR
+          COALESCE(barras2,'') LIKE ? OR
+          COALESCE(barras3,'') LIKE ?
         )
       ORDER BY
-        CASE WHEN cve_articulo=:q2 THEN 0 ELSE 1 END,
-        des_articulo
+        CASE WHEN cve_articulo = ? THEN 0 ELSE 1 END,
+        des_articulo ASC
       LIMIT $limit
     ";
+
     $st = $pdo->prepare($sql);
-    $st->execute(['q1'=>$q,'q2'=>$q,'qLike'=>$qLike]);
+    $st->execute([$q, $qLike, $qLike, $qLike, $qLike, $q]);
+
     jexit(['ok'=>1,'rows'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
   }
 
-  // =========================
-  // PEDIDOS (tipo Picking)
-  // =========================
-  if ($action === 'pedidos') {
-
-    $status   = trim((string)($_GET['status'] ?? ''));
-    $almac    = trim((string)($_GET['cve_almac'] ?? ''));
-    $ruta     = trim((string)($_GET['ruta'] ?? ''));
-    $clte     = trim((string)($_GET['cve_clte'] ?? ''));
-    $desde    = trim((string)($_GET['desde'] ?? ''));
-    $hasta    = trim((string)($_GET['hasta'] ?? ''));
-
-    $tipoPed  = trim((string)($_GET['tipo_pedido'] ?? ''));      // h.TipoPedido
-    $fuente   = trim((string)($_GET['fuente'] ?? ''));           // h.fuente_detalle
-    $prio     = trim((string)($_GET['prioridad'] ?? ''));        // h.ID_Tipoprioridad
-    $sem      = trim((string)($_GET['semaforo'] ?? ''));         // VERDE/AMARILLO/ROJO
+  // ==========================
+  // ARTICULO INFO (1 artículo)
+  // ==========================
+  if ($action === 'articulo_info') {
+    $cve = trim((string)($_GET['cve'] ?? ''));
+    if ($cve === '') jexit(['ok'=>0,'error'=>'Falta cve'], 400);
 
     $sql = "
       SELECT
-        h.id_pedido,
-        h.Fol_folio,
-        h.Fec_Pedido,
-        h.Fec_Entrega,
-        h.Cve_clte,
-        h.status,
-        h.TipoPedido,
-        h.ruta,
-        h.cve_almac,
-        a.clave AS clave_almacen,
-        h.fuente_detalle,
-        h.ID_Tipoprioridad,
-        h.rango_hora,
-        h.Cve_Usuario,
-        h.Observaciones,
-
-        /* Agregados estilo Picking */
-        COALESCE(x.lineas,0)        AS lineas,
-        COALESCE(x.piezas,0)        AS piezas,
-        COALESCE(x.pzas_surtidas,0) AS pzas_surtidas,
-        COALESCE(x.avance_pct,0)    AS avance_pct,
-        COALESCE(x.semaforo,'ROJO') AS semaforo
-
-      FROM th_pedido h
-      LEFT JOIN c_almacenp a
-        ON (a.clave = h.cve_almac OR a.id = h.cve_almac)
-
-      LEFT JOIN (
-        SELECT
-          d.Fol_folio,
-          COUNT(*) AS lineas,
-          SUM(COALESCE(d.Num_cantidad,0)) AS piezas,
-          SUM(COALESCE(d.SurtidoXPiezas,0) + COALESCE(d.SurtidoXCajas,0)) AS pzas_surtidas,
-          CASE
-            WHEN SUM(COALESCE(d.Num_cantidad,0)) <= 0 THEN 0
-            ELSE ROUND( (SUM(COALESCE(d.SurtidoXPiezas,0) + COALESCE(d.SurtidoXCajas,0)) / SUM(COALESCE(d.Num_cantidad,0))) * 100, 2)
-          END AS avance_pct,
-          CASE
-            WHEN SUM(COALESCE(d.Num_cantidad,0)) <= 0 THEN 'ROJO'
-            WHEN SUM(COALESCE(d.SurtidoXPiezas,0) + COALESCE(d.SurtidoXCajas,0)) <= 0 THEN 'ROJO'
-            WHEN (SUM(COALESCE(d.SurtidoXPiezas,0) + COALESCE(d.SurtidoXCajas,0)) / NULLIF(SUM(COALESCE(d.Num_cantidad,0)),0)) >= 1 THEN 'VERDE'
-            ELSE 'AMARILLO'
-          END AS semaforo
-        FROM td_pedido d
-        GROUP BY d.Fol_folio
-      ) x ON x.Fol_folio = h.Fol_folio
-
-      WHERE COALESCE(h.Activo,1)=1
+        id,
+        cve_articulo,
+        des_articulo,
+        des_detallada,
+        cve_umed,
+        cve_almac,
+        mav_pctiva,
+        IEPS,
+        PrecioVenta,
+        control_lotes,
+        control_numero_series
+      FROM c_articulo
+      WHERE cve_articulo=? AND COALESCE(Activo,1)=1
+      LIMIT 1
     ";
+    $st = $pdo->prepare($sql);
+    $st->execute([$cve]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$row) jexit(['ok'=>0,'error'=>'Artículo no encontrado/inactivo'], 404);
+    jexit(['ok'=>1,'row'=>$row]);
+  }
 
-    $p = [];
+  // ==========================
+  // CREAR PEDIDO (th_pedido + td_pedido)
+  // ==========================
+  if ($action === 'crear') {
+    $p = get_json_body();
 
-    if ($status !== '') { $sql .= " AND h.status = :st "; $p['st'] = $status; }
-    if ($almac  !== '') { $sql .= " AND h.cve_almac = :alm "; $p['alm'] = $almac; }
-    if ($ruta   !== '') { $sql .= " AND h.ruta = :ruta "; $p['ruta'] = $ruta; }
-    if ($clte   !== '') { $sql .= " AND h.Cve_clte = :clte "; $p['clte'] = $clte; }
+    $cliente     = trim((string)($p['Cve_clte'] ?? ''));
+    $fecPedido   = trim((string)($p['Fec_Pedido'] ?? date('Y-m-d')));
+    $fecEntrega  = trim((string)($p['Fec_Entrega'] ?? $fecPedido));
+    $vendedor    = trim((string)($p['cve_Vendedor'] ?? ''));
+    $obs         = (string)($p['Observaciones'] ?? '');
+    $cveAlmac    = trim((string)($p['cve_almac'] ?? ''));
+    $cveUbic     = trim((string)($p['cve_ubicacion'] ?? ''));
+    $dest        = trim((string)($p['destinatario'] ?? ''));
+    $tipoVenta   = trim((string)($p['tipo_venta'] ?? 'preventa'));
+    $prioridad   = (int)($p['ID_Tipoprioridad'] ?? 0);
+    $rangoHora   = trim((string)($p['rango_hora'] ?? ''));
+    $idem        = trim((string)($p['idempotency_key'] ?? ''));
+    $partidas    = $p['partidas'] ?? [];
 
-    if ($tipoPed !== '') { $sql .= " AND COALESCE(h.TipoPedido,'') = :tp "; $p['tp'] = $tipoPed; }
-    if ($fuente  !== '') { $sql .= " AND COALESCE(h.fuente_detalle,'') = :fue "; $p['fue'] = $fuente; }
-    if ($prio    !== '' && ctype_digit($prio)) { $sql .= " AND COALESCE(h.ID_Tipoprioridad,0) = :pr "; $p['pr'] = (int)$prio; }
-
-    if ($desde !== '' && $hasta !== '') {
-      $sql .= " AND h.Fec_Pedido BETWEEN :d1 AND :d2 ";
-      $p['d1'] = $desde;
-      $p['d2'] = $hasta;
+    if ($cliente === '' || !is_array($partidas) || count($partidas) === 0) {
+      jexit(['ok'=>0,'error'=>'Datos incompletos: Cliente/Partidas'], 400);
     }
 
-    if ($sem !== '') { $sql .= " AND COALESCE(x.semaforo,'ROJO') = :sem "; $p['sem'] = strtoupper($sem); }
-
-    $sql .= " ORDER BY h.Fec_Pedido DESC, h.Fol_folio DESC LIMIT 25 ";
-
-    $st = $pdo->prepare($sql);
-    $st->execute($p);
-    jexit(['ok'=>1,'rows'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
-  }
-
-  // =========================
-  // DETALLE
-  // =========================
-  if ($action === 'pedido_detalle') {
-    $folio = trim((string)($_GET['folio'] ?? ''));
-    if ($folio === '') jexit(['ok'=>0,'error'=>'Falta folio'], 400);
-
-    $stH = $pdo->prepare("
-      SELECT *
-      FROM th_pedido
-      WHERE Fol_folio = :f
-      LIMIT 1
-    ");
-    $stH->execute(['f'=>$folio]);
-    $header = $stH->fetch(PDO::FETCH_ASSOC);
-
-    $stD = $pdo->prepare("
-      SELECT
-        id, Fol_folio, Cve_articulo, Num_cantidad, id_unimed, cve_lote,
-        SurtidoXCajas, SurtidoXPiezas, Num_revisadas, Num_Empacados, status, itemPos, Precio_unitario, Desc_Importe, IVA
-      FROM td_pedido
-      WHERE Fol_folio = :f
-      ORDER BY itemPos ASC, id ASC
-    ");
-    $stD->execute(['f'=>$folio]);
-    $detail = $stD->fetchAll(PDO::FETCH_ASSOC);
-
-    jexit(['ok'=>1,'header'=>$header,'detail'=>$detail]);
-  }
-
-  // =========================
-  // CREAR (para pedido.php)
-  // =========================
-  if ($action === 'crear') {
-    $b = get_json_body();
-    if (empty($b['Cve_clte'])) jexit(['ok'=>0,'error'=>'Falta cliente'], 400);
-    if (empty($b['cve_almac'])) jexit(['ok'=>0,'error'=>'Falta almacén'], 400);
-    if (empty($b['partidas']) || !is_array($b['partidas'])) jexit(['ok'=>0,'error'=>'Sin partidas'], 400);
+    // validar cliente activo
+    $st = $pdo->prepare("SELECT 1 FROM c_cliente WHERE Cve_Clte=? AND COALESCE(Activo,1)=1 LIMIT 1");
+    $st->execute([$cliente]);
+    if (!$st->fetchColumn()) jexit(['ok'=>0,'error'=>'Cliente inválido/inactivo'], 400);
 
     $pdo->beginTransaction();
 
-    $folio = trim((string)($b['Fol_folio'] ?? ''));
-    if ($folio === '') $folio = 'PED-' . date('Ymd-His');
+    // idempotencia por fuente_detalle
+    if ($idem !== '') {
+      $st = $pdo->prepare("SELECT id_pedido, Fol_folio FROM th_pedido WHERE fuente_detalle=? LIMIT 1");
+      $st->execute([$idem]);
+      $ex = $st->fetch(PDO::FETCH_ASSOC);
+      if ($ex) {
+        $pdo->commit();
+        jexit(['ok'=>1,'id_pedido'=>(int)$ex['id_pedido'],'Fol_folio'=>$ex['Fol_folio'],'idempotente'=>1]);
+      }
+    }
 
-    $st = $pdo->prepare("
+    // folio
+    $ymd = date('Ymd', strtotime($fecPedido));
+    $st = $pdo->prepare("SELECT COUNT(*) FROM th_pedido WHERE Fec_Pedido=?");
+    $st->execute([$fecPedido]);
+    $seq = (int)$st->fetchColumn() + 1;
+    $folio = sprintf("PED-%s-%06d", $ymd, $seq);
+
+    // insertar encabezado
+    $sqlH = "
       INSERT INTO th_pedido
-      (Fol_folio, Fec_Pedido, Cve_clte, status, Fec_Entrega, cve_almac, TipoPedido, ruta, ID_Tipoprioridad, rango_hora, fuente_detalle, Observaciones, Cve_Usuario, Activo)
+      (Fol_folio,Fec_Pedido,Cve_clte,status,Fec_Entrega,cve_Vendedor,fuente_detalle,Observaciones,
+       ID_Tipoprioridad,Fec_Entrada,rango_hora,cve_almac,cve_ubicacion,destinatario,Activo,tipo_venta,Cve_Usuario)
       VALUES
-      (:f, CURDATE(), :cl, 'A', :fe, :alm, :tp, :ruta, :pr, :rh, :fu, :obs, :usr, 1)
-    ");
-    $st->execute([
-      'f'   => $folio,
-      'cl'  => $b['Cve_clte'],
-      'fe'  => ($b['Fec_Entrega'] ?? date('Y-m-d')),
-      'alm' => $b['cve_almac'],
-      'tp'  => ($b['TipoPedido'] ?? 'PEDIDO'),
-      'ruta'=> ($b['ruta'] ?? null),
-      'pr'  => (int)($b['ID_Tipoprioridad'] ?? 3),
-      'rh'  => ($b['rango_hora'] ?? null),
-      'fu'  => ($b['fuente_detalle'] ?? 'CAPTURA'),
-      'obs' => ($b['Observaciones'] ?? null),
-      'usr' => ($b['Cve_Usuario'] ?? ($_SESSION['usuario'] ?? 'SYS')),
+      (?,?,?,?,?,?,?,?,?,NOW(),?,?,?,?,?,1,?,?)
+    ";
+    $stH = $pdo->prepare($sqlH);
+    $stH->execute([
+      $folio,
+      $fecPedido,
+      $cliente,
+      'A',
+      $fecEntrega,
+      ($vendedor !== '' ? $vendedor : null),
+      ($idem !== '' ? $idem : null),
+      ($obs !== '' ? $obs : null),
+      ($prioridad > 0 ? $prioridad : null),
+      ($rangoHora !== '' ? $rangoHora : null),
+      ($cveAlmac !== '' ? $cveAlmac : null),
+      ($cveUbic !== '' ? $cveUbic : null),
+      ($dest !== '' ? $dest : null),
+      ($tipoVenta !== '' ? $tipoVenta : null),
+      ($_SESSION['usuario'] ?? null),
     ]);
 
-    $pos = 1;
-    $stD = $pdo->prepare("
-      INSERT INTO td_pedido
-      (Fol_folio, Cve_articulo, Num_cantidad, status, itemPos, Num_revisadas, Num_Empacados, Activo, Precio_unitario, Desc_Importe, IVA, id_unimed, cve_lote)
-      VALUES
-      (:f, :a, :q, 'A', :p, 0, 0, 1, :pu, :di, :iva, :uom, :lote)
-    ");
+    $idPedido = (int)$pdo->lastInsertId();
 
-    foreach ($b['partidas'] as $r) {
+    // insertar detalle
+    $sqlD = "
+      INSERT INTO td_pedido
+      (Fol_folio,Cve_articulo,Num_cantidad,id_unimed,status,itemPos,cve_lote,Num_revisadas,Activo,
+       Precio_unitario,Desc_Importe,IVA,Fec_Entrega,Proyecto)
+      VALUES
+      (?,?,?,?,?,?,?,0,1,?,?,?,?,?)
+    ";
+    $stD = $pdo->prepare($sqlD);
+
+    $pos = 1;
+    foreach ($partidas as $r) {
+      $art  = trim((string)($r['Cve_articulo'] ?? ''));
+      $qty  = (float)($r['Num_cantidad'] ?? 0);
+      $uom  = isset($r['id_unimed']) ? (int)$r['id_unimed'] : null;
+      $lote = trim((string)($r['cve_lote'] ?? ''));
+      $precio = array_key_exists('Precio_unitario',$r) ? (float)$r['Precio_unitario'] : null;
+      $desc   = array_key_exists('Desc_Importe',$r) ? (float)$r['Desc_Importe'] : 0.0;
+      $iva    = array_key_exists('IVA',$r) ? (float)$r['IVA'] : null;
+      $proy   = trim((string)($r['Proyecto'] ?? ''));
+
+      if ($art === '' || $qty <= 0) throw new RuntimeException("Partida inválida (artículo/cantidad)");
+
+      // defaults del artículo
+      $stA = $pdo->prepare("SELECT cve_umed, PrecioVenta, mav_pctiva, control_lotes FROM c_articulo WHERE cve_articulo=? AND COALESCE(Activo,1)=1 LIMIT 1");
+      $stA->execute([$art]);
+      $a = $stA->fetch(PDO::FETCH_ASSOC);
+      if (!$a) throw new RuntimeException("Artículo inválido/inactivo: $art");
+
+      if ($uom === null && $a['cve_umed'] !== null) $uom = (int)$a['cve_umed'];
+      if ($precio === null) $precio = (float)($a['PrecioVenta'] ?? 0);
+      if ($iva === null) $iva = (float)($a['mav_pctiva'] ?? 0);
+
+      if (($a['control_lotes'] ?? '') === 'S' && $lote === '') {
+        throw new RuntimeException("Artículo requiere lote: $art");
+      }
+
       $stD->execute([
-        'f'   => $folio,
-        'a'   => $r['Cve_articulo'],
-        'q'   => (float)($r['Num_cantidad'] ?? 0),
-        'p'   => $pos++,
-        'pu'  => (float)($r['Precio_unitario'] ?? 0),
-        'di'  => (float)($r['Desc_Importe'] ?? 0),
-        'iva' => (float)($r['IVA'] ?? 0),
-        'uom' => ($r['id_unimed'] ?? null),
-        'lote'=> ($r['cve_lote'] ?? null),
+        $folio,
+        $art,
+        $qty,
+        $uom,
+        'A',
+        $pos,
+        ($lote !== '' ? $lote : null),
+        $precio,
+        $desc,
+        $iva,
+        $fecEntrega,
+        ($proy !== '' ? $proy : null),
       ]);
+
+      $pos++;
     }
 
     $pdo->commit();
-    jexit(['ok'=>1,'Fol_folio'=>$folio]);
+    jexit(['ok'=>1,'id_pedido'=>$idPedido,'Fol_folio'=>$folio]);
+  }
+
+  // ==========================
+  // CONSULTAR PEDIDO
+  // ==========================
+  if ($action === 'consultar') {
+    $id = (int)($_GET['id_pedido'] ?? 0);
+    $folio = trim((string)($_GET['Fol_folio'] ?? ''));
+
+    if ($id <= 0 && $folio === '') jexit(['ok'=>0,'error'=>'Falta id_pedido o Fol_folio'], 400);
+
+    if ($id > 0) {
+      $st = $pdo->prepare("SELECT * FROM th_pedido WHERE id_pedido=? LIMIT 1");
+      $st->execute([$id]);
+    } else {
+      $st = $pdo->prepare("SELECT * FROM th_pedido WHERE Fol_folio=? LIMIT 1");
+      $st->execute([$folio]);
+    }
+    $h = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$h) jexit(['ok'=>0,'error'=>'Pedido no encontrado'], 404);
+
+    $st = $pdo->prepare("SELECT * FROM td_pedido WHERE Fol_folio=? ORDER BY itemPos ASC, id ASC");
+    $st->execute([$h['Fol_folio']]);
+    $d = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    jexit(['ok'=>1,'header'=>$h,'detail'=>$d]);
+  }
+
+  // ==========================
+  // LISTAR PEDIDOS
+  // ==========================
+  if ($action === 'listar') {
+    $status = trim((string)($_GET['status'] ?? 'A'));
+    $desde  = trim((string)($_GET['desde'] ?? date('Y-m-01')));
+    $hasta  = trim((string)($_GET['hasta'] ?? date('Y-m-d')));
+    $clte   = trim((string)($_GET['Cve_clte'] ?? ''));
+
+    $sql = "
+      SELECT
+        h.id_pedido, h.Fol_folio, h.Fec_Pedido, h.Fec_Entrega, h.status,
+        h.Cve_clte, c.RazonSocial, h.cve_almac, h.destinatario
+      FROM th_pedido h
+      LEFT JOIN c_cliente c ON c.Cve_Clte = h.Cve_clte
+      WHERE h.Fec_Pedido BETWEEN ? AND ?
+    ";
+    $p = [$desde, $hasta];
+
+    if ($status !== '') { $sql .= " AND h.status=? "; $p[] = $status; }
+    if ($clte !== '') { $sql .= " AND h.Cve_clte=? "; $p[] = $clte; }
+
+    $sql .= " ORDER BY h.Fec_Pedido DESC, h.id_pedido DESC LIMIT 500 ";
+
+    $st = $pdo->prepare($sql);
+    $st->execute($p);
+
+    jexit(['ok'=>1,'rows'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
   }
 
   jexit(['ok'=>0,'error'=>'Acción no soportada','debug'=>['action'=>$action,'get'=>$_GET]], 400);
