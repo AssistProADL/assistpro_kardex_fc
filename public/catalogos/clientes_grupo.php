@@ -1,469 +1,453 @@
 <?php
-// public/catalogos/clientes_grupo.php
-require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>AssistPro | Grupo de Clientes</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+/* =========================================================
+   ASSISTPRO – GRUPO DE CLIENTES
+========================================================= */
+body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6fb; margin: 0; }
+.ap-container { padding: 20px; font-size: 13px; max-width: 1400px; margin: 0 auto; }
 
-  <style>
-    :root{
-      --ap-blue:#0B5ED7;
-      --ap-blue-2:#0A58CA;
-      --ap-bg:#F6F8FB;
-      --ap-card:#FFFFFF;
-      --ap-border:#E6EAF2;
-      --ap-text:#1F2A37;
-    }
-    body{ background:var(--ap-bg); color:var(--ap-text); }
-    .ap-titlebar{
-      background: var(--ap-card);
-      border:1px solid var(--ap-border);
-      border-radius:14px;
-      padding:14px 16px;
-      margin:14px 14px 10px 14px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-    }
-    .ap-title{
-      display:flex; align-items:center; gap:10px;
-      font-weight:800; color:var(--ap-blue);
-      margin:0; font-size:18px;
-    }
-    .ap-title i{ font-size:18px; }
-    .ap-actions{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-    .ap-card{
-      background:var(--ap-card);
-      border:1px solid var(--ap-border);
-      border-radius:14px;
-      margin:0 14px 14px 14px;
-      padding:12px;
-    }
-    .ap-table-wrap{
-      width:100%;
-      overflow:auto;
-      border-radius:12px;
-      border:1px solid var(--ap-border);
-    }
-    table.ap-grid{
-      width:100%;
-      border-collapse:separate;
-      border-spacing:0;
-      font-size:10px;
-      white-space:nowrap;
-    }
-    table.ap-grid thead th{
-      position:sticky; top:0;
-      background:#EEF4FF;
-      color:#0B2F6A;
-      z-index:2;
-      border-bottom:1px solid var(--ap-border);
-      padding:8px 8px;
-      text-align:center;
-    }
-    table.ap-grid td{
-      border-bottom:1px solid #F0F3FA;
-      padding:6px 8px;
-      text-align:center;
-      background:#fff;
-    }
-    table.ap-grid tbody tr:hover td{ background:#F7FAFF; }
-    .ap-col-actions{ position:sticky; left:0; z-index:3; }
-    table.ap-grid thead .ap-col-actions{ background:#E3EEFF; z-index:4; }
-    table.ap-grid tbody .ap-col-actions{ background:#fff; }
-    .ap-btn{
-      border:1px solid var(--ap-border);
-      background:#fff;
-      padding:6px 10px;
-      border-radius:10px;
-      font-size:12px;
-    }
-    .ap-btn-primary{
-      background:var(--ap-blue);
-      color:#fff;
-      border-color:var(--ap-blue);
-    }
-    .ap-btn-primary:hover{ background:var(--ap-blue-2); }
-    .ap-badge-inac{
-      background:#FFE7E7; color:#9B1C1C; border:1px solid #FFD1D1;
-      padding:2px 8px; border-radius:999px; font-size:10px;
-    }
-    .ap-badge-act{
-      background:#E9FCEB; color:#166534; border:1px solid #C7F9CC;
-      padding:2px 8px; border-radius:999px; font-size:10px;
-    }
-    .ap-spinner{
-      display:none;
-      position:fixed;
-      inset:0;
-      background:rgba(15,23,42,.35);
-      z-index:9999;
-      align-items:center;
-      justify-content:center;
-    }
-    .ap-spinner .box{
-      background:#fff;
-      border:1px solid var(--ap-border);
-      border-radius:16px;
-      padding:18px 22px;
-      display:flex;
-      align-items:center;
-      gap:12px;
-      font-weight:700;
-    }
-    .ap-modal .form-label{ font-weight:700; font-size:12px; }
-    .ap-modal .form-control, .ap-modal .form-select{ font-size:12px; }
-  </style>
-</head>
+.ap-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #0b5ed7;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
-<body>
+/* TOOLBAR */
+.ap-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 15px; background: #fff; padding: 10px; border-radius: 10px; border: 1px solid #e0e6ed; }
+.ap-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 300px; background: #f8f9fa; padding: 6px 12px; border-radius: 8px; border: 1px solid #dee2e6; }
+.ap-search i { color: #6c757d; }
+.ap-search input { border: none; background: transparent; outline: none; width: 100%; font-size: 13px; }
 
-<div class="ap-spinner" id="apSpinner">
-  <div class="box">
-    <div class="spinner-border" role="status" aria-hidden="true"></div>
-    <div>Procesando información…</div>
-  </div>
-</div>
+/* CHIPS */
+.ap-chip {
+  font-size: 12px;
+  background: #f1f3f5;
+  color: #495057;
+  border: 1px solid #dee2e6;
+  border-radius: 20px;
+  padding: 5px 12px;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.ap-chip:hover { background: #e9ecef; color: #212529; border-color: #ced4da; }
+.ap-chip.ok { background: #d1e7dd; color: #0f5132; border-color: #badbcc; }
+.ap-chip.warn { background: #fff3cd; color: #664d03; border-color: #ffecb5; }
+button.ap-chip { font-family: inherit; }
 
-<div class="ap-titlebar">
-  <h1 class="ap-title">
-    <i class="fa-solid fa-layer-group"></i>
-    Catálogo | Grupo de Clientes
-  </h1>
+/* GRID */
+.ap-grid {
+  background: #fff;
+  border: 1px solid #e0e6ed;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  max-height: 600px;
+  overflow-y: auto;
+}
+.ap-grid table { width: 100%; border-collapse: collapse; }
+.ap-grid th { background: #f8f9fa; padding: 12px; text-align: left; font-weight: 600; color: #495057; border-bottom: 1px solid #dee2e6; white-space: nowrap; position: sticky; top: 0; z-index: 10; }
+.ap-grid td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; color: #212529; vertical-align: middle; }
+.ap-grid tr:hover td { background: #f8f9fa; }
+.ap-actions i { cursor: pointer; margin-right: 12px; color: #6c757d; transition: color 0.2s; font-size: 14px; }
+.ap-actions i:hover { color: #0b5ed7; }
 
-  <div class="ap-actions">
-    <input id="txtQ" class="form-control form-control-sm" style="width:240px; font-size:12px;" placeholder="Buscar (clave o descripción)…">
-    <select id="selActivo" class="form-select form-select-sm" style="width:170px; font-size:12px;">
-      <option value="">Estatus: Todos</option>
-      <option value="1" selected>Activos</option>
-      <option value="0">Inactivos</option>
-    </select>
+/* PAGER */
+.ap-pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+  padding: 0 5px;
+}
+.ap-pager button {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #495057;
+}
+.ap-pager button:disabled { opacity: 0.5; cursor: default; }
+.ap-pager button:hover:not(:disabled) { background: #f8f9fa; border-color: #ced4da; }
+.ap-pager select { padding: 6px; border-radius: 6px; border: 1px solid #dee2e6; color: #495057; margin-left: 5px; }
 
-    <button class="ap-btn ap-btn-primary" id="btnNuevo"><i class="fa-solid fa-plus"></i> Nuevo</button>
-    <button class="ap-btn" id="btnExport"><i class="fa-solid fa-file-export"></i> Exportar CSV</button>
+/* MODAL */
+.ap-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+.ap-modal[style*="display: block"] { display: flex !important; }
+.ap-modal-content { background: #fff; width: 700px; max-width: 95%; max-height: 90vh; border-radius: 12px; display: flex; flex-direction: column; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 20px; }
 
-    <label class="ap-btn mb-0" style="cursor:pointer;">
-      <i class="fa-solid fa-file-import"></i> Importar CSV
-      <input type="file" id="fileCsv" accept=".csv,text/csv" hidden>
-    </label>
-  </div>
-</div>
+.ap-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+.ap-field { display: flex; flex-direction: column; gap: 5px; }
+.ap-label { font-weight: 500; font-size: 13px; color: #495057; }
+.ap-input { display: flex; align-items: center; gap: 10px; border: 1px solid #dee2e6; border-radius: 8px; padding: 8px 12px; background: #fff; transition: all 0.2s; }
+.ap-input:focus-within { border-color: #0b5ed7; box-shadow: 0 0 0 3px rgba(11, 94, 215, 0.1); }
+.ap-input i { color: #adb5bd; }
+.ap-input input, .ap-input select { border: none; outline: none; width: 100%; font-size: 14px; color: #212529; background: transparent; }
 
-<div class="ap-card">
-  <div class="d-flex align-items-center justify-content-between mb-2">
-    <div class="d-flex align-items-center gap-2" style="font-size:12px;">
-      <span class="badge text-bg-primary" id="lblTotal">0</span>
-      <span>Total registros</span>
+button.primary { background: #0b5ed7; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+button.primary:hover { background: #0a58ca; }
+button.ghost { background: #fff; color: #495057; border: 1px solid #dee2e6; padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+button.ghost:hover { background: #f1f3f5; border-color: #ced4da; }
+</style>
+
+<div class="ap-container">
+  <div class="ap-title"><i class="fa fa-layer-group"></i> Catálogo | Grupo de Clientes</div>
+
+  <div class="ap-toolbar">
+    <div class="ap-search">
+      <i class="fa fa-search"></i>
+      <input id="q" placeholder="Buscar clave o descripción…" onkeydown="if(event.key==='Enter')buscar()">
     </div>
-    <div class="d-flex align-items-center gap-2" style="font-size:12px;">
-      <button class="ap-btn" id="btnPrev"><i class="fa-solid fa-chevron-left"></i></button>
-      <span>Página <b id="lblPage">1</b></span>
-      <button class="ap-btn" id="btnNext"><i class="fa-solid fa-chevron-right"></i></button>
-    </div>
+    <button class="ap-chip" onclick="buscar()">Buscar</button>
+    <button class="ap-chip" onclick="limpiar()">Limpiar</button>
+
+    <div style="flex:1"></div>
+
+    <button class="ap-chip" onclick="nuevo()"><i class="fa fa-plus"></i> Agregar</button>
+    <button class="ap-chip" onclick="exportarDatos()"><i class="fa fa-download"></i> Exportar</button>
+    <button class="ap-chip" onclick="abrirImport()"><i class="fa fa-upload"></i> Importar</button>
+    <button class="ap-chip" onclick="toggleInactivos()"><i class="fa fa-eye"></i> Inactivos</button>
   </div>
 
-  <div class="ap-table-wrap" style="max-height: 62vh;">
-    <table class="ap-grid" id="tbl">
+  <div class="ap-grid">
+    <table>
       <thead>
         <tr>
-          <th class="ap-col-actions">Acciones</th>
-          <th>id</th>
-          <th>cve_grupo</th>
-          <th>des_grupo</th>
+          <th>Acciones</th>
+          <th>ID</th>
+          <th>Clave</th>
+          <th>Descripción</th>
           <th>Activo</th>
         </tr>
       </thead>
-      <tbody id="tbody"></tbody>
+      <tbody id="tb"></tbody>
     </table>
   </div>
-</div>
 
-<!-- Modal Alta/Edición -->
-<div class="modal fade ap-modal" id="mdl" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content" style="border-radius:16px;">
-      <div class="modal-header">
-        <h5 class="modal-title" id="mdlTitle" style="color:var(--ap-blue); font-weight:800;">
-          <i class="fa-solid fa-pen-to-square"></i> Registro
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body">
-        <form id="frm" class="row g-2">
-          <input type="hidden" name="id" id="f_id">
-
-          <div class="col-md-4">
-            <label class="form-label">cve_grupo</label>
-            <input class="form-control" name="cve_grupo" id="f_cve" maxlength="50" autocomplete="off">
-          </div>
-
-          <div class="col-md-8">
-            <label class="form-label">des_grupo</label>
-            <input class="form-control" name="des_grupo" id="f_des" maxlength="200" autocomplete="off">
-          </div>
-
-          <div class="col-md-4">
-            <label class="form-label">Activo</label>
-            <select class="form-select" name="Activo" id="f_activo">
-              <option value="1">1</option>
-              <option value="0">0</option>
-            </select>
-          </div>
-        </form>
-        <div class="small text-muted mt-2">
-          Nota: <b>cve_grupo</b> se guarda en MAYÚSCULAS para estandarizar segmentación.
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="ap-btn" data-bs-dismiss="modal"><i class="fa-regular fa-circle-xmark"></i> Cancelar</button>
-        <button class="ap-btn ap-btn-primary" id="btnGuardar"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
-      </div>
+  <!-- Paginación -->
+  <div class="ap-pager">
+    <div class="left">
+      <button onclick="prevPage()" id="btnPrev"><i class="fa fa-chevron-left"></i> Anterior</button>
+      <button onclick="nextPage()" id="btnNext">Siguiente <i class="fa fa-chevron-right"></i></button>
+      <span class="ap-chip" id="lblRange" style="background:transparent; border:none; padding:0;">Mostrando 0–0</span>
+    </div>
+    <div class="right" style="display:flex; align-items:center;">
+      <span>Página:</span>
+      <select id="selPage" onchange="goPage(this.value)"></select>
+      
+      <span style="margin-left:15px">Por página:</span>
+      <select id="selPerPage" onchange="setPerPage(this.value)">
+        <option value="25" selected>25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
     </div>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- MODAL -->
+<div class="ap-modal" id="mdl">
+  <div class="ap-modal-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+      <h3 style="margin:0"><i class="fa fa-layer-group"></i> Grupo de Cliente</h3>
+      <button onclick="cerrarModal('mdl')" style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i class="fa fa-times"></i></button>
+    </div>
+
+    <input type="hidden" id="id">
+
+    <div class="ap-form">
+      <div class="ap-field">
+        <div class="ap-label">Clave</div>
+        <div class="ap-input"><i class="fa fa-key"></i><input id="cve_grupo" maxlength="50" placeholder="GRUPO-A"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Descripción</div>
+        <div class="ap-input"><i class="fa fa-align-left"></i><input id="des_grupo" maxlength="200" placeholder="Descripción del grupo"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Activo</div>
+        <div class="ap-input"><i class="fa fa-toggle-on"></i>
+          <select id="Activo"><option value="1">Activo</option><option value="0">Inactivo</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:right;margin-top:15px;display:flex;justify-content:flex-end;gap:10px">
+      <button class="ghost" onclick="cerrarModal('mdl')">Cancelar</button>
+      <button class="primary" onclick="guardar()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORT -->
+<div class="ap-modal" id="mdlImport">
+  <div class="ap-modal-content" style="width:700px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+      <h3 style="margin:0"><i class="fa fa-upload"></i> Importar grupos</h3>
+      <button onclick="cerrarModal('mdlImport')" style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i class="fa fa-times"></i></button>
+    </div>
+
+    <div class="ap-chip" style="margin-bottom:15px">Layout: <b>id,cve_grupo,des_grupo,Activo</b></div>
+
+    <div class="ap-input">
+      <i class="fa fa-file-csv"></i>
+      <input type="file" id="fileCsv" accept=".csv">
+    </div>
+
+    <div style="margin-top:15px;display:flex;gap:10px">
+      <button class="ghost" onclick="descargarLayout()"><i class="fa fa-download"></i> Descargar layout</button>
+      <button class="primary" onclick="importarCsv()"><i class="fa fa-upload"></i> Importar</button>
+    </div>
+
+    <div class="ap-chip" id="importMsg" style="margin-top:15px; width:100%; display:none; justify-content:center;"></div>
+  </div>
+</div>
 
 <script>
-  const API = "../api/clientes_grupo_api.php";
-  let PAGE = 1;
-  const LIMIT = 25;
-  let CURRENT = [];
+const API = '../api/clientes_grupo_api.php';
 
-  const el = (id)=>document.getElementById(id);
-  const sp = (on=true)=>el('apSpinner').style.display = on?'flex':'none';
-  const safe = (s)=>String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+let verInactivos = false;
+let qLast = '';
+let page = 1;
+let perPage = 25;
+let total = 0;
+let lastRows = [];
 
-  function badgeActivo(v){
-    const n = parseInt(v ?? 1, 10);
-    return n===1 ? `<span class="ap-badge-act">ACTIVO</span>` : `<span class="ap-badge-inac">INACTIVO</span>`;
+/* ===== Paginación ===== */
+function setPager(){
+  const start = total>0 ? ((page-1)*perPage + (lastRows.length?1:0)) : 0;
+  let end   = total>0 ? Math.min(page*perPage, total) : 0;
+  if(total===0) { end = 0; }
+  
+  lblRange.innerText = `Mostrando ${start}–${end}` + (total>0 ? ` de ${total}` : '');
+
+  const maxPages = total>0 ? Math.max(1, Math.ceil(total/perPage)) : 1;
+  selPage.innerHTML='';
+  for(let i=1;i<=maxPages;i++){
+    const o=document.createElement('option');
+    o.value=i; o.textContent=i;
+    if(i===page) o.selected=true;
+    selPage.appendChild(o);
   }
+  btnPrev.disabled = (page<=1);
+  btnNext.disabled = total>0 ? (page>=maxPages) : (lastRows.length < perPage);
+}
+function prevPage(){ if(page>1){ page--; cargar(); } }
+function nextPage(){
+  const maxPages = total>0 ? Math.ceil(total/perPage) : 1;
+  if(page < maxPages) { page++; cargar(); }
+  else if(total===0 && lastRows.length===perPage) { page++; cargar(); } 
+}
+function goPage(p){ page = Math.max(1, parseInt(p,10)||1); cargar(); }
+function setPerPage(v){ perPage = parseInt(v,10)||25; page=1; cargar(); }
 
-  async function apiGet(params){
-    const url = API + "?" + new URLSearchParams(params).toString();
-    const r = await fetch(url, {cache:'no-store'});
-    return await r.json();
-  }
-  async function apiPost(action, payload, isForm=false){
-    let opt = { method:'POST', cache:'no-store' };
-    if (isForm){
-      opt.body = payload;
-    } else {
-      opt.headers = {'Content-Type':'application/json; charset=utf-8'};
-      opt.body = JSON.stringify(payload);
+function cargar(){
+  const activo = verInactivos ? '' : '1';
+  const url = API+'?action=list'
+    + '&page='+page
+    + '&limit='+perPage
+    + '&q='+encodeURIComponent(qLast||'')
+    + '&activo='+activo;
+
+  fetch(url).then(r=>r.json()).then(resp=>{
+    if(!resp.ok){
+      tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#dc3545;padding:20px">Error: ${resp.msg||'Error desconocido'}</td></tr>`;
+      return;
     }
-    const r = await fetch(API + "?action=" + encodeURIComponent(action), opt);
-    return await r.json();
-  }
 
-  function render(rows){
-    const tb = [];
+    const rows = resp.data || [];
+    total = Number(resp.total||0) || 0;
+    lastRows = rows;
+
+    let h='';
     rows.forEach(r=>{
-      tb.push(`<tr>`);
-      tb.push(`<td class="ap-col-actions">
-        <div class="d-flex gap-1 justify-content-center">
-          <button class="btn btn-sm btn-outline-primary" style="font-size:10px; padding:2px 6px;" onclick="editRow(${r.id})" title="Editar">
-            <i class="fa-solid fa-pen"></i>
-          </button>
-          ${
-            parseInt(r.Activo,10)===1
-            ? `<button class="btn btn-sm btn-outline-warning" style="font-size:10px; padding:2px 6px;" onclick="toggleActivo(${r.id},0)" title="Inactivar">
-                <i class="fa-solid fa-lock"></i>
-              </button>`
-            : `<button class="btn btn-sm btn-outline-success" style="font-size:10px; padding:2px 6px;" onclick="toggleActivo(${r.id},1)" title="Recuperar">
-                <i class="fa-solid fa-rotate-left"></i>
-              </button>`
-          }
-          <button class="btn btn-sm btn-outline-danger" style="font-size:10px; padding:2px 6px;" onclick="hardDelete(${r.id})" title="Eliminar">
-            <i class="fa-solid fa-trash"></i>
-          </button>
-        </div>
-      </td>`);
-
-      tb.push(`<td>${safe(r.id)}</td>`);
-      tb.push(`<td>${safe(r.cve_grupo)}</td>`);
-      tb.push(`<td>${safe(r.des_grupo)}</td>`);
-      tb.push(`<td>${badgeActivo(r.Activo)}</td>`);
-      tb.push(`</tr>`);
+      const activo = Number(r.Activo||1)===1;
+      h+=`
+      <tr>
+        <td class="ap-actions">
+          <i class="fa fa-edit" title="Editar" onclick="editar(${r.id})"></i>
+          ${activo
+            ? `<i class="fa fa-lock" title="Inactivar" onclick="toggleActivo(${r.id},0)"></i>`
+            : `<i class="fa fa-undo" title="Recuperar" onclick="toggleActivo(${r.id},1)"></i>`}
+          <i class="fa fa-trash" title="Eliminar" onclick="eliminar(${r.id})"></i>
+        </td>
+        <td>${r.id||''}</td>
+        <td><b>${r.cve_grupo||''}</b></td>
+        <td>${r.des_grupo||''}</td>
+        <td>${activo ? '<span class="ap-chip ok">Activo</span>' : '<span class="ap-chip warn">Inactivo</span>'}</td>
+      </tr>`;
     });
-    el('tbody').innerHTML = tb.join('') || `<tr><td colspan="5" style="padding:18px; text-align:center;">Sin información</td></tr>`;
-  }
-
-  async function load(){
-    sp(true);
-    try{
-      const q = el('txtQ').value.trim();
-      const activo = el('selActivo').value;
-
-      const resp = await apiGet({action:'list', page: PAGE, limit: LIMIT, q, activo});
-      if(!resp.ok) throw new Error(resp.msg || 'Error consultando datos.');
-
-      CURRENT = resp.data || [];
-      el('lblTotal').textContent = resp.total ?? 0;
-      el('lblPage').textContent = PAGE;
-      render(CURRENT);
-    }catch(e){
-      el('tbody').innerHTML = `<tr><td colspan="5" style="padding:18px; text-align:center;"><b>Error:</b> ${safe(e.message)}</td></tr>`;
-    }finally{
-      sp(false);
-    }
-  }
-
-  function openModal(title){
-    el('mdlTitle').innerHTML = `<i class="fa-solid fa-pen-to-square"></i> ${safe(title)}`;
-    new bootstrap.Modal(el('mdl')).show();
-  }
-
-  function clearForm(){
-    el('f_id').value = '';
-    el('f_cve').value = '';
-    el('f_des').value = '';
-    el('f_activo').value = '1';
-  }
-
-  window.editRow = function(id){
-    const r = CURRENT.find(x=>String(x.id)===String(id));
-    if(!r) return;
-
-    el('f_id').value = r.id;
-    el('f_cve').value = r.cve_grupo ?? '';
-    el('f_des').value = r.des_grupo ?? '';
-    el('f_activo').value = String(r.Activo ?? '1');
-
-    openModal('Editar Grupo de Cliente');
-  }
-
-  el('btnNuevo').addEventListener('click', ()=>{
-    clearForm();
-    openModal('Nuevo Grupo de Cliente');
+    tb.innerHTML = h || `<tr><td colspan="5" style="text-align:center;color:#6c757d;padding:20px">Sin resultados</td></tr>`;
+    setPager();
   });
+}
 
-  el('btnGuardar').addEventListener('click', async ()=>{
-    const data = {
-      id: el('f_id').value,
-      cve_grupo: (el('f_cve').value || '').toUpperCase().trim(),
-      des_grupo: (el('f_des').value || '').trim(),
-      Activo: el('f_activo').value
-    };
+function buscar(){ qLast = q.value.trim(); page=1; cargar(); }
+function limpiar(){ q.value=''; qLast=''; page=1; cargar(); }
+function toggleInactivos(){ verInactivos=!verInactivos; page=1; cargar(); }
 
-    sp(true);
-    try{
-      const resp = await apiPost('save', {data});
-      if(!resp.ok) throw new Error(resp.msg || 'No se pudo guardar.');
-      await load();
-      bootstrap.Modal.getInstance(el('mdl')).hide();
-      alert(resp.msg);
-    }catch(e){
-      alert("Error: " + e.message);
-    }finally{
-      sp(false);
-    }
-  });
+function nuevo(){
+  id.value='';
+  cve_grupo.value='';
+  des_grupo.value='';
+  Activo.value='1';
+  mdl.style.display='block';
+}
 
-  window.toggleActivo = async function(id, val){
-    if(!confirm(val===1 ? "¿Recuperar (Activo=1) este grupo?" : "¿Inactivar (Activo=0) este grupo?")) return;
-    sp(true);
-    try{
-      const resp = await apiPost('toggle', {id, Activo: val});
-      if(!resp.ok) throw new Error(resp.msg || 'No se pudo actualizar Activo.');
-      await load();
-      alert(resp.msg);
-    }catch(e){
-      alert("Error: " + e.message);
-    }finally{
-      sp(false);
-    }
+function editar(idVal){
+  const r = lastRows.find(x=>String(x.id)===String(idVal));
+  if(!r) return;
+
+  id.value = r.id;
+  cve_grupo.value = r.cve_grupo||'';
+  des_grupo.value = r.des_grupo||'';
+  Activo.value = String(r.Activo||'1');
+  mdl.style.display='block';
+}
+
+function guardar(){
+  const data = {
+    id: id.value,
+    cve_grupo: (cve_grupo.value||'').toUpperCase().trim(),
+    des_grupo: (des_grupo.value||'').trim(),
+    Activo: Activo.value
+  };
+
+  if(!data.cve_grupo || !data.des_grupo){
+    alert('Clave y descripción son obligatorias.');
+    return;
   }
 
-  window.hardDelete = async function(id){
-    if(!confirm("¿Eliminar (Hard Delete) este registro? No se puede revertir.")) return;
-    sp(true);
-    try{
-      const resp = await apiPost('delete', {id});
-      if(!resp.ok) throw new Error(resp.msg || 'No se pudo eliminar.');
-      await load();
+  fetch(API+'?action=save',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({data})
+  })
+    .then(r=>r.json())
+    .then(resp=>{
+      if(!resp.ok){
+        alert('Error: '+(resp.msg||'Error desconocido'));
+        return;
+      }
+      cerrarModal('mdl');
+      cargar();
       alert(resp.msg);
-    }catch(e){
-      alert("Error: " + e.message);
-    }finally{
-      sp(false);
-    }
-  }
+    });
+}
 
-  el('btnExport').addEventListener('click', async ()=>{
-    sp(true);
-    try{
-      const activo = el('selActivo').value;
-      const resp = await apiGet({action:'export', activo});
-      if(!resp.ok) throw new Error(resp.msg || 'No se pudo exportar.');
+function toggleActivo(idVal, val){
+  if(!confirm(val===1 ? '¿Recuperar (Activo=1) este grupo?' : '¿Inactivar (Activo=0) este grupo?')) return;
 
+  fetch(API+'?action=toggle',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:idVal, Activo:val})
+  })
+    .then(r=>r.json())
+    .then(resp=>{
+      if(!resp.ok){
+        alert('Error: '+(resp.msg||'Error desconocido'));
+        return;
+      }
+      cargar();
+      alert(resp.msg);
+    });
+}
+
+function eliminar(idVal){
+  if(!confirm('¿Eliminar (Hard Delete) este registro? No se puede revertir.')) return;
+
+  fetch(API+'?action=delete',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:idVal})
+  })
+    .then(r=>r.json())
+    .then(resp=>{
+      if(!resp.ok){
+        alert('Error: '+(resp.msg||'Error desconocido'));
+        return;
+      }
+      cargar();
+      alert(resp.msg);
+    });
+}
+
+function exportarDatos(){
+  const activo = verInactivos ? '' : '1';
+  fetch(API+'?action=export&activo='+activo)
+    .then(r=>r.json())
+    .then(resp=>{
+      if(!resp.ok){
+        alert('Error: '+(resp.msg||'Error desconocido'));
+        return;
+      }
       const blob = new Blob([resp.csv], {type:'text/csv;charset=utf-8;'});
-      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = URL.createObjectURL(blob);
       a.download = resp.filename || 'c_gpoclientes.csv';
-      document.body.appendChild(a);
       a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }catch(e){
-      alert("Error: " + e.message);
-    }finally{
-      sp(false);
-    }
-  });
+      URL.revokeObjectURL(a.href);
+    });
+}
 
-  el('fileCsv').addEventListener('change', async (ev)=>{
-    const f = ev.target.files?.[0];
-    if(!f) return;
-    if(!confirm("¿Importar CSV? Layout: id,cve_grupo,des_grupo,Activo")) { ev.target.value=''; return; }
+function descargarLayout(){
+  const csv = 'id,cve_grupo,des_grupo,Activo\n';
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'c_gpoclientes_layout.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
-    const form = new FormData();
-    form.append('file', f);
+function abrirImport(){
+  fileCsv.value='';
+  importMsg.style.display='none';
+  mdlImport.style.display='block';
+}
 
-    sp(true);
-    try{
-      const r = await fetch(API + "?action=import", { method:'POST', body: form });
-      const j = await r.json();
-      if(!j.ok) throw new Error(j.msg || 'Error importando.');
-      await load();
-      alert(j.msg);
-    }catch(e){
-      alert("Error: " + e.message);
-    }finally{
-      sp(false);
-      ev.target.value='';
-    }
-  });
+function importarCsv(){
+  const f=fileCsv.files[0];
+  if(!f){ alert('Selecciona un CSV'); return; }
 
-  el('btnPrev').addEventListener('click', async ()=>{
-    if(PAGE<=1) return;
-    PAGE--; await load();
-  });
-  el('btnNext').addEventListener('click', async ()=>{
-    PAGE++; await load();
-  });
+  const fd=new FormData();
+  fd.append('file',f);
 
-  let t=null;
-  el('txtQ').addEventListener('input', ()=>{
-    clearTimeout(t);
-    t=setTimeout(()=>{ PAGE=1; load(); }, 350);
-  });
-  el('selActivo').addEventListener('change', ()=>{
-    PAGE=1; load();
-  });
+  fetch(API+'?action=import',{method:'POST',body:fd})
+    .then(r=>r.json())
+    .then(resp=>{
+      importMsg.style.display='flex';
+      if(!resp.ok){
+        importMsg.className='ap-chip warn';
+        importMsg.innerHTML = `<b>Error:</b> ${resp.msg||'Error desconocido'}`;
+        return;
+      }
+      importMsg.className='ap-chip ok';
+      importMsg.innerHTML = `<b>Importación:</b> ${resp.msg}`;
+      setTimeout(() => { cerrarModal('mdlImport'); cargar(); }, 2000);
+    });
+}
 
-  (async ()=>{ await load(); })();
+function cerrarModal(id){ document.getElementById(id).style.display='none'; }
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  selPerPage.value='25';
+  cargar();
+});
 </script>
 
-</body>
-</html>
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>

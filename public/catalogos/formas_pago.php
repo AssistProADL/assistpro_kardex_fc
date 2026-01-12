@@ -1,539 +1,689 @@
 <?php
-// public/catalogos/formas_pago.php
-require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AssistPro | Formas de Pago</title>
 
-  <!-- Bootstrap 5 -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  /* =========================================================
+   ASSISTPRO STYLES
+========================================================= */
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f4f6fb;
+    margin: 0;
+  }
 
-  <!-- DataTables -->
-  <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+  .ap-container {
+    padding: 20px;
+    font-size: 13px;
+    max-width: 100%;
+    margin: 0 auto;
+  }
 
-  <!-- DataTables Buttons (Export CSV) -->
-  <link href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap5.min.css" rel="stylesheet">
+  /* TITLE */
+  .ap-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #0b5ed7;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
 
-  <!-- FontAwesome (icono) -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  /* CARDS (KPIs) - Placeholder for consistency, though this module might not have KPIs defined yet */
+  .ap-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+  }
 
-  <style>
-    :root{
-      --ap-blue:#0b3a66;
-      --ap-blue2:#0e4a80;
-      --ap-gray:#f4f6f9;
-      --ap-white:#ffffff;
-    }
+  /* TOOLBAR */
+  .ap-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 15px;
+    background: #fff;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid #e0e6ed;
+  }
 
-    body{ background: var(--ap-gray); }
+  .ap-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 300px;
+    background: #f8f9fa;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+  }
 
-    /* Header corporativo (no pegado) */
-    .ap-header{
-      background: linear-gradient(90deg, var(--ap-blue), var(--ap-blue2));
-      color:#fff;
-      border-radius: 16px;
-      padding: 18px 18px; /* más aire */
-      box-shadow: 0 6px 18px rgba(0,0,0,.12);
-      margin-bottom: 12px;
-    }
-    .ap-title{
-      display:flex; gap:12px; align-items:center;
-    }
-    .ap-title .ap-ico{
-      width:42px; height:42px;
-      border-radius: 12px;
-      background: rgba(255,255,255,.14);
-      display:flex; align-items:center; justify-content:center;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-    }
-    .ap-title h1{
-      font-size: 16px; margin:0; font-weight:800; letter-spacing:.2px;
-    }
-    .ap-title .sub{
-      font-size: 12px; margin:0; opacity:.95; font-weight:600;
-    }
+  .ap-search i {
+    color: #6c757d;
+  }
 
-    .ap-card{
-      border:0;
-      border-radius: 16px;
-      box-shadow: 0 6px 18px rgba(0,0,0,.08);
-    }
+  .ap-search input {
+    border: none;
+    background: transparent;
+    outline: none;
+    width: 100%;
+    font-size: 13px;
+  }
 
-    /* Tipografía compacta AssistPro */
-    .table, .dataTables_wrapper, .modal, .form-control, .form-select, .btn{
-      font-size: 10px !important;
-    }
+  /* CHIPS / BUTTONS */
+  .ap-chip {
+    font-size: 12px;
+    background: #f1f3f5;
+    color: #495057;
+    border: 1px solid #dee2e6;
+    border-radius: 20px;
+    padding: 5px 12px;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
 
-    /* Una fila por renglón, sin doble espacio */
-    table.dataTable thead th{ padding: 6px 8px !important; }
-    table.dataTable tbody td{
-      padding: 4px 8px !important;
-      line-height: 1.05 !important;
-      vertical-align: middle !important;
-      white-space: nowrap;
-    }
+  .ap-chip:hover {
+    background: #e9ecef;
+    color: #212529;
+    border-color: #ced4da;
+  }
 
-    /* Filtros en una sola fila */
-    .filters-row .form-select, .filters-row .form-control{
-      font-size: 10px !important;
-      padding: .20rem .45rem !important;
-      height: 28px !important;
-    }
+  .ap-chip.ok {
+    background: #d1e7dd;
+    color: #0f5132;
+    border-color: #badbcc;
+  }
 
-    /* Botón mini */
-    .btn-xs{ padding: .15rem .35rem !important; font-size: 10px !important; }
+  .ap-chip.warn {
+    background: #fff3cd;
+    color: #664d03;
+    border-color: #ffecb5;
+  }
 
-    .badge{ font-size:10px !important; }
+  button.ap-chip {
+    font-family: inherit;
+  }
 
-    /* Ajustes DataTables */
-    .dataTables_wrapper .dataTables_filter input{
-      height: 28px !important;
-      padding: .20rem .45rem !important;
-      font-size: 10px !important;
-    }
-    .dataTables_wrapper .dataTables_length{ display:none; } /* max 25, sin selector */
-    .dt-buttons .btn{ margin-right:6px; }
+  /* FILTERS */
+  .ap-select {
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    font-size: 12px;
+    color: #495057;
+    outline: none;
+    cursor: pointer;
+  }
 
-    /* Overlay / Spinner corporativo */
-    .ap-overlay{
-      position: fixed;
-      inset: 0;
-      background: rgba(255,255,255,.65);
-      display:none;
-      align-items:center;
-      justify-content:center;
-      z-index: 9999;
-    }
-    .ap-overlay .box{
-      background: #fff;
-      border-radius: 16px;
-      padding: 14px 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.12);
-      display:flex;
-      align-items:center;
-      gap:10px;
-      border: 1px solid rgba(11,58,102,.12);
-    }
-    .ap-overlay .spinner-border{
-      width: 1.15rem;
-      height: 1.15rem;
-    }
-  </style>
-</head>
+  /* GRID */
+  .ap-grid {
+    background: #fff;
+    border: 1px solid #e0e6ed;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    height: calc(100vh - 280px);
+    overflow-y: auto;
+  }
 
-<body>
+  .ap-grid table {
+    width: 100%;
+    border-collapse: collapse;
+  }
 
-<div class="ap-overlay" id="apOverlay">
-  <div class="box">
-    <div class="spinner-border text-primary" role="status"></div>
-    <div style="font-weight:700;color:var(--ap-blue);">Procesando...</div>
+  .ap-grid th {
+    background: #f8f9fa;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 1px solid #dee2e6;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .ap-grid td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f1f3f5;
+    color: #212529;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .ap-grid tr:hover td {
+    background: #f8f9fa;
+  }
+
+  .ap-actions i {
+    cursor: pointer;
+    margin-right: 12px;
+    color: #6c757d;
+    transition: color 0.2s;
+    font-size: 14px;
+  }
+
+  .ap-actions i:hover {
+    color: #0b5ed7;
+  }
+
+  /* MODAL */
+  .ap-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+
+  .ap-modal[style*="display: block"] {
+    display: flex !important;
+  }
+
+  .ap-modal-content {
+    background: #fff;
+    width: 600px;
+    max-width: 95%;
+    max-height: 90vh;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+  }
+
+  .ap-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 15px;
+  }
+
+  .ap-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .ap-label {
+    font-weight: 500;
+    font-size: 13px;
+    color: #495057;
+  }
+
+  .ap-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: #fff;
+    transition: all 0.2s;
+  }
+
+  .ap-input:focus-within {
+    border-color: #0b5ed7;
+    box-shadow: 0 0 0 3px rgba(11, 94, 215, 0.1);
+  }
+
+  .ap-input i {
+    color: #adb5bd;
+  }
+
+  .ap-input input,
+  .ap-input select {
+    border: none;
+    outline: none;
+    width: 100%;
+    font-size: 14px;
+    color: #212529;
+    background: transparent;
+  }
+
+  .ap-error {
+    font-size: 12px;
+    color: #dc3545;
+    display: none;
+    margin-top: 4px;
+  }
+
+  /* PAGER */
+  .ap-pager {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+    padding: 0 5px;
+  }
+
+  button.primary {
+    background: #0b5ed7;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  button.primary:hover {
+    background: #0a58ca;
+  }
+
+  button.ghost {
+    background: #fff;
+    color: #495057;
+    border: 1px solid #dee2e6;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  button.ghost:hover {
+    background: #f1f3f5;
+    border-color: #ced4da;
+  }
+</style>
+
+<div class="ap-container">
+  <div class="ap-title"><i class="fa fa-credit-card"></i> Catálogo de Formas de Pago</div>
+
+  <!-- TOOLBAR -->
+  <div class="ap-toolbar">
+    <div class="ap-search">
+      <i class="fa fa-search"></i>
+      <input id="q" placeholder="Buscar forma, clave, empresa..." onkeydown="if(event.key==='Enter')buscar()">
+    </div>
+    <button class="ap-chip" onclick="buscar()">Buscar</button>
+    <button class="ap-chip" onclick="limpiar()">Limpiar</button>
+
+    <div style="border-left:1px solid #dee2e6; height:24px; margin:0 5px;"></div>
+
+    <select id="fEmpresa" class="ap-select" onchange="buscar()">
+      <option value="">Todas las Empresas</option>
+    </select>
+    <select id="fStatus" class="ap-select" onchange="buscar()">
+      <option value="">Todos los Estatus</option>
+      <option value="1">Activos</option>
+      <option value="0">Inactivos</option>
+    </select>
+
+    <div style="flex:1"></div>
+
+    <button class="ap-chip" onclick="nuevo()"><i class="fa fa-plus"></i> Nuevo</button>
+    <button class="ap-chip" onclick="abrirImport()"><i class="fa fa-upload"></i> Importar CSV</button>
   </div>
+
+  <span class="ap-chip" id="msg" style="display:none; margin-bottom:10px;"></span>
+
+  <!-- GRID -->
+  <div class="ap-grid">
+    <table>
+      <thead>
+        <tr>
+          <th>Opciones</th>
+          <th>ID</th>
+          <th>Forma</th>
+          <th>Clave</th>
+          <th>Empresa</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+
+  <!-- PAGER -->
+  <div id="pager" class="ap-pager"></div>
 </div>
 
-<div class="container-fluid py-3">
-
-  <div class="ap-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-    <div class="ap-title">
-      <div class="ap-ico">
-        <i class="fa-solid fa-credit-card" style="font-size:18px;"></i>
-      </div>
-      <div>
-        <h1>Catálogo | Formas de Pago</h1>
-        <p class="sub">Gobierno comercial y control financiero (Activos / Inactivos)</p>
-      </div>
+<!-- MODAL EDIT/NEW -->
+<div class="ap-modal" id="mdl">
+  <div class="ap-modal-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+      <h3 style="margin:0"><i class="fa fa-credit-card"></i> Forma de Pago</h3>
+      <button onclick="cerrarModal('mdl')"
+        style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
+          class="fa fa-times"></i></button>
     </div>
 
-    <div class="d-flex gap-2">
-      <button class="btn btn-light btn-sm" id="btnNuevo"><i class="fa-solid fa-plus me-1"></i>Nuevo</button>
-      <button class="btn btn-outline-light btn-sm" id="btnImportar"><i class="fa-solid fa-file-arrow-up me-1"></i>Importar CSV</button>
-    </div>
-  </div>
+    <input type="hidden" id="IdFpag" value="0">
 
-  <div class="card ap-card">
-    <div class="card-body">
-
-      <!-- Filtros (misma fila) -->
-      <div class="row g-2 align-items-end filters-row mb-2">
-        <div class="col-12 col-md-3">
-          <label class="form-label mb-1">Empresa</label>
-          <select class="form-select" id="fEmpresa">
-            <option value="">Todas</option>
+    <div class="ap-form">
+      <div class="ap-field">
+        <div class="ap-label">Forma *</div>
+        <div class="ap-input"><i class="fa fa-font"></i><input id="Forma" placeholder="Efectivo, Transferencia...">
+        </div>
+      </div>
+      <div class="ap-field">
+        <div class="ap-label">Clave *</div>
+        <div class="ap-input"><i class="fa fa-key"></i><input id="Clave" placeholder="01, 03..."></div>
+      </div>
+      <div class="ap-field">
+        <div class="ap-label">Empresa (ID)</div>
+        <div class="ap-input"><i class="fa fa-building"></i><input id="IdEmpresa" placeholder="EMP01"></div>
+      </div>
+      <div class="ap-field">
+        <div class="ap-label">Estatus</div>
+        <div class="ap-input"><i class="fa fa-toggle-on"></i>
+          <select id="Status">
+            <option value="1">Activo</option>
+            <option value="0">Inactivo</option>
           </select>
         </div>
-        <div class="col-12 col-md-2">
-          <label class="form-label mb-1">Estatus</label>
-          <select class="form-select" id="fStatus">
-            <option value="">Todos</option>
-            <option value="1">Activos</option>
-            <option value="0">Inactivos</option>
-          </select>
-        </div>
-
-        <div class="col-12 col-md-7 d-flex justify-content-end gap-2">
-          <button class="btn btn-outline-primary btn-sm" id="btnRefrescar">
-            <i class="fa-solid fa-rotate me-1"></i>Refrescar
-          </button>
-        </div>
       </div>
-
-      <div class="table-responsive">
-        <table id="tbl" class="table table-sm table-striped table-hover w-100">
-          <thead class="table-dark">
-            <tr>
-              <th style="width:170px;">Opciones</th>
-              <th style="width:70px;" class="text-center">ID</th>
-              <th>Forma</th>
-              <th>Clave</th>
-              <th style="width:140px;" class="text-center">Empresa</th>
-              <th style="width:95px;" class="text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-
     </div>
-  </div>
 
-</div>
-
-<!-- Modal Alta/Edición -->
-<div class="modal fade" id="mdl" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content" style="border-radius:16px;">
-      <div class="modal-header" style="background:var(--ap-blue);color:#fff;">
-        <h6 class="modal-title"><i class="fa-solid fa-pen-to-square me-2"></i>Forma de Pago</h6>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <form id="frm">
-        <div class="modal-body">
-          <input type="hidden" name="IdFpag" id="IdFpag" value="0">
-
-          <div class="row g-2">
-            <div class="col-12 col-md-6">
-              <label class="form-label mb-1">Forma</label>
-              <input class="form-control form-control-sm" name="Forma" id="Forma" maxlength="100" required>
-            </div>
-            <div class="col-12 col-md-6">
-              <label class="form-label mb-1">Clave</label>
-              <input class="form-control form-control-sm" name="Clave" id="Clave" maxlength="100" required>
-            </div>
-            <div class="col-12 col-md-6">
-              <label class="form-label mb-1">Empresa (IdEmpresa)</label>
-              <input class="form-control form-control-sm" name="IdEmpresa" id="IdEmpresa" maxlength="50">
-            </div>
-            <div class="col-12 col-md-6">
-              <label class="form-label mb-1">Status</label>
-              <select class="form-select form-select-sm" name="Status" id="Status">
-                <option value="1">Activo</option>
-                <option value="0">Inactivo</option>
-              </select>
-            </div>
-          </div>
-
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Cerrar</button>
-          <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button>
-        </div>
-      </form>
+    <div style="text-align:right;margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
+      <button class="ghost" onclick="cerrarModal('mdl')">Cancelar</button>
+      <button class="primary" onclick="guardar()">Guardar</button>
     </div>
   </div>
 </div>
 
-<!-- Modal Importar CSV -->
-<div class="modal fade" id="mdlCsv" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-md modal-dialog-centered">
-    <div class="modal-content" style="border-radius:16px;">
-      <div class="modal-header" style="background:var(--ap-blue);color:#fff;">
-        <h6 class="modal-title"><i class="fa-solid fa-file-csv me-2"></i>Importar CSV</h6>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
+<!-- MODAL IMPORT -->
+<div class="ap-modal" id="mdlImport">
+  <div class="ap-modal-content" style="width:500px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+      <h3 style="margin:0"><i class="fa fa-upload"></i> Importar CSV</h3>
+      <button onclick="cerrarModal('mdlImport')"
+        style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
+          class="fa fa-times"></i></button>
+    </div>
 
-      <div class="modal-body">
-        <div class="alert alert-info py-2 mb-2" style="font-size:10px;">
-          Layout CSV esperado: <b>Clave, Forma, IdEmpresa, Status</b> (Status: 1 activo, 0 inactivo)
-        </div>
+    <div class="ap-chip" style="margin-bottom:15px; width:100%; justify-content:center;">
+      Layout: Clave, Forma, IdEmpresa, Status
+    </div>
 
-        <input type="file" id="csvFile" class="form-control form-control-sm" accept=".csv">
-        <div class="mt-2 d-flex gap-2">
-          <button class="btn btn-outline-secondary btn-sm" id="btnDescargaLayout">
-            <i class="fa-solid fa-download me-1"></i>Layout CSV
-          </button>
-          <button class="btn btn-primary btn-sm" id="btnSubirCsv">
-            <i class="fa-solid fa-cloud-arrow-up me-1"></i>Importar
-          </button>
-        </div>
+    <div class="ap-input">
+      <i class="fa fa-file-csv"></i>
+      <input type="file" id="fileCsv" accept=".csv">
+    </div>
 
-        <div id="csvResult" class="mt-2" style="font-size:10px;"></div>
-      </div>
+    <div id="importResult" style="margin-top:15px;"></div>
+
+    <div style="margin-top:15px; display:flex; gap:10px; justify-content:flex-end;">
+      <button class="ghost" onclick="descargarLayout()"><i class="fa fa-download"></i> Layout</button>
+      <button class="primary" onclick="subirCsv()"><i class="fa fa-cloud-arrow-up"></i> Importar</button>
     </div>
   </div>
 </div>
-
-<!-- JS -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-
-<!-- Buttons -->
-<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <script>
-  const API = "../api/formaspag_api.php";
-  const mdl = new bootstrap.Modal(document.getElementById('mdl'));
-  const mdlCsv = new bootstrap.Modal(document.getElementById('mdlCsv'));
+  const API = '../api/formaspag_api.php';
+  let curPage = 1;
 
-  let dt = null;
-
-  function overlay(show){
-    const el = document.getElementById('apOverlay');
-    el.style.display = show ? 'flex' : 'none';
+  function showMsg(txt, cls = '') {
+    const m = document.getElementById('msg');
+    m.style.display = 'inline-flex';
+    m.className = 'ap-chip ' + cls;
+    m.innerHTML = txt;
+    setTimeout(() => { m.style.display = 'none' }, 3500);
   }
 
-  function badgeStatus(v){
-    const n = parseInt(v,10);
-    return n === 1
-      ? '<span class="badge text-bg-success">Activo</span>'
-      : '<span class="badge text-bg-secondary">Inactivo</span>';
+  function abrirModal(id) { document.getElementById(id).style.display = 'block'; }
+  function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
+
+  function esc(s) {
+    return (s ?? '').toString().replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
   }
 
-  function renderOps(row){
-    const id = row.IdFpag;
-    const st = parseInt(row.Status,10);
-
-    const btnEdit = `<button class="btn btn-outline-primary btn-xs me-1" data-op="edit" data-id="${id}">
-      <i class="fa-solid fa-pen me-1"></i>Editar</button>`;
-
-    const btnToggle = st === 1
-      ? `<button class="btn btn-outline-warning btn-xs me-1" data-op="toggle" data-id="${id}">
-          <i class="fa-solid fa-ban me-1"></i>Inactivar</button>`
-      : `<button class="btn btn-outline-success btn-xs me-1" data-op="toggle" data-id="${id}">
-          <i class="fa-solid fa-rotate-left me-1"></i>Recuperar</button>`;
-
-    const btnDel = `<button class="btn btn-outline-danger btn-xs" data-op="del" data-id="${id}">
-      <i class="fa-solid fa-trash me-1"></i>Eliminar</button>`;
-
-    return btnEdit + btnToggle + btnDel;
+  async function loadEmpresas() {
+    try {
+      const r = await fetch(API + '?action=empresas');
+      const j = await r.json();
+      if (j.ok && j.data) {
+        const s = document.getElementById('fEmpresa');
+        // Mantener solo la primera opcion
+        s.innerHTML = '<option value="">Todas las Empresas</option>';
+        j.data.forEach(x => {
+          if (!x.IdEmpresa) return;
+          const opt = document.createElement('option');
+          opt.value = x.IdEmpresa;
+          opt.textContent = x.IdEmpresa;
+          s.appendChild(opt);
+        });
+      }
+    } catch (e) { console.error(e); }
   }
 
-  function loadEmpresas(){
-    return $.getJSON(API, {action:'empresas'}).then(resp=>{
-      if(!resp.ok) return;
-      const $s = $("#fEmpresa");
-      $s.find('option:not(:first)').remove();
-      (resp.data || []).forEach(r=>{
-        const v = (r.IdEmpresa ?? '').toString().trim();
-        if(v !== '') $s.append(`<option value="${v}">${v}</option>`);
-      });
-    });
+  function refrescar(p = 1) {
+    curPage = p;
+    const q = document.getElementById('q').value;
+    const fEmpresa = document.getElementById('fEmpresa').value;
+    const fStatus = document.getElementById('fStatus').value;
+
+    // Mapeo a DataTables API
+    const start = (curPage - 1) * 25;
+
+    // Construir URL params
+    const params = new URLSearchParams();
+    params.append('action', 'list');
+    params.append('draw', 1);
+    params.append('start', start);
+    params.append('length', 25);
+    params.append('search[value]', q);
+    if (fEmpresa) params.append('fEmpresa', fEmpresa);
+    if (fStatus) params.append('fStatus', fStatus);
+
+    fetch(API + '?' + params.toString())
+      .then(r => r.json())
+      .then(d => {
+        renderGrid(d.data || []);
+        renderPager(d.recordsFiltered || 0, d.recordsTotal || 0);
+      })
+      .catch(e => console.error(e));
   }
 
-  function initDT(){
-    dt = $("#tbl").DataTable({
-      processing: true,
-      serverSide: true,
-      pageLength: 25,
-      scrollX: true,
-      scrollY: "58vh",
-      scrollCollapse: true,
-      searching: true,
-      dom: "<'row g-2 align-items-center'<'col-12 col-md-6'B><'col-12 col-md-6'f>>" +
-           "<'row'<'col-12'tr>>" +
-           "<'row g-2 align-items-center'<'col-12 col-md-6'i><'col-12 col-md-6'p>>",
-      buttons: [
-        {
-          extend: 'csvHtml5',
-          text: '<i class="fa-solid fa-file-csv me-1"></i>Exportar CSV',
-          className: 'btn btn-outline-primary btn-sm',
-          filename: 'catalogo_formas_pago',
-          exportOptions: {
-            // Exporta columnas visibles (sin Opciones)
-            columns: [1,2,3,4,5]
-          }
+  function renderGrid(rows) {
+    const tb = document.getElementById('tb');
+    if (!rows.length) {
+      tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#777">Sin resultados</td></tr>';
+      return;
+    }
+    tb.innerHTML = rows.map(r => {
+      const st = parseInt(r.Status ?? 1);
+      const cls = st === 1 ? 'ok' : 'warn';
+      const txt = st === 1 ? 'Activo' : 'Inactivo';
+
+      return `<tr>
+        <td class="ap-actions">
+           <i class="fa fa-pen" title="Editar" onclick="editar(${r.IdFpag})"></i>
+           ${st === 1
+          ? `<i class="fa fa-ban" title="Inactivar" onclick="toggle(${r.IdFpag})"></i>`
+          : `<i class="fa fa-rotate-left" title="Recuperar" onclick="toggle(${r.IdFpag})"></i>`
         }
-      ],
-      ajax: {
-        url: API,
-        type: "GET",
-        data: function(d){
-          d.action   = "list";
-          d.fEmpresa = $("#fEmpresa").val();
-          d.fStatus  = $("#fStatus").val();
-          d.length   = 25; // asegurar max 25
-        },
-        beforeSend: ()=> overlay(true),
-        complete: ()=> overlay(false),
-        error: ()=> overlay(false)
-      },
-      columns: [
-        { data: null, orderable:false, searchable:false, render: (d,t,row)=> renderOps(row) },
-        { data: "IdFpag", className: "text-center" },
-        { data: "Forma" },
-        { data: "Clave" },
-        { data: "IdEmpresa", className: "text-center" },
-        { data: "Status", className: "text-center", render: (d)=> badgeStatus(d) }
-      ],
-      order: [[1,'desc']],
-      language: { url: "https://cdn.datatables.net/plug-ins/1.13.8/i18n/es-ES.json" }
-    });
-
-    // Hook extra: overlay cuando DataTables procesa demasiado
-    dt.on('processing.dt', function(e, settings, processing) {
-      overlay(!!processing);
-    });
+           <i class="fa fa-trash" title="Eliminar Forzoso" onclick="del(${r.IdFpag})"></i>
+        </td>
+        <td>${esc(r.IdFpag)}</td>
+        <td><b>${esc(r.Forma)}</b></td>
+        <td>${esc(r.Clave)}</td>
+        <td>${esc(r.IdEmpresa)}</td>
+        <td><span class="ap-chip ${cls}" style="padding:2px 8px;font-size:11px;">${txt}</span></td>
+      </tr>`;
+    }).join('');
   }
 
-  function openNuevo(){
-    $("#IdFpag").val(0);
-    $("#Forma").val('');
-    $("#Clave").val('');
-    $("#IdEmpresa").val($("#fEmpresa").val() || '');
-    $("#Status").val(1);
-    mdl.show();
+  function renderPager(filtered, total) {
+    const p = document.getElementById('pager');
+    const totalPages = Math.ceil(filtered / 25);
+    const start = filtered > 0 ? (curPage - 1) * 25 + 1 : 0;
+    const end = Math.min(curPage * 25, filtered);
+
+    const prev = curPage > 1 ? `<button class="ap-chip" onclick="refrescar(${curPage - 1})"><i class="fa fa-chevron-left"></i></button>` : '';
+    const next = curPage < totalPages ? `<button class="ap-chip" onclick="refrescar(${curPage + 1})"><i class="fa fa-chevron-right"></i></button>` : '';
+
+    p.innerHTML = `
+      <div style="font-size:12px;color:#666">
+         Mostrando ${start}-${end} de ${filtered} registros
+      </div>
+      <div style="display:flex;gap:5px">
+        ${prev}
+        <span class="ap-chip" style="cursor:default">Página ${curPage}</span>
+        ${next}
+      </div>
+    `;
   }
 
-  function openEdit(id){
-    overlay(true);
-    $.getJSON(API, {action:'get', id}).then(resp=>{
-      overlay(false);
-      if(!resp.ok){ alert(resp.msg || 'Error'); return; }
-      const r = resp.data;
-      $("#IdFpag").val(r.IdFpag);
-      $("#Forma").val(r.Forma);
-      $("#Clave").val(r.Clave);
-      $("#IdEmpresa").val(r.IdEmpresa);
-      $("#Status").val(r.Status);
-      mdl.show();
-    }).catch(()=> overlay(false));
+  function buscar() { refrescar(1); }
+  function limpiar() {
+    document.getElementById('q').value = '';
+    document.getElementById('fEmpresa').value = '';
+    document.getElementById('fStatus').value = '';
+    refrescar(1);
   }
 
-  function toggleStatus(id){
-    if(!confirm("¿Confirmas el cambio de estatus (Inactivar/Recuperar)?")) return;
-    overlay(true);
-    $.post(API, {action:'toggle', id}, null, 'json').done(resp=>{
-      overlay(false);
-      if(!resp.ok){ alert(resp.msg||'Error'); return; }
-      dt.ajax.reload(null,false);
-    }).fail(()=> overlay(false));
+  function nuevo() {
+    document.getElementById('IdFpag').value = 0;
+    document.getElementById('Forma').value = '';
+    document.getElementById('Clave').value = '';
+    document.getElementById('IdEmpresa').value = '';
+    document.getElementById('Status').value = 1;
+    abrirModal('mdl');
   }
 
-  function hardDelete(id){
-    if(!confirm("¿Confirmas ELIMINAR (Hard Delete) este registro?")) return;
-    overlay(true);
-    $.post(API, {action:'delete', id}, null, 'json').done(resp=>{
-      overlay(false);
-      if(!resp.ok){ alert(resp.msg||'Error'); return; }
-      dt.ajax.reload(null,false);
-      loadEmpresas();
-    }).fail(()=> overlay(false));
+  function editar(id) {
+    fetch(API + '?action=get&id=' + id)
+      .then(r => r.json())
+      .then(j => {
+        if (!j.ok) { showMsg(j.msg, 'warn'); return; }
+        const d = j.data;
+        document.getElementById('IdFpag').value = d.IdFpag;
+        document.getElementById('Forma').value = d.Forma;
+        document.getElementById('Clave').value = d.Clave;
+        document.getElementById('IdEmpresa').value = d.IdEmpresa;
+        document.getElementById('Status').value = d.Status;
+        abrirModal('mdl');
+      });
   }
 
-  function downloadLayout(){
-    const csv = "Clave,Forma,IdEmpresa,Status\n" +
-                "EFECTIVO,Pago en Efectivo,EMP01,1\n" +
-                "TRANSFER,Transferencia Bancaria,EMP01,1\n";
-    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  function guardar() {
+    const id = document.getElementById('IdFpag').value;
+    const Forma = document.getElementById('Forma').value.trim();
+    const Clave = document.getElementById('Clave').value.trim();
+    const IdEmpresa = document.getElementById('IdEmpresa').value.trim();
+    const Status = document.getElementById('Status').value;
+
+    if (!Forma || !Clave) { alert('Forma y Clave son obligatorios'); return; }
+
+    const fd = new FormData();
+    fd.append('action', 'save');
+    fd.append('IdFpag', id);
+    fd.append('Forma', Forma);
+    fd.append('Clave', Clave);
+    fd.append('IdEmpresa', IdEmpresa);
+    fd.append('Status', Status);
+
+    fetch(API, { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(j => {
+        if (j.ok) {
+          showMsg('Guardado correctamente', 'ok');
+          cerrarModal('mdl');
+          refrescar(curPage);
+          loadEmpresas(); // Recargar por si hay nueva empresa
+        } else {
+          showMsg(j.msg || 'Error al guardar', 'warn');
+        }
+      });
+  }
+
+  function toggle(id) {
+    if (!confirm('¿Cambiar estatus?')) return;
+    const fd = new FormData();
+    fd.append('action', 'toggle');
+    fd.append('id', id);
+    fetch(API, { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(j => {
+        if (j.ok) { showMsg(j.msg, 'ok'); refrescar(curPage); }
+        else showMsg(j.msg, 'warn');
+      });
+  }
+
+  function del(id) {
+    if (!confirm('¿ELIMINAR defintivamente?')) return;
+    const fd = new FormData();
+    fd.append('action', 'delete');
+    fd.append('id', id);
+    fetch(API, { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(j => {
+        if (j.ok) { showMsg(j.msg, 'warn'); refrescar(curPage); loadEmpresas(); }
+        else showMsg(j.msg, 'warn');
+      });
+  }
+
+  // Import Logic
+  function abrirImport() {
+    document.getElementById('fileCsv').value = '';
+    document.getElementById('importResult').innerHTML = '';
+    abrirModal('mdlImport');
+  }
+
+  function descargarLayout() {
+    const csv = "Clave,Forma,IdEmpresa,Status\nEFECTIVO,Pago en Efectivo,EMP01,1";
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'layout_formas_pago.csv';
     document.body.appendChild(a);
     a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   }
 
-  function importCsv(){
-    const f = document.getElementById('csvFile').files[0];
-    if(!f){ alert("Selecciona un archivo CSV."); return; }
-
+  function subirCsv() {
+    const f = document.getElementById('fileCsv').files[0];
+    if (!f) { alert('Selecciona un archivo'); return; }
     const fd = new FormData();
-    fd.append('action','import_csv');
+    fd.append('action', 'import_csv');
     fd.append('file', f);
 
-    $("#csvResult").html('');
-    overlay(true);
+    document.getElementById('importResult').innerHTML = '<div class="ap-chip">Importando...</div>';
 
-    $.ajax({
-      url: API,
-      method: 'POST',
-      data: fd,
-      processData: false,
-      contentType: false,
-      dataType: 'json'
-    }).done(resp=>{
-      overlay(false);
-      if(!resp.ok){
-        let html = `<div class="alert alert-danger py-2 mb-0"><b>${resp.msg || 'Error'}</b>`;
-        if(resp.errors && resp.errors.length){
-          html += `<div class="mt-1">Detalles (top 25):<br>${resp.errors.map(x=>`• ${x}`).join('<br>')}</div>`;
+    fetch(API, { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(j => {
+        const div = document.getElementById('importResult');
+        if (j.ok) {
+          div.innerHTML = `<div class="ap-chip ok">${j.msg}</div>`;
+          setTimeout(() => { cerrarModal('mdlImport'); refrescar(1); loadEmpresas(); }, 2000);
+        } else {
+          let html = `<div style="color:red;font-size:12px;margin-bottom:5px;">${j.msg}</div>`;
+          if (j.errors && j.errors.length) {
+            html += `<div style="max-height:100px;overflow:auto;font-size:11px;background:#fff3cd;padding:5px;">${j.errors.join('<br>')}</div>`;
+          }
+          div.innerHTML = html;
         }
-        html += `</div>`;
-        $("#csvResult").html(html);
-        return;
-      }
-      $("#csvResult").html(`<div class="alert alert-success py-2 mb-0"><b>${resp.msg}</b></div>`);
-      loadEmpresas();
-      dt.ajax.reload(null,false);
-    }).fail(()=>{
-      overlay(false);
-      $("#csvResult").html(`<div class="alert alert-danger py-2 mb-0"><b>Error de comunicación con API</b></div>`);
-    });
+      })
+      .catch(e => document.getElementById('importResult').innerHTML = 'Error de red');
   }
 
-  $(function(){
-    overlay(true);
-    loadEmpresas().then(()=>{
-      initDT();
-      overlay(false);
-    }).catch(()=> overlay(false));
-
-    $("#btnNuevo").on('click', openNuevo);
-    $("#btnRefrescar").on('click', ()=> dt.ajax.reload());
-    $("#fEmpresa,#fStatus").on('change', ()=> dt.ajax.reload());
-
-    $("#tbl").on('click','button[data-op]', function(){
-      const op = $(this).data('op');
-      const id = $(this).data('id');
-      if(op === 'edit') openEdit(id);
-      if(op === 'toggle') toggleStatus(id);
-      if(op === 'del') hardDelete(id);
-    });
-
-    $("#frm").on('submit', function(e){
-      e.preventDefault();
-      overlay(true);
-      const data = $(this).serialize() + "&action=save";
-      $.post(API, data, null, 'json').done(resp=>{
-        overlay(false);
-        if(!resp.ok){ alert(resp.msg||'Error'); return; }
-        mdl.hide();
-        dt.ajax.reload(null,false);
-        loadEmpresas();
-      }).fail(()=> overlay(false));
-    });
-
-    $("#btnImportar").on('click', ()=>{
-      $("#csvFile").val('');
-      $("#csvResult").html('');
-      mdlCsv.show();
-    });
-    $("#btnDescargaLayout").on('click', downloadLayout);
-    $("#btnSubirCsv").on('click', importCsv);
+  // Init
+  document.addEventListener('DOMContentLoaded', () => {
+    loadEmpresas();
+    refrescar(1);
   });
 </script>
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
-</body>
-</html>
