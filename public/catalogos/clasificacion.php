@@ -1,812 +1,770 @@
 <?php
-require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
-<!-- ===== DATATABLES SERVERSIDE ===== -->
-<link rel="stylesheet"
-      href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 
 <style>
-    /* ================== MODAL BASE ================== */
-    .ap-modal{
-        position:fixed;
-        inset:0;
-        background:rgba(0,0,0,.55);
-        display:none;
-        align-items:center;
-        justify-content:center;
-        z-index:9999;
-    }
-    .ap-modal.show{ display:flex; }
-
-    .ap-modal-content{
-        background:#fff;
-        width:980px;
-        max-width:96%;
-        border-radius:12px;
-        overflow:hidden;
-        border:none;
-        box-shadow:0 18px 35px rgba(0,0,0,.25);
+    /* =========================================================
+   ASSISTPRO STYLES
+========================================================= */
+    body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #f4f6fb;
+        margin: 0;
     }
 
-    /* ================== HEADER ================== */
-    .ap-modal-header{
-        background:#0d6efd;
-        color:#fff;
-        padding:14px 20px;
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-    }
-    .ap-modal-header h3{
-        margin:0;
-        font-size:16px;
-        font-weight:600;
-        display:flex;
-        align-items:center;
-        gap:8px;
-    }
-    .ap-modal-header button{
-        background:transparent;
-        border:none;
-        color:#fff;
-        font-size:22px;
-        cursor:pointer;
+    .ap-container {
+        padding: 20px;
+        font-size: 13px;
+        max-width: 100%;
+        margin: 0 auto;
     }
 
-    /* ================== BODY ================== */
-    .ap-modal-body{
-        padding:20px;
-        font-size:13px;
-        color:#212529;
+    /* TITLE */
+    .ap-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #0b5ed7;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
 
-    /* ================== LABELS ================== */
-    .ap-modal-body label{
-        font-size:13px;
-        font-weight:600;
-        color:#343a40;
-        margin-bottom:6px;
-        display:block;
+    /* TOOLBAR */
+    .ap-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 15px;
+        background: #fff;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #e0e6ed;
     }
 
-    /* ================== INPUTS ================== */
-    .ap-modal-body input[type="text"],
-    .ap-modal-body input[type="number"],
-    .ap-modal-body input[type="file"]{
-        width:100%;
-        max-width:320px;
-        padding:8px 10px;
-        font-size:13px;
-        border-radius:8px;
-        border:1px solid #dee2e6;
-        background:#fff;
-        transition:border-color .15s, box-shadow .15s;
+    .ap-search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 300px;
+        background: #f8f9fa;
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
     }
 
-    .ap-modal-body input:focus{
-        border-color:#0d6efd;
-        box-shadow:0 0 0 2px rgba(13,110,253,.15);
+    .ap-search i {
+        color: #6c757d;
     }
 
-    /* ================== COLUMNAS ESPERADAS ================== */
-    .ap-import-cols{
-        display:grid;
-        grid-template-columns:repeat(6,1fr);
-        gap:10px;
-        margin:18px 0;
-    }
-    .ap-import-cols span{
-        background:#f8f9fa;
-        border:1px solid #e9ecef;
-        border-radius:10px;
-        padding:10px 6px;
-        font-size:12px;
-        font-weight:600;
-        text-align:center;
-        color:#495057;
+    .ap-search input {
+        border: none;
+        background: transparent;
+        outline: none;
+        width: 100%;
+        font-size: 13px;
     }
 
-    /* ================== BOTONES ================== */
-    .ap-import-actions,
-    .ap-modal-footer{
-        display:flex;
-        gap:10px;
-        margin-top:10px;
+    /* CHIPS / BUTTONS */
+    .ap-chip {
+        font-size: 12px;
+        background: #f1f3f5;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        border-radius: 20px;
+        padding: 5px 12px;
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
     }
 
-    .ap-import-actions button,
-    .ap-modal-footer button{
-        padding:8px 14px;
-        font-size:13px;
-        border-radius:10px;
-        border:1px solid #dee2e6;
-        background:#f8f9fa;
-        cursor:pointer;
-        transition:background .15s, color .15s;
+    .ap-chip:hover {
+        background: #e9ecef;
+        color: #212529;
+        border-color: #ced4da;
     }
 
-    .ap-import-actions button.primary,
-    .ap-modal-footer .btn-primary{
-        background:#0d6efd;
-        color:#fff;
-        border:none;
+    .ap-chip.primary {
+        background: #0b5ed7;
+        color: #fff;
+        border-color: #0b5ed7;
     }
 
-    .ap-import-actions button:hover,
-    .ap-modal-footer button:hover{
-        opacity:.9;
+    .ap-chip.primary:hover {
+        background: #0a58ca;
     }
 
-    /* ================== PREVIEW ================== */
-    .ap-grid{
-        border:1px solid #e9ecef;
-        border-radius:10px;
-        overflow:auto;
-    }
-    .ap-grid table{
-        width:100%;
-        border-collapse:collapse;
-        font-size:12px;
-    }
-    .ap-grid th,
-    .ap-grid td{
-        border:1px solid #e9ecef;
-        padding:8px;
-        text-align:center;
+    .ap-chip.ok {
+        background: #d1e7dd;
+        color: #0f5132;
+        border-color: #badbcc;
     }
 
-    /* ================== FORM NUEVO / EDITAR ================== */
-    #mdlNuevo .ap-form-grid{
-        display:grid;
-        grid-template-columns:repeat(3,1fr);
-        gap:18px 24px;
+    .ap-chip.warn {
+        background: #fff3cd;
+        color: #664d03;
+        border-color: #ffecb5;
     }
 
-    #mdlNuevo .ap-form-grid > div{
-        display:flex;
-        flex-direction:column;
+    button.ap-chip {
+        font-family: inherit;
     }
 
-    #mdlNuevo input[type="checkbox"]{
-        width:16px;
-        height:16px;
-        accent-color:#0d6efd;
+    /* GRID */
+    .ap-grid {
+        background: #fff;
+        border: 1px solid #e0e6ed;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        height: calc(100vh - 240px);
+        overflow-y: auto;
     }
 
-    /* ================== FOOTER ================== */
-    .ap-modal-footer{
-        justify-content:flex-end;
-        padding:16px 20px;
-        background:#f8f9fa;
+    .ap-grid table {
+        width: 100%;
+        border-collapse: collapse;
     }
 
-    /* ================== QUITAR BORDES NEGROS ================== */
-    .ap-modal button,
-    .ap-modal button:focus,
-    .ap-modal button:active{
-        outline:none !important;
-        box-shadow:none !important;
-    }
-    /* ======================================================
-   ASSISTPRO – INPUTS SUAVES (NUEVO / EDITAR)
-   ====================================================== */
-
-    #mdlNuevo input[type="text"],
-    #mdlNuevo input[type="number"]{
-        background:#f8f9fa;                 /* fondo suave */
-        border:1px solid #e1e5ea;           /* borde claro */
-        border-radius:12px;                 /* esquinas redondeadas */
-        padding:10px 12px;                  /* más aire */
-        font-size:13px;
-        color:#212529;
-        transition:
-                background .15s ease,
-                border-color .15s ease,
-                box-shadow .15s ease;
+    .ap-grid th {
+        background: #f8f9fa;
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        color: #495057;
+        border-bottom: 1px solid #dee2e6;
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+        z-index: 10;
     }
 
-    /* Placeholder más suave */
-    #mdlNuevo input::placeholder{
-        color:#adb5bd;
+    .ap-grid td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #f1f3f5;
+        color: #212529;
+        vertical-align: middle;
+        white-space: nowrap;
     }
 
-    /* Focus AssistPro */
-    #mdlNuevo input:focus{
-        background:#fff;
-        border-color:#0d6efd;
-        box-shadow:0 0 0 3px rgba(13,110,253,.15);
+    .ap-grid tr:hover td {
+        background: #f8f9fa;
     }
 
-    /* Input de solo lectura (editar clave, si aplica) */
-    #mdlNuevo input[readonly]{
-        background:#eef1f4;
-        border-color:#dee2e6;
-        color:#6c757d;
-    }
-    /* ======================================================
-       ASSISTPRO – FORMULARIO EN LISTA (NUEVO / EDITAR)
-       ====================================================== */
-
-    /* Forzar layout vertical */
-    #mdlNuevo .ap-form-grid{
-        display:flex !important;
-        flex-direction:column !important;
-        gap:14px !important;
+    .ap-actions i {
+        cursor: pointer;
+        margin-right: 12px;
+        color: #6c757d;
+        transition: color 0.2s;
+        font-size: 14px;
     }
 
-    /* Cada campo ocupa toda la fila */
-    #mdlNuevo .ap-form-grid > div{
-        width:100%;
+    .ap-actions i:hover {
+        color: #0b5ed7;
     }
 
-    /* Inputs ocupan todo el ancho */
-    #mdlNuevo .ap-form-grid input[type="text"],
-    #mdlNuevo .ap-form-grid input[type="number"]{
-        width:100% !important;
-        max-width:none !important;
+    /* MODAL */
+    .ap-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(2px);
     }
 
-    /* Checkbox alineado como item de lista */
-    #mdlNuevo .ap-modal-body > label{
-        display:flex;
-        align-items:center;
-        gap:8px;
-        margin-top:6px;
-        font-weight:600;
+    .ap-modal[style*="display: block"] {
+        display: flex !important;
     }
 
-    /* Separación visual tipo lista */
-    #mdlNuevo .ap-form-grid > div{
-        padding-bottom:4px;
-        border-bottom:1px solid #f1f3f5;
+    .ap-modal-content {
+        background: #fff;
+        width: 600px;
+        max-width: 95%;
+        max-height: 90vh;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        padding: 20px;
     }
 
-    /* Último campo sin línea */
-    #mdlNuevo .ap-form-grid > div:last-child{
-        border-bottom:none;
-    }
-    /* Quitar línea inferior y aumentar espacio en cada campo (formularios) */
-    #mdlNuevo .ap-form-grid > div{
-        padding-bottom:12px !important;     /* un poco más de espacio vertical */
-        border-bottom:none !important;      /* quitar la línea inferior */
+    .ap-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-top: 15px;
     }
 
-    /* Asegurar que el último campo no tenga línea (por si hay reglas previas) */
-    #mdlNuevo .ap-form-grid > div:last-child{
-        border-bottom:none !important;
+    .ap-form.full {
+        grid-template-columns: 1fr;
     }
 
-    /* Hacer los campos de los formularios un poco más grandes y consistentes */
-    #mdlNuevo .ap-form-grid input,
-    #mdlNuevo .ap-form-grid select,
-    #mdlNuevo .ap-form-grid textarea,
-    .ap-modal-body input,
-    .ap-modal-body select,
-    .ap-modal-body textarea {
-        padding:12px 14px !important;       /* ligeramente más grande */
-        font-size:14px !important;          /* tamaño de texto un poco mayor */
-        border-radius:12px !important;
-        background:#f8f9fa !important;
+    .ap-field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
     }
 
-    /* Aumentar ligeramente el ancho del modal para dar más aire */
-    .ap-modal-content{
-        width:1020px !important;
-        max-width:96% !important;
-    }
-    /* Eliminar borde/outline negro y sombras en inputs del formulario/modal */
-    .ap-modal input,
-    .ap-modal select,
-    .ap-modal textarea,
-    #mdlNuevo input,
-    #mdlNuevo select,
-    #mdlNuevo textarea,
-    input.form-control,
-    input.form-control:focus,
-    input.form-control:hover,
-    input.form-control:active {
-        border: 1px solid #e6eaef !important; /* borde sutil */
-        box-shadow: none !important;
-        -webkit-box-shadow: none !important;
-        -moz-box-shadow: none !important;
-        outline: none !important;
-        transition: none !important;
-        background: #f8f9fa !important;
+    .ap-label {
+        font-weight: 500;
+        font-size: 13px;
+        color: #495057;
     }
 
-    /* Asegurar que el foco no muestre borde negro ni shadow */
-    .ap-modal input:focus,
-    #mdlNuevo input:focus,
-    .ap-modal select:focus,
-    #mdlNuevo select:focus,
-    .ap-modal textarea:focus,
-    #mdlNuevo textarea:focus,
-    input.form-control:focus {
-        border-color: #0d6efd !important; /* indicador sutil */
-        box-shadow: 0 0 0 4px rgba(13,110,253,0.06) !important; /* muy tenue */
-        outline: none !important;
+    .ap-input {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 8px 12px;
+        background: #fff;
+        transition: all 0.2s;
     }
 
-    /* Quitar cualquier outline por focus-visible */
-    :focus-visible { outline: none !important; box-shadow: none !important; }
-
-    /* Evitar cambios al pasar el cursor */
-    .ap-modal input:hover,
-    #mdlNuevo input:hover,
-    input.form-control:hover {
-        border-color: #e6eaef !important;
-        box-shadow: none !important;
+    .ap-input:focus-within {
+        border-color: #0b5ed7;
+        box-shadow: 0 0 0 3px rgba(11, 94, 215, 0.1);
     }
 
-    /* --- AÑADIR dentro del <style> (al final del bloque style) --- */
-
-    .ap-paginator{
-        display:flex;
-        gap:6px;
-        align-items:center;
-        justify-content:center;
-        margin-top:10px;
-        flex-wrap:wrap;
-    }
-    .ap-paginator .page-btn{
-        padding:6px 10px;
-        border-radius:8px;
-        border:1px solid #e6eaef;
-        background:#f8f9fa;
-        color:#212529;
-        cursor:pointer;
-        font-size:13px;
-    }
-    .ap-paginator .page-btn:hover{ background:#e9eef7; }
-    .ap-paginator .page-btn.active{
-        background:#0d6efd;
-        color:#fff;
-        border-color:transparent;
-    }
-    .ap-paginator .page-btn.disabled{
-        opacity:.45;
-        cursor:default;
-    }
-    .ap-paginator .page-info{
-        font-size:13px;
-        color:#6c757d;
-        margin-left:8px;
+    .ap-input input,
+    .ap-input select {
+        border: none;
+        outline: none;
+        width: 100%;
+        font-size: 14px;
+        color: #212529;
+        background: transparent;
     }
 
-    /* fin del bloque paginador */
+    /* PAGER */
+    .ap-pager {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 15px;
+        padding: 0 5px;
+    }
 
+    button.primary {
+        background: #0b5ed7;
+        color: #fff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
 
+    button.primary:hover {
+        background: #0a58ca;
+    }
+
+    button.ghost {
+        background: #fff;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    button.ghost:hover {
+        background: #f1f3f5;
+        border-color: #ced4da;
+    }
 </style>
 
+<div class="ap-container">
+    <div class="ap-title"><i class="fa fa-tags"></i> Clasificación de Artículos</div>
+
+    <!-- TOOLBAR -->
+    <div class="ap-toolbar">
+        <div class="ap-search">
+            <i class="fa fa-search"></i>
+            <input id="q" placeholder="Buscar clave o descripción..." onkeydown="if(event.key==='Enter')buscar()">
+        </div>
+        <button class="ap-chip" onclick="buscar()">Buscar</button>
+        <button class="ap-chip" onclick="limpiar()">Limpiar</button>
 
 
-
-
-
-<div class="container-fluid" style="padding:10px">
-
-    <h4 class="text-primary mb-3">
-        <i class="fa fa-tags"></i> Clasificación de Artículos
-    </h4>
-
-    <div class="d-flex mb-2 gap-2 flex-wrap">
-        <input type="text" id="txtBuscar" class="form-control form-control-sm"
-               placeholder="Buscar..." style="max-width:200px">
-
-        <button class="btn btn-primary btn-sm" onclick="buscar()">
-            <i class="fa fa-search"></i> Buscar
-        </button>
-
-        <button class="btn btn-success btn-sm" onclick="nuevoRegistro()">
-            <i class="fa fa-plus"></i> Nuevo
-        </button>
-
-        <button class="btn btn-secondary btn-sm" onclick="toggleInactivos()">
+        <button class="ap-chip" id="btnToggleInactive" onclick="toggleInactivos()">
             <i class="fa fa-eye"></i> Ver Inactivos
         </button>
 
-        <button class="btn btn-info btn-sm" onclick="exportarCSV()">
-            <i class="fa fa-file-csv"></i> Exportar
-        </button>
+        <div style="flex:1"></div>
 
-        <button class="btn btn-warning btn-sm" onclick="mostrarModalImportar()">
-            <i class="fa fa-upload"></i> Importar
-        </button>
+        <button class="ap-chip primary" onclick="nuevo()"><i class="fa fa-plus"></i> Nuevo</button>
+        <button class="ap-chip" onclick="exportar()"><i class="fa fa-download"></i> Exportar</button>
+        <button class="ap-chip" onclick="abrirImport()"><i class="fa fa-upload"></i> Importar CSV</button>
     </div>
 
-    <div class="table-responsive" style="max-height:520px">
-        <table class="table table-sm table-hover text-center align-middle">
-            <thead class="table-primary">
-            <tr>
-                <th style="width:120px">Opciones</th>
-                <th>Clave</th>
-                <th>Grupo</th>
-                <th>Descripción</th>
-                <th>Almacén</th>
-                <th>Múltiplo</th>
-                <th>Incluye</th>
-                <th>Estatus</th>
-            </tr>
+    <span class="ap-chip" id="msg" style="display:none; margin-bottom:10px;"></span>
+
+    <!-- GRID -->
+    <div class="ap-grid">
+        <table>
+            <thead>
+                <tr>
+                    <th>Opciones</th>
+                    <th>Clave</th>
+                    <th>Grupo</th>
+                    <th>Descripción</th>
+                    <th>Almacén</th>
+                    <th>Múltiplo</th>
+                    <th>Incluye</th>
+                    <th>Estatus</th>
+                </tr>
             </thead>
-            <tbody id="gridDatos"></tbody>
+            <tbody id="tb"></tbody>
         </table>
-
-</table>
-</div>
-<!-- contenedor del paginador -->
-<div id="paginador" class="ap-paginator" aria-label="Paginador"></div>
-
-
     </div>
+
+    <!-- PAGER -->
+    <div id="pager" class="ap-pager"></div>
 </div>
 
-<!-- ================== MODAL IMPORTAR ================== -->
-<div class="ap-modal" id="mdlImport">
+<!-- MODAL EDIT/NEW -->
+<div class="ap-modal" id="mdl">
     <div class="ap-modal-content">
-        <div class="ap-modal-header">
-            <h3><i class="fa fa-upload"></i> Importar Clasificación</h3>
-            <button onclick="cerrarModalImportar()">×</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+            <h3 style="margin:0"><i class="fa fa-tag"></i> <span id="mdlTitle">Clasificación</span></h3>
+            <button onclick="cerrarModal('mdl')"
+                style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
+                    class="fa fa-times"></i></button>
         </div>
 
-        <div class="ap-modal-body">
-            <label>Archivo CSV</label>
-            <input type="file" id="fileCsvImport" accept=".csv">
+        <input type="hidden" id="mID" value="">
 
-
-            <div class="ap-import-cols">
-                <span>Clave</span>
-                <span>Grupo</span>
-                <span>Descripción</span>
-                <span>Almacén</span>
-                <span>Múltiplo</span>
-                <span>Incluye</span>
+        <div class="ap-form">
+            <div class="ap-field">
+                <div class="ap-label">Clave *</div>
+                <div class="ap-input"><input id="mClave" maxlength="50"></div>
             </div>
-
-            <div class="ap-import-actions">
-                <button onclick="descargarLayoutImport()">Descargar layout</button>
-                <button class="primary" onclick="previsualizarCsvImport()">Previsualizar</button>
-                <button onclick="cerrarModalImportar()">Cancelar</button>
-            </div>
-
-            <div id="csvPreviewWrapImport" style="display:none">
-                <div class="ap-grid" style="max-height:260px">
-                    <table>
-                        <thead id="csvHeadImport"></thead>
-                        <tbody id="csvBodyImport"></tbody>
-                    </table>
-                </div>
-                <div style="text-align:right;margin-top:8px">
-                    <button class="primary" onclick="importarCsvImport()">Importar</button>
-                </div>
+            <div class="ap-field">
+                <div class="ap-label">Grupo</div>
+                <div class="ap-input"><input id="mGrupo" maxlength="50"></div>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- ================== MODAL NUEVO / EDITAR ================== -->
-<div class="ap-modal" id="mdlNuevo">
-    <div class="ap-modal-content">
-        <div class="ap-modal-header">
-            <h3 id="tituloModalNuevo"><i class="fa fa-plus"></i> Clasificación</h3>
-            <button onclick="cerrarModalNuevo()">×</button>
+        <div class="ap-form full" style="margin-top:10px; grid-template-columns: 1fr;">
+            <div class="ap-field">
+                <div class="ap-label">Descripción *</div>
+                <div class="ap-input"><input id="mDesc" maxlength="255"></div>
+            </div>
         </div>
 
-        <div class="ap-modal-body">
-            <input type="hidden" id="edit_id">
-
-            <div class="ap-form-grid">
-                <div><label>Clave *</label><input id="n_cve_sgpoart"></div>
-                <div><label>Grupo</label><input id="n_cve_gpoart"></div>
-                <div><label>Almacén</label><input id="n_id_almacen"></div>
-            </div>
-
-            <div class="ap-form-grid">
-                <div style="grid-column:span 2">
-                    <label>Descripción *</label><input id="n_des_sgpoart">
-                </div>
-                <div>
-                    <label>Múltiplo</label><input type="number" id="n_Num_Multiplo" value="0">
+        <div class="ap-form" style="margin-top:10px;">
+            <div class="ap-field">
+                <div class="ap-label">Almacén</div>
+                <div class="ap-input">
+                    <select id="mAlmacen">
+                        <option value="">Cargando...</option>
+                    </select>
                 </div>
             </div>
+            <div class="ap-field">
+                <div class="ap-label">Múltiplo</div>
+                <div class="ap-input"><input type="number" id="mMultiplo" value="0"></div>
+            </div>
+        </div>
 
-            <label>
-                <input type="checkbox" id="n_Ban_Incluye"> Incluye
+        <div class="ap-form full" style="margin-top:10px;">
+            <label style="display:flex; gap:8px; align-items:center; font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="mIncluye">
+                <span>Incluye (Ban_Incluye)</span>
             </label>
         </div>
 
-        <div class="ap-modal-footer">
-            <button onclick="cerrarModalNuevo()">Cancelar</button>
-            <button class="btn btn-primary btn-sm" onclick="guardarNuevo()">Guardar</button>
+        <div style="text-align:right;margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
+            <button class="ghost" onclick="cerrarModal('mdl')">Cancelar</button>
+            <button class="primary" onclick="guardar()">Guardar</button>
         </div>
     </div>
 </div>
 
-<!-- ================== MODAL ALERTA ================== -->
-<div class="ap-modal" id="mdlAlert">
-    <div class="ap-modal-content" style="max-width:420px">
-        <div class="ap-modal-header" id="apAlertHeader">
-            <h3 id="apAlertTitle">Aviso</h3>
-            <button onclick="cerrarApAlert()">×</button>
+<!-- MODAL IMPORT -->
+<div class="ap-modal" id="mdlImport">
+    <div class="ap-modal-content" style="width:500px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+            <h3 style="margin:0"><i class="fa fa-upload"></i> Importar CSV</h3>
+            <button onclick="cerrarModal('mdlImport')"
+                style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
+                    class="fa fa-times"></i></button>
         </div>
-        <div class="ap-modal-body">
-            <p id="apAlertMsg" style="margin:0"></p>
+
+        <div class="ap-chip"
+            style="margin-bottom:15px; width:100%; justify-content:center; flex-direction:column; gap:5px;">
+            <div>Layout: Clave, Grupo, Descripción, Almacén, Múltiplo, Incluye</div>
+            <button class="ghost" style="font-size:10px; padding:2px 6px;" onclick="bajarLayout()">Descargar Layout
+                Modelo</button>
         </div>
-        <div class="ap-modal-footer">
-            <button class="btn btn-primary btn-sm" onclick="cerrarApAlert()">Aceptar</button>
+
+        <div class="ap-input">
+            <i class="fa fa-file-csv"></i>
+            <input type="file" id="fileCsv" accept=".csv">
+        </div>
+
+        <div id="importResult" style="margin-top:15px;"></div>
+        <!-- Preview Area -->
+        <div id="importPreview"
+            style="display:none; max-height:200px; overflow:auto; margin-top:10px; border:1px solid #eee;">
+            <table class="table table-sm" style="font-size:11px; width:100%;">
+                <thead id="impHead"></thead>
+                <tbody id="impBody"></tbody>
+            </table>
+        </div>
+
+        <div style="margin-top:15px; display:flex; gap:10px; justify-content:flex-end;">
+            <button class="ghost" onclick="previsualizar()">Previsualizar</button>
+            <button class="primary" onclick="procesarImport()"><i class="fa fa-cloud-arrow-up"></i> Importar</button>
         </div>
     </div>
 </div>
 
 <script>
-    const api = '../api/clasificacion.php';
-    const apiAlmacenes = '../api/filtros_almacenes.php';
+    const API = '../api/clasificacion.php';
+    const API_ALMACEN = '../api/filtros_almacenes.php';
 
-    let dataCache = [], verInactivos = 0;
-    let paginaActual = 1;
-    const filasPorPagina = 25;
+    let curPage = 1;
+    let viewInactive = false;
+    let dataCache = [];
+    let importData = []; // Para guardar datos parseados antes de enviar
 
-    /* ================== ALERTAS ================== */
-    function apAlert(tipo, msg){
-        const h = document.getElementById('apAlertHeader');
-        const t = document.getElementById('apAlertTitle');
-        const m = document.getElementById('apAlertMsg');
-        h.className = 'ap-modal-header';
-        if(tipo === 'success'){ h.classList.add('bg-success'); t.innerText = 'Éxito'; }
-        else if(tipo === 'error'){ h.classList.add('bg-danger'); t.innerText = 'Error'; }
-        else if(tipo === 'warning'){ h.classList.add('bg-warning'); t.innerText = 'Atención'; }
-        else{ h.classList.add('bg-info'); t.innerText = 'Aviso'; }
-        m.innerText = msg;
-        mdlAlert.classList.add('show');
-    }
-    function cerrarApAlert(){ mdlAlert.classList.remove('show'); }
-
-    /* ================== IMPORTAR ================== */
-    function mostrarModalImportar(){ mdlImport.classList.add('show'); }
-    function cerrarModalImportar(){
-        mdlImport.classList.remove('show');
-        fileCsvImport.value = '';
-        csvPreviewWrapImport.style.display = 'none';
+    function showMsg(txt, cls = '') {
+        const m = document.getElementById('msg');
+        m.style.display = 'inline-flex';
+        m.className = 'ap-chip ' + cls;
+        m.innerHTML = txt;
+        setTimeout(() => { m.style.display = 'none' }, 3500);
     }
 
-    function descargarLayoutImport(){
-        let csv =
-            "sep=;\r\n" +
-            "Clave Clasificación;Grupo de Artículo;Descripción;Almacén;Múltiplo;Incluye\r\n";
+    function abrirModal(id) { document.getElementById(id).style.display = 'block'; }
+    function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
 
-        const utf16 = new Uint16Array(Array.from(csv).map(c => c.charCodeAt(0)));
-        const blob = new Blob([utf16], { type: 'text/csv;charset=utf-16le;' });
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'layout_clasificacion_articulos.csv';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    function esc(s) {
+        return (s ?? '').toString().replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
     }
 
-    function previsualizarCsvImport(){
-        const f = fileCsvImport.files[0];
-        if(!f) return;
-
-        const r = new FileReader();
-        r.onload = e => {
-            const l = e.target.result.split(/\r?\n/).filter(x => x.trim());
-            const d = l[0].includes(';') ? ';' : ',';
-            csvHeadImport.innerHTML =
-                '<tr>' + l[0].split(d).map(h => `<th>${h}</th>`).join('') + '</tr>';
-            csvBodyImport.innerHTML =
-                l.slice(1,6).map(r =>
-                    '<tr>' + r.split(d).map(c => `<td>${c}</td>`).join('') + '</tr>'
-                ).join('');
-            csvPreviewWrapImport.style.display = 'block';
-        };
-        r.readAsText(f);
+    function toggleInactivos() {
+        viewInactive = !viewInactive;
+        const btn = document.getElementById('btnToggleInactive');
+        if (viewInactive) {
+            btn.classList.add('warn');
+            btn.innerHTML = '<i class="fa fa-eye-slash"></i> Ocultar Inactivos';
+        } else {
+            btn.classList.remove('warn');
+            btn.innerHTML = '<i class="fa fa-eye"></i> Ver Inactivos';
+        }
+        refrescar(1);
     }
 
-    function importarCsvImport(){
-        const f = fileCsvImport.files[0];
-        if(!f) return apAlert('warning','Selecciona un archivo CSV');
+    function refrescar(p = 1) {
+        curPage = p;
+        const q = document.getElementById('q').value;
 
-        const r = new FileReader();
-        r.onload = e => {
-            const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
-            const d = lines[0].includes(';') ? ';' : ',';
-            const data = lines.slice(1);
-            const reqs = [];
+        // API logic translation
+        const start = (curPage - 1) * 25;
+        const params = new URLSearchParams();
+        params.append('action', 'list');
+        params.append('start', start);
+        params.append('length', 25);
+        params.append('draw', 1);
+        params.append('search[value]', q);
+        params.append('inactivos', viewInactive ? 1 : 0);
 
-            data.forEach(l => {
-                const c = l.split(d);
-                if(!c[0] || !c[2]) return;
-                reqs.push(fetch(api,{
-                    method:'POST',
-                    headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({
-                        action:'create',
-                        cve_sgpoart:c[0],
-                        cve_gpoart:c[1]||null,
-                        des_sgpoart:c[2],
-                        id_almacen:c[3]||null,
-                        Num_Multiplo:c[4]||0,
-                        Ban_Incluye:c[5]||0
-                    })
-                }));
-            });
-
-            Promise.all(reqs)
-                .then(()=>{
-                    cerrarModalImportar();
-                    cargarDatos();
-                    apAlert('success','Importación realizada correctamente');
-                })
-                .catch(()=> apAlert('error','Error durante la importación'));
-        };
-        r.readAsText(f);
-    }
-
-    /* ================== NUEVO / EDITAR ================== */
-    function nuevoRegistro(){
-        limpiarNuevo();
-        edit_id.value = '';
-        cargarAlmacenes(); // 👈 AQUÍ se consume el API de almacenes
-        tituloModalNuevo.innerHTML = '<i class="fa fa-plus"></i> Nueva Clasificación';
-        mdlNuevo.classList.add('show');
-    }
-
-    function editar(id){
-        const r = dataCache.find(x => x.id == id);
-        if(!r) return;
-
-        edit_id.value = r.id;
-        n_cve_sgpoart.value = r.cve_sgpoart;
-        n_cve_gpoart.value = r.cve_gpoart;
-        n_des_sgpoart.value = r.des_sgpoart;
-        n_Num_Multiplo.value = r.Num_Multiplo;
-        n_Ban_Incluye.checked = r.Ban_Incluye == 1;
-
-        cargarAlmacenes(r.id_almacen); // 👈 AQUÍ se consume el API de almacenes
-
-        tituloModalNuevo.innerHTML = '<i class="fa fa-edit"></i> Editar Clasificación';
-        mdlNuevo.classList.add('show');
-    }
-
-    function cerrarModalNuevo(){ mdlNuevo.classList.remove('show'); }
-
-    function limpiarNuevo(){
-        n_cve_sgpoart.value = '';
-        n_cve_gpoart.value = '';
-        n_des_sgpoart.value = '';
-        n_id_almacen.value = '';
-        n_Num_Multiplo.value = 0;
-        n_Ban_Incluye.checked = false;
-    }
-
-    function guardarNuevo(){
-        if(!n_cve_sgpoart.value || !n_des_sgpoart.value)
-            return apAlert('warning','Clave y descripción son obligatorias');
-
-        const action = edit_id.value ? 'update' : 'create';
-
-        fetch(api,{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-                action,
-                id: edit_id.value,
-                cve_sgpoart: n_cve_sgpoart.value,
-                cve_gpoart: n_cve_gpoart.value,
-                des_sgpoart: n_des_sgpoart.value,
-                id_almacen: n_id_almacen.value,
-                Num_Multiplo: n_Num_Multiplo.value,
-                Ban_Incluye: n_Ban_Incluye.checked ? 1 : 0
-            })
-        })
-            .then(r => r.json())
-            .then(resp => {
-                if(resp.success){
-                    apAlert('success', edit_id.value
-                        ? 'Registro actualizado correctamente'
-                        : 'Registro agregado correctamente');
-                    cerrarModalNuevo();
-                    cargarDatos();
-                } else {
-                    apAlert('error', resp.error || 'No se pudo guardar');
-                }
-            })
-            .catch(()=> apAlert('error','Error de comunicación con el servidor'));
-    }
-
-    /* ================== GRID ================== */
-    function cargarDatos(){
-        fetch(`${api}?inactivos=${verInactivos}`)
+        fetch(API + '?' + params.toString())
             .then(r => r.json())
             .then(d => {
                 dataCache = d.data || [];
+                const total = d.recordsFiltered || 0; // API returns filtered count
                 renderGrid(dataCache);
-            });
+                renderPager(total);
+            })
+            .catch(e => console.error(e));
     }
 
-    function renderGrid(d){
-        const inicio = (paginaActual - 1) * filasPorPagina;
-        const fin = inicio + filasPorPagina;
-        const datosPagina = d.slice(inicio, fin);
+    function renderGrid(rows) {
+        const tb = document.getElementById('tb');
+        if (!rows.length) {
+            tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#777">Sin resultados</td></tr>';
+            return;
+        }
+        tb.innerHTML = rows.map(r => {
+            const st = parseInt(r.Activo ?? 1);
+            const cls = st === 1 ? 'ok' : 'warn';
+            const txt = st === 1 ? 'Activo' : 'Inactivo';
+            // Ajuste de IDs según API (usamos 'id' para acciones)
 
-        gridDatos.innerHTML = datosPagina.map(r => `
-            <tr>
-                <td>
-                    <button class="btn btn-warning btn-sm" onclick="editar(${r.id})">
-                        <i class="fa fa-edit"></i>
-                    </button>
-                    ${r.Activo==1
-            ? `<button class="btn btn-danger btn-sm" onclick="desactivar(${r.id})">
-                               <i class="fa fa-trash"></i>
-                           </button>`
-            : `<button class="btn btn-success btn-sm" onclick="restaurar(${r.id})">
-                               <i class="fa fa-undo"></i>
-                           </button>`}
-                </td>
-                <td>${r.cve_sgpoart}</td>
-                <td>${r.cve_gpoart||''}</td>
-                <td>${r.des_sgpoart||''}</td>
-                <td>${r.id_almacen||''}</td>
-                <td>${r.Num_Multiplo}</td>
-                <td>${r.Ban_Incluye==1?'Sí':'No'}</td>
-                <td>${r.Activo==1?'Activo':'Inactivo'}</td>
-            </tr>
-        `).join('');
-
-        renderPaginador(d.length);
+            return `<tr>
+        <td class="ap-actions">
+           <i class="fa fa-pen" title="Editar" onclick="editar(${r.id})"></i>
+           ${st === 1
+                    ? `<i class="fa fa-ban" title="Inactivar" onclick="toggle(${r.id}, 'delete')"></i>`
+                    : `<i class="fa fa-rotate-left" title="Recuperar" onclick="toggle(${r.id}, 'restore')"></i>`
+                }
+        </td>
+        <td>${esc(r.cve_sgpoart)}</td>
+        <td>${esc(r.cve_gpoart)}</td>
+        <td><div style="max-width:250px;overflow:hidden;text-overflow:ellipsis" title="${esc(r.des_sgpoart)}">${esc(r.des_sgpoart)}</div></td>
+        <td>${esc(r.id_almacen)}</td>
+        <td>${esc(r.Num_Multiplo)}</td>
+        <td>${r.Ban_Incluye == 1 ? 'Sí' : 'No'}</td>
+        <td><span class="ap-chip ${cls}" style="padding:2px 8px;font-size:11px;">${txt}</span></td>
+      </tr>`;
+        }).join('');
     }
 
-    function buscar(){
-        const q = txtBuscar.value.toLowerCase();
-        renderGrid(dataCache.filter(r => r.cve_sgpoart.toLowerCase().includes(q)));
+    function renderPager(filtered) {
+        const p = document.getElementById('pager');
+        const totalPages = Math.ceil(filtered / 25);
+        const start = filtered > 0 ? (curPage - 1) * 25 + 1 : 0;
+        const end = Math.min(curPage * 25, filtered);
+
+        const prev = curPage > 1 ? `<button class="ap-chip" onclick="refrescar(${curPage - 1})"><i class="fa fa-chevron-left"></i></button>` : '';
+        const next = curPage < totalPages ? `<button class="ap-chip" onclick="refrescar(${curPage + 1})"><i class="fa fa-chevron-right"></i></button>` : '';
+
+        p.innerHTML = `
+      <div style="font-size:12px;color:#666">
+         Mostrando ${start}-${end} de ${filtered} registros
+      </div>
+      <div style="display:flex;gap:5px">
+        ${prev}
+        <span class="ap-chip" style="cursor:default">Página ${curPage}</span>
+        ${next}
+      </div>
+    `;
     }
-    function toggleInactivos(){ verInactivos = verInactivos ? 0 : 1; cargarDatos(); }
 
-    function exportarCSV(){ window.location = `${api}?action=export`; }
-
-    function desactivar(id){
-        fetch(api,{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({action:'delete',id})})
-            .then(()=>{ cargarDatos(); apAlert('success','Registro desactivado'); });
+    function buscar() { refrescar(1); }
+    function limpiar() {
+        document.getElementById('q').value = '';
+        refrescar(1);
     }
 
-    function restaurar(id){
-        fetch(api,{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({action:'restore',id})})
-            .then(()=>{ cargarDatos(); apAlert('success','Registro recuperado'); });
-    }
-
-    /* ================== ALMACENES ================== */
-    function cargarAlmacenes(selectedId = null){
-        const select = document.getElementById('n_id_almacen');
-        if (!select) return;
-
-        fetch(apiAlmacenes)
+    // --- ALMACENES ---
+    function cargarAlmacenes(selectedVal = null) {
+        const sel = document.getElementById('mAlmacen');
+        sel.innerHTML = '<option value="">Cargando...</option>';
+        fetch(API_ALMACEN)
             .then(r => r.json())
             .then(data => {
                 if (!Array.isArray(data)) {
-                    select.innerHTML = '<option value="">Sin almacenes disponibles</option>';
-                    return;
+                    sel.innerHTML = '<option value="">Sin almacenes</option>'; return;
                 }
+                sel.innerHTML = '<option value="">-- Seleccione --</option>' +
+                    data.map(a => `<option value="${a.id}">${a.nombre}</option>`).join('');
 
-                select.innerHTML =
-                    '<option value="">Seleccione un almacén</option>' +
-                    data.map(a =>
-                        `<option value="${a.id}" ${
-                            String(selectedId) === String(a.id) ? 'selected' : ''
-                        }>${a.nombre}</option>`
-                    ).join('');
+                if (selectedVal) sel.value = selectedVal;
             })
-            .catch(() => {
-                select.innerHTML = '<option value="">Error al cargar almacenes</option>';
+            .catch(e => sel.innerHTML = '<option value="">Error carga</option>');
+    }
+
+    // --- CRUD ---
+
+    function nuevo() {
+        document.getElementById('mdlTitle').innerText = 'Nueva Clasificación';
+        document.getElementById('mID').value = '';
+        document.getElementById('mClave').value = '';
+        document.getElementById('mGrupo').value = '';
+        document.getElementById('mDesc').value = '';
+        document.getElementById('mMultiplo').value = 0;
+        document.getElementById('mIncluye').checked = false;
+
+        cargarAlmacenes();
+        abrirModal('mdl');
+    }
+
+    function editar(id) {
+        // Buscar en cache (la API list trae todos los campos necesarios)
+        const r = dataCache.find(x => x.id == id);
+        if (!r) { showMsg('Error localizando registro en cache', 'warn'); return; }
+
+        document.getElementById('mdlTitle').innerText = 'Editar Clasificación';
+        document.getElementById('mID').value = r.id;
+        document.getElementById('mClave').value = r.cve_sgpoart;
+        document.getElementById('mGrupo').value = r.cve_gpoart || '';
+        document.getElementById('mDesc').value = r.des_sgpoart;
+        document.getElementById('mMultiplo').value = r.Num_Multiplo;
+        document.getElementById('mIncluye').checked = (r.Ban_Incluye == 1);
+
+        cargarAlmacenes(r.id_almacen);
+        abrirModal('mdl');
+    }
+
+    function guardar() {
+        const id = document.getElementById('mID').value;
+        const isUpdate = !!id; // empty string means create
+
+        const payload = {
+            action: isUpdate ? 'update' : 'create',
+            cve_sgpoart: document.getElementById('mClave').value.trim(),
+            cve_gpoart: document.getElementById('mGrupo').value.trim(),
+            des_sgpoart: document.getElementById('mDesc').value.trim(),
+            id_almacen: document.getElementById('mAlmacen').value,
+            Num_Multiplo: document.getElementById('mMultiplo').value,
+            Ban_Incluye: document.getElementById('mIncluye').checked ? 1 : 0
+        };
+
+        if (!payload.cve_sgpoart || !payload.des_sgpoart) {
+            alert('Clave y Descripción son obligatorios'); return;
+        }
+
+        if (isUpdate) payload.id = id;
+
+        fetch(API, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(r => r.json())
+            .then(j => {
+                if (j.success) {
+                    showMsg('Guardado correctamente', 'ok');
+                    cerrarModal('mdl');
+                    refrescar(curPage); // reload current page
+                } else {
+                    showMsg(j.error || 'Error al guardar', 'warn');
+                }
             });
     }
 
-    cargarDatos();
+    function toggle(id, action) {
+        // action: delete / restore
+        if (!confirm('¿Estás seguro?')) return;
+
+        const payload = { action: action, id: id };
+
+        fetch(API, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(r => r.json())
+            .then(j => {
+                if (j.success) { showMsg('Acción correcta', 'ok'); refrescar(curPage); }
+                else showMsg(j.error || 'Error', 'warn');
+            });
+    }
+
+    function exportar() {
+        window.open(API + '?action=export', '_blank');
+    }
+
+    // --- IMPORT ---
+    function abrirImport() {
+        document.getElementById('fileCsv').value = '';
+        document.getElementById('importResult').innerHTML = '';
+        document.getElementById('importPreview').style.display = 'none';
+        importData = [];
+        abrirModal('mdlImport');
+    }
+
+    function bajarLayout() {
+        const csv = "sep=;\r\nClave Clasificación;Grupo de Artículo;Descripción;Almacén;Múltiplo;Incluye\r\n";
+        const blob = new Blob([new Uint16Array([0xFEFF]), csv], { type: 'text/csv;charset=utf-16le;' }); // UTF-16LE BOM attempt or generic
+        // Simpler: UTF-8 BOM
+        const uniCsv = "\uFEFFClave;Grupo;Descripcion;AlmacenID;Multiplo;Incluye_1_0\r\n";
+        const blob2 = new Blob([uniCsv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob2);
+        const a = document.createElement('a'); a.href = url; a.download = 'layout_clasificacion.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+
+    function previsualizar() {
+        const f = document.getElementById('fileCsv').files[0];
+        if (!f) return;
+
+        const r = new FileReader();
+        r.onload = e => {
+            const text = e.target.result;
+            const rows = text.split(/\r?\n/).filter(x => x.trim() !== '');
+            if (rows.length < 2) { alert('CSV vacío o sin datos'); return; }
+
+            const delim = rows[0].includes(';') ? ';' : ',';
+
+            // Render Header
+            const heads = rows[0].split(delim);
+            document.getElementById('impHead').innerHTML = `<tr>${heads.map(h => `<th>${esc(h)}</th>`).join('')}</tr>`;
+
+            // Render Body & Store Data
+            importData = []; // clear previous
+
+            // Map rows to object structure expected by API create
+            // Expected Order in CSV according to old code: Clave(0), Group(1), Dest(2), Alm(3), Multi(4), Incl(5)
+            const bodyHtml = rows.slice(1, 11).map(line => { // Show max 10 preview
+                const cols = line.split(delim);
+                return `<tr>${cols.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`;
+            }).join('');
+            document.getElementById('impBody').innerHTML = bodyHtml;
+
+            // Parse ALL for import
+            rows.slice(1).forEach(line => {
+                const c = line.split(delim);
+                if (c.length >= 3) { // Min required fields
+                    importData.push({
+                        action: 'create',
+                        cve_sgpoart: c[0],
+                        cve_gpoart: c[1] || null,
+                        des_sgpoart: c[2],
+                        id_almacen: c[3] || null,
+                        Num_Multiplo: c[4] || 0,
+                        Ban_Incluye: c[5] || 0
+                    });
+                }
+            });
+
+            document.getElementById('importPreview').style.display = 'block';
+            document.getElementById('importResult').innerHTML = `<div class="ap-chip">Listo para importar ${importData.length} registros.</div>`;
+        };
+        r.readAsText(f);
+    }
+
+    function procesarImport() {
+        if (!importData.length) { alert('No hay datos para importar. Previsualiza primero.'); return; }
+
+        const div = document.getElementById('importResult');
+        div.innerHTML = '<div class="ap-chip">Importando... esto puede tardar.</div>';
+
+        // Execute distinct fetch requests in parallel (or sequential batches if too many)
+        // Since generic implementation used Promise.all for everything, we replicate that but be careful with limits.
+        const promises = importData.map(d =>
+            fetch(API, {
+                method: 'POST',
+                body: JSON.stringify(d),
+                headers: { 'Content-Type': 'application/json' }
+            }).then(r => r.json())
+        );
+
+        Promise.all(promises)
+            .then(results => {
+                const ok = results.filter(r => r.success).length;
+                const err = results.length - ok;
+                div.innerHTML = `<div class="ap-chip ${err === 0 ? 'ok' : 'warn'}">Importados: ${ok} | Fallidos: ${err}</div>`;
+
+                if (ok > 0) setTimeout(() => { cerrarModal('mdlImport'); refrescar(1); }, 2500);
+            })
+            .catch(e => {
+                div.innerHTML = '<div class="ap-chip warn">Error de red o servidor durante importación masiva.</div>';
+            });
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        refrescar(1);
+    });
 </script>
 
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>

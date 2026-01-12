@@ -1,485 +1,571 @@
 <?php
-require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../bi/_menu_global.php';
 
-$preCveClte = trim((string)($_GET['Cve_Clte'] ?? '')); // precarga desde clientes
+$preCveClte = trim((string) ($_GET['Cve_Clte'] ?? ''));
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Catálogo de Destinatarios</title>
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" rel="stylesheet">
-  <link href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css" rel="stylesheet">
+<style>
+/* =========================================================
+   ASSISTPRO – DESTINATARIOS
+========================================================= */
+body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6fb; margin: 0; }
+.ap-container { padding: 20px; font-size: 13px; max-width: 1800px; margin: 0 auto; }
 
-  <style>
-    .ap-title{ font-weight:700; letter-spacing:.2px; }
-    .ap-sub{ color:#6c757d; font-size:12px; }
-    .ap-card{ border-radius:14px; box-shadow:0 6px 18px rgba(0,0,0,.06); }
-    table.dataTable thead th, table.dataTable tbody td { font-size: 10px; white-space: nowrap; }
-    .dt-wrap { overflow:auto; }
-    .btn-xs{ padding:.25rem .45rem; font-size: .75rem; }
-    .form-label{ font-size:12px; margin-bottom:.25rem; }
-    .form-control, .form-select{ font-size:12px; }
-    .kpi{ min-height:72px; }
-    .kpi .n{ font-size:20px; font-weight:800; }
-  </style>
-</head>
-<body>
+.ap-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #0b5ed7;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
-<div class="container-fluid py-3">
-  <div class="d-flex align-items-center justify-content-between mb-2">
-    <div>
-      <div class="ap-title fs-5">📍 Catálogo de Destinatarios</div>
-      <div class="ap-sub">Direcciones de entrega / contactos asociados a clientes (25 por página con paginación)</div>
+/* CARDS (KPIs) */
+.ap-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+.ap-card {
+  background: #fff;
+  border: 1px solid #e0e6ed;
+  border-radius: 12px;
+  padding: 15px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  transition: all 0.2s;
+}
+.ap-card:hover { border-color: #0b5ed7; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(11, 94, 215, 0.1); }
+.ap-card .h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-weight: 600; color: #333; }
+.ap-card .k { font-size: 24px; font-weight: 700; color: #0b5ed7; }
+
+/* TOOLBAR */
+.ap-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 15px; background: #fff; padding: 10px; border-radius: 10px; border: 1px solid #e0e6ed; }
+.ap-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 300px; background: #f8f9fa; padding: 6px 12px; border-radius: 8px; border: 1px solid #dee2e6; }
+.ap-search i { color: #6c757d; }
+.ap-search input { border: none; background: transparent; outline: none; width: 100%; font-size: 13px; }
+
+/* CHIPS */
+.ap-chip {
+  font-size: 12px;
+  background: #f1f3f5;
+  color: #495057;
+  border: 1px solid #dee2e6;
+  border-radius: 20px;
+  padding: 5px 12px;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.ap-chip:hover { background: #e9ecef; color: #212529; border-color: #ced4da; }
+button.ap-chip { font-family: inherit; }
+
+/* GRID */
+.ap-grid {
+  background: #fff;
+  border: 1px solid #e0e6ed;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  max-height: 600px;
+  overflow-y: auto;
+}
+.ap-grid table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.ap-grid th { background: #f8f9fa; padding: 10px 8px; text-align: left; font-weight: 600; color: #495057; border-bottom: 1px solid #dee2e6; white-space: nowrap; position: sticky; top: 0; z-index: 10; }
+.ap-grid td { padding: 8px; border-bottom: 1px solid #f1f3f5; color: #212529; vertical-align: middle; }
+.ap-grid tr:hover td { background: #f8f9fa; }
+.ap-actions i { cursor: pointer; margin-right: 10px; color: #6c757d; transition: color 0.2s; font-size: 13px; }
+.ap-actions i:hover { color: #0b5ed7; }
+
+/* PAGER */
+.ap-pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+  padding: 0 5px;
+}
+.ap-pager button {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #495057;
+}
+.ap-pager button:disabled { opacity: 0.5; cursor: default; }
+.ap-pager button:hover:not(:disabled) { background: #f8f9fa; border-color: #ced4da; }
+.ap-pager select { padding: 6px; border-radius: 6px; border: 1px solid #dee2e6; color: #495057; margin-left: 5px; }
+
+/* MODAL */
+.ap-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+.ap-modal[style*="display: block"] { display: flex !important; }
+.ap-modal-content { background: #fff; width: 1100px; max-width: 95%; max-height: 90vh; border-radius: 12px; display: flex; flex-direction: column; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 20px; }
+
+.ap-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px; }
+.ap-field { display: flex; flex-direction: column; gap: 5px; }
+.ap-label { font-weight: 500; font-size: 13px; color: #495057; }
+.ap-input { display: flex; align-items: center; gap: 10px; border: 1px solid #dee2e6; border-radius: 8px; padding: 8px 12px; background: #fff; transition: all 0.2s; }
+.ap-input:focus-within { border-color: #0b5ed7; box-shadow: 0 0 0 3px rgba(11, 94, 215, 0.1); }
+.ap-input i { color: #adb5bd; }
+.ap-input input, .ap-input select { border: none; outline: none; width: 100%; font-size: 14px; color: #212529; background: transparent; }
+
+button.primary { background: #0b5ed7; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+button.primary:hover { background: #0a58ca; }
+button.ghost { background: #fff; color: #495057; border: 1px solid #dee2e6; padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+button.ghost:hover { background: #f1f3f5; border-color: #ced4da; }
+</style>
+
+<div class="ap-container">
+  <div class="ap-title"><i class="fa fa-map-marked-alt"></i> Catálogo de Destinatarios</div>
+
+  <div class="ap-cards">
+    <div class="ap-card">
+      <div class="h"><span>Total</span><i class="fa fa-list"></i></div>
+      <div class="k" id="kTotal">0</div>
     </div>
-    <div class="d-flex gap-2">
-      <a class="btn btn-outline-secondary btn-sm" href="../api/destinatarios.php?action=export_csv&tipo=layout">Descargar layout</a>
-      <a class="btn btn-outline-secondary btn-sm" href="../api/destinatarios.php?action=export_csv&tipo=datos">Exportar datos</a>
-      <button class="btn btn-outline-primary btn-sm" id="btnImport">Importar CSV</button>
-      <button class="btn btn-primary btn-sm" id="btnNuevo">Nuevo destinatario</button>
+    <div class="ap-card">
+      <div class="h"><span>Activos</span><i class="fa fa-check-circle" style="color:#198754"></i></div>
+      <div class="k" id="kActivos">0</div>
+    </div>
+    <div class="ap-card">
+      <div class="h"><span>Inactivos</span><i class="fa fa-times-circle" style="color:#dc3545"></i></div>
+      <div class="k" id="kInactivos">0</div>
+    </div>
+    <div class="ap-card">
+      <div class="h"><span>Principales</span><i class="fa fa-star" style="color:#ffc107"></i></div>
+      <div class="k" id="kPrincipales">0</div>
     </div>
   </div>
 
-  <!-- KPI -->
-  <div class="row g-2 mb-2">
-    <div class="col-md-3">
-      <div class="card ap-card kpi"><div class="card-body">
-        <div class="ap-sub">Total</div><div class="n" id="kTotal">0</div>
-      </div></div>
+  <div class="ap-toolbar">
+    <div class="ap-search">
+      <i class="fa fa-search"></i>
+      <input id="q" placeholder="Buscar razón social, dirección, contacto…" onkeydown="if(event.key==='Enter')buscar()">
     </div>
-    <div class="col-md-3">
-      <div class="card ap-card kpi"><div class="card-body">
-        <div class="ap-sub">Activos</div><div class="n" id="kActivos">0</div>
-      </div></div>
-    </div>
-    <div class="col-md-3">
-      <div class="card ap-card kpi"><div class="card-body">
-        <div class="ap-sub">Inactivos</div><div class="n" id="kInactivos">0</div>
-      </div></div>
-    </div>
-    <div class="col-md-3">
-      <div class="card ap-card kpi"><div class="card-body">
-        <div class="ap-sub">Principales</div><div class="n" id="kPrincipales">0</div>
-      </div></div>
-    </div>
+    <button class="ap-chip" onclick="buscar()">Buscar</button>
+    <button class="ap-chip" onclick="limpiar()">Limpiar</button>
+
+    <div style="flex:1"></div>
+
+    <button class="ap-chip" onclick="nuevo()"><i class="fa fa-plus"></i> Agregar</button>
+    <button class="ap-chip" onclick="exportarDatos()"><i class="fa fa-download"></i> Exportar</button>
+    <button class="ap-chip" onclick="abrirImport()"><i class="fa fa-upload"></i> Importar</button>
+    <button class="ap-chip" onclick="toggleInactivos()"><i class="fa fa-eye"></i> Inactivos</button>
   </div>
 
-  <div class="card ap-card">
-    <div class="card-body">
-
-      <div class="row g-2 align-items-end mb-2">
-        <div class="col-md-3">
-          <label class="form-label">Cve Cliente (obligatorio para alta)</label>
-          <input type="text" id="fCveClte" class="form-control" placeholder="Ej: CLI0001" value="<?= htmlspecialchars($preCveClte) ?>">
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Ver inactivos</label>
-          <select id="fInactivos" class="form-select">
-            <option value="0" selected>No</option>
-            <option value="1">Sí</option>
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Buscar</label>
-          <input type="text" id="fQ" class="form-control" placeholder="Razón social, dirección, contacto, etc.">
-        </div>
-        <div class="col-md-1">
-          <button class="btn btn-outline-dark btn-sm w-100" id="btnFiltrar">OK</button>
-        </div>
-        <div class="col-md-2">
-          <button class="btn btn-outline-secondary btn-sm w-100" id="btnReset">Limpiar</button>
-        </div>
-      </div>
-
-      <div class="dt-wrap">
-        <table id="tblDest" class="display stripe" style="width:100%">
-          <thead>
-            <tr>
-              <th>Acciones</th>
-              <th>id_destinatario</th>
-              <th>Cve_Clte</th>
-              <th>clave_destinatario</th>
-              <th>razonsocial</th>
-              <th>direccion</th>
-              <th>colonia</th>
-              <th>postal</th>
-              <th>ciudad</th>
-              <th>estado</th>
-              <th>contacto</th>
-              <th>telefono</th>
-              <th>email</th>
-              <th>cve_vendedor</th>
-              <th>dir_principal</th>
-              <th>Activo</th>
-            </tr>
-          </thead>
-        </table>
-      </div>
-
-    </div>
+  <div style="margin-bottom:10px; display:flex; gap:10px; align-items:center;">
+    <label style="font-size:13px; font-weight:500;">Cliente:</label>
+    <input id="fCveClte" style="padding:6px 12px; border:1px solid #dee2e6; border-radius:6px; font-size:13px; width:200px;" placeholder="Ej: CLI0001" value="<?= htmlspecialchars($preCveClte) ?>" <?= $preCveClte ? 'readonly' : '' ?>>
+    <button class="ap-chip" onclick="buscar()">Filtrar</button>
   </div>
-</div>
 
-<!-- Modal Destinatario -->
-<div class="modal fade" id="mdlDest" tabindex="-1">
-  <div class="modal-dialog modal-xl">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="mdlDestTitle">Destinatario</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="m_id_destinatario">
+  <div class="ap-grid">
+    <table>
+      <thead>
+        <tr>
+          <th>Acciones</th>
+          <th>ID</th>
+          <th>Cliente</th>
+          <th>Clave</th>
+          <th>Razón Social</th>
+          <th>Dirección</th>
+          <th>Colonia</th>
+          <th>CP</th>
+          <th>Ciudad</th>
+          <th>Estado</th>
+          <th>Contacto</th>
+          <th>Teléfono</th>
+          <th>Email</th>
+          <th>Vendedor</th>
+          <th>Principal</th>
+          <th>Activo</th>
+        </tr>
+      </thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
 
-        <div class="row g-2">
-          <div class="col-md-3">
-            <label class="form-label">Cve_Clte *</label>
-            <input class="form-control" id="m_Cve_Clte">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">clave_destinatario *</label>
-            <input class="form-control" id="m_clave_destinatario" placeholder="Ej: CLI0001-PRINC">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">razonsocial</label>
-            <input class="form-control" id="m_razonsocial">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Activo</label>
-            <select class="form-select" id="m_Activo">
-              <option value="1" selected>Sí</option>
-              <option value="0">No</option>
-            </select>
-          </div>
-
-          <div class="col-md-6">
-            <label class="form-label">direccion</label>
-            <input class="form-control" id="m_direccion">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">colonia</label>
-            <input class="form-control" id="m_colonia">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">postal</label>
-            <input class="form-control" id="m_postal">
-          </div>
-
-          <div class="col-md-3">
-            <label class="form-label">ciudad</label>
-            <input class="form-control" id="m_ciudad">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">estado</label>
-            <input class="form-control" id="m_estado">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">contacto</label>
-            <input class="form-control" id="m_contacto">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">telefono</label>
-            <input class="form-control" id="m_telefono">
-          </div>
-
-          <div class="col-md-4">
-            <label class="form-label">email_destinatario</label>
-            <input class="form-control" id="m_email_destinatario">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">cve_vendedor</label>
-            <input class="form-control" id="m_cve_vendedor">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">dir_principal</label>
-            <input class="form-control" id="m_dir_principal" placeholder="1/0">
-          </div>
-          <div class="col-md-1">
-            <label class="form-label">latitud</label>
-            <input class="form-control" id="m_latitud">
-          </div>
-          <div class="col-md-1">
-            <label class="form-label">longitud</label>
-            <input class="form-control" id="m_longitud">
-          </div>
-        </div>
-
-        <div class="alert alert-info mt-3 mb-0" style="font-size:12px;">
-          * Obligatorios: <b>Cve_Clte</b> y <b>clave_destinatario</b>.
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-        <button class="btn btn-primary btn-sm" id="btnGuardarDest">Guardar</button>
-      </div>
+  <!-- Paginación -->
+  <div class="ap-pager">
+    <div class="left">
+      <button onclick="prevPage()" id="btnPrev"><i class="fa fa-chevron-left"></i> Anterior</button>
+      <button onclick="nextPage()" id="btnNext">Siguiente <i class="fa fa-chevron-right"></i></button>
+      <span class="ap-chip" id="lblRange" style="background:transparent; border:none; padding:0;">Mostrando 0–0</span>
+    </div>
+    <div class="right" style="display:flex; align-items:center;">
+      <span>Página:</span>
+      <select id="selPage" onchange="goPage(this.value)"></select>
+      
+      <span style="margin-left:15px">Por página:</span>
+      <select id="selPerPage" onchange="setPerPage(this.value)">
+        <option value="25" selected>25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
     </div>
   </div>
 </div>
 
-<!-- Modal Import -->
-<div class="modal fade" id="mdlImport" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Importar Destinatarios (CSV)</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<!-- MODAL -->
+<div class="ap-modal" id="mdl">
+  <div class="ap-modal-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+      <h3 style="margin:0"><i class="fa fa-map-marker-alt"></i> Destinatario</h3>
+      <button onclick="cerrarModal('mdl')" style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i class="fa fa-times"></i></button>
+    </div>
+
+    <div class="ap-chip" style="margin-bottom:10px"><span style="color:#dc3545;font-weight:700">*</span> Obligatorios: <b>Cliente</b>, <b>Clave</b></div>
+
+    <input type="hidden" id="id_destinatario">
+
+    <div class="ap-form">
+      <div class="ap-field">
+        <div class="ap-label">Cliente *</div>
+        <div class="ap-input"><i class="fa fa-user"></i><input id="Cve_Clte" placeholder="CLI0001"></div>
       </div>
-      <div class="modal-body">
-        <input type="file" id="csvFile" class="form-control" accept=".csv">
-        <div class="ap-sub mt-2">Descarga layout, llena datos y reimporta (UPSERT por Cve_Clte + clave_destinatario).</div>
-        <div id="importResult" class="mt-2" style="font-size:12px;"></div>
+
+      <div class="ap-field">
+        <div class="ap-label">Clave *</div>
+        <div class="ap-input"><i class="fa fa-key"></i><input id="clave_destinatario" placeholder="CLI0001-PRINC"></div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-        <button class="btn btn-primary btn-sm" id="btnDoImport">Importar</button>
+
+      <div class="ap-field">
+        <div class="ap-label">Razón Social</div>
+        <div class="ap-input"><i class="fa fa-building"></i><input id="razonsocial" placeholder="Razón Social"></div>
+      </div>
+
+      <div class="ap-field" style="grid-column: span 2">
+        <div class="ap-label">Dirección</div>
+        <div class="ap-input"><i class="fa fa-map-marker"></i><input id="direccion" placeholder="Calle y número"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Colonia</div>
+        <div class="ap-input"><i class="fa fa-home"></i><input id="colonia" placeholder="Colonia"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Código Postal</div>
+        <div class="ap-input"><i class="fa fa-envelope"></i><input id="postal" placeholder="00000"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Ciudad</div>
+        <div class="ap-input"><i class="fa fa-city"></i><input id="ciudad" placeholder="Ciudad"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Estado</div>
+        <div class="ap-input"><i class="fa fa-flag"></i><input id="estado" placeholder="Estado"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Contacto</div>
+        <div class="ap-input"><i class="fa fa-user-circle"></i><input id="contacto" placeholder="Nombre contacto"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Teléfono</div>
+        <div class="ap-input"><i class="fa fa-phone"></i><input id="telefono" placeholder="1234567890"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Email</div>
+        <div class="ap-input"><i class="fa fa-at"></i><input id="email_destinatario" placeholder="correo@dominio.com"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Vendedor</div>
+        <div class="ap-input"><i class="fa fa-user-tie"></i><input id="cve_vendedor" placeholder="Clave vendedor"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Principal</div>
+        <div class="ap-input"><i class="fa fa-star"></i>
+          <select id="dir_principal"><option value="0">No</option><option value="1">Sí</option></select>
+        </div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Activo</div>
+        <div class="ap-input"><i class="fa fa-toggle-on"></i>
+          <select id="Activo"><option value="1">Activo</option><option value="0">Inactivo</option></select>
+        </div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Latitud</div>
+        <div class="ap-input"><i class="fa fa-map-pin"></i><input id="latitud" placeholder="0.000000"></div>
+      </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Longitud</div>
+        <div class="ap-input"><i class="fa fa-map-pin"></i><input id="longitud" placeholder="0.000000"></div>
       </div>
     </div>
+
+    <div style="text-align:right;margin-top:15px;display:flex;justify-content:flex-end;gap:10px">
+      <button class="ghost" onclick="cerrarModal('mdl')">Cancelar</button>
+      <button class="primary" onclick="guardar()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORT -->
+<div class="ap-modal" id="mdlImport">
+  <div class="ap-modal-content" style="width:700px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+      <h3 style="margin:0"><i class="fa fa-upload"></i> Importar destinatarios</h3>
+      <button onclick="cerrarModal('mdlImport')" style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i class="fa fa-times"></i></button>
+    </div>
+
+    <div class="ap-chip" style="margin-bottom:15px">UPSERT por <b>Cve_Clte + clave_destinatario</b>. Descarga layout primero.</div>
+
+    <div class="ap-input">
+      <i class="fa fa-file-csv"></i>
+      <input type="file" id="fileCsv" accept=".csv">
+    </div>
+
+    <div style="margin-top:15px;display:flex;gap:10px">
+      <button class="ghost" onclick="descargarLayout()"><i class="fa fa-download"></i> Descargar layout</button>
+      <button class="primary" onclick="importarCsv()"><i class="fa fa-upload"></i> Importar</button>
+    </div>
+
+    <div class="ap-chip" id="importMsg" style="margin-top:15px; width:100%; display:none; justify-content:center;"></div>
   </div>
 </div>
 
 <script>
-  const API = "../api/destinatarios.php";
-  const PRE_CVE = <?= json_encode($preCveClte) ?>;
-</script>
+const API = '../api/destinatarios.php';
+const PRE_CVE = <?= json_encode($preCveClte) ?>;
 
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+let verInactivos = false;
+let qLast = '';
+let page = 1;
+let perPage = 25;
+let total = 0;
+let lastRows = [];
 
-<script>
-let dtDest;
+/* ===== Paginación ===== */
+function setPager(){
+  const start = total>0 ? ((page-1)*perPage + (lastRows.length?1:0)) : 0;
+  let end   = total>0 ? Math.min(page*perPage, total) : 0;
+  if(total===0) { end = 0; }
+  
+  lblRange.innerText = `Mostrando ${start}–${end}` + (total>0 ? ` de ${total}` : '');
 
-function postForm(action, payload){
-  const fd = new FormData();
-  fd.append('action', action);
-  Object.keys(payload).forEach(k => fd.append(k, payload[k]));
-  return fetch(API, { method:'POST', body: fd }).then(r => r.json());
+  const maxPages = total>0 ? Math.max(1, Math.ceil(total/perPage)) : 1;
+  selPage.innerHTML='';
+  for(let i=1;i<=maxPages;i++){
+    const o=document.createElement('option');
+    o.value=i; o.textContent=i;
+    if(i===page) o.selected=true;
+    selPage.appendChild(o);
+  }
+  btnPrev.disabled = (page<=1);
+  btnNext.disabled = total>0 ? (page>=maxPages) : (lastRows.length < perPage);
+}
+function prevPage(){ if(page>1){ page--; cargar(); } }
+function nextPage(){
+  const maxPages = total>0 ? Math.ceil(total/perPage) : 1;
+  if(page < maxPages) { page++; cargar(); }
+  else if(total===0 && lastRows.length===perPage) { page++; cargar(); } 
+}
+function goPage(p){ page = Math.max(1, parseInt(p,10)||1); cargar(); }
+function setPerPage(v){ perPage = parseInt(v,10)||25; page=1; cargar(); }
+
+function cargar(){
+  const cveClte = fCveClte.value.trim();
+  const url = API+'?action=list'
+    + '&inactivos='+(verInactivos?1:0)
+    + '&Cve_Clte='+encodeURIComponent(cveClte)
+    + '&q='+encodeURIComponent(qLast||'')
+    + '&limit='+perPage
+    + '&offset='+((page-1)*perPage);
+
+  fetch(url).then(r=>r.json()).then(resp=>{
+    const rows = resp.rows || resp || [];
+    total = Number(resp.total||0) || 0;
+    lastRows = rows;
+
+    // KPIs
+    kTotal.textContent = total;
+    const activos = rows.filter(r=>Number(r.Activo||1)===1).length;
+    kActivos.textContent = activos;
+    kInactivos.textContent = total - activos;
+    kPrincipales.textContent = rows.filter(r=>Number(r.dir_principal||0)===1).length;
+
+    let h='';
+    rows.forEach(r=>{
+      const activo = Number(r.Activo||1)===1;
+      h+=`
+      <tr>
+        <td class="ap-actions">
+          <i class="fa fa-edit" title="Editar" onclick="editar(${r.id_destinatario})"></i>
+          ${activo
+            ? `<i class="fa fa-trash" title="Inactivar" onclick="eliminar(${r.id_destinatario})"></i>`
+            : `<i class="fa fa-undo" title="Recuperar" onclick="recuperar(${r.id_destinatario})"></i>`}
+        </td>
+        <td>${r.id_destinatario||''}</td>
+        <td>${r.Cve_Clte||''}</td>
+        <td><b>${r.clave_destinatario||''}</b></td>
+        <td>${r.razonsocial||''}</td>
+        <td>${r.direccion||''}</td>
+        <td>${r.colonia||''}</td>
+        <td>${r.postal||''}</td>
+        <td>${r.ciudad||''}</td>
+        <td>${r.estado||''}</td>
+        <td>${r.contacto||''}</td>
+        <td>${r.telefono||''}</td>
+        <td>${r.email_destinatario||''}</td>
+        <td>${r.cve_vendedor||''}</td>
+        <td>${Number(r.dir_principal||0)===1 ? '<span class="ap-chip" style="background:#fff3cd;color:#664d03">★</span>' : ''}</td>
+        <td>${activo ? '1':'0'}</td>
+      </tr>`;
+    });
+    tb.innerHTML = h || `<tr><td colspan="16" style="text-align:center;color:#6c757d;padding:20px">Sin resultados</td></tr>`;
+    setPager();
+  });
 }
 
-function refreshKpis(){
-  // usamos dt_dest para calcular KPIs: total/activos/inactivos y principales
-  const base = new URLSearchParams();
-  base.set('action','dt_dest');
-  base.set('draw','1');
-  base.set('start','0');
-  base.set('length','1');
-  base.set('Cve_Clte', $('#fCveClte').val().trim());
-  base.set('q', $('#fQ').val().trim());
-  base.set('inactivos','1'); // para contar total real
-  fetch(API + "?" + base.toString()).then(r=>r.json()).then(j=>{
-    $('#kTotal').text(j.recordsFiltered ?? 0);
-  });
+function buscar(){ qLast = q.value.trim(); page=1; cargar(); }
+function limpiar(){ q.value=''; qLast=''; if(!PRE_CVE) fCveClte.value=''; page=1; cargar(); }
+function toggleInactivos(){ verInactivos=!verInactivos; page=1; cargar(); }
 
-  const act = new URLSearchParams(base);
-  act.set('inactivos','0');
-  fetch(API + "?" + act.toString()).then(r=>r.json()).then(j=>{
-    $('#kActivos').text(j.recordsFiltered ?? 0);
-    const total = parseInt($('#kTotal').text()||'0',10);
-    const activos = j.recordsFiltered ?? 0;
-    $('#kInactivos').text(Math.max(0, total - activos));
-  });
+function nuevo(){
+  id_destinatario.value='';
+  Cve_Clte.value = fCveClte.value.trim() || '';
+  clave_destinatario.value = Cve_Clte.value ? Cve_Clte.value+'-PRINC' : '';
+  razonsocial.value='';
+  direccion.value='';
+  colonia.value='';
+  postal.value='';
+  ciudad.value='';
+  estado.value='';
+  contacto.value='';
+  telefono.value='';
+  email_destinatario.value='';
+  cve_vendedor.value='';
+  dir_principal.value='1';
+  Activo.value='1';
+  latitud.value='';
+  longitud.value='';
+  if(PRE_CVE) Cve_Clte.readOnly=true;
+  mdl.style.display='block';
+}
 
-  // principales (dir_principal=1) simple query con list (rápido)
-  const p = new URLSearchParams();
-  p.set('action','list');
-  p.set('inactivos','1');
-  p.set('Cve_Clte', $('#fCveClte').val().trim());
-  p.set('q','');
-  fetch(API + "?" + p.toString()).then(r=>r.json()).then(rows=>{
-    const n = Array.isArray(rows) ? rows.filter(x => parseInt(x.dir_principal||0,10)===1).length : 0;
-    $('#kPrincipales').text(n);
+function editar(id){
+  fetch(API+'?action=get&id_destinatario='+id).then(r=>r.json()).then(resp=>{
+    const d = resp.data || resp;
+    id_destinatario.value = d.id_destinatario||'';
+    Cve_Clte.value = d.Cve_Clte||'';
+    clave_destinatario.value = d.clave_destinatario||'';
+    razonsocial.value = d.razonsocial||'';
+    direccion.value = d.direccion||'';
+    colonia.value = d.colonia||'';
+    postal.value = d.postal||'';
+    ciudad.value = d.ciudad||'';
+    estado.value = d.estado||'';
+    contacto.value = d.contacto||'';
+    telefono.value = d.telefono||'';
+    email_destinatario.value = d.email_destinatario||'';
+    cve_vendedor.value = d.cve_vendedor||'';
+    dir_principal.value = String(d.dir_principal||'0');
+    Activo.value = String(d.Activo||'1');
+    latitud.value = d.latitud||'';
+    longitud.value = d.longitud||'';
+    if(PRE_CVE) Cve_Clte.readOnly=true;
+    mdl.style.display='block';
   });
 }
 
-$(function(){
-
-  // precarga desde clientes: bloquea campo filtro si llega por GET
-  if(PRE_CVE){
-    $('#fCveClte').prop('readonly', true);
+function guardar(){
+  if(!Cve_Clte.value.trim() || !clave_destinatario.value.trim()){
+    alert('Cliente y Clave son obligatorios');
+    return;
   }
 
-  dtDest = $("#tblDest").DataTable({
-    processing: true,
-    serverSide: true,
-    pageLength: 25,
-    lengthMenu: [25,50,100],
-    scrollX: true,
-    scrollY: "60vh",
-    ajax: function(data, cb){
-      const params = new URLSearchParams();
-      params.set('action','dt_dest');
-      params.set('draw', data.draw);
-      params.set('start', data.start);
-      params.set('length', data.length);
-      params.set('inactivos', $("#fInactivos").val());
-      params.set('Cve_Clte', $("#fCveClte").val().trim());  // <-- Cve_Clte
-      params.set('q', $("#fQ").val().trim());
-      fetch(API + "?" + params.toString()).then(r=>r.json()).then(j=>{
-        cb(j);
-        refreshKpis();
-      });
-    },
-    columns: [
-      { data: null, orderable:false, render: function(row){
-          const id = row.id_destinatario;
-          const act = (row.Activo==='1');
-          return `
-            <div class="d-flex gap-1">
-              <button class="btn btn-outline-primary btn-xs" onclick="editDest(${id})">Editar</button>
-              ${act
-                ? `<button class="btn btn-outline-danger btn-xs" onclick="delDest(${id})">Baja</button>`
-                : `<button class="btn btn-outline-success btn-xs" onclick="resDest(${id})">Restaurar</button>`}
-            </div>`;
-        }
-      },
-      { data:'id_destinatario' },
-      { data:'Cve_Clte' },
-      { data:'clave_destinatario' },
-      { data:'razonsocial' },
-      { data:'direccion' },
-      { data:'colonia' },
-      { data:'postal' },
-      { data:'ciudad' },
-      { data:'estado' },
-      { data:'contacto' },
-      { data:'telefono' },
-      { data:'email_destinatario' },
-      { data:'cve_vendedor' },
-      { data:'dir_principal' },
-      { data:'Activo' }
-    ],
-    fixedHeader: true
-  });
+  const fd=new FormData();
+  fd.append('action', id_destinatario.value ? 'update' : 'create');
+  fd.append('id_destinatario', id_destinatario.value);
+  fd.append('Cve_Clte', Cve_Clte.value);
+  fd.append('clave_destinatario', clave_destinatario.value);
+  fd.append('razonsocial', razonsocial.value);
+  fd.append('direccion', direccion.value);
+  fd.append('colonia', colonia.value);
+  fd.append('postal', postal.value);
+  fd.append('ciudad', ciudad.value);
+  fd.append('estado', estado.value);
+  fd.append('contacto', contacto.value);
+  fd.append('telefono', telefono.value);
+  fd.append('email_destinatario', email_destinatario.value);
+  fd.append('cve_vendedor', cve_vendedor.value);
+  fd.append('dir_principal', dir_principal.value);
+  fd.append('Activo', Activo.value);
+  fd.append('latitud', latitud.value);
+  fd.append('longitud', longitud.value);
 
-  const mdlDest = new bootstrap.Modal(document.getElementById('mdlDest'));
-  const mdlImport = new bootstrap.Modal(document.getElementById('mdlImport'));
+  fetch(API,{method:'POST',body:fd})
+    .then(r=>r.json())
+    .then(resp=>{
+      if(resp && resp.error){
+        alert(resp.error + (resp.detalles ? "\n- " + resp.detalles.join("\n- ") : ''));
+        return;
+      }
+      cerrarModal('mdl');
+      cargar();
+    });
+}
 
-  $("#btnFiltrar").on('click', ()=> dtDest.ajax.reload());
-  $("#btnReset").on('click', ()=>{
-    if(!PRE_CVE) $('#fCveClte').val('');
-    $('#fQ').val('');
-    $('#fInactivos').val('0');
-    dtDest.ajax.reload();
-  });
+function eliminar(id){
+  if(!confirm('¿Inactivar destinatario?')) return;
+  const fd=new FormData(); fd.append('action','delete'); fd.append('id_destinatario',id);
+  fetch(API,{method:'POST',body:fd}).then(()=>cargar());
+}
 
-  $("#btnNuevo").on('click', ()=>{
-    $("#mdlDestTitle").text("Nuevo destinatario");
-    $("#mdlDest input, #mdlDest select").val('');
-    $("#m_Activo").val('1');
-    // Si vienes desde clientes, precarga y bloquea en modal
-    const c = $('#fCveClte').val().trim();
-    if(c){
-      $('#m_Cve_Clte').val(c).prop('readonly', true);
-      $('#m_clave_destinatario').val(c + '-PRINC');
-      $('#m_dir_principal').val('1');
-    }else{
-      $('#m_Cve_Clte').prop('readonly', false);
-    }
-    mdlDest.show();
-  });
+function recuperar(id){
+  const fd=new FormData(); fd.append('action','restore'); fd.append('id_destinatario',id);
+  fetch(API,{method:'POST',body:fd}).then(()=>cargar());
+}
 
-  $("#btnImport").on('click', ()=>{ $("#csvFile").val(''); $("#importResult").html(''); mdlImport.show(); });
+function exportarDatos(){ window.open(API+'?action=export_csv&tipo=datos','_blank'); }
+function descargarLayout(){ window.open(API+'?action=export_csv&tipo=layout','_blank'); }
 
-  $("#btnDoImport").on('click', async ()=>{
-    const f = $("#csvFile")[0].files[0];
-    if(!f){ alert("Selecciona un CSV"); return; }
-    const fd = new FormData();
-    fd.append('action','import_csv');
-    fd.append('file', f);
-    const r = await fetch(API, { method:'POST', body: fd }).then(x=>x.json());
-    if(r.ok || r.success){
-      $("#importResult").html(`<div class="text-success">OK: ${r.rows_ok} | Errores: ${r.rows_err}</div>`);
-      dtDest.ajax.reload();
-    }else{
-      $("#importResult").html(`<div class="text-danger">${r.msg || r.error || 'Error'}</div>`);
-    }
-  });
+function abrirImport(){
+  fileCsv.value='';
+  importMsg.style.display='none';
+  mdlImport.style.display='block';
+}
 
-  $("#btnGuardarDest").on('click', async ()=>{
-    const id = $("#m_id_destinatario").val().trim();
-    const payload = {
-      id_destinatario: id,
-      Cve_Clte: $("#m_Cve_Clte").val(),                 // <-- Cve_Clte
-      clave_destinatario: $("#m_clave_destinatario").val(),
-      razonsocial: $("#m_razonsocial").val(),
-      direccion: $("#m_direccion").val(),
-      colonia: $("#m_colonia").val(),
-      postal: $("#m_postal").val(),
-      ciudad: $("#m_ciudad").val(),
-      estado: $("#m_estado").val(),
-      contacto: $("#m_contacto").val(),
-      telefono: $("#m_telefono").val(),
-      email_destinatario: $("#m_email_destinatario").val(),
-      cve_vendedor: $("#m_cve_vendedor").val(),
-      latitud: $("#m_latitud").val(),
-      longitud: $("#m_longitud").val(),
-      dir_principal: $("#m_dir_principal").val(),
-      Activo: $("#m_Activo").val()
-    };
-    if(!payload.Cve_Clte || !payload.clave_destinatario){
-      alert("Cve_Clte y clave_destinatario son obligatorios"); return;
-    }
-    const action = id ? 'update' : 'create';
-    const r = await postForm(action, payload);
-    if(r.ok || r.success){
-      mdlDest.hide();
-      dtDest.ajax.reload();
-    }else{
-      alert((r.msg || r.error || 'Error') + (r.detalles ? ("\n" + r.detalles.join("\n")) : ''));
-    }
-  });
+function importarCsv(){
+  const f=fileCsv.files[0];
+  if(!f){ alert('Selecciona un CSV'); return; }
 
-  // exponer modal
-  window.__mdlDest = mdlDest;
+  const fd=new FormData();
+  fd.append('action','import_csv');
+  fd.append('file',f);
+
+  fetch(API,{method:'POST',body:fd})
+    .then(r=>r.json())
+    .then(resp=>{
+      importMsg.style.display='flex';
+      if(resp.error){
+        importMsg.className='ap-chip warn';
+        importMsg.innerHTML = `<b>Error:</b> ${resp.error}`;
+        return;
+      }
+      importMsg.className='ap-chip ok';
+      importMsg.innerHTML = `<b>Importación:</b> OK ${resp.rows_ok||0} | Err ${resp.rows_err||0}`;
+      setTimeout(() => { cerrarModal('mdlImport'); cargar(); }, 2000);
+    });
+}
+
+function cerrarModal(id){ document.getElementById(id).style.display='none'; }
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  selPerPage.value='25';
+  cargar();
 });
-
-async function editDest(id){
-  const r = await fetch(API + "?action=get&id_destinatario=" + id).then(x=>x.json());
-  const d = r.data || r;
-  if(d && !d.error){
-    $("#mdlDestTitle").text("Editar destinatario #" + id);
-    $("#m_id_destinatario").val(d.id_destinatario || '');
-    $("#m_Cve_Clte").val(d.Cve_Clte || '').prop('readonly', !!PRE_CVE);
-    $("#m_clave_destinatario").val(d.clave_destinatario || '');
-    $("#m_razonsocial").val(d.razonsocial || '');
-    $("#m_direccion").val(d.direccion || '');
-    $("#m_colonia").val(d.colonia || '');
-    $("#m_postal").val(d.postal || '');
-    $("#m_ciudad").val(d.ciudad || '');
-    $("#m_estado").val(d.estado || '');
-    $("#m_contacto").val(d.contacto || '');
-    $("#m_telefono").val(d.telefono || '');
-    $("#m_email_destinatario").val(d.email_destinatario || d.email_destinatario || '');
-    $("#m_cve_vendedor").val(d.cve_vendedor || '');
-    $("#m_latitud").val(d.latitud || '');
-    $("#m_longitud").val(d.longitud || '');
-    $("#m_dir_principal").val(d.dir_principal ?? '');
-    $("#m_Activo").val((d.Activo==='0')?'0':'1');
-    window.__mdlDest.show();
-  }else{
-    alert(d.error || "No se pudo cargar");
-  }
-}
-
-async function delDest(id){
-  if(!confirm("Dar de baja destinatario #" + id + "?")) return;
-  const r = await postForm('delete', { id_destinatario: id });
-  if(r.ok || r.success){ $("#tblDest").DataTable().ajax.reload(); }
-  else alert(r.msg || r.error || "Error");
-}
-async function resDest(id){
-  if(!confirm("Restaurar destinatario #" + id + "?")) return;
-  const r = await postForm('restore', { id_destinatario: id });
-  if(r.ok || r.success){ $("#tblDest").DataTable().ajax.reload(); }
-  else alert(r.msg || r.error || "Error");
-}
 </script>
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
-</body>
-</html>

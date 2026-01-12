@@ -4,7 +4,10 @@ header('Content-Type: application/json; charset=utf-8');
 $pdo = db_pdo();
 
 $action = $_GET['action'] ?? 'kpi';
-if($action!=='kpi'){ echo json_encode(['error'=>'Acción no válida']); exit; }
+if ($action !== 'kpi') {
+  echo json_encode(['error' => 'Acción no válida']);
+  exit;
+}
 
 $sql = "
 SELECT
@@ -15,6 +18,6 @@ SELECT
     (Clave IS NULL OR TRIM(Clave)='')
     OR (Motivo IS NULL OR TRIM(Motivo)='')
   ) AS inconsistentes
-FROM MotivosNoVenta
+FROM motivosnoventa
 ";
 echo json_encode($pdo->query($sql)->fetch(PDO::FETCH_ASSOC));

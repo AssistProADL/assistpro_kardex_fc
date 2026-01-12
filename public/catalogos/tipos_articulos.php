@@ -2,566 +2,810 @@
 require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <title>Tipo de Artículos</title>
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+    /* =========================================================
+   ASSISTPRO – TIPO DE ARTÍCULOS
+========================================================= */
+    body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #f4f6fb;
+        margin: 0;
+    }
 
-    <style>
-        /* =========================================================
-           ASSISTPRO – BASE
-        ========================================================= */
-        .container-fluid{ padding:14px; }
-        h4{ font-weight:600; }
+    .ap-container {
+        padding: 20px;
+        font-size: 13px;
+        max-width: 1800px;
+        margin: 0 auto;
+    }
 
-        /* =========================================================
-           TOOLBAR
-        ========================================================= */
-        .ap-toolbar{
-            display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;
-        }
-        .ap-toolbar input{
-            border-radius:8px; border:1px solid #dee2e6; padding:6px 10px;
-        }
+    .ap-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #0b5ed7;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
 
-        /* =========================================================
-           GRID
-        ========================================================= */
-        .ap-card{
-            background:#fff;
-            border-radius:12px;
-            box-shadow:0 6px 20px rgba(0,0,0,.06);
-            padding:10px;
-        }
-        .ap-table{
-            width:100%;
-            border-collapse:collapse;
-            font-size:13px;
-        }
-        .ap-table thead{
-            background:#f1f3f5;
-        }
-        .ap-table th,.ap-table td{
-            padding:8px;
-            border-bottom:1px solid #e9ecef;
-            text-align:center;
-        }
-        .ap-table tbody tr:hover{ background:#f8f9fa; }
+    /* CARDS (KPIs) */
+    .ap-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
 
-        /* =========================================================
-           BUTTONS
-        ========================================================= */
-        .btn{
-            border:none; border-radius:8px;
-            padding:6px 12px; font-size:13px;
-            cursor:pointer;
-        }
-        .btn-primary{ background:#0d6efd; color:#fff; }
-        .btn-success{ background:#198754; color:#fff; }
-        .btn-warning{ background:#ffc107; }
-        .btn-danger{ background:#dc3545; color:#fff; }
-        .btn-secondary{ background:#6c757d; color:#fff; }
-        .btn-info{ background:#0dcaf0; }
-        .btn-sm{ padding:5px 10px; font-size:12px; }
+    .ap-card {
+        background: #fff;
+        border: 1px solid #e0e6ed;
+        border-radius: 12px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        transition: all 0.2s;
+        cursor: pointer;
+    }
 
-        /* =========================================================
-           MODAL BASE
-        ========================================================= */
-        .ap-modal{
-            position:fixed; inset:0;
-            background:rgba(0,0,0,.55);
-            display:none; align-items:center; justify-content:center;
-            z-index:9999;
-        }
-        .ap-modal.show{ display:flex; }
+    .ap-card:hover {
+        border-color: #0b5ed7;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(11, 94, 215, 0.1);
+    }
 
-        .ap-modal-content{
-            background:#fff;
-            width:760px; max-width:95%;
-            border-radius:14px;
-            box-shadow:0 18px 35px rgba(0,0,0,.25);
-            overflow:hidden;
-        }
+    .ap-card .h {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        font-weight: 600;
+        color: #333;
+    }
 
-        /* HEADER */
-        .ap-modal-header{
-            background:#0d6efd; color:#fff;
-            padding:14px 18px;
-            display:flex; justify-content:space-between; align-items:center;
-        }
-        .ap-modal-header h3{
-            margin:0; font-size:16px; font-weight:600;
-        }
-        .ap-modal-header button{
-            background:none; border:none; color:#fff; font-size:22px;
-        }
+    .ap-card .k {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+    }
 
-        /* BODY */
-        .ap-modal-body{ padding:18px; font-size:13px; }
+    /* TOOLBAR */
+    .ap-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 15px;
+        background: #fff;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #e0e6ed;
+    }
 
-        /* FOOTER */
-        .ap-modal-footer{
-            padding:14px 18px;
-            display:flex; justify-content:flex-end; gap:10px;
-            background:#f8f9fa;
-        }
+    .ap-search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 300px;
+        background: #f8f9fa;
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
 
-        /* =========================================================
-           FORM (NUEVO / EDITAR) – ESTILO ASSISTPRO
-        ========================================================= */
-        .ap-form-list{
-            display:grid;
-            grid-template-columns:repeat(2,1fr);
-            gap:16px 24px;
-        }
-        .ap-form-list > div{
-            display:flex; flex-direction:column;
-        }
-        .ap-form-list > div.full{
-            grid-column:1 / -1;
-        }
-        .ap-form-list label{
-            font-weight:600; margin-bottom:4px;
-        }
-        .ap-form-list input{
-            border-radius:12px;
-            border:1px solid #e1e5ea;
-            padding:10px 12px;
-            background:#f8f9fa;
-        }
-        .ap-form-list input:focus{
-            outline:none;
-            background:#fff;
-            border-color:#0d6efd;
-            box-shadow:0 0 0 3px rgba(13,110,253,.15);
-        }
+    .ap-search i {
+        color: #6c757d;
+    }
 
-        /* =========================================================
-           IMPORTADOR
-        ========================================================= */
-        .ap-import-cols{
-            display:grid;
-            grid-template-columns:repeat(4,1fr);
-            gap:8px; margin:12px 0;
-        }
-        .ap-import-cols span{
-            background:#f1f3f5;
-            padding:8px;
-            border-radius:8px;
-            font-size:12px;
-            font-weight:600;
-            text-align:center;
-        }
-        #previewBox{
-            margin-top:12px;
-        }
-        #previewBox table{
-            width:100%;
-            border-collapse:collapse;
-        }
-        #previewBox th,#previewBox td{
-            border:1px solid #dee2e6;
-            padding:6px;
-            font-size:12px;
-        }
-        #previewBox .ap-table{
-            max-height:260px;
-            overflow:auto;
-        }
+    .ap-search input {
+        border: none;
+        background: transparent;
+        outline: none;
+        width: 100%;
+        font-size: 13px;
+    }
 
-        /* quitar outline negro */
-        button:focus,button:active{ outline:none; box-shadow:none; }
-    </style>
-</head>
+    /* CHIPS */
+    .ap-chip {
+        font-size: 12px;
+        background: #f1f3f5;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        border-radius: 20px;
+        padding: 5px 12px;
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
 
-<body>
+    .ap-chip:hover {
+        background: #e9ecef;
+        color: #212529;
+        border-color: #ced4da;
+    }
 
-<div class="container-fluid">
-    <h4 class="text-primary"><i class="fa fa-tag"></i> Tipo de Artículos</h4>
+    .ap-chip.ok {
+        background: #d1e7dd;
+        color: #0f5132;
+        border-color: #badbcc;
+    }
+
+    .ap-chip.warn {
+        background: #fff3cd;
+        color: #664d03;
+        border-color: #ffecb5;
+    }
+
+    button.ap-chip {
+        font-family: inherit;
+    }
+
+    /* REQ INDICATOR */
+    .ap-req-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #dc3545;
+    }
+
+    .ap-req-ok {
+        background: #198754;
+    }
+
+    /* GRID */
+    .ap-grid {
+        background: #fff;
+        border: 1px solid #e0e6ed;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
+    .ap-grid table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .ap-grid th {
+        background: #f8f9fa;
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        color: #495057;
+        border-bottom: 1px solid #dee2e6;
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .ap-grid td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #f1f3f5;
+        color: #212529;
+        vertical-align: middle;
+    }
+
+    .ap-grid tr:hover td {
+        background: #f8f9fa;
+    }
+
+    .ap-actions i {
+        cursor: pointer;
+        margin-right: 12px;
+        color: #6c757d;
+        transition: color 0.2s;
+        font-size: 14px;
+    }
+
+    .ap-actions i:hover {
+        color: #0b5ed7;
+    }
+
+    /* PAGER */
+    .ap-pager {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 15px;
+        padding: 0 5px;
+    }
+
+    .ap-pager button {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        padding: 6px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #495057;
+    }
+
+    .ap-pager button:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+
+    .ap-pager button:hover:not(:disabled) {
+        background: #f8f9fa;
+        border-color: #ced4da;
+    }
+
+    .ap-pager select {
+        padding: 6px;
+        border-radius: 6px;
+        border: 1px solid #dee2e6;
+        color: #495057;
+        margin-left: 5px;
+    }
+
+    /* MODAL */
+    .ap-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(2px);
+    }
+
+    .ap-modal[style*="display: block"] {
+        display: flex !important;
+    }
+
+    .ap-modal-content {
+        background: #fff;
+        width: 800px;
+        max-width: 95%;
+        max-height: 90vh;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+    }
+
+    .ap-form {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+        margin-top: 15px;
+    }
+
+    .ap-field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .ap-label {
+        font-weight: 500;
+        font-size: 13px;
+        color: #495057;
+    }
+
+    .ap-input {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 8px 12px;
+        background: #fff;
+        transition: all 0.2s;
+    }
+
+    .ap-input:focus-within {
+        border-color: #0b5ed7;
+        box-shadow: 0 0 0 3px rgba(11, 94, 215, 0.1);
+    }
+
+    .ap-input i {
+        color: #adb5bd;
+    }
+
+    .ap-input input,
+    .ap-input select {
+        border: none;
+        outline: none;
+        width: 100%;
+        font-size: 14px;
+        color: #212529;
+        background: transparent;
+    }
+
+    .ap-error {
+        font-size: 12px;
+        color: #dc3545;
+        display: none;
+        margin-top: 4px;
+    }
+
+    button.primary {
+        background: #0b5ed7;
+        color: #fff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    button.primary:hover {
+        background: #0a58ca;
+    }
+
+    button.ghost {
+        background: #fff;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    button.ghost:hover {
+        background: #f1f3f5;
+        border-color: #ced4da;
+    }
+</style>
+
+<div class="ap-container">
+    <div class="ap-title"><i class="fa fa-tag"></i> Tipo de Artículos</div>
+
+    <div class="ap-cards" id="cards"></div>
 
     <div class="ap-toolbar">
-        <input id="txtBuscar" placeholder="Buscar...">
-        <button class="btn btn-primary btn-sm" onclick="buscar()">Buscar</button>
-        <button class="btn btn-success btn-sm" onclick="abrirNuevo()">Nuevo</button>
-        <button id="btnInactivos" class="btn btn-success btn-sm" onclick="toggleInactivos()">
-            <i class="fa fa-eye"></i> Inactivos
-        </button>
-        <button class="btn btn-warning btn-sm" onclick="abrirImportar()">Importar</button>
-        <button class="btn btn-info btn-sm" onclick="exportar()">Exportar</button>
+        <div class="ap-chip" id="inacLabel"><i class="fa fa-eye"></i> Mostrando: <b>Activos</b></div>
+
+        <div class="ap-search">
+            <i class="fa fa-search"></i>
+            <input id="q" placeholder="Buscar clave, descripción…" onkeydown="if(event.key==='Enter')buscar()">
+        </div>
+        <button class="ap-chip" onclick="buscar()">Buscar</button>
+        <button class="ap-chip" onclick="limpiar()">Limpiar</button>
+
+        <div style="flex:1"></div>
+
+        <button class="ap-chip" onclick="nuevo()"><i class="fa fa-plus"></i> Agregar</button>
+        <button class="ap-chip" onclick="exportar()"><i class="fa fa-download"></i> Exportar</button>
+        <button class="ap-chip" onclick="abrirImportar()"><i class="fa fa-upload"></i> Importar</button>
+        <button class="ap-chip" onclick="toggleInactivos()"><i class="fa fa-filter"></i> Inactivos</button>
     </div>
 
-    <div class="ap-card">
-        <table class="ap-table">
+    <div class="ap-grid">
+        <table>
             <thead>
-            <tr>
-                <th>Acciones</th>
-                <th>Clave</th>
-                <th>Descripción</th>
-                <th>Grupo</th>
-                <th>Almacén</th>
-                <th>Estatus</th>
-            </tr>
+                <tr>
+                    <th>Acciones</th>
+                    <th>Req</th>
+                    <th>Clave</th>
+                    <th>Descripción</th>
+                    <th>Grupo</th>
+                    <th>Almacén</th>
+                    <th>Estatus</th>
+                </tr>
             </thead>
-            <tbody id="grid"></tbody>
+            <tbody id="tb"></tbody>
         </table>
     </div>
-</div>
 
-<!-- ================= MODAL NUEVO / EDITAR ================= -->
-<div class="ap-modal" id="mdlNuevo">
-    <div class="ap-modal-content">
-        <div class="ap-modal-header">
-            <h3 id="mdlTitulo">Nuevo Tipo de Artículo</h3>
-            <button onclick="cerrarNuevo()">×</button>
+    <!-- Paginación -->
+    <div class="ap-pager">
+        <div class="left">
+            <button onclick="prevPage()" id="btnPrev"><i class="fa fa-chevron-left"></i> Anterior</button>
+            <button onclick="nextPage()" id="btnNext">Siguiente <i class="fa fa-chevron-right"></i></button>
+            <span class="ap-chip" id="lblRange" style="background:transparent; border:none; padding:0;">Mostrando
+                0–0</span>
         </div>
-        <div class="ap-modal-body">
-            <input type="hidden" id="id">
-            <div class="ap-form-list">
-                <div><label>Clave *</label><input id="cve"></div>
-                <div><label>Grupo</label><input id="grupo"></div>
-                <div class="full"><label>Descripción *</label><input id="desc"></div>
-                <div><label>Almacén</label><input id="almacen"></div>
-            </div>
-        </div>
-        <div class="ap-modal-footer">
-            <button class="btn btn-secondary" onclick="cerrarNuevo()">Cancelar</button>
-            <button class="btn btn-primary" onclick="guardar()">Guardar</button>
+        <div class="right" style="display:flex; align-items:center;">
+            <span>Página:</span>
+            <select id="selPage" onchange="goPage(this.value)"></select>
+
+            <span style="margin-left:15px">Por página:</span>
+            <select id="selPerPage" onchange="setPerPage(this.value)">
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
         </div>
     </div>
 </div>
 
-<!-- ================= MODAL IMPORTAR ================= -->
-<div class="ap-modal" id="mdlImport">
+<!-- MODAL CRUD -->
+<div class="ap-modal" id="mdl">
     <div class="ap-modal-content">
-        <div class="ap-modal-header">
-            <h3><i class="fa fa-upload"></i> Importar Tipo de Artículos</h3>
-            <button onclick="cerrarImportar()">×</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+            <h3 style="margin:0"><i class="fa fa-tag"></i> Tipo Artículo</h3>
+            <button onclick="cerrarModal('mdl')"
+                style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
+                    class="fa fa-times"></i></button>
         </div>
-        <div class="ap-modal-body">
-            <label>Archivo CSV</label>
-            <input type="file" id="fileCsv" accept=".csv">
 
-            <div class="ap-import-cols">
-                <span>Clave</span>
-                <span>Grupo</span>
-                <span>Descripción</span>
-                <span>Almacén</span>
-            </div>
+        <input type="hidden" id="id">
 
-            <div style="margin-top:10px">
-                <button class="btn btn-secondary btn-sm" onclick="layout()">Layout</button>
-                <button class="btn btn-primary btn-sm" onclick="previsualizar()">Previsualizar</button>
-            </div>
-
-            <div id="previewBox" style="display:none">
-                <table class="ap-table">
-                    <thead id="prevHead"></thead>
-                    <tbody id="prevBody"></tbody>
-                </table>
-                <div style="text-align:right;margin-top:10px">
-                    <button class="btn btn-success btn-sm" onclick="importar()">Importar</button>
+        <div class="ap-form">
+            <div class="ap-field">
+                <div class="ap-label">Clave *</div>
+                <div class="ap-input"><i class="fa fa-hashtag"></i><input id="cve_ssgpoart" placeholder="Clave única">
                 </div>
+                <div class="ap-error" id="err_cve">Clave obligatoria.</div>
             </div>
+
+            <div class="ap-field">
+                <div class="ap-label">Descripción *</div>
+                <div class="ap-input"><i class="fa fa-align-left"></i><input id="des_ssgpoart"
+                        placeholder="Descripción..."></div>
+                <div class="ap-error" id="err_des">Descripción obligatoria.</div>
+            </div>
+
+            <div class="ap-field">
+                <div class="ap-label">Grupo (ID)</div>
+                <div class="ap-input"><i class="fa fa-layer-group"></i><input id="cve_sgpoart"
+                        placeholder="ID Grupo (opcional)"></div>
+            </div>
+
+            <div class="ap-field">
+                <div class="ap-label">Almacén (ID)</div>
+                <div class="ap-input"><i class="fa fa-warehouse"></i><input id="id_almacen"
+                        placeholder="ID Almacén (opcional)"></div>
+            </div>
+        </div>
+
+        <div style="text-align:right;margin-top:15px;display:flex;justify-content:flex-end;gap:10px">
+            <button class="ghost" onclick="cerrarModal('mdl')">Cancelar</button>
+            <button class="primary" onclick="guardar()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL IMPORT -->
+<div class="ap-modal" id="mdlImport">
+    <div class="ap-modal-content" style="width:700px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+            <h3 style="margin:0"><i class="fa fa-upload"></i> Importar Tipos de Artículos</h3>
+            <button onclick="cerrarModal('mdlImport')"
+                style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
+                    class="fa fa-times"></i></button>
+        </div>
+
+        <div class="ap-chip" style="margin-bottom:15px">
+            UPSERT por <b>Clave</b>.<br>
+            Columnas: <b>Clave, Descripción, Grupo, Almacén</b>.
+        </div>
+
+        <div class="ap-input">
+            <i class="fa fa-file-csv"></i>
+            <input type="file" id="fileCsv" accept=".csv">
+        </div>
+
+        <div style="margin-top:15px; display:flex; gap:10px;">
+            <button class="ghost" onclick="descargarLayout()"><i class="fa fa-download"></i> Descargar layout</button>
+            <button class="primary" onclick="previsualizarCsv()"><i class="fa fa-eye"></i> Previsualizar</button>
+        </div>
+
+        <div id="csvPreviewWrap" style="display:none;margin-top:15px">
+            <h4 style="margin:0 0 10px; font-size:14px; color:#555;">Previsualización</h4>
+            <div class="ap-grid" style="height:200px">
+                <table style="font-size:12px;">
+                    <thead id="csvHead"></thead>
+                    <tbody id="csvBody"></tbody>
+                </table>
+            </div>
+
+            <div class="ap-chip" id="importMsg"
+                style="margin-top:15px; width:100%; display:none; justify-content:center;"></div>
+        </div>
+
+        <div style="text-align:right;margin-top:15px;display:flex;justify-content:flex-end;gap:10px">
+            <button class="ghost" onclick="cerrarModal('mdlImport')">Cerrar</button>
+            <button class="primary" onclick="importarCsv()" id="btnImportarFinal"
+                style="display:none;">Importar</button>
         </div>
     </div>
 </div>
 
 <script>
-    const api = '../api/articulos.php';
-    let dataCache=[], inactivos=0;
+    const API = '../api/articulos.php'; // Usa API existente pero estandarizamos llamadas
 
-    /* ================= CARGA ================= */
-    function cargar(){
-        fetch(`${api}?action=list&inactivos=${inactivos}`)
-            .then(r=>r.json())
-            .then(j=>{
-                dataCache = j.data || [];
-                render(dataCache);
-            })
-            .catch(()=>alert('No se pudo conectar con el API'));
+    let verInactivos = false;
+    let qLast = '';
+    let page = 1;
+    let perPage = 25;
+    let total = 0;
+    let lastRows = [];
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
-    function render(arr){
-        grid.innerHTML = arr.map(r=>`
-        <tr>
-            <td>
-                <button class="btn btn-warning btn-sm" onclick="editar(${r.id})"><i class="fa fa-edit"></i></button>
-                ${r.Activo==1
-            ? `<button class="btn btn-danger btn-sm" onclick="desactivar(${r.id})"><i class="fa fa-trash"></i></button>`
-            : `<button class="btn btn-success btn-sm" onclick="restaurar(${r.id})"><i class="fa fa-undo"></i></button>`
+
+    function reqDot(r) {
+        const ok = !!(String(r.cve_ssgpoart || '').trim() !== '' && String(r.des_ssgpoart || '').trim() !== '');
+        return '<span class="ap-req-dot ' + (ok ? 'ap-req-ok' : '') + '"></span>';
+    }
+
+    function loadCards() {
+        // Implement or leave empty if no KPI API is ready yet.
+        // Articulos API currently doesn't provide KPI endpoint.
+        cards.innerHTML = '';
+        // Example placeholder
+        // cards.innerHTML = '<div class="ap-card"><div class="h"><b>Total</b></div><div class="k">'+total+'</div></div>';
+    }
+
+    /* ===== Paginación ===== */
+    function setPager() {
+        const start = total > 0 ? ((page - 1) * perPage + (lastRows.length ? 1 : 0)) : 0;
+        let end = total > 0 ? Math.min(page * perPage, total) : 0;
+        if (total === 0) end = 0;
+
+        lblRange.innerText = 'Mostrando ' + start + '–' + end + (total > 0 ? ' de ' + total : '');
+
+        const maxPages = total > 0 ? Math.max(1, Math.ceil(total / perPage)) : 1;
+        selPage.innerHTML = '';
+        for (let i = 1; i <= maxPages; i++) {
+            const o = document.createElement('option');
+            o.value = i; o.textContent = i;
+            if (i === page) o.selected = true;
+            selPage.appendChild(o);
         }
-            </td>
-            <td>${r.cve_ssgpoart}</td>
-            <td>${r.des_ssgpoart}</td>
-            <td>${r.cve_sgpoart||''}</td>
-            <td>${r.id_almacen||''}</td>
-            <td>${r.Activo==1?'Activo':'Inactivo'}</td>
-        </tr>
-    `).join('');
+        btnPrev.disabled = (page <= 1);
+        btnNext.disabled = total > 0 ? (page >= maxPages) : (lastRows.length < perPage);
     }
-    function buscar(){
-        const q=txtBuscar.value.toLowerCase();
-        render(dataCache.filter(x=>x.des_ssgpoart.toLowerCase().includes(q)));
+    function prevPage() { if (page > 1) { page--; cargar(); } }
+    function nextPage() {
+        const maxPages = total > 0 ? Math.ceil(total / perPage) : 1;
+        if (page < maxPages) { page++; cargar(); }
+        else if (total === 0 && lastRows.length === perPage) { page++; cargar(); }
+    }
+    function goPage(p) { page = Math.max(1, parseInt(p, 10) || 1); cargar(); }
+    function setPerPage(v) { perPage = parseInt(v, 10) || 25; page = 1; cargar(); }
+
+    /* ===== Listado ===== */
+    function cargar() {
+        const offset = (page - 1) * perPage;
+        const url = API + '?action=list'
+            + '&inactivos=' + (verInactivos ? 1 : 0)
+            + '&q=' + encodeURIComponent(qLast || '')
+            + '&limit=' + encodeURIComponent(perPage)
+            + '&offset=' + encodeURIComponent(offset)
+            + '&page=' + encodeURIComponent(page); // Some APIs use page, some offset
+
+        fetch(url).then(r => r.json()).then(resp => {
+            if (resp.error) { alert(resp.error); return; }
+
+            const rows = resp.rows || [];
+            total = Number(resp.total || 0) || 0;
+            lastRows = rows;
+
+            let h = '';
+            rows.forEach(r => {
+                const vid = r.id;
+                const st = Number(r.Activo || 0) === 1;
+
+                let btns = '';
+                if (verInactivos && !st) {
+                    btns = '<i class="fa fa-undo" title="Restaurar" onclick="restaurar(' + vid + ')"></i>';
+                } else {
+                    btns = '<i class="fa fa-edit" title="Editar" onclick="editar(' + vid + ')"></i>'
+                        + '<i class="fa fa-trash" title="Desactivar" onclick="eliminar(' + vid + ')"></i>';
+                }
+
+                h += '<tr>'
+                    + '<td class="ap-actions">' + btns + '</td>'
+                    + '<td>' + reqDot(r) + '</td>'
+                    + '<td>' + escapeHtml(String(r.cve_ssgpoart || '')) + '</td>'
+                    + '<td>' + escapeHtml(String(r.des_ssgpoart || '')) + '</td>'
+                    + '<td>' + escapeHtml(String(r.cve_sgpoart || '')) + '</td>'
+                    + '<td>' + escapeHtml(String(r.id_almacen || '')) + '</td>'
+                    + '<td>' + (st ? '<span class="ap-chip ok">Activo</span>' : '<span class="ap-chip warn">Inactivo</span>') + '</td>'
+                    + '</tr>';
+            });
+
+            tb.innerHTML = h || '<tr><td colspan="7" style="text-align:center;padding:20px;color:#777">Sin datos</td></tr>';
+            inacLabel.innerHTML = '<i class="fa fa-eye"></i> Mostrando: <b>' + (verInactivos ? 'Inactivos' : 'Activos') + '</b>';
+            setPager();
+        });
     }
 
-    /* ================= ACTIVOS / INACTIVOS ================= */
-    function toggleInactivos(){
-        inactivos = inactivos ? 0 : 1;
-        if(inactivos){
-            btnInactivos.className='btn btn-secondary btn-sm';
-            btnInactivos.innerHTML='<i class="fa fa-eye"></i> Activos';
-        }else{
-            btnInactivos.className='btn btn-success btn-sm';
-            btnInactivos.innerHTML='<i class="fa fa-eye"></i> Inactivos';
+    function buscar() { qLast = document.getElementById('q').value.trim(); page = 1; cargar(); }
+    function limpiar() { document.getElementById('q').value = ''; qLast = ''; page = 1; cargar(); }
+    function toggleInactivos() { verInactivos = !verInactivos; page = 1; cargar(); }
+
+    /* ===== CRUD ===== */
+    function hideErrors() {
+        err_cve.style.display = 'none';
+        err_des.style.display = 'none';
+    }
+    function validar() {
+        hideErrors();
+        let ok = true;
+        if (!cve_ssgpoart.value.trim()) { err_cve.style.display = 'block'; ok = false; }
+        if (!des_ssgpoart.value.trim()) { err_des.style.display = 'block'; ok = false; }
+        return ok;
+    }
+    function nuevo() {
+        id.value = '';
+        cve_ssgpoart.value = '';
+        des_ssgpoart.value = '';
+        cve_sgpoart.value = '';
+        id_almacen.value = '';
+        hideErrors();
+        mdl.style.display = 'block';
+    }
+    function editar(rid) {
+        // Use local cache if possible or fetch
+        const row = lastRows.find(r => r.id == rid);
+        if (row) {
+            id.value = row.id;
+            cve_ssgpoart.value = row.cve_ssgpoart || '';
+            des_ssgpoart.value = row.des_ssgpoart || '';
+            cve_sgpoart.value = row.cve_sgpoart || '';
+            id_almacen.value = row.id_almacen || '';
+            hideErrors();
+            mdl.style.display = 'block';
         }
-        cargar();
     }
+    function guardar() {
+        if (!validar()) return;
 
-    /* ================= NUEVO / EDITAR ================= */
-    function abrirNuevo(){
-        id.value=''; cve.value=''; grupo.value=''; desc.value=''; almacen.value='';
-        mdlTitulo.innerText='Nuevo Tipo de Artículo';
-        mdlNuevo.classList.add('show');
-    }
-    function editar(idr){
-        const r=dataCache.find(x=>x.id==idr);
-        id.value=r.id; cve.value=r.cve_ssgpoart; grupo.value=r.cve_sgpoart;
-        desc.value=r.des_ssgpoart; almacen.value=r.id_almacen;
-        mdlTitulo.innerText='Editar Tipo de Artículo';
-        mdlNuevo.classList.add('show');
-    }
-    function cerrarNuevo(){ mdlNuevo.classList.remove('show'); }
-    function guardar(){
-
-        if(!cve.value || !desc.value){
-            apAlert('warning','Clave y Descripción son obligatorias');
-            return;
-        }
-
-        const esEdicion = id.value && id.value !== '';
-
-        const idAlmacen = almacen.value && !isNaN(almacen.value)
-            ? parseInt(almacen.value, 10)
-            : null;
-
+        // Payload JSON to match backend expectation
         const payload = {
-            action: esEdicion ? 'update' : 'create',
-            cve_ssgpoart: cve.value.trim(),
-            cve_sgpoart: grupo.value && !isNaN(grupo.value)
-                ? parseInt(grupo.value,10)
-                : null,
-            des_ssgpoart: desc.value.trim(),
-            id_almacen: idAlmacen
+            action: id.value ? 'update' : 'create',
+            cve_ssgpoart: cve_ssgpoart.value,
+            des_ssgpoart: des_ssgpoart.value,
+            cve_sgpoart: cve_sgpoart.value,
+            id_almacen: id_almacen.value
         };
+        if (id.value) payload.id = id.value;
 
-        if(esEdicion){
-            payload.id = id.value;
-        }
-
-        fetch(api,{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
+        fetch(API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         })
             .then(r => r.json())
             .then(resp => {
-                if(resp.success){
-                    cerrarNuevo();
-                    cargar();
-                    apAlert(
-                        'success',
-                        esEdicion
-                            ? 'Registro actualizado correctamente'
-                            : 'Registro agregado correctamente'
-                    );
-                }else{
-                    apAlert('error', resp.error || 'No se pudo guardar');
-                }
-            })
-            .catch(()=>{
-                apAlert('error','Error de comunicación con el API');
-            });
-    }
-
-
-    function desactivar(id){
-        fetch(api,{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({action:'delete',id})})
-            .then(()=>cargar());
-    }
-    function restaurar(id){
-        fetch(api,{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({action:'restore',id})})
-            .then(()=>cargar());
-    }
-
-    /* ================= IMPORTAR ================= */
-    function abrirImportar(){
-        mdlImport.classList.add('show');
-    }
-
-    function cerrarImportar(){
-        mdlImport.classList.remove('show');
-        previewBox.style.display='none';
-    }
-
-    /* ===================== LAYOUT CSV ===================== */
-    function layout(){
-        // BOM UTF-8 + delimitador COMA (Excel MX / ES)
-        const csv =
-            "\uFEFFClave,Grupo,Descripción,Almacén\r\n";
-
-        const blob = new Blob(
-            [csv],
-            { type: 'text/csv;charset=utf-8;' }
-        );
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'layout_tipo_articulos.csv';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-
-    /* ===================== PREVISUALIZAR ===================== */
-    function previsualizar(){
-        const f = fileCsv.files[0];
-        if(!f) return;
-
-        const r = new FileReader();
-        r.onload = e => {
-
-            const lines = e.target.result
-                .split(/\r?\n/)
-                .filter(l => l.trim() !== '');
-
-            // Detectar delimitador automáticamente
-            const d = lines[0].includes(';') ? ';' : ',';
-
-            // Encabezados
-            const headers = lines[0].split(d);
-            prevHead.innerHTML =
-                '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
-
-            // Primeras 5 filas (preview limpio)
-            prevBody.innerHTML =
-                lines.slice(1,6).map(row => {
-                    const cols = row.split(d);
-                    return '<tr>' + cols.map(v => `<td>${v}</td>`).join('') + '</tr>';
-                }).join('');
-
-            previewBox.style.display = 'block';
-        };
-
-        r.readAsText(f,'UTF-8');
-    }
-
-    /* ===================== IMPORTAR ===================== */
-    function importar(){
-        const f = fileCsv.files[0];
-        if(!f){
-            apAlert('warning','Selecciona un archivo CSV');
-            return;
-        }
-
-        const reader = new FileReader();
-
-        reader.onload = e => {
-            const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
-            if(lines.length < 2){
-                apAlert('warning','El archivo no contiene datos');
-                return;
-            }
-
-            const delimiter = lines[0].includes(';') ? ';' : ',';
-            const rows = lines.slice(1);
-
-            const reqs = [];
-
-            rows.forEach(row => {
-                const c = row.split(delimiter);
-
-                if(!c[0] || !c[2]) return; // Clave y descripción obligatorias
-
-                reqs.push(
-                    fetch(api,{
-                        method:'POST',
-                        headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify({
-                            action:'create',
-                            cve_ssgpoart: c[0].trim(),
-                            cve_sgpoart: c[1] && !isNaN(c[1]) ? parseInt(c[1],10) : null,
-                            des_ssgpoart: c[2].trim(),
-                            id_almacen: c[3] && !isNaN(c[3]) ? parseInt(c[3],10) : null
-                        })
-                    })
-                );
-            });
-
-            Promise.all(reqs)
-                .then(() => {
-                    cerrarImportar();
-                    verInactivos = 0;   // 🔥 FORZAR ACTIVOS
-                    cargar();
-                    apAlert('success','Importación realizada correctamente');
-                })
-                .catch(() => {
-                    apAlert('error','Error durante la importación');
-                });
-        };
-
-        reader.readAsText(f,'UTF-8');
-    }
-
-
-
-    /* ===================== EXPORTAR ===================== */
-    function exportar(){
-        fetch(api + '?action=list&inactivos=0')
-            .then(r => r.json())
-            .then(resp => {
-                if(!resp.success){
-                    apAlert('error','No se pudo exportar');
+                if (resp.error || resp.success === false) {
+                    alert('Error: ' + (resp.error || 'Desconocido'));
                     return;
                 }
-
-                // BOM UTF-8 + DELIMITADOR COMA (CONSISTENTE)
-                let csv = "\uFEFFClave,Grupo,Descripción,Almacén\r\n";
-
-                resp.data.forEach(r => {
-                    csv +=
-                        `${r.cve_ssgpoart ?? ''},` +
-                        `${r.cve_sgpoart ?? ''},` +
-                        `"${(r.des_ssgpoart ?? '').replace(/"/g,'""')}",` +
-                        `${r.id_almacen ?? ''}\r\n`;
-                });
-
-                const blob = new Blob(
-                    [csv],
-                    { type: 'text/csv;charset=utf-8;' }
-                );
-
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'tipo_articulos_export.csv';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                alert('Guardado exitosamente');
+                cerrarModal('mdl');
+                cargar();
             })
-            .catch(() => apAlert('error','Error al generar el archivo'));
+            .catch(err => alert('Error de red: ' + err.message));
+    }
+    function eliminar(rid) {
+        if (!confirm('¿Desactivar?')) return;
+        fetch(API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', id: rid })
+        }).then(() => cargar());
+    }
+    function restaurar(rid) {
+        fetch(API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'restore', id: rid })
+        }).then(() => cargar());
     }
 
+    /* ===== CSV ===== */
+    function exportar() { window.open(API + '?action=export', '_blank'); } // Uses API's export
+    function descargarLayout() {
+        // Create a client-side CSV or verify if API has a layout action.
+        // The previous implementation used client-side. Let's stick to client-side strictly conforming to human headers.
+        const csvContent = "\uFEFFClave,Descripción,Grupo,Almacén\n";
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", "layout_tipos_articulos.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 
-    cargar();
+    function abrirImportar() {
+        fileCsv.value = '';
+        csvPreviewWrap.style.display = 'none';
+        importMsg.style.display = 'none';
+        document.getElementById('btnImportarFinal').style.display = 'none';
+        mdlImport.style.display = 'block';
+    }
 
+    function previsualizarCsv() {
+        const f = fileCsv.files[0];
+        if (!f) { alert('Selecciona un CSV'); return; }
+        const r = new FileReader();
+        r.onload = e => {
+            const rows = e.target.result.split('\n').filter(x => x.trim() !== '');
+            const headers = rows[0].split(',').map(h => '<th>' + h + '</th>').join('');
+            csvHead.innerHTML = '<tr>' + headers + '</tr>';
+
+            const bodyRows = rows.slice(1, 6).map(r => {
+                const cells = r.split(',').map(c => '<td>' + c + '</td>').join('');
+                return '<tr>' + cells + '</tr>';
+            }).join('');
+            csvBody.innerHTML = bodyRows;
+
+            csvPreviewWrap.style.display = 'block';
+            importMsg.style.display = 'none';
+            document.getElementById('btnImportarFinal').style.display = 'block';
+        };
+        r.readAsText(f);
+    }
+
+    function importarCsv() {
+        // Use API import_csv if available, or build specific logic.
+        // The current API `articulos.php` does NOT have `import_csv`.
+        // The previous file had client-side generic import logic sending `create` one by one.
+        // We will preserve that logic for now as it is safest without modifying API drastically yet.
+
+        const f = fileCsv.files[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = async e => {
+            const lines = e.target.result.split('\n').filter(l => l.trim());
+            if (lines.length < 2) return;
+            const rows = lines.slice(1);
+
+            let ok = 0, err = 0;
+
+            for (const row of rows) {
+                const c = row.split(',');
+                // Map Client-Side by position (Clave, Desc, Grupo, Almacen)
+                if (c.length < 2) continue;
+
+                const payload = {
+                    action: 'create',
+                    cve_ssgpoart: c[0].trim(), // Clave
+                    des_ssgpoart: c[1] ? c[1].trim() : '', // Descripcion
+                    cve_sgpoart: c[2] ? c[2].trim() : '', // Grupo
+                    id_almacen: c[3] ? c[3].trim() : '' // Almacen
+                };
+
+                try {
+                    const res = await fetch(API, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const j = await res.json();
+                    if (j.success) ok++; else err++;
+                } catch (e) { err++; }
+            }
+
+            importMsg.style.display = 'flex';
+            importMsg.className = 'ap-chip ok';
+            importMsg.innerText = 'Importado: ' + ok + ' OK, ' + err + ' Errores';
+            setTimeout(() => { cerrarModal('mdlImport'); cargar(); }, 2000);
+        };
+        r.readAsText(f);
+    }
+
+    function cerrarModal(mid) { document.getElementById(mid).style.display = 'none'; }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('Tipos Articulos v2 loaded');
+        cargar();
+    });
 </script>
 
-</body>
-</html>
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>

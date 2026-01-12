@@ -1,533 +1,693 @@
 <?php
-// public/catalogos/contactos.php
-require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../bi/_menu_global.php';
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Catálogo - Contactos | AssistPro</title>
 
-  <!-- Bootstrap / FontAwesome (si tu proyecto ya los incluye global, puedes omitir) -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" rel="stylesheet">
+<style>
+  /* =========================================================
+   ASSISTPRO – CONTACTOS
+========================================================= */
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f4f6fb;
+    margin: 0;
+  }
 
-  <!-- DataTables -->
-  <link href="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/datatables.net-scroller-bs5@2.4.0/css/scroller.bootstrap5.min.css" rel="stylesheet">
+  .ap-container {
+    padding: 20px;
+    font-size: 13px;
+    max-width: 1800px;
+    margin: 0 auto;
+  }
 
-  <style>
-    :root{
-      --ap-blue:#0b4aa2;      /* azul corporativo */
-      --ap-blue-2:#0d6efd;
-      --ap-bg:#f4f7fb;
-      --ap-card:#ffffff;
-      --ap-border:#dfe6ef;
-    }
-    body{ background:var(--ap-bg); }
-    .ap-titlebar{
-      background:var(--ap-card);
-      border:1px solid var(--ap-border);
-      border-radius:14px;
-      padding:14px 16px;
-      margin:14px 14px 10px 14px;
-      display:flex; align-items:center; justify-content:space-between;
-      box-shadow:0 6px 18px rgba(16,24,40,.06);
-    }
-    .ap-title{
-      display:flex; gap:10px; align-items:center;
-      color:var(--ap-blue);
-      font-weight:800;
-      font-size:18px;
-      margin:0;
-    }
-    .ap-title i{ font-size:18px; }
-    .ap-card{
-      background:var(--ap-card);
-      border:1px solid var(--ap-border);
-      border-radius:14px;
-      margin:0 14px 14px 14px;
-      box-shadow:0 6px 18px rgba(16,24,40,.06);
-    }
-    .ap-card .ap-card-h{
-      padding:10px 12px;
-      border-bottom:1px solid var(--ap-border);
-      display:flex; align-items:center; justify-content:space-between;
-      gap:10px;
-      flex-wrap:wrap;
-    }
-    .ap-btn{
-      border-radius:10px;
-      font-weight:700;
-    }
-    .ap-table-wrap{
-      padding:10px 12px 14px 12px;
-    }
-    table.dataTable{
-      font-size:10px !important;
-      width:100% !important;
-    }
-    table.dataTable thead th,
-    table.dataTable tbody td{
-      white-space:nowrap;
-      text-align:center;
-      vertical-align:middle;
-    }
-    .dt-scroll-body{
-      max-height:62vh !important;
-    }
+  .ap-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #0b5ed7;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
 
-    /* Spinner overlay */
-    .ap-overlay{
-      position:fixed; inset:0;
-      background:rgba(255,255,255,.65);
-      display:none;
-      align-items:center; justify-content:center;
-      z-index:9999;
-    }
-    .ap-overlay .box{
-      background:#fff;
-      border:1px solid var(--ap-border);
-      border-radius:14px;
-      padding:18px 22px;
-      box-shadow:0 10px 30px rgba(0,0,0,.12);
-      display:flex; gap:12px; align-items:center;
-      font-weight:800;
-      color:var(--ap-blue);
-    }
-    .ap-form-label{ font-weight:800; color:#1b2b41; }
-    .modal-title{ color:var(--ap-blue); font-weight:900; }
-    .ap-help{ font-size:12px; color:#5b6b7f; }
-  </style>
-</head>
+  /* TOOLBAR */
+  .ap-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 15px;
+    background: #fff;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid #e0e6ed;
+  }
 
-<body>
+  .ap-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 300px;
+    background: #f8f9fa;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+  }
 
-<div class="ap-overlay" id="apOverlay">
-  <div class="box">
-    <div class="spinner-border" role="status" aria-hidden="true"></div>
-    <div>Procesando…</div>
+  .ap-search i {
+    color: #6c757d;
+  }
+
+  .ap-search input {
+    border: none;
+    background: transparent;
+    outline: none;
+    width: 100%;
+    font-size: 13px;
+  }
+
+  /* CHIPS */
+  .ap-chip {
+    font-size: 12px;
+    background: #f1f3f5;
+    color: #495057;
+    border: 1px solid #dee2e6;
+    border-radius: 20px;
+    padding: 5px 12px;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .ap-chip:hover {
+    background: #e9ecef;
+    color: #212529;
+    border-color: #ced4da;
+  }
+
+  button.ap-chip {
+    font-family: inherit;
+  }
+
+  /* GRID */
+  .ap-grid {
+    background: #fff;
+    border: 1px solid #e0e6ed;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .ap-grid table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .ap-grid th {
+    background: #f8f9fa;
+    padding: 10px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 1px solid #dee2e6;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .ap-grid td {
+    padding: 8px;
+    border-bottom: 1px solid #f1f3f5;
+    color: #212529;
+    vertical-align: middle;
+  }
+
+  .ap-grid tr:hover td {
+    background: #f8f9fa;
+  }
+
+  .ap-actions i {
+    cursor: pointer;
+    margin-right: 10px;
+    color: #6c757d;
+    transition: color 0.2s;
+    font-size: 13px;
+  }
+
+  .ap-actions i:hover {
+    color: #0b5ed7;
+  }
+
+  /* PAGER */
+  .ap-pager {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+    padding: 0 5px;
+  }
+
+  .ap-pager button {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #495057;
+  }
+
+  .ap-pager button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .ap-pager button:hover:not(:disabled) {
+    background: #f8f9fa;
+    border-color: #ced4da;
+  }
+
+  .ap-pager select {
+    padding: 6px;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+    color: #495057;
+    margin-left: 5px;
+  }
+
+  /* MODAL */
+  .ap-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+
+  .ap-modal[style*="display: block"] {
+    display: flex !important;
+  }
+
+  .ap-modal-content {
+    background: #fff;
+    width: 900px;
+    max-width: 95%;
+    max-height: 90vh;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+  }
+
+  .ap-form {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-top: 15px;
+  }
+
+  .ap-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .ap-label {
+    font-weight: 500;
+    font-size: 13px;
+    color: #495057;
+  }
+
+  .ap-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: #fff;
+    transition: all 0.2s;
+  }
+
+  .ap-input:focus-within {
+    border-color: #0b5ed7;
+    box-shadow: 0 0 0 3px rgba(11, 94, 215, 0.1);
+  }
+
+  .ap-input i {
+    color: #adb5bd;
+  }
+
+  .ap-input input {
+    border: none;
+    outline: none;
+    width: 100%;
+    font-size: 14px;
+    color: #212529;
+    background: transparent;
+  }
+
+  .ap-error {
+    font-size: 12px;
+    color: #dc3545;
+    display: none;
+    margin-top: 4px;
+  }
+
+  button.primary {
+    background: #0b5ed7;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  button.primary:hover {
+    background: #0a58ca;
+  }
+
+  button.ghost {
+    background: #fff;
+    color: #495057;
+    border: 1px solid #dee2e6;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  button.ghost:hover {
+    background: #f1f3f5;
+    border-color: #ced4da;
+  }
+</style>
+
+<div class="ap-container">
+  <div class="ap-title"><i class="fa fa-address-book"></i> Catálogo - Contactos</div>
+
+  <div class="ap-toolbar">
+    <div class="ap-search">
+      <i class="fa fa-search"></i>
+      <input id="q" placeholder="Buscar clave, nombre, correo, teléfono, ubicación…"
+        onkeydown="if(event.key==='Enter')buscar()">
+    </div>
+    <button class="ap-chip" onclick="buscar()">Buscar</button>
+    <button class="ap-chip" onclick="limpiar()">Limpiar</button>
+
+    <div style="flex:1"></div>
+
+    <button class="ap-chip" onclick="nuevo()"><i class="fa fa-plus"></i> Agregar</button>
+    <button class="ap-chip" onclick="exportarDatos()"><i class="fa fa-download"></i> Exportar</button>
+    <button class="ap-chip" onclick="abrirImport()"><i class="fa fa-upload"></i> Importar</button>
   </div>
-</div>
 
-<div class="ap-titlebar">
-  <h1 class="ap-title">
-    <i class="fa-solid fa-address-book"></i>
-    Catálogo - Contactos
-  </h1>
-
-  <div class="d-flex gap-2 flex-wrap">
-    <button class="btn btn-primary ap-btn" id="btnNuevo">
-      <i class="fa-solid fa-plus"></i> Nuevo
-    </button>
-
-    <a class="btn btn-outline-primary ap-btn" href="../api/api_contactos.php?action=export_csv" target="_blank">
-      <i class="fa-solid fa-file-csv"></i> Exportar CSV
-    </a>
-
-    <button class="btn btn-outline-primary ap-btn" id="btnImportar">
-      <i class="fa-solid fa-file-import"></i> Importar CSV
-    </button>
+  <div class="ap-grid">
+    <table>
+      <thead>
+        <tr>
+          <th>Acciones</th>
+          <th>ID</th>
+          <th>Clave</th>
+          <th>Nombre</th>
+          <th>Apellido</th>
+          <th>Correo</th>
+          <th>Teléfono 1</th>
+          <th>Teléfono 2</th>
+          <th>País</th>
+          <th>Estado</th>
+          <th>Ciudad</th>
+          <th>Dirección</th>
+        </tr>
+      </thead>
+      <tbody id="tb"></tbody>
+    </table>
   </div>
-</div>
 
-<div class="ap-card">
-  <div class="ap-card-h">
-    <div class="d-flex gap-2 align-items-center">
-      <i class="fa-solid fa-filter text-primary"></i>
-      <div class="fw-bold" style="color:#1b2b41;">Búsqueda</div>
-      <div class="ap-help">Escribe para filtrar por clave, nombre, correo, teléfonos o ubicación.</div>
+  <!-- Paginación -->
+  <div class="ap-pager">
+    <div class="left">
+      <button onclick="prevPage()" id="btnPrev"><i class="fa fa-chevron-left"></i> Anterior</button>
+      <button onclick="nextPage()" id="btnNext">Siguiente <i class="fa fa-chevron-right"></i></button>
+      <span class="ap-chip" id="lblRange" style="background:transparent; border:none; padding:0;">Mostrando 0–0</span>
+    </div>
+    <div class="right" style="display:flex; align-items:center;">
+      <span>Página:</span>
+      <select id="selPage" onchange="goPage(this.value)"></select>
+
+      <span style="margin-left:15px">Por página:</span>
+      <select id="selPerPage" onchange="setPerPage(this.value)">
+        <option value="25" selected>25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
     </div>
   </div>
-
-  <div class="ap-table-wrap">
-    <div class="table-responsive">
-      <table id="tblContactos" class="table table-striped table-bordered table-hover w-100">
-        <thead>
-          <tr>
-            <th style="min-width:140px;">Acciones</th>
-            <th style="min-width:90px;">ID</th>
-            <th style="min-width:120px;">Clave</th>
-            <th style="min-width:160px;">Nombre</th>
-            <th style="min-width:160px;">Apellido</th>
-            <th style="min-width:200px;">Correo</th>
-            <th style="min-width:140px;">Teléfono 1</th>
-            <th style="min-width:140px;">Teléfono 2</th>
-            <th style="min-width:140px;">País</th>
-            <th style="min-width:140px;">Estado</th>
-            <th style="min-width:140px;">Ciudad</th>
-            <th style="min-width:260px;">Dirección</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
 </div>
 
-<!-- Modal CRUD -->
-<div class="modal fade" id="mdlContacto" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="fa-solid fa-address-book"></i> <span id="mdlTitulo">Contacto</span></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+<!-- MODAL -->
+<div class="ap-modal" id="mdl">
+  <div class="ap-modal-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+      <h3 style="margin:0"><i class="fa fa-address-book"></i> Contacto</h3>
+      <button onclick="cerrarModal('mdl')"
+        style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
+          class="fa fa-times"></i></button>
+    </div>
+
+    <div class="ap-chip" style="margin-bottom:10px"><span style="color:#dc3545;font-weight:700">*</span> Obligatorios:
+      <b>Clave</b>, <b>Nombre</b>
+    </div>
+
+    <input type="hidden" id="id">
+
+    <div class="ap-form">
+      <div class="ap-field">
+        <div class="ap-label">Clave *</div>
+        <div class="ap-input"><i class="fa fa-hashtag"></i><input id="clave" maxlength="50" placeholder="C01"></div>
+        <div class="ap-error" id="err_clave">Clave obligatoria.</div>
       </div>
-      <div class="modal-body">
-        <input type="hidden" id="id">
 
-        <div class="row g-3">
-          <div class="col-md-3">
-            <label class="ap-form-label form-label">Clave *</label>
-            <input type="text" class="form-control" id="clave" maxlength="50" autocomplete="off">
-          </div>
+      <div class="ap-field">
+        <div class="ap-label">Nombre *</div>
+        <div class="ap-input"><i class="fa fa-user"></i><input id="nombre" maxlength="100" placeholder="Juan"></div>
+        <div class="ap-error" id="err_nombre">Nombre obligatorio.</div>
+      </div>
 
-          <div class="col-md-4">
-            <label class="ap-form-label form-label">Nombre *</label>
-            <input type="text" class="form-control" id="nombre" maxlength="100" autocomplete="off">
-          </div>
+      <div class="ap-field">
+        <div class="ap-label">Apellido</div>
+        <div class="ap-input"><i class="fa fa-user"></i><input id="apellido" maxlength="100" placeholder="Pérez"></div>
+      </div>
 
-          <div class="col-md-5">
-            <label class="ap-form-label form-label">Apellido</label>
-            <input type="text" class="form-control" id="apellido" maxlength="100" autocomplete="off">
-          </div>
+      <div class="ap-field" style="grid-column: span 2">
+        <div class="ap-label">Correo</div>
+        <div class="ap-input"><i class="fa fa-envelope"></i><input id="correo" maxlength="100"
+            placeholder="correo@dominio.com"></div>
+      </div>
 
-          <div class="col-md-5">
-            <label class="ap-form-label form-label">Correo</label>
-            <input type="email" class="form-control" id="correo" maxlength="100" autocomplete="off">
-          </div>
-
-          <div class="col-md-3">
-            <label class="ap-form-label form-label">Teléfono 1</label>
-            <input type="text" class="form-control" id="telefono1" maxlength="50" autocomplete="off">
-          </div>
-
-          <div class="col-md-4">
-            <label class="ap-form-label form-label">Teléfono 2</label>
-            <input type="text" class="form-control" id="telefono2" maxlength="50" autocomplete="off">
-          </div>
-
-          <div class="col-md-3">
-            <label class="ap-form-label form-label">País</label>
-            <input type="text" class="form-control" id="pais" maxlength="100" autocomplete="off">
-          </div>
-
-          <div class="col-md-3">
-            <label class="ap-form-label form-label">Estado</label>
-            <input type="text" class="form-control" id="estado" maxlength="100" autocomplete="off">
-          </div>
-
-          <div class="col-md-3">
-            <label class="ap-form-label form-label">Ciudad</label>
-            <input type="text" class="form-control" id="ciudad" maxlength="100" autocomplete="off">
-          </div>
-
-          <div class="col-md-12">
-            <label class="ap-form-label form-label">Dirección</label>
-            <input type="text" class="form-control" id="direccion" maxlength="200" autocomplete="off">
-          </div>
+      <div class="ap-field">
+        <div class="ap-label">Teléfono 1</div>
+        <div class="ap-input"><i class="fa fa-phone"></i><input id="telefono1" maxlength="50" placeholder="1234567890">
         </div>
+      </div>
 
-        <div class="mt-3 ap-help">
-          * Campos obligatorios: <b>Clave</b>, <b>Nombre</b>.
+      <div class="ap-field">
+        <div class="ap-label">Teléfono 2</div>
+        <div class="ap-input"><i class="fa fa-phone"></i><input id="telefono2" maxlength="50" placeholder="0987654321">
         </div>
+      </div>
 
+      <div class="ap-field">
+        <div class="ap-label">País</div>
+        <div class="ap-input"><i class="fa fa-globe"></i><input id="pais" maxlength="100" placeholder="México"></div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary ap-btn" data-bs-dismiss="modal">
-          <i class="fa-solid fa-xmark"></i> Cancelar
-        </button>
-        <button class="btn btn-primary ap-btn" id="btnGuardar">
-          <i class="fa-solid fa-floppy-disk"></i> Guardar
-        </button>
+
+      <div class="ap-field">
+        <div class="ap-label">Estado</div>
+        <div class="ap-input"><i class="fa fa-flag"></i><input id="estado" maxlength="100" placeholder="Estado"></div>
       </div>
+
+      <div class="ap-field">
+        <div class="ap-label">Ciudad</div>
+        <div class="ap-input"><i class="fa fa-city"></i><input id="ciudad" maxlength="100" placeholder="Ciudad"></div>
+      </div>
+
+      <div class="ap-field" style="grid-column: span 3">
+        <div class="ap-label">Dirección</div>
+        <div class="ap-input"><i class="fa fa-map-marker-alt"></i><input id="direccion" maxlength="200"
+            placeholder="Calle y número"></div>
+      </div>
+    </div>
+
+    <div style="text-align:right;margin-top:15px;display:flex;justify-content:flex-end;gap:10px">
+      <button class="ghost" onclick="cerrarModal('mdl')">Cancelar</button>
+      <button class="primary" onclick="guardar()">Guardar</button>
     </div>
   </div>
 </div>
 
-<!-- Modal Import CSV -->
-<div class="modal fade" id="mdlImport" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="fa-solid fa-file-import"></i> Importar Contactos (CSV)</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body">
-        <div class="ap-help mb-2">
-          Layout requerido (encabezados exactos): <b>clave,nombre,apellido,correo,telefono1,telefono2,pais,estado,ciudad,direccion</b>
-          <br>Regla: UPSERT por <b>clave</b> (si existe actualiza, si no existe inserta).
-        </div>
+<!-- MODAL IMPORT -->
+<div class="ap-modal" id="mdlImport">
+  <div class="ap-modal-content" style="width:700px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+      <h3 style="margin:0"><i class="fa fa-upload"></i> Importar contactos</h3>
+      <button onclick="cerrarModal('mdlImport')"
+        style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
+          class="fa fa-times"></i></button>
+    </div>
 
-        <input type="file" id="csvFile" class="form-control" accept=".csv,text/csv">
-        <div class="mt-2 ap-help">Tip: exporta primero para obtener el layout exacto.</div>
+    <div class="ap-chip" style="margin-bottom:15px">UPSERT por <b>clave</b>. Layout:
+      clave,nombre,apellido,correo,telefono1,telefono2,pais,estado,ciudad,direccion</div>
 
-        <div class="alert alert-danger mt-3 d-none" id="impErr"></div>
-        <div class="alert alert-success mt-3 d-none" id="impOk"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary ap-btn" data-bs-dismiss="modal">Cerrar</button>
-        <button class="btn btn-primary ap-btn" id="btnProcesarImport">
-          <i class="fa-solid fa-upload"></i> Procesar Importación
-        </button>
-      </div>
+    <div class="ap-input">
+      <i class="fa fa-file-csv"></i>
+      <input type="file" id="fileCsv" accept=".csv">
+    </div>
+
+    <div style="margin-top:15px;display:flex;gap:10px">
+      <button class="primary" onclick="importarCsv()"><i class="fa fa-upload"></i> Importar</button>
+    </div>
+
+    <div class="ap-chip" id="importMsg" style="margin-top:15px; width:100%; display:none; justify-content:center;">
     </div>
   </div>
 </div>
-
-<!-- JS -->
-<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/datatables.net@1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.8/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/datatables.net-scroller@2.4.0/js/dataTables.scroller.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/datatables.net-scroller-bs5@2.4.0/js/scroller.bootstrap5.min.js"></script>
 
 <script>
-  const API = "../api/api_contactos.php";
+  const API = '../api/api_contactos.php';
 
-  const overlay = document.getElementById('apOverlay');
-  const showOverlay = (v=true) => overlay.style.display = v ? 'flex' : 'none';
+  let qLast = '';
+  let page = 1;
+  let perPage = 25;
+  let total = 0;
+  let lastRows = [];
 
-  const mdlContacto = new bootstrap.Modal(document.getElementById('mdlContacto'));
-  const mdlImport   = new bootstrap.Modal(document.getElementById('mdlImport'));
-
-  let tabla = null;
-  let modo  = "create"; // create | update
-
-  function toast(msg, type="success"){
-    // Minimalista: alert bootstrap
+  /* ===== Escape HTML ===== */
+  function escapeHtml(text) {
     const div = document.createElement('div');
-    div.className = `alert alert-${type} position-fixed top-0 end-0 m-3 shadow`;
-    div.style.zIndex = 99999;
-    div.innerHTML = msg;
-    document.body.appendChild(div);
-    setTimeout(()=>div.remove(), 2400);
+    div.textContent = text;
+    return div.innerHTML;
   }
 
-  function limpiarForm(){
-    document.getElementById('id').value = "";
-    ['clave','nombre','apellido','correo','telefono1','telefono2','pais','estado','ciudad','direccion'].forEach(id=>{
-      document.getElementById(id).value = "";
+  /* ===== Paginación ===== */
+  function setPager() {
+    const start = total > 0 ? ((page - 1) * perPage + (lastRows.length ? 1 : 0)) : 0;
+    let end = total > 0 ? Math.min(page * perPage, total) : 0;
+    if (total === 0) { end = 0; }
+
+    lblRange.innerText = `Mostrando ${start}–${end}` + (total > 0 ? ` de ${total}` : '');
+
+    const maxPages = total > 0 ? Math.max(1, Math.ceil(total / perPage)) : 1;
+    selPage.innerHTML = '';
+    for (let i = 1; i <= maxPages; i++) {
+      const o = document.createElement('option');
+      o.value = i; o.textContent = i;
+      if (i === page) o.selected = true;
+      selPage.appendChild(o);
+    }
+    btnPrev.disabled = (page <= 1);
+    btnNext.disabled = total > 0 ? (page >= maxPages) : (lastRows.length < perPage);
+  }
+  function prevPage() { if (page > 1) { page--; cargar(); } }
+  function nextPage() {
+    const maxPages = total > 0 ? Math.ceil(total / perPage) : 1;
+    if (page < maxPages) { page++; cargar(); }
+    else if (total === 0 && lastRows.length === perPage) { page++; cargar(); }
+  }
+  function goPage(p) { page = Math.max(1, parseInt(p, 10) || 1); cargar(); }
+  function setPerPage(v) { perPage = parseInt(v, 10) || 25; page = 1; cargar(); }
+
+  function cargar() {
+    const url = API + '?action=list'
+      + '&draw=' + page
+      + '&q=' + encodeURIComponent(qLast || '')
+      + '&start=' + ((page - 1) * perPage)
+      + '&length=' + perPage;
+
+    fetch(url).then(r => r.json()).then(resp => {
+      const rows = resp.data || [];
+      if (rows.length > 0) { }
+
+      total = Number(resp.recordsFiltered || 0) || 0;
+      lastRows = rows;
+
+      let h = '';
+      rows.forEach(c => {
+        const contactId = parseInt(c.id) || 0;
+        h += `
+      <tr>
+        <td class="ap-actions">
+          <i class="fa fa-edit" title="Editar" onclick="editar(${contactId})"></i>
+          <i class="fa fa-trash" title="Eliminar" onclick="eliminar(${contactId})"></i>
+        </td>
+        <td>${escapeHtml(String(c.id || ''))}</td>
+        <td><b>${escapeHtml(String(c.clave || ''))}</b></td>
+        <td>${escapeHtml(String(c.nombre || ''))}</td>
+        <td>${escapeHtml(String(c.apellido || ''))}</td>
+        <td>${escapeHtml(String(c.correo || ''))}</td>
+        <td>${escapeHtml(String(c.telefono1 || ''))}</td>
+        <td>${escapeHtml(String(c.telefono2 || ''))}</td>
+        <td>${escapeHtml(String(c.pais || ''))}</td>
+        <td>${escapeHtml(String(c.estado || ''))}</td>
+        <td>${escapeHtml(String(c.ciudad || ''))}</td>
+        <td>${escapeHtml(String(c.direccion || ''))}</td>
+      </tr>`;
+      });
+      tb.innerHTML = h || `<tr><td colspan="12" style="text-align:center;color:#6c757d;padding:20px">Sin resultados</td></tr>`;
+      setPager();
     });
   }
 
-  async function apiPost(action, data){
-    const form = new FormData();
-    form.append('action', action);
-    Object.keys(data||{}).forEach(k => form.append(k, data[k] ?? ''));
+  function buscar() { qLast = q.value.trim(); page = 1; cargar(); }
+  function limpiar() { q.value = ''; qLast = ''; page = 1; cargar(); }
 
-    const resp = await fetch(API, { method:'POST', body: form });
-    const json = await resp.json().catch(()=>null);
-    if(!json || json.ok !== true){
-      throw new Error((json && (json.msg || json.error)) ? (json.msg || json.error) : 'Error desconocido');
-    }
-    return json;
+  function hideErrors() {
+    err_clave.style.display = 'none';
+    err_nombre.style.display = 'none';
   }
 
-  async function apiGet(params){
-    const url = new URL(API, window.location.origin);
-    Object.keys(params||{}).forEach(k => url.searchParams.set(k, params[k]));
-    const resp = await fetch(url.toString(), { method:'GET' });
-    return await resp.json();
+  function validar() {
+    hideErrors();
+    let ok = true;
+    if (!clave.value.trim()) { err_clave.style.display = 'block'; ok = false; }
+    if (!nombre.value.trim()) { err_nombre.style.display = 'block'; ok = false; }
+    return ok;
   }
 
-  function renderAcciones(row){
-    return `
-      <div class="d-flex gap-1 justify-content-center">
-        <button class="btn btn-sm btn-outline-primary ap-btn" title="Editar" onclick="editar(${row.id})">
-          <i class="fa-solid fa-pen"></i>
-        </button>
-        <button class="btn btn-sm btn-outline-danger ap-btn" title="Eliminar" onclick="eliminar(${row.id})">
-          <i class="fa-solid fa-trash"></i>
-        </button>
-      </div>
-    `;
+  function nuevo() {
+    id.value = '';
+    clave.value = '';
+    nombre.value = '';
+    apellido.value = '';
+    correo.value = '';
+    telefono1.value = '';
+    telefono2.value = '';
+    pais.value = '';
+    estado.value = '';
+    ciudad.value = '';
+    direccion.value = '';
+    hideErrors();
+    mdl.style.display = 'block';
   }
 
-  window.editar = async function(id){
-    try{
-      showOverlay(true);
-      const r = await apiGet({ action:'get', id });
-      if(!r.ok) throw new Error(r.msg || 'No se pudo obtener el registro');
+  function editar(idVal) {
 
-      limpiarForm();
-      modo = "update";
-      document.getElementById('mdlTitulo').innerText = "Editar Contacto";
-      const d = r.data;
-
-      document.getElementById('id').value        = d.id ?? '';
-      document.getElementById('clave').value     = d.clave ?? '';
-      document.getElementById('nombre').value    = d.nombre ?? '';
-      document.getElementById('apellido').value  = d.apellido ?? '';
-      document.getElementById('correo').value    = d.correo ?? '';
-      document.getElementById('telefono1').value = d.telefono1 ?? '';
-      document.getElementById('telefono2').value = d.telefono2 ?? '';
-      document.getElementById('pais').value      = d.pais ?? '';
-      document.getElementById('estado').value    = d.estado ?? '';
-      document.getElementById('ciudad').value    = d.ciudad ?? '';
-      document.getElementById('direccion').value = d.direccion ?? '';
-
-      mdlContacto.show();
-    }catch(e){
-      toast(e.message, "danger");
-    }finally{
-      showOverlay(false);
-    }
-  }
-
-  window.eliminar = async function(id){
-    if(!confirm("¿Eliminar contacto (Hard Delete)?")) return;
-    try{
-      showOverlay(true);
-      await apiPost('delete', { id });
-      toast("Contacto eliminado", "success");
-      tabla.ajax.reload(null, false);
-    }catch(e){
-      toast(e.message, "danger");
-    }finally{
-      showOverlay(false);
-    }
-  }
-
-  document.getElementById('btnNuevo').addEventListener('click', ()=>{
-    modo = "create";
-    limpiarForm();
-    document.getElementById('mdlTitulo').innerText = "Nuevo Contacto";
-    mdlContacto.show();
-  });
-
-  document.getElementById('btnGuardar').addEventListener('click', async ()=>{
-    const id = document.getElementById('id').value;
-
-    const data = {
-      id,
-      clave: document.getElementById('clave').value.trim(),
-      nombre: document.getElementById('nombre').value.trim(),
-      apellido: document.getElementById('apellido').value.trim(),
-      correo: document.getElementById('correo').value.trim(),
-      telefono1: document.getElementById('telefono1').value.trim(),
-      telefono2: document.getElementById('telefono2').value.trim(),
-      pais: document.getElementById('pais').value.trim(),
-      estado: document.getElementById('estado').value.trim(),
-      ciudad: document.getElementById('ciudad').value.trim(),
-      direccion: document.getElementById('direccion').value.trim()
-    };
-
-    if(!data.clave || !data.nombre){
-      toast("Campos obligatorios: clave y nombre", "danger");
+    if (!idVal || idVal === 0) {
+      alert('Error: ID inválido (0 o undefined)');
       return;
     }
 
-    try{
-      showOverlay(true);
-      if(modo === "create"){
-        await apiPost('create', data);
-        toast("Contacto creado", "success");
-      }else{
-        await apiPost('update', data);
-        toast("Contacto actualizado", "success");
-      }
-      mdlContacto.hide();
-      tabla.ajax.reload(null, false);
-    }catch(e){
-      toast(e.message, "danger");
-    }finally{
-      showOverlay(false);
-    }
-  });
-
-  document.getElementById('btnImportar').addEventListener('click', ()=>{
-    document.getElementById('csvFile').value = "";
-    document.getElementById('impErr').classList.add('d-none');
-    document.getElementById('impOk').classList.add('d-none');
-    mdlImport.show();
-  });
-
-  document.getElementById('btnProcesarImport').addEventListener('click', async ()=>{
-    const f = document.getElementById('csvFile').files[0];
-    const boxErr = document.getElementById('impErr');
-    const boxOk  = document.getElementById('impOk');
-    boxErr.classList.add('d-none'); boxOk.classList.add('d-none');
-
-    if(!f){
-      boxErr.innerText = "Selecciona un archivo CSV.";
-      boxErr.classList.remove('d-none');
-      return;
-    }
-
-    try{
-      showOverlay(true);
-      const form = new FormData();
-      form.append('action', 'import_csv');
-      form.append('archivo', f);
-
-      const resp = await fetch(API, { method:'POST', body: form });
-      const json = await resp.json().catch(()=>null);
-
-      if(!json || json.ok !== true){
-        const msg = (json && json.msg) ? json.msg : "Error en importación";
-        const det = (json && Array.isArray(json.errores)) ? ("\n" + json.errores.slice(0,10).join("\n")) : "";
-        boxErr.innerText = msg + det;
-        boxErr.classList.remove('d-none');
+    fetch(API + '?action=get&id=' + idVal).then(r => r.json()).then(resp => {
+      if (!resp.ok) {
+        alert('Error: ' + (resp.msg || 'No se pudo cargar'));
         return;
       }
-
-      boxOk.innerText = `Importación exitosa. OK: ${json.total_ok ?? 0}`;
-      boxOk.classList.remove('d-none');
-
-      tabla.ajax.reload(null, false);
-    }catch(e){
-      boxErr.innerText = e.message;
-      boxErr.classList.remove('d-none');
-    }finally{
-      showOverlay(false);
-    }
-  });
-
-  $(document).ready(function(){
-    tabla = $('#tblContactos').DataTable({
-      processing: true,
-      serverSide: true,
-      pageLength: 25,
-      lengthChange: false,
-      searching: true,
-      scrollX: true,
-      scrollY: "62vh",
-      scroller: true,
-      language: {
-        url: "https://cdn.datatables.net/plug-ins/1.13.8/i18n/es-ES.json"
-      },
-      ajax: {
-        url: API,
-        type: 'GET',
-        data: function(d){
-          d.action = 'list';
-        },
-        beforeSend: function(){ showOverlay(true); },
-        complete: function(){ showOverlay(false); }
-      },
-      columns: [
-        { data: null, orderable:false, render: function(_,__,row){ return renderAcciones(row); } },
-        { data: 'id' },
-        { data: 'clave' },
-        { data: 'nombre' },
-        { data: 'apellido' },
-        { data: 'correo' },
-        { data: 'telefono1' },
-        { data: 'telefono2' },
-        { data: 'pais' },
-        { data: 'estado' },
-        { data: 'ciudad' },
-        { data: 'direccion' }
-      ],
-      order: [[1,'desc']]
+      const d = resp.data;
+      id.value = d.id || '';
+      clave.value = d.clave || '';
+      nombre.value = d.nombre || '';
+      apellido.value = d.apellido || '';
+      correo.value = d.correo || '';
+      telefono1.value = d.telefono1 || '';
+      telefono2.value = d.telefono2 || '';
+      pais.value = d.pais || '';
+      estado.value = d.estado || '';
+      ciudad.value = d.ciudad || '';
+      direccion.value = d.direccion || '';
+      hideErrors();
+      mdl.style.display = 'block';
+    }).catch(err => {
+      console.error('Error en fetch:', err);
+      alert('Error de red: ' + err.message);
     });
+  }
+
+  function guardar() {
+    if (!validar()) return;
+
+    const fd = new FormData();
+    fd.append('action', id.value ? 'update' : 'create');
+    fd.append('id', id.value);
+    fd.append('clave', clave.value.trim());
+    fd.append('nombre', nombre.value.trim());
+    fd.append('apellido', apellido.value.trim());
+    fd.append('correo', correo.value.trim());
+    fd.append('telefono1', telefono1.value.trim());
+    fd.append('telefono2', telefono2.value.trim());
+    fd.append('pais', pais.value.trim());
+    fd.append('estado', estado.value.trim());
+    fd.append('ciudad', ciudad.value.trim());
+    fd.append('direccion', direccion.value.trim());
+
+    fetch(API, { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(resp => {
+        if (!resp.ok) {
+          alert('Error: ' + (resp.msg || 'Error desconocido'));
+          return;
+        }
+        cerrarModal('mdl');
+        cargar();
+      });
+  }
+
+  function eliminar(idVal) {
+    if (!confirm('¿Eliminar contacto (Hard Delete)?')) return;
+    const fd = new FormData(); fd.append('action', 'delete'); fd.append('id', idVal);
+    fetch(API, { method: 'POST', body: fd }).then(() => cargar());
+  }
+
+  function exportarDatos() { window.open(API + '?action=export_csv', '_blank'); }
+
+  function abrirImport() {
+    fileCsv.value = '';
+    importMsg.style.display = 'none';
+    mdlImport.style.display = 'block';
+  }
+
+  function importarCsv() {
+    const f = fileCsv.files[0];
+    if (!f) { alert('Selecciona un CSV'); return; }
+
+    const fd = new FormData();
+    fd.append('action', 'import_csv');
+    fd.append('archivo', f);
+
+    fetch(API, { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(resp => {
+        importMsg.style.display = 'flex';
+        if (!resp.ok) {
+          importMsg.className = 'ap-chip warn';
+          importMsg.innerHTML = `<b>Error:</b> ${resp.msg || 'Error desconocido'}`;
+          return;
+        }
+        importMsg.className = 'ap-chip ok';
+        importMsg.innerHTML = `<b>Importación:</b> OK ${resp.total_ok || 0}`;
+        setTimeout(() => { cerrarModal('mdlImport'); cargar(); }, 2000);
+      });
+  }
+
+  function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    selPerPage.value = '25';
+    cargar();
   });
 </script>
 
-</body>
-</html>
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>

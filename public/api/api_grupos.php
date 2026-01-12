@@ -7,6 +7,15 @@
 
 require_once __DIR__ . '/../../app/db.php';
 
+// Inicializar conexión
+try {
+    $pdo = db_pdo();
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Error de conexión: ' . $e->getMessage()]);
+    exit;
+}
+
 /* =====================================================
    1. CAPTURA UNIVERSAL DEL ACTION
    (POST / GET / JSON / DataTables)
@@ -54,24 +63,53 @@ try {
     switch ($action) {
 
         /* =========================================
-           LISTADO (DataTables)
+           LISTADO (Paginacion + Search)
         ========================================= */
         case 'list':
+            $page = max(1, intval($_GET['page'] ?? 1));
+            $limit = max(1, intval($_GET['limit'] ?? 25));
+            $offset = ($page - 1) * $limit;
+            $q = $_GET['q'] ?? '';
+            $verInactivos = intval($_GET['inactivos'] ?? 0);
 
-            $sql = "
-                SELECT
-                    id,
-                    cve_gpoart,
-                    des_gpoart,
-                    por_depcont,
-                    por_depfical,
-                    Activo,
-                    id_almacen
-                FROM c_gpoarticulo
-                ORDER BY des_gpoart
-            ";
+            $where = ["Activo = ?"];
+            $params = [$verInactivos ? 0 : 1];
 
-            echo json_encode(db_all($sql));
+            if ($q !== '') {
+                $where[] = "(cve_gpoart LIKE ? OR des_gpoart LIKE ?)";
+                $params[] = "%$q%";
+                $params[] = "%$q%";
+            }
+
+            $wStr = implode(" AND ", $where);
+
+            // Count
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM c_gpoarticulo WHERE $wStr");
+            $stmt->execute($params);
+            $total = $stmt->fetchColumn();
+            $pages = ceil($total / $limit);
+
+            // Data
+            $sql = "SELECT id, cve_gpoart, des_gpoart, por_depcont, por_depfical, id_almacen, Activo 
+                    FROM c_gpoarticulo 
+                    WHERE $wStr 
+                    ORDER BY des_gpoart 
+                    LIMIT $limit OFFSET $offset";
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+
+            // Check if there are any inactive records in total
+            $hasInactives = $pdo->query("SELECT COUNT(*) FROM c_gpoarticulo WHERE Activo = 0")->fetchColumn() > 0;
+
+            echo json_encode([
+                'success' => true,
+                'rows' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+                'total' => $total,
+                'pages' => $pages,
+                'page' => $page,
+                'hasInactives' => $hasInactives
+            ]);
             break;
 
         /* =========================================
@@ -79,46 +117,22 @@ try {
         ========================================= */
         case 'save':
 
-            $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+            $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+            $cve = $_POST['cve_gpoart'] ?? '';
+            $des = $_POST['des_gpoart'] ?? '';
+            $pdc = isset($_POST['por_depcont']) && $_POST['por_depcont'] !== '' ? $_POST['por_depcont'] : null;
+            $pdf = isset($_POST['por_depfical']) && $_POST['por_depfical'] !== '' ? $_POST['por_depfical'] : null;
+            $alm = isset($_POST['id_almacen']) && $_POST['id_almacen'] !== '' ? $_POST['id_almacen'] : null;
 
             if ($id === 0) {
-
-                $sql = "
-                    INSERT INTO c_gpoarticulo
-                        (cve_gpoart, des_gpoart, por_depcont, por_depfical, Activo, id_almacen)
-                    VALUES
-                        (:cve, :des, :pdc, :pdf, 1, :alm)
-                ";
-
-                db_exec($sql, [
-                    'cve' => $_POST['cve_gpoart']   ?? null,
-                    'des' => $_POST['des_gpoart']   ?? null,
-                    'pdc' => $_POST['por_depcont']  ?? null,
-                    'pdf' => $_POST['por_depfical'] ?? null,
-                    'alm' => $_POST['id_almacen']   ?? null
-                ]);
-
+                $sql = "INSERT INTO c_gpoarticulo (cve_gpoart, des_gpoart, por_depcont, por_depfical, Activo, id_almacen)
+                        VALUES (?, ?, ?, ?, 1, ?)";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute([$cve, $des, $pdc, $pdf, $alm]);
             } else {
-
-                $sql = "
-                    UPDATE c_gpoarticulo
-                    SET
-                        cve_gpoart   = :cve,
-                        des_gpoart   = :des,
-                        por_depcont  = :pdc,
-                        por_depfical = :pdf,
-                        id_almacen   = :alm
-                    WHERE id = :id
-                ";
-
-                db_exec($sql, [
-                    'cve' => $_POST['cve_gpoart']   ?? null,
-                    'des' => $_POST['des_gpoart']   ?? null,
-                    'pdc' => $_POST['por_depcont']  ?? null,
-                    'pdf' => $_POST['por_depfical'] ?? null,
-                    'alm' => $_POST['id_almacen']   ?? null,
-                    'id'  => $id
-                ]);
+                $sql = "UPDATE c_gpoarticulo SET cve_gpoart=?, des_gpoart=?, por_depcont=?, por_depfical=?, id_almacen=? WHERE id=?";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute([$cve, $des, $pdc, $pdf, $alm, $id]);
             }
 
             echo json_encode(['success' => true]);
@@ -128,16 +142,10 @@ try {
            DELETE LÓGICO
         ========================================= */
         case 'delete':
-
-            if (!isset($_POST['id'])) {
+            if (!isset($_POST['id']))
                 throw new Exception('ID no recibido');
-            }
-
-            db_exec(
-                "UPDATE c_gpoarticulo SET Activo = 0 WHERE id = :id",
-                ['id' => $_POST['id']]
-            );
-
+            $stmt = $pdo->prepare("UPDATE c_gpoarticulo SET Activo = 0 WHERE id = ?");
+            $stmt->execute([$_POST['id']]);
             echo json_encode(['success' => true]);
             break;
 
@@ -145,34 +153,46 @@ try {
            RECUPERAR
         ========================================= */
         case 'restore':
-
-            if (!isset($_POST['id'])) {
+            if (!isset($_POST['id']))
                 throw new Exception('ID no recibido');
-            }
-
-            db_exec(
-                "UPDATE c_gpoarticulo SET Activo = 1 WHERE id = :id",
-                ['id' => $_POST['id']]
-            );
-
+            $stmt = $pdo->prepare("UPDATE c_gpoarticulo SET Activo = 1 WHERE id = ?");
+            $stmt->execute([$_POST['id']]);
             echo json_encode(['success' => true]);
             break;
 
         /* =========================================
-           SEGURIDAD (NO DEBERÍA ENTRAR AQUÍ)
+           EXPORTAR
+        ========================================= */
+        case 'export':
+            header('Content-Type: text/csv; charset=UTF-8');
+            header('Content-Disposition: attachment; filename=grupos_articulos.csv');
+            echo "\xEF\xBB\xBF"; // BOM UTF-8
+
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Clave', 'Descripción', '% Contable', '% Fiscal', 'Almacén'], ',');
+
+            $stmt = $pdo->query("SELECT cve_gpoart, des_gpoart, por_depcont, por_depfical, id_almacen FROM c_gpoarticulo WHERE Activo = 1 ORDER BY des_gpoart");
+            while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                fputcsv($out, [
+                    $r['cve_gpoart'],
+                    $r['des_gpoart'],
+                    $r['por_depcont'],
+                    $r['por_depfical'],
+                    $r['id_almacen']
+                ], ',');
+            }
+            fclose($out);
+            exit;
+
+        /* =========================================
+           DEFAULT
         ========================================= */
         default:
             http_response_code(400);
-            echo json_encode([
-                'error'  => 'Acción no válida',
-                'action' => $action
-            ]);
+            echo json_encode(['error' => 'Acción no válida', 'action' => $action]);
     }
 
 } catch (Throwable $e) {
-
     http_response_code(500);
-    echo json_encode([
-        'error' => $e->getMessage()
-    ]);
+    echo json_encode(['error' => $e->getMessage()]);
 }
