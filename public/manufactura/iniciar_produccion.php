@@ -1,127 +1,224 @@
 <?php
 // /public/manufactura/iniciar_produccion.php
+// Consolidado de OTs (1..N) + ejecución con mínimas instrucciones a BD.
+
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../app/db.php';
-require_once __DIR__ . '/../bi/_menu_global.php';
 
 $pdo = db_pdo();
 
-function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
-function f2($n){ return number_format((float)$n, 2, '.', ','); }
+function h($s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+function f2($n): string { return number_format((float)$n, 2, '.', ','); }
 
-$usr = 'DEMO'; // sin sesión por ahora
+$usr = $_SESSION['cve_usuario'] ?? ($_SESSION['username'] ?? ($_SESSION['usuario'] ?? 'SISTEMA'));
 
-/* =============================
-   Resolver OT (id / folio / folios)
-   ============================= */
-$id     = (int)($_GET['id'] ?? 0);
-$folio  = trim((string)($_GET['folio'] ?? ''));
-$folios = trim((string)($_GET['folios'] ?? ''));
+/* ==========================================================
+   API INLINE (JSON) — Ejecutar producción consolidada
+   - 1 instrucción por artículo MP
+   - Permite consumo negativo
+   IMPORTANT: este bloque debe ejecutarse ANTES del layout.
+   ========================================================== */
+if (isset($_POST['action']) && $_POST['action'] === 'exec') {
+  // Evitar que salga cualquier HTML previo
+  if (function_exists('ob_get_length') && ob_get_length()) { @ob_clean(); }
+  header('Content-Type: application/json; charset=utf-8');
 
-if ($id <= 0) {
-  $buscar = $folio !== '' ? $folio : $folios;
-  if ($buscar !== '') {
-    $st = $pdo->prepare("
-      SELECT id
-      FROM t_ordenprod
-      WHERE Folio_Pro = :f
-      LIMIT 1
-    ");
-    $st->execute([':f'=>$buscar]);
-    $id = (int)($st->fetchColumn() ?: 0);
+  $t0 = microtime(true);
+
+  $foliosRaw = (string)($_POST['folios'] ?? '');
+  $bl_mp = (int)($_POST['bl_mp'] ?? 0);
+  $bl_pt = (int)($_POST['bl_pt'] ?? 0);
+
+  $folios = array_values(array_unique(array_filter(array_map('trim', explode(',', $foliosRaw)))));
+  if (!$folios) { echo json_encode(['ok'=>false,'error'=>'Folios inválidos']); exit; }
+  if ($bl_mp <= 0) { echo json_encode(['ok'=>false,'error'=>'Selecciona BL de Materia Prima (MP)']); exit; }
+  if ($bl_pt <= 0) { $bl_pt = $bl_mp; }
+
+  // Leer OTs
+  $in = implode(',', array_fill(0, count($folios), '?'));
+  $sqlOT = "
+    SELECT id, Folio_Pro, cve_almac, ID_Proveedor, Cve_Articulo, Cantidad, Status
+    FROM t_ordenprod
+    WHERE Folio_Pro IN ($in)
+  ";
+  $st = $pdo->prepare($sqlOT);
+  $st->execute($folios);
+  $ots = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  if (!$ots) { echo json_encode(['ok'=>false,'error'=>'OT(s) no encontradas']); exit; }
+
+  // Gobernanza mínima: mismas empresa/almacén y Planeadas
+  $alm = (int)($ots[0]['cve_almac'] ?? 0);
+  $prov = (int)($ots[0]['ID_Proveedor'] ?? 0);
+  foreach ($ots as $r) {
+    if ((string)($r['Status'] ?? '') !== 'P') {
+      echo json_encode(['ok'=>false,'error'=>'Todas las OTs deben estar en status Planeada (P)']);
+      exit;
+    }
+    if ((int)($r['cve_almac'] ?? 0) !== $alm) {
+      echo json_encode(['ok'=>false,'error'=>'Consolidado inválido: OTs de distinto almacén']);
+      exit;
+    }
+    if ((int)($r['ID_Proveedor'] ?? 0) !== $prov) {
+      echo json_encode(['ok'=>false,'error'=>'Consolidado inválido: OTs de distinta empresa']);
+      exit;
+    }
+  }
+
+  // Consolidar BOM: ReqTotal = Σ(factor_bom * cantidad_ot)
+  $cantOT = [];
+  foreach ($ots as $r) {
+    $cantOT[(string)$r['Folio_Pro']] = (float)($r['Cantidad'] ?? 0);
+  }
+
+  $sqlBom = "
+    SELECT Folio_Pro, Cve_Articulo, Cantidad
+    FROM td_ordenprod
+    WHERE Folio_Pro IN ($in)
+      AND (Activo = 1 OR Activo IS NULL)
+  ";
+  $stb = $pdo->prepare($sqlBom);
+  $stb->execute($folios);
+  $rows = $stb->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  $mp = []; // art => req
+  foreach ($rows as $ln) {
+    $art = (string)($ln['Cve_Articulo'] ?? '');
+    if ($art === '') continue;
+    $folio = (string)($ln['Folio_Pro'] ?? '');
+    $factor = (float)($ln['Cantidad'] ?? 0);
+    $req = $factor * (float)($cantOT[$folio] ?? 0);
+    if (!isset($mp[$art])) $mp[$art] = 0.0;
+    $mp[$art] += $req;
+  }
+
+  $tx0 = microtime(true);
+  try {
+    $pdo->beginTransaction();
+
+    // 1) Marcar OTs
+    $stUp = $pdo->prepare("UPDATE t_ordenprod SET Status='E', Hora_Ini=NOW(), idy_ubica_dest=? WHERE Folio_Pro=?");
+    foreach ($folios as $f) {
+      $stUp->execute([$bl_pt, $f]);
+    }
+
+    // 2) Consumo consolidado MP — permite negativos
+    $stCons = $pdo->prepare("UPDATE ts_existenciapiezas
+      SET Existencia = COALESCE(Existencia,0) - ?
+      WHERE cve_almac=? AND ID_Proveedor=? AND idy_ubica=? AND cve_articulo=?");
+
+    $movs = 0;
+    foreach ($mp as $art => $req) {
+      $stCons->execute([$req, $alm, $prov, $bl_mp, (string)$art]);
+      $movs++;
+    }
+
+    $pdo->commit();
+
+    $tx1 = microtime(true);
+    $t1 = microtime(true);
+
+    echo json_encode([
+      'ok' => true,
+      'data' => [
+        'ots' => count($folios),
+        'mp_articulos' => count($mp),
+        'movimientos_mp' => $movs,
+        'bl_mp' => $bl_mp,
+        'bl_pt' => $bl_pt,
+        'ms_total' => round(($t1-$t0)*1000, 2),
+        'ms_tx' => round(($tx1-$tx0)*1000, 2),
+      ]
+    ]);
+    exit;
+
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    echo json_encode(['ok'=>false,'error'=>'Fallo al ejecutar: '.$e->getMessage()]);
+    exit;
   }
 }
 
-if ($id <= 0) { die('OT no especificada'); }
+/* ==========================================================
+   A partir de aquí: UI (layout)
+   ========================================================== */
+require_once __DIR__ . '/../bi/_menu_global.php';
 
-/* =============================
-   DATOS DE LA OT (cabecera) - SEGÚN TU t_ordenprod real
-   ============================= */
+// Soporta: ?folios=OT1,OT2 ó ?folio=OT ó ?id=...
+$id = (int)($_GET['id'] ?? 0);
+$folio = trim((string)($_GET['folio'] ?? ''));
+$foliosRaw = trim((string)($_GET['folios'] ?? ''));
+
+$folios = [];
+if ($foliosRaw !== '') {
+  $folios = array_values(array_unique(array_filter(array_map('trim', explode(',', $foliosRaw)))));
+} elseif ($folio !== '') {
+  $folios = [$folio];
+} elseif ($id > 0) {
+  $st = $pdo->prepare("SELECT Folio_Pro FROM t_ordenprod WHERE id=? LIMIT 1");
+  $st->execute([$id]);
+  $f = (string)($st->fetchColumn() ?: '');
+  if ($f !== '') $folios = [$f];
+}
+if (!$folios) { die('OT no especificada'); }
+
+$in = implode(',', array_fill(0, count($folios), '?'));
 $sqlOT = "
 SELECT
   t.id,
   t.Folio_Pro,
-  t.FolioImport,
   t.cve_almac,
   t.ID_Proveedor,
   t.Cve_Articulo,
-  t.Cve_Lote,
   t.Cantidad,
-  t.Cant_Prod,
-  t.Cve_Usuario,
-  t.Fecha,
-  t.FechaReg,
   t.Hora_Ini,
-  t.Hora_Fin,
-  t.cronometro,
-  t.id_umed,
   t.Status,
-  t.Referencia,
-  t.Cve_Almac_Ori,
-  t.Tipo,
-  t.id_zona_almac,
-  t.idy_ubica,
   t.idy_ubica_dest,
   COALESCE(p.Nombre, CONCAT('Proveedor #', t.ID_Proveedor)) AS EmpresaNombre
 FROM t_ordenprod t
 LEFT JOIN c_proveedores p
   ON p.ID_Proveedor = t.ID_Proveedor
- AND (p.es_cliente = 1 OR p.es_cliente IS NULL)
-WHERE t.id = :id
-LIMIT 1
+WHERE t.Folio_Pro IN ($in)
 ";
-$stmt = $pdo->prepare($sqlOT);
-$stmt->execute([':id'=>$id]);
-$ot = $stmt->fetch(PDO::FETCH_ASSOC);
-if(!$ot){ die('Orden de producción no encontrada'); }
+$st = $pdo->prepare($sqlOT);
+$st->execute($folios);
+$ots = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+if (!$ots) { die('Orden(es) de producción no encontrada(s)'); }
 
-$status = (string)($ot['Status'] ?? '');
+$esConsolidado = count($ots) > 1;
+$ot0 = $ots[0];
+
+// Gobernanza (UI)
+$almSet = array_values(array_unique(array_map(fn($r)=>(string)($r['cve_almac'] ?? ''), $ots)));
+$provSet = array_values(array_unique(array_map(fn($r)=>(string)($r['ID_Proveedor'] ?? ''), $ots)));
+$almInt = (int)($ot0['cve_almac'] ?? 0);
+$idProv = (int)($ot0['ID_Proveedor'] ?? 0);
+
+$problemaGov = '';
+if ($esConsolidado && (count($almSet) !== 1 || count($provSet) !== 1)) {
+  $problemaGov = 'Consolidación no permitida: selecciona OTs de la misma Empresa y Almacén.';
+}
+
+$statusSet = array_values(array_unique(array_map(fn($r)=>(string)($r['Status'] ?? ''), $ots)));
+$status = (count($statusSet) === 1) ? (string)$statusSet[0] : 'M';
 $statusLabel = match($status){
   'P' => 'Planeada',
   'E' => 'En proceso',
   'T' => 'Terminada',
   'C' => 'Cancelada',
+  'M' => 'Mixto',
   default => ($status ?: '—')
 };
 
-/* =============================
-   COMPONENTES (BOM)
-   En tu BD: td_ordenprod.Folio_Pro = t_ordenprod.Folio_Pro
-   Cantidad requerida REAL = (td.Cantidad * OT.Cantidad)
-   ============================= */
-$componentes = [];
-$sqlComp = "
-  SELECT
-    d.Folio_Pro,
-    d.Cve_Articulo,
-    d.Cantidad,
-    d.Activo,
-    d.Referencia,
-    d.Cve_Lote
-  FROM td_ordenprod d
-  WHERE d.Folio_Pro = :folio
-    AND (d.Activo = 1 OR d.Activo IS NULL)
-  ORDER BY d.Cve_Articulo
-";
-$stc = $pdo->prepare($sqlComp);
-$stc->execute([':folio'=>(string)$ot['Folio_Pro']]);
-$componentes = $stc->fetchAll(PDO::FETCH_ASSOC) ?: [];
-$tieneBom = count($componentes) > 0;
+$otCantTotal = 0.0;
+foreach($ots as $r){ $otCantTotal += (float)($r['Cantidad'] ?? 0); }
 
-/* =============================
-   BLs de Producción por ALMACÉN
-   Reglas:
-   - c_ubicacion.AreaProduccion='S'
-   - Mostrar CodigoCSD (tu estándar BL)
-   ============================= */
-$almInt = (int)($ot['cve_almac'] ?? 0);
+$ptArts = array_values(array_unique(array_map(fn($r)=>(string)($r['Cve_Articulo'] ?? ''), $ots)));
+$ptArt = (count($ptArts) === 1) ? $ptArts[0] : 'MULTI';
 
+// BLs Producción (por almacén)
 $sqlBL = "
-SELECT
-  u.idy_ubica,
-  u.CodigoCSD,
-  u.Ubicacion
+SELECT u.idy_ubica, u.CodigoCSD, u.Ubicacion
 FROM c_ubicacion u
 WHERE u.cve_almac = :alm
   AND u.AreaProduccion = 'S'
@@ -132,63 +229,71 @@ $stb = $pdo->prepare($sqlBL);
 $stb->execute([':alm'=>$almInt]);
 $bls = $stb->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-$blDefault = (int)($ot['idy_ubica_dest'] ?? 0);
-if($blDefault <= 0 && count($bls)>0){
-  $blDefault = (int)$bls[0]['idy_ubica'];
+$blDefault = (int)($ot0['idy_ubica_dest'] ?? 0);
+if($blDefault <= 0 && count($bls)>0){ $blDefault = (int)$bls[0]['idy_ubica']; }
+
+// Consolidar componentes (BOM)
+$otCantByFolio = [];
+foreach($ots as $r){ $otCantByFolio[(string)$r['Folio_Pro']] = (float)($r['Cantidad'] ?? 0); }
+
+$sqlComp = "
+  SELECT d.Folio_Pro, d.Cve_Articulo, d.Cantidad, d.Referencia
+  FROM td_ordenprod d
+  WHERE d.Folio_Pro IN ($in)
+    AND (d.Activo = 1 OR d.Activo IS NULL)
+";
+$stc = $pdo->prepare($sqlComp);
+$stc->execute($folios);
+$raw = $stc->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$componentes = []; // art => ['Cve_Articulo','ReqTotal','Referencia']
+foreach($raw as $ln){
+  $art = (string)($ln['Cve_Articulo'] ?? '');
+  if($art==='') continue;
+  $folioLn = (string)($ln['Folio_Pro'] ?? '');
+  $factor = (float)($ln['Cantidad'] ?? 0);
+  $req = $factor * (float)($otCantByFolio[$folioLn] ?? 0);
+  if(!isset($componentes[$art])){
+    $componentes[$art] = ['Cve_Articulo'=>$art,'ReqTotal'=>0.0,'Referencia'=>(string)($ln['Referencia'] ?? '')];
+  }
+  $componentes[$art]['ReqTotal'] += $req;
 }
+ksort($componentes);
+$tieneBom = count($componentes) > 0;
 
-/* =============================
-   STOCK (2 tablas finales)
-   - ts_existenciapiezas
-   - ts_existenciatarima
-   Nota: medimos impacto real incluso si MP queda negativa.
-   ============================= */
-$idProv = (int)($ot['ID_Proveedor'] ?? 0);
-
-function sumExist(PDO $pdo, string $table, int $alm, int $prov, int $bl, string $art): float {
-  $sql = "SELECT COALESCE(SUM(existencia),0)
-          FROM {$table}
-          WHERE cve_almac=? AND ID_Proveedor=? AND idy_ubica=? AND cve_articulo=?";
+// Stock informativo (almacén completo)
+function sumExistAll(PDO $pdo, string $table, int $alm, int $prov, string|int $art): float {
+  $sql = "SELECT COALESCE(SUM(existencia),0) FROM {$table} WHERE cve_almac=? AND ID_Proveedor=? AND cve_articulo=?";
   $st = $pdo->prepare($sql);
-  $st->execute([$alm,$prov,$bl,$art]);
+  $st->execute([$alm,$prov,(string)$art]);
   return (float)$st->fetchColumn();
 }
-function sumExistAll(PDO $pdo, string $table, int $alm, int $prov, string $art): float {
-  $sql = "SELECT COALESCE(SUM(existencia),0)
-          FROM {$table}
-          WHERE cve_almac=? AND ID_Proveedor=? AND cve_articulo=?";
+function sumExist(PDO $pdo, string $table, int $alm, int $prov, int $bl, string|int $art): float {
+  $sql = "SELECT COALESCE(SUM(existencia),0) FROM {$table} WHERE cve_almac=? AND ID_Proveedor=? AND idy_ubica=? AND cve_articulo=?";
   $st = $pdo->prepare($sql);
-  $st->execute([$alm,$prov,$art]);
+  $st->execute([$alm,$prov,$bl,(string)$art]);
   return (float)$st->fetchColumn();
 }
 
-$otCant = (float)($ot['Cantidad'] ?? 0);
-$ptArt  = (string)($ot['Cve_Articulo'] ?? '');
+$stockComp = [];
+foreach($componentes as $a=>$c){
+  $stockComp[$a] = [
+    'pzas' => sumExistAll($pdo,'ts_existenciapiezas',$almInt,$idProv,$a),
+    'tar'  => sumExistAll($pdo,'ts_existenciatarima',$almInt,$idProv,$a)
+  ];
+}
 
-$ptPzasIni = 0.0;
-$ptTarIni  = 0.0;
-if($blDefault>0 && $ptArt!==''){
+$ptPzasIni = 0.0; $ptTarIni = 0.0;
+if($blDefault>0 && $ptArt!=='' && $ptArt!=='MULTI'){
   $ptPzasIni = sumExist($pdo,'ts_existenciapiezas',$almInt,$idProv,$blDefault,$ptArt);
   $ptTarIni  = sumExist($pdo,'ts_existenciatarima',$almInt,$idProv,$blDefault,$ptArt);
 }
 $ptIniTotal = $ptPzasIni + $ptTarIni;
-$ptFinTeo   = $ptIniTotal + $otCant;
+$ptFinTeo   = ($ptArt==='MULTI') ? 0.0 : ($ptIniTotal + $otCantTotal);
 
-/* Stock de componentes (total en almacén) */
-$stockComp = []; // art => [pzas, tar]
-if($tieneBom){
-  foreach($componentes as $c){
-    $a = (string)($c['Cve_Articulo'] ?? '');
-    if($a==='') continue;
-    if(!isset($stockComp[$a])){
-      $stockComp[$a] = [
-        'pzas' => sumExistAll($pdo,'ts_existenciapiezas',$almInt,$idProv,$a),
-        'tar'  => sumExistAll($pdo,'ts_existenciatarima',$almInt,$idProv,$a),
-      ];
-    }
-  }
-}
-
+$foliosSel = array_map(fn($r)=>(string)($r['Folio_Pro'] ?? ''), $ots);
+$preview = implode(', ', array_slice($foliosSel, 0, 5));
+$extra = count($foliosSel) > 5 ? (' … +' . (count($foliosSel)-5)) : '';
 ?>
 <style>
   body{ background:#f6f8fb; }
@@ -211,7 +316,7 @@ if($tieneBom){
     <div class="d-flex align-items-center justify-content-between mb-2">
       <div>
         <div class="ap-title"><i class="fa fa-play-circle me-1"></i> Iniciar Producción</div>
-        <div class="ap-sub">Arranque controlado de OT. Registra <b>Hora_Ini</b> y define <b>BL Producción</b> (sin consumo).</div>
+        <div class="ap-sub">Consolidado de MP (mínimas instrucciones BD) y arranque de OTs seleccionadas. Consumo negativo permitido.</div>
       </div>
       <div class="text-end">
         <div class="ap-label">Usuario</div>
@@ -219,31 +324,36 @@ if($tieneBom){
       </div>
     </div>
 
+    <?php if($problemaGov): ?>
+      <div class="alert alert-danger mt-3"><i class="fa fa-times-circle"></i> <?=h($problemaGov)?></div>
+    <?php endif; ?>
+
     <?php if(!$tieneBom): ?>
-      <div class="alert alert-warning mt-3">
-        <i class="fa fa-exclamation-triangle"></i>
-        No se detectaron componentes en <b>td_ordenprod</b> para el folio <b><?=h((string)$ot['Folio_Pro'])?></b>.
-        (Para demo puedes iniciar igual, pero para productivo conviene BOM siempre).
-      </div>
+      <div class="alert alert-warning mt-3"><i class="fa fa-exclamation-triangle"></i> No se detectaron componentes en <b>td_ordenprod</b> para las OT(s) seleccionadas.</div>
     <?php endif; ?>
 
     <div class="alert alert-info mt-3 mb-3" style="font-size:12px;">
-      <b>Impacto real (BD):</b> mostramos stock inicial vs proyección. Materia prima puede quedar negativa para evidenciar velocidad/impacto.
+      <b>Métricas visibles:</b> total OTs, artículos MP consolidados, movimientos BD por artículo y tiempos (total / TX). Inventario MP puede quedar negativo.
     </div>
 
-    <!-- Capa 1: Orden -->
     <div class="row g-3 mb-3">
       <div class="col-md-3">
         <div class="ap-label">Folio</div>
-        <div class="ap-value"><?=h((string)$ot['Folio_Pro'])?></div>
+        <div class="ap-value">
+          <?php if(!$esConsolidado): ?>
+            <?=h((string)$ot0['Folio_Pro'])?>
+          <?php else: ?>
+            Consolidado (<?=count($foliosSel)?> OTs): <?=h($preview . $extra)?>
+          <?php endif; ?>
+        </div>
       </div>
       <div class="col-md-3">
         <div class="ap-label">Empresa</div>
-        <div class="ap-value"><?=h((string)$ot['EmpresaNombre'])?></div>
+        <div class="ap-value"><?=h((string)$ot0['EmpresaNombre'])?></div>
       </div>
       <div class="col-md-3">
         <div class="ap-label">Almacén</div>
-        <div class="ap-value"><?=h((string)$ot['cve_almac'])?></div>
+        <div class="ap-value"><?=h((string)$ot0['cve_almac'])?></div>
       </div>
       <div class="col-md-3">
         <div class="ap-label">Status</div>
@@ -254,15 +364,21 @@ if($tieneBom){
 
       <div class="col-md-4">
         <div class="ap-label">Producto</div>
-        <div class="ap-value"><?=h((string)$ot['Cve_Articulo'])?></div>
+        <div class="ap-value">
+          <?php if($ptArt==='MULTI'): ?>
+            Múltiple (<?=count($ptArts)?>)
+          <?php else: ?>
+            <?=h($ptArt)?>
+          <?php endif; ?>
+        </div>
       </div>
       <div class="col-md-2">
-        <div class="ap-label">Cantidad</div>
-        <div class="ap-value"><?=f2($otCant)?></div>
+        <div class="ap-label">Cantidad (total)</div>
+        <div class="ap-value"><?=f2($otCantTotal)?></div>
       </div>
       <div class="col-md-3">
-        <div class="ap-label">Hora Ini</div>
-        <div class="ap-value"><?=h((string)($ot['Hora_Ini'] ?? '—'))?></div>
+        <div class="ap-label">Hora Ini (referencia)</div>
+        <div class="ap-value"><?=h((string)($ot0['Hora_Ini'] ?? '—'))?></div>
       </div>
       <div class="col-md-3">
         <div class="ap-label">Fecha/Hora (UI)</div>
@@ -270,11 +386,10 @@ if($tieneBom){
       </div>
     </div>
 
-    <!-- BL Producción -->
     <div class="row g-3 mb-3">
       <div class="col-md-6">
-        <label class="form-label mb-0">BL de Producción (por almacén)</label>
-        <select id="selBL" class="form-select form-select-sm" <?=($status!=='P')?'disabled':''?>>
+        <label class="form-label mb-0">BL Materia Prima (única)</label>
+        <select id="selBLMP" class="form-select form-select-sm" <?=($status!=='P' || $problemaGov)?'disabled':''?>>
           <?php if(count($bls)===0): ?>
             <option value="0">No hay BLs con AreaProduccion='S' para este almacén</option>
           <?php else: ?>
@@ -283,32 +398,51 @@ if($tieneBom){
               $csd = trim((string)($b['CodigoCSD'] ?? ''));
               $txt = $csd !== '' ? $csd : ('UBI#'.$idb);
             ?>
-              <option value="<?=h((string)$idb)?>" <?= $idb===$blDefault?'selected':''?>>
-                <?=h($txt)?>
-              </option>
+              <option value="<?=h((string)$idb)?>" <?= $idb===$blDefault?'selected':''?>><?=h($txt)?></option>
             <?php endforeach; ?>
           <?php endif; ?>
         </select>
-        <div class="ap-label mt-1">Fuente: <b>c_ubicacion</b> (AreaProduccion='S') mostrando <b>CodigoCSD</b>.</div>
+        <div class="ap-label mt-1">MP debe consumirse desde una sola BL. Fuente: <b>c_ubicacion</b> (AreaProduccion='S').</div>
       </div>
 
       <div class="col-md-6">
-        <div class="ap-label">Producto Terminado — Stock inicial en BL seleccionado</div>
-        <div class="ap-value">
-          Total: <?=f2($ptIniTotal)?> (Pzas: <?=f2($ptPzasIni)?> | Tarima: <?=f2($ptTarIni)?>)
-          &nbsp; → Final teórico: <b><?=f2($ptFinTeo)?></b>
+        <div class="d-flex align-items-center justify-content-between">
+          <label class="form-label mb-0">BL Producto Terminado (PT)</label>
+          <div class="form-check" style="font-size:12px;">
+            <input class="form-check-input" type="checkbox" id="chkPTSame" checked>
+            <label class="form-check-label" for="chkPTSame">PT en la misma BL</label>
+          </div>
+        </div>
+        <select id="selBLPT" class="form-select form-select-sm" disabled>
+          <?php if(count($bls)===0): ?>
+            <option value="0">No hay BLs disponibles</option>
+          <?php else: ?>
+            <?php foreach($bls as $b):
+              $idb = (int)$b['idy_ubica'];
+              $csd = trim((string)($b['CodigoCSD'] ?? ''));
+              $txt = $csd !== '' ? $csd : ('UBI#'.$idb);
+            ?>
+              <option value="<?=h((string)$idb)?>" <?= $idb===$blDefault?'selected':''?>><?=h($txt)?></option>
+            <?php endforeach; ?>
+          <?php endif; ?>
+        </select>
+
+        <div class="ap-label mt-1">
+          <?php if($ptArt==='MULTI'): ?>
+            PT: múltiple producto, stock no consolidable en una sola línea.
+          <?php else: ?>
+            PT — Stock inicial en BL default: Total <?=f2($ptIniTotal)?> (Pzas <?=f2($ptPzasIni)?> | Tar <?=f2($ptTarIni)?>) → Final teórico <b><?=f2($ptFinTeo)?></b>
+          <?php endif; ?>
         </div>
       </div>
     </div>
 
-    <!-- Capa 2: Componentes -->
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle">
         <thead>
           <tr>
             <th style="width:40px;">#</th>
             <th>Componente</th>
-            <th class="text-end">Factor BOM</th>
             <th class="text-end">Req Total</th>
             <th class="text-end">Stock Pzas</th>
             <th class="text-end">Proj Pzas</th>
@@ -318,25 +452,22 @@ if($tieneBom){
         </thead>
         <tbody>
           <?php if(!$tieneBom): ?>
-            <tr><td colspan="8" class="text-center text-muted">Sin componentes.</td></tr>
+            <tr><td colspan="7" class="text-center text-muted">Sin componentes.</td></tr>
           <?php else: ?>
-            <?php $i=1; foreach($componentes as $c):
-              $a = (string)($c['Cve_Articulo'] ?? '');
-              $factor = (float)($c['Cantidad'] ?? 0);
-              $req = $factor * $otCant; // requerido real
+            <?php $i=1; foreach($componentes as $a=>$c):
+              $req = (float)($c['ReqTotal'] ?? 0);
               $sp = (float)($stockComp[$a]['pzas'] ?? 0);
-              $st = (float)($stockComp[$a]['tar'] ?? 0);
+              $stt = (float)($stockComp[$a]['tar'] ?? 0);
               $projP = $sp - $req;
-              $projT = $st - $req;
+              $projT = $stt - $req;
             ?>
               <tr>
                 <td><?= $i++ ?></td>
-                <td class="fw-semibold"><?=h($a)?></td>
-                <td class="text-end"><?=f2($factor)?></td>
+                <td class="fw-semibold"><?=h((string)$a)?></td>
                 <td class="text-end"><?=f2($req)?></td>
                 <td class="text-end"><?=f2($sp)?></td>
                 <td class="text-end <?=($projP<0?'text-danger fw-bold':'text-success fw-bold')?>"><?=f2($projP)?></td>
-                <td class="text-end"><?=f2($st)?></td>
+                <td class="text-end"><?=f2($stt)?></td>
                 <td class="text-end <?=($projT<0?'text-danger fw-bold':'text-success fw-bold')?>"><?=f2($projT)?></td>
               </tr>
             <?php endforeach; ?>
@@ -345,17 +476,13 @@ if($tieneBom){
       </table>
     </div>
 
-    <div class="ap-label mt-1">
-      * Proyección = <b>Stock - Requerido Total</b>. Negativos permitidos (impacto real en BD).
-    </div>
+    <div class="ap-label mt-1">* Proyección = <b>Stock - Requerido Total</b>. Negativos permitidos.</div>
+
+    <div id="execMetrics" class="mt-3" style="display:none;"></div>
 
     <div class="d-flex justify-content-end gap-2 mt-3">
-      <a href="monitor_produccion.php" class="btn btn-outline-secondary btn-sm">
-        <i class="fa fa-arrow-left"></i> Regresar
-      </a>
-
-      <button id="btnIniciar" class="btn btn-primary btn-sm"
-        <?=($status!=='P' || $blDefault<=0 || count($bls)===0)?'disabled':''?>>
+      <a href="monitor_produccion.php" class="btn btn-outline-secondary btn-sm"><i class="fa fa-arrow-left"></i> Regresar</a>
+      <button id="btnIniciar" class="btn btn-primary btn-sm" <?=($status!=='P' || $blDefault<=0 || count($bls)===0 || $problemaGov)?'disabled':''?>>
         <i class="fa fa-play"></i> Confirmar e Iniciar
       </button>
     </div>
@@ -366,40 +493,66 @@ if($tieneBom){
 <script>
 (function(){
   const btn = document.getElementById('btnIniciar');
-  const sel = document.getElementById('selBL');
+  const selMP = document.getElementById('selBLMP');
+  const selPT = document.getElementById('selBLPT');
+  const chkSame = document.getElementById('chkPTSame');
+  const metricsBox = document.getElementById('execMetrics');
+  const folios = <?= json_encode(implode(',', $foliosSel), JSON_UNESCAPED_UNICODE) ?>;
+
+  if(chkSame){
+    chkSame.addEventListener('change', function(){
+      if(!selPT) return;
+      selPT.disabled = this.checked;
+    });
+  }
   if(!btn) return;
 
   btn.addEventListener('click', function(){
-    const id  = <?= (int)$ot['id'] ?>;
-    const bl  = sel ? (sel.value || '0') : '0';
+    const blMP = selMP ? (selMP.value || '0') : '0';
+    const blPT = (chkSame && chkSame.checked) ? blMP : (selPT ? (selPT.value || '0') : '0');
 
-    if(!id || id <= 0){
-      alert('OT inválida.');
-      return;
-    }
-    if(!bl || bl === '0'){
-      alert('Selecciona un BL de Producción válido.');
-      return;
-    }
+    if(!folios){ alert('Folios inválidos.'); return; }
+    if(!blMP || blMP === '0'){ alert('Selecciona BL MP válida.'); return; }
+    if(!blPT || blPT === '0'){ alert('Selecciona BL PT válida.'); return; }
 
     btn.disabled = true;
-    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Iniciando...';
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Ejecutando...';
 
-    fetch('../api/iniciar_produccion.php', {
-      method: 'POST',
-      headers: {'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},
-      body: 'id=' + encodeURIComponent(id) + '&idy_ubica_dest=' + encodeURIComponent(bl)
+    const body = new URLSearchParams();
+    body.set('action','exec');
+    body.set('folios', folios);
+    body.set('bl_mp', blMP);
+    body.set('bl_pt', blPT);
+
+    fetch('iniciar_produccion.php', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},
+      body: body.toString()
     })
-    .then(r => r.json())
-    .then(resp => {
+    .then(async r => {
+      const txt = await r.text();
+      try { return JSON.parse(txt); }
+      catch(e){ throw new Error('Respuesta no JSON: ' + txt.substring(0,120)); }
+    })
+    .then(resp=>{
       if(resp && resp.ok){
-        window.location.href = 'monitor_produccion.php';
-      }else{
+        const d = resp.data || {};
+        metricsBox.style.display = 'block';
+        metricsBox.innerHTML = `
+          <div class="alert alert-success" style="font-size:12px;">
+            <b>Producción ejecutada.</b><br>
+            OTs: <b>${d.ots ?? 0}</b> | Artículos MP: <b>${d.mp_articulos ?? 0}</b> | Movimientos MP: <b>${d.movimientos_mp ?? 0}</b><br>
+            BL MP: <b>${d.bl_mp ?? ''}</b> | BL PT: <b>${d.bl_pt ?? ''}</b><br>
+            Tiempo total: <b>${d.ms_total ?? 0} ms</b> | Tiempo TX: <b>${d.ms_tx ?? 0} ms</b>
+          </div>
+        `;
+        btn.innerHTML = '<i class="fa fa-check"></i> Ejecutado';
+      } else {
         alert((resp && resp.error) ? resp.error : 'Error al iniciar producción');
         location.reload();
       }
     })
-    .catch(err => {
+    .catch(err=>{
       alert('Error de comunicación: ' + (err && err.message ? err.message : err));
       location.reload();
     });

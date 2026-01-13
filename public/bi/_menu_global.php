@@ -497,10 +497,9 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Administración Comercial',      'url' => 'sfa/destinatarios_config.php',       'icono' => 'fa-tags'],
                 ['titulo' => 'Lista de Precios',              'url' => 'sfa/lista_precios.php',              'icono' => 'fa-tags'],
                 ['titulo' => 'Lista de Descuentos',           'url' => 'sfa/lista_descuentos.php',           'icono' => 'fa-percent'],
-                ['titulo' => 'Promociones',                   'url' => 'promociones/promociones.php',        'icono' => 'fa-gift'],
-                ['titulo' => 'Simulador Promociones',         'url' => 'promociones/reglas_form.php',        'icono' => 'fa-gift'],
-                ['titulo' => 'Grupo Promociones'   ,          'url' => 'sfa/grupo_promociones.php', 'icono' => 'fa-layer-group'],
-                ['titulo' => 'Asignación de Activos', 'url' => 'sfa/activos_control.php', 'icono' => 'fa-tags'],
+                ['titulo' => 'Promociones',                   'url' => 'sfa/promociones/promociones.php',        'icono' => 'fa-gift'],
+                ['titulo' => 'Simulador Promociones',         'url' => 'sfa/promociones/simulador.php',        'icono' => 'fa-gift'],
+                 ['titulo' => 'Asignación de Activos', 'url' => 'sfa/activos_control.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Activos', 'url' => 'sfa/activos.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Tipos de Activos', 'url' => 'sfa/activo_tipos.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Propietario Activos', 'url' => 'sfa/activos_propiedad.php', 'icono' => 'fa-percent'],
@@ -523,8 +522,10 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // ADMINISTRACIÓN DE ALMACEN
             'Administración Almacen' => [
-                ['titulo' => 'Config. de Almacén', 'url' => 'config_almacen/configuracion_almacen.php', 'icono' => 'fa-gear'],
-                ['titulo' => 'Pallets y Contenedores', 'url' => 'config_almacen/license_plate.php', 'icono' => 'fa-right-left'],
+                ['titulo' => 'Config. de Almacén',              'url' => 'config_almacen/configuracion_almacen.php',      'icono' => 'fa-gear'],
+                ['titulo' => 'Pallets y Contenedores',          'url' => 'config_almacen/license_plate.php',              'icono' => 'fa-right-left'],
+                ['titulo' => 'Transacciones License Plate',     'url' => 'config_almacen/lp_pr_transaction.php',          'icono' => 'fa-right-left'],
+
             ],
 
 
@@ -545,15 +546,15 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // PUTAWAY
             'PutAway' => [
-                ['titulo' => 'RTM (Ready To Move)', 'url' => 'putaway/rtm_general.php', 'icono' => 'fa-right-left'],
-                ['titulo' => 'PutAway (Acomodo)', 'url' => 'putaway/putaway_acomodo.php', 'icono' => 'fa-right-left'],
-                ['titulo' => 'Traslado', 'url' => 'putaway/traslado.php', 'icono' => 'fa-box-archive'],
-                ['titulo' => 'Traslado entre Almacenes', 'url' => 'putaway/traslado_entre_almacenes.php', 'icono' => 'fa-box-archive'],
+                ['titulo' => 'RTM (Ready To Move)',          'url' => 'ingresos/rtm_pendiente_acomodo.php',      'icono' => 'fa-right-left'],
+                ['titulo' => 'PutAway (Acomodo)',            'url' => 'putaway/putaway_acomodo.php',             'icono' => 'fa-right-left'],
+                ['titulo' => 'Traslado',                     'url' => 'putaway/traslado.php',                    'icono' => 'fa-box-archive'],
+                ['titulo' => 'Traslado entre Almacenes',     'url' => 'putaway/traslado_entre_almacenes.php',    'icono' => 'fa-box-archive'],
             ],
 
             // PICKING
             'Picking' => [
-                ['titulo' => 'Registro de Pedidos', 'url' => 'pedidos/pedido.php', 'icono' => 'fa-right-left'],
+                ['titulo' => 'Registro de Pedidos', 'url' => 'pedidos/registro_pedidos.php', 'icono' => 'fa-right-left'],
                 ['titulo' => 'Administración de Pedidos', 'url' => 'pedidos/picking_admin.php', 'icono' => 'fa-right-left'],
                 ['titulo' => 'Secuencia de Surtido', 'url' => 'pedidos/secuencia_surtido.php', 'icono' => 'fa-box-archive'],
 

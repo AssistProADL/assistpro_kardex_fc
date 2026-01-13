@@ -65,18 +65,19 @@ include __DIR__ . '/../bi/_menu_global.php';
 
       <hr class="my-2">
 
+      <!-- ✅ CAMBIO DE ORDEN: PRIMERO OC, LUEGO PROVEEDOR (AUTO) -->
       <div class="row g-2">
-        <div class="col-md-4">
-          <label class="form-label mb-0">Proveedor</label>
-          <select id="proveedor" class="form-select form-select-sm">
-            <option value="">Seleccione</option>
-          </select>
-        </div>
-
-        <div class="col-md-4">
+        <div class="col-md-6">
           <label class="form-label mb-0">Número de Orden de Compra</label>
           <select id="oc_folio" class="form-select form-select-sm">
             <option value="">Seleccione una OC</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label mb-0">Proveedor (auto por OC)</label>
+          <select id="proveedor" class="form-select form-select-sm" disabled>
+            <option value="">Seleccione</option>
           </select>
         </div>
 
@@ -85,17 +86,17 @@ include __DIR__ . '/../bi/_menu_global.php';
           <input id="folio_rl" class="form-control form-control-sm" placeholder="">
         </div>
 
-        <div class="col-md-6">
+        <div class="col-md-4">
           <label class="form-label mb-0">Folio Recepción Cross Docking</label>
           <input id="folio_cd" class="form-control form-control-sm" placeholder="">
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label mb-0">Factura / Remisión</label>
           <input id="factura" class="form-control form-control-sm" placeholder="">
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label mb-0">Proyecto</label>
           <input id="proyecto" class="form-control form-control-sm" placeholder="Seleccione">
         </div>
@@ -104,9 +105,7 @@ include __DIR__ . '/../bi/_menu_global.php';
       <hr class="my-3">
 
       <div class="d-flex justify-content-end mb-2">
-        <button id="btnAdd" class="btn btn-secondary btn-sm">
-          + Agregar Contenedor o Pallet
-        </button>
+        <button id="btnAdd" class="btn btn-secondary btn-sm">+ Agregar Contenedor o Pallet</button>
       </div>
 
       <div class="table-responsive">
@@ -144,12 +143,36 @@ include __DIR__ . '/../bi/_menu_global.php';
             <td><input id="lp_contenedor" class="form-control form-control-sm" value="" /></td>
             <td><input id="pallet" class="form-control form-control-sm" value="Pallet" /></td>
             <td><input id="lp_pallet" class="form-control form-control-sm" value="" /></td>
-            <td class="text-center">
-              <button id="btnRecibir" class="btn btn-primary btn-sm">Recibir</button>
-            </td>
+            <td class="text-center"><button id="btnRecibir" class="btn btn-primary btn-sm">Recibir</button></td>
           </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- GRID INFERIOR: ESPERADOS OC -->
+      <div id="wrapOCDetalle" style="display:none;">
+        <hr class="my-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="fw-semibold">Productos esperados por la Orden de Compra</div>
+          <div style="font-size:9px;opacity:.75;" id="lblOCInfo"></div>
+        </div>
+        <div class="table-responsive" style="max-height:240px; overflow:auto;">
+          <table class="table table-sm table-bordered" id="tblOCDetalle" style="font-size:10px;">
+            <thead class="table-light" style="position:sticky;top:0;z-index:2;">
+            <tr>
+              <th>ID Det</th>
+              <th>Artículo</th>
+              <th>Lote/Serie</th>
+              <th>Caducidad</th>
+              <th class="text-end">Cantidad</th>
+              <th class="text-end">Ingresado</th>
+              <th>Num Orden</th>
+              <th>Activo</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
 
       <hr class="my-3">
@@ -187,125 +210,321 @@ include __DIR__ . '/../bi/_menu_global.php';
 </div>
 
 <script>
-// ✅ RUTAS REALES (según tu estructura /public/api/recepcion/*)
-const API = '../api/recepcion/recepcion_api.php';
-const API_EMPRESAS = '../api/empresas_api.php';
+// ============================
+// ✅ APIS
+// ============================
+const API_EMPRESAS   = '../api/empresas_api.php';
+const API_FILTROS    = '../api/filtros_assistpro.php'; // ✅ aquí vive tubicacionesretencion -> zonas_recep
+const API_OCS        = '../api/recepcion/recepcion_oc_api.php';
+const API_OC_DETALLE = '../api/recepcion/recepcion_oc_detalle_api.php';
+const API_RECEPCION  = '../api/recepcion/recepcion_api.php'; // BL destino (solo RL/CD)
 
 function qs(id){ return document.getElementById(id); }
 function val(id){ return (qs(id).value||'').trim(); }
 
-async function apiGet(action, params={}){
-  const u = new URL(API, window.location.href);
-  u.searchParams.set('action', action);
-  Object.keys(params).forEach(k=>u.searchParams.set(k, params[k]));
-  const r = await fetch(u.toString());
-  return await r.json();
-}
-async function apiPost(action, payload){
-  const r = await fetch(API+'?action='+encodeURIComponent(action), {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(payload)
-  });
-  return await r.json();
-}
-
-function fillSelect(sel, rows, map){
-  sel.innerHTML = '';
-  if(map?.placeholder){
-    const o=document.createElement('option');
-    o.value=map.placeholder.value; o.textContent=map.placeholder.text;
-    sel.appendChild(o);
-  }
-  (rows||[]).forEach(x=>{
-    const o=document.createElement('option');
-    o.value = (x[map.value] ?? '');
-    o.textContent = (x[map.text] ?? '');
-    sel.appendChild(o);
-  });
-}
-
-async function loadEmpresas(){
-  // empresas_api.php debe responder JSON. Si responde HTML (404/login) te dará "token <"
-  const u = new URL(API_EMPRESAS, window.location.href);
-  u.searchParams.set('action','list');
-  const r = await fetch(u.toString());
-  const j = await r.json();
-  if(!j.ok) return alert(j.error||'Error cargando empresas');
-  fillSelect(qs('empresa'), j.data, {value:'id', text:'nombre', placeholder:{value:'',text:'Seleccione'}});
-}
-
-async function loadAlmacenes(){
-  const j = await apiGet('almacenes');
-  if(!j.ok) return alert(j.error||'Error');
-  fillSelect(qs('almacen'), j.data, {value:'id', text:'nombre', placeholder:{value:'',text:'[Seleccione un almacén]'}});
-  if(qs('almacen').options.length>1){
-    qs('almacen').selectedIndex = 1;
-    await onAlmacenChange();
-  }
-}
-
-async function loadProveedores(){
-  const j = await apiGet('proveedores');
-  if(!j.ok) return;
-  fillSelect(qs('proveedor'), j.data, {value:'id', text:'nombre', placeholder:{value:'',text:'Seleccione'}});
+async function fetchJson(url, opt){
+  const r = await fetch(url, opt || {cache:'no-store'});
+  const t = await r.text();
+  try { return JSON.parse(t); }
+  catch(e){ return { ok:0, error:'Respuesta no JSON', detail:t.slice(0,500) }; }
 }
 
 function getTipo(){
   return document.querySelector('input[name="tipo"]:checked')?.value || 'OC';
 }
 
-async function loadZonas(){
-  const alm = val('almacen');
-  if(!alm){
-    fillSelect(qs('zona_recepcion'), [], {value:'zona',text:'zona', placeholder:{value:'',text:'Seleccione una Zona de Recepción'}});
-    fillSelect(qs('zona_destino'), [], {value:'zona',text:'zona', placeholder:{value:'',text:'Seleccione Zona destino'}});
-    return;
-  }
-  const j = await apiGet('zonas', {almacen: alm});
-  if(!j.ok) return alert(j.error||'Error');
-  fillSelect(qs('zona_recepcion'), j.data, {value:'zona', text:'zona', placeholder:{value:'',text:'Seleccione una Zona de Recepción'}});
-  fillSelect(qs('zona_destino'), j.data, {value:'zona', text:'zona', placeholder:{value:'',text:'Seleccione Zona destino'}});
+function fillSelect(sel, rows, cfg){
+  sel.innerHTML = '';
+  const op0 = document.createElement('option');
+  op0.value = cfg.placeholder?.value ?? '';
+  op0.textContent = cfg.placeholder?.text ?? 'Seleccione';
+  sel.appendChild(op0);
+
+  (rows||[]).forEach(r=>{
+    const o = document.createElement('option');
+    o.value = (r[cfg.value] ?? '');
+    o.textContent = (r[cfg.text] ?? '');
+    if(cfg.dataset){
+      Object.keys(cfg.dataset).forEach(k=>{
+        o.dataset[k] = (r[cfg.dataset[k]] ?? '');
+      });
+    }
+    sel.appendChild(o);
+  });
 }
 
-async function loadBL(){
-  const alm = val('almacen');
-  const zona = val('zona_destino');
-  if(!alm || !zona){
+// ============================
+// Cache
+// ============================
+let CACHE_FILTROS = null;
+let CACHE_OCS = [];
+
+async function loadFiltros(){
+  if(CACHE_FILTROS) return CACHE_FILTROS;
+  CACHE_FILTROS = await fetchJson(API_FILTROS);
+  return CACHE_FILTROS;
+}
+
+// ============================
+// Regla negocio: OC NO usa destino/BL
+// ============================
+function applyTipoUI(){
+  const tipo = getTipo();
+  const isOC = (tipo === 'OC');
+
+  qs('oc_folio').disabled = !isOC;
+
+  qs('zona_destino').disabled = isOC;
+  qs('bl_destino').disabled   = isOC;
+
+  if(isOC){
+    qs('zona_destino').value = '';
+    qs('bl_destino').value = '';
+  }else{
+    qs('wrapOCDetalle').style.display = 'none';
+    qs('tblOCDetalle').querySelector('tbody').innerHTML = '';
+    qs('lblOCInfo').textContent = '';
+    qs('oc_folio').value = '';
+    // proveedor queda “auto”, pero para RL/CD no aplica; lo limpiamos
+    fillSelect(qs('proveedor'), [], {value:'id', text:'text', placeholder:{value:'',text:'N/A'}});
+  }
+}
+
+// ============================
+// Empresas
+// ============================
+async function loadEmpresas(){
+  const j = await fetchJson(API_EMPRESAS);
+  if(!j || !j.ok){
+    alert((j && (j.error||j.msg)) ? (j.error||j.msg) : 'Error cargando empresas');
+    return;
+  }
+  fillSelect(qs('empresa'), (j.data||[]), {
+    value:'cve_cia',
+    text:'des_cia',
+    placeholder:{value:'',text:'Seleccione'}
+  });
+}
+
+// ============================
+// Almacenes desde filtros_assistpro
+// ============================
+async function loadAlmacenes(){
+  const f = await loadFiltros();
+  const almacenes = (f.almacenes || []).map(a=>({
+    cve_almac: a.cve_almac,
+    clave_almacen: a.clave_almacen,
+    des_almac: a.des_almac
+  }));
+
+  fillSelect(qs('almacen'), almacenes, {
+    value:'clave_almacen', // ✅ clave usada por OC API (WH8, A42, etc.)
+    text:'des_almac',
+    dataset:{ cve:'cve_almac' }, // ✅ cve para filtrar zonas
+    placeholder:{value:'',text:'[Seleccione un almacén]'}
+  });
+
+  if(qs('almacen').options.length > 1){
+    qs('almacen').selectedIndex = 1;
+    await onAlmacenChange();
+  }
+}
+
+function getCveAlmacSeleccionado(){
+  const sel = qs('almacen');
+  const opt = sel.options[sel.selectedIndex];
+  return opt?.dataset?.cve ? String(opt.dataset.cve) : '';
+}
+function getClaveAlmacenSeleccionado(){
+  return val('almacen');
+}
+
+// ============================
+// ✅ ZONA RECEPCIÓN = tubicacionesretencion
+// filtros_assistpro.php -> data['zonas_recep']
+// campos: cve_almacp as cve_almac, cve_ubicacion, desc_ubicacion as descripcion
+// ============================
+async function loadZonasPorAlmacen(){
+  const cve = getCveAlmacSeleccionado();
+  const f = await loadFiltros();
+
+  // ✅ ESTA ES LA VALIDACIÓN QUE PEDISTE:
+  // La vista está usando filtros_assistpro.php y toma ZONA RECEPCIÓN de tubicacionesretencion vía llave zonas_recep.
+  const zonasRec = (f.zonas_recep || []).filter(z => String(z.cve_almac) === String(cve));
+
+  fillSelect(qs('zona_recepcion'), zonasRec, {
+    value:'cve_ubicacion',
+    text:'descripcion',
+    placeholder:{value:'',text:'Seleccione una Zona de Recepción'}
+  });
+
+  // Zonas destino (solo RL/CD) si existen en filtros
+  const zonasAlmBase = (f.zonas_almacenaje || []);
+  const zonasDest = zonasAlmBase.filter(z => String(z.cve_almac) === String(cve));
+
+  fillSelect(qs('zona_destino'), zonasDest, {
+    value:'cve_ubicacion',
+    text:'descripcion',
+    placeholder:{value:'',text:'Seleccione Zona destino'}
+  });
+
+  // reset BL
+  fillSelect(qs('bl_destino'), [], {value:'bl', text:'bl', placeholder:{value:'',text:'Seleccione BL destino'}});
+}
+
+// ============================
+// ✅ OCs: primero se elige OC, proveedor auto por OC
+// OC label: "NUM_OC · PROVEEDOR" (+ factura opcional)
+// ============================
+async function loadOCsPorAlmacen(){
+  const tipo = getTipo();
+  if(tipo !== 'OC'){
+    CACHE_OCS = [];
+    fillSelect(qs('oc_folio'), [], {value:'id_oc', text:'label', placeholder:{value:'',text:'N/A'}});
+    fillSelect(qs('proveedor'), [], {value:'id', text:'text', placeholder:{value:'',text:'N/A'}});
+    return;
+  }
+
+  const almClave = getClaveAlmacenSeleccionado();
+  if(!almClave){
+    CACHE_OCS = [];
+    fillSelect(qs('oc_folio'), [], {value:'id_oc', text:'label', placeholder:{value:'',text:'Seleccione una OC'}});
+    fillSelect(qs('proveedor'), [], {value:'id', text:'text', placeholder:{value:'',text:'Seleccione'}});
+    return;
+  }
+
+  const u = new URL(API_OCS, window.location.href);
+  u.searchParams.set('almacen', almClave);
+
+  const j = await fetchJson(u.toString());
+  if(!j.ok){
+    console.warn('Error OCs', j);
+    CACHE_OCS = [];
+    fillSelect(qs('oc_folio'), [], {value:'id_oc', text:'label', placeholder:{value:'',text:'Seleccione una OC'}});
+    fillSelect(qs('proveedor'), [], {value:'id', text:'text', placeholder:{value:'',text:'Seleccione'}});
+    return;
+  }
+
+  CACHE_OCS = j.data || [];
+
+  // OCs con dataset para autopoblar proveedor
+  const rows = CACHE_OCS.map(x=>({
+    id_oc: String(x.id_oc),
+    label: `${x.num_oc ?? x.id_oc} · ${x.proveedor ?? ''}${x.factura ? (' · ' + x.factura) : ''}`.trim(),
+    id_proveedor: String(x.id_proveedor ?? ''),
+    proveedor: String(x.proveedor ?? '')
+  }));
+
+  fillSelect(qs('oc_folio'), rows, {
+    value:'id_oc',
+    text:'label',
+    dataset:{ prov_id:'id_proveedor', prov_nom:'proveedor' },
+    placeholder:{value:'',text:'Seleccione una OC'}
+  });
+
+  // proveedor en blanco hasta que elijan OC
+  fillSelect(qs('proveedor'), [], {value:'id', text:'text', placeholder:{value:'',text:'Seleccione una OC primero'}});
+}
+
+// Autollenado proveedor al elegir OC
+function syncProveedorFromOC(){
+  const sel = qs('oc_folio');
+  const opt = sel.options[sel.selectedIndex];
+  const pid = opt?.dataset?.prov_id ? String(opt.dataset.prov_id) : '';
+  const pnom = opt?.dataset?.prov_nom ? String(opt.dataset.prov_nom) : '';
+
+  if(!pid && !pnom){
+    fillSelect(qs('proveedor'), [], {value:'id', text:'text', placeholder:{value:'',text:'Seleccione una OC primero'}});
+    return;
+  }
+
+  fillSelect(qs('proveedor'), [{id: pid, text: pnom}], {
+    value:'id',
+    text:'text',
+    placeholder:{value:'',text:'Proveedor'}
+  });
+  qs('proveedor').value = pid || '';
+}
+
+// ============================
+// Detalle OC
+// ============================
+async function loadOCDetalleGrid(){
+  const tipo = getTipo();
+  if(tipo !== 'OC') return;
+
+  const id_oc = val('oc_folio');
+  if(!id_oc){
+    qs('wrapOCDetalle').style.display = 'none';
+    qs('tblOCDetalle').querySelector('tbody').innerHTML = '';
+    qs('lblOCInfo').textContent = '';
+    return;
+  }
+
+  const u = new URL(API_OC_DETALLE, window.location.href);
+  u.searchParams.set('id_oc', id_oc);
+
+  const j = await fetchJson(u.toString());
+  if(!j.ok){
+    alert(j.error || 'Error cargando detalle OC');
+    return;
+  }
+
+  const tb = qs('tblOCDetalle').querySelector('tbody');
+  tb.innerHTML = '';
+
+  (j.data || []).forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.id_det ?? ''}</td>
+      <td>${r.cve_articulo ?? ''}</td>
+      <td>${r.cve_lote ?? ''}</td>
+      <td>${r.caducidad ?? ''}</td>
+      <td class="text-end">${r.cantidad ?? 0}</td>
+      <td class="text-end">${r.ingresado ?? 0}</td>
+      <td>${r.num_orden ?? ''}</td>
+      <td>${r.activo ?? ''}</td>
+    `;
+    tb.appendChild(tr);
+  });
+
+  qs('lblOCInfo').textContent = `OC ID: ${id_oc} · Líneas: ${(j.total ?? (j.data||[]).length)}`;
+  qs('wrapOCDetalle').style.display = 'block';
+}
+
+// ============================
+// BL destino (solo RL/CD)
+// ============================
+async function loadBLDestino(){
+  const tipo = getTipo();
+  if(tipo === 'OC') return;
+
+  const almClave = getClaveAlmacenSeleccionado();
+  const zonaDestino = val('zona_destino');
+
+  if(!almClave || !zonaDestino){
     fillSelect(qs('bl_destino'), [], {value:'bl', text:'bl', placeholder:{value:'',text:'Seleccione BL destino'}});
     return;
   }
-  const j = await apiGet('bl', {almacen: alm, zona: zona});
-  if(!j.ok) return alert(j.error||'Error');
-  fillSelect(qs('bl_destino'), j.data, {value:'bl', text:'bl', placeholder:{value:'',text:'Seleccione BL destino'}});
-}
 
-async function loadOCs(){
-  const tipo = getTipo();
-  const alm = val('almacen');
-  const prov = val('proveedor');
-  qs('oc_folio').disabled = (tipo!=='OC');
+  const u = new URL(API_RECEPCION, window.location.href);
+  u.searchParams.set('action','bl_destino');
+  u.searchParams.set('almacen', almClave);
+  u.searchParams.set('zona', zonaDestino);
 
-  if(tipo!=='OC'){
-    fillSelect(qs('oc_folio'), [], {value:'folio',text:'folio', placeholder:{value:'',text:'N/A'}});
+  const j = await fetchJson(u.toString());
+  if(!j.ok){
+    alert(j.error || 'Error cargando BL destino');
     return;
   }
-  const j = await apiGet('ocs', {almacen: alm, proveedor: prov});
-  if(!j.ok) return alert(j.error||'Error');
-  fillSelect(qs('oc_folio'), j.data, {value:'folio', text:'folio', placeholder:{value:'',text:'Seleccione una OC'}});
+  fillSelect(qs('bl_destino'), (j.data||[]), {value:'bl', text:'bl', placeholder:{value:'',text:'Seleccione BL destino'}});
 }
 
-async function onOCChange(){
-  const folio = val('oc_folio');
-  if(!folio) return;
-  const j = await apiGet('oc_detalle', {folio});
-  if(!j.ok) return alert(j.error||'Error');
-  // si tu API devuelve proveedor, se puede setear aquí (opcional)
-}
-
+// ============================
+// Operación: recibir y guardar (sin cambio)
+/// ===========================
 function addLineaFromInputs(){
   const tb = qs('tblRecibido').querySelector('tbody');
-
   const tr = document.createElement('tr');
   const now = new Date().toISOString().slice(0,19).replace('T',' ');
   tr.innerHTML = `
@@ -331,14 +550,23 @@ async function onGuardar(){
   const tb = qs('tblRecibido').querySelector('tbody');
   if(!tb.children.length){ alert('No hay líneas recibidas'); return; }
 
+  const tipo = getTipo();
+
+  // proveedor_id viene del select (autollenado) o del dataset OC si hiciera falta
+  let proveedor_id = val('proveedor');
+  if(!proveedor_id){
+    const opt = qs('oc_folio').options[qs('oc_folio').selectedIndex];
+    proveedor_id = opt?.dataset?.prov_id ? String(opt.dataset.prov_id) : '';
+  }
+
   const payload = {
-    tipo: getTipo(),
+    tipo,
     empresa: val('empresa'),
-    almacen: val('almacen'),
+    almacen: getClaveAlmacenSeleccionado(),
     zona_recepcion: val('zona_recepcion'),
-    zona_destino: val('zona_destino'),
-    bl_destino: val('bl_destino'),
-    proveedor: val('proveedor'),
+    zona_destino: (tipo==='OC' ? '' : val('zona_destino')),
+    bl_destino:   (tipo==='OC' ? '' : val('bl_destino')),
+    proveedor: proveedor_id,
     oc_folio: val('oc_folio'),
     folio_rl: val('folio_rl'),
     folio_cd: val('folio_cd'),
@@ -361,27 +589,58 @@ async function onGuardar(){
     });
   });
 
-  const j = await apiPost('guardar_recepcion', payload);
-  if(!j.ok){ alert((j.error||'Error') + (j.detail?(' | '+j.detail):'')); return; }
+  const u = new URL(API_RECEPCION, window.location.href);
+  u.searchParams.set('action','guardar_recepcion');
+
+  const j = await fetchJson(u.toString(), {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+
+  if(!j.ok){
+    alert((j.error||'Error') + (j.detail?(' | '+j.detail):'') + (j.msg?(' | '+j.msg):''));
+    return;
+  }
   alert('Recepción guardada correctamente');
   tb.innerHTML = '';
 }
 
-async function onTipoChange(){ await loadOCs(); }
-async function onAlmacenChange(){ await loadZonas(); await loadOCs(); }
+// ============================
+// Eventos
+// ============================
+async function onTipoChange(){
+  applyTipoUI();
+  await loadOCsPorAlmacen();
+  // zonas siempre se mantienen por almacén, pero destino/BL quedan bloqueados si OC
+}
+
+async function onAlmacenChange(){
+  await loadZonasPorAlmacen();
+  await loadOCsPorAlmacen();
+  applyTipoUI();
+}
 
 document.addEventListener('DOMContentLoaded', async ()=>{
   await loadEmpresas();
   await loadAlmacenes();
-  await loadProveedores();
+  await loadZonasPorAlmacen();
+
+  applyTipoUI();
+  await loadOCsPorAlmacen();
 
   document.querySelectorAll('input[name="tipo"]').forEach(r=>r.addEventListener('change', onTipoChange));
   qs('almacen').addEventListener('change', onAlmacenChange);
-  qs('zona_destino').addEventListener('change', loadBL);
-  qs('proveedor').addEventListener('change', loadOCs);
-  qs('oc_folio').addEventListener('change', onOCChange);
 
-  qs('btnAdd').addEventListener('click', (e)=>{ e.preventDefault(); /* placeholder modal */ });
+  // ✅ OC primero -> proveedor auto + detalle
+  qs('oc_folio').addEventListener('change', async ()=>{
+    syncProveedorFromOC();
+    await loadOCDetalleGrid();
+  });
+
+  qs('zona_destino').addEventListener('change', loadBLDestino);
+
+  qs('btnAdd').addEventListener('click', (e)=>{ e.preventDefault(); });
   qs('btnRecibir').addEventListener('click', (e)=>{ e.preventDefault(); addLineaFromInputs(); });
   qs('btnGuardar').addEventListener('click', (e)=>{ e.preventDefault(); onGuardar(); });
 });
