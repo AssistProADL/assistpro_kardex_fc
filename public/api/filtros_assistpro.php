@@ -2,7 +2,7 @@
 // public/api/filtros_assistpro.php
 header('Content-Type: application/json; charset=utf-8');
 
-//require_once __DIR__ . '/../../app/auth_check.php';
+require_once __DIR__ . '/../../app/auth_check.php';
 require_once __DIR__ . '/../../app/db.php';
 
 try {
@@ -92,40 +92,15 @@ function init_filtros(PDO $pdo): void
     // ===================== EMPRESAS (c_compania) =====================
     if ($useSection('empresas')) {
         try {
-            // Filtrar empresas según almacenes asignados al usuario
-            $user = $_SESSION['username'] ?? '';
-            $paramsEmp = [];
-            $whereEmp = ["IFNULL(c.Activo, 1) = 1"];
-
-            if ($user !== '') {
-                // Join con almacenes del usuario para ver qué empresas puede ver
-                // Asumiendo que c_almacenp tiene empresa_id o similar, o usando la lógica inversa
-                // Si no hay relación directa usuario-empresa, usamos la relación usuario-almacén-empresa
-                // Ajuste: Traer empresas que tengan al menos un almacén asignado al usuario
-                $sqlEmp = "
-                    SELECT DISTINCT
-                        c.cve_cia,
-                        c.des_cia,
-                        c.clave_empresa
-                    FROM c_compania c
-                    INNER JOIN c_almacenp a ON a.cve_cia = c.cve_cia
-                    LEFT JOIN trel_us_alm t ON t.cve_almac = a.clave
-                    LEFT JOIN t_usu_alm_pre p ON p.cve_almac = a.clave
-                    WHERE IFNULL(c.Activo, 1) = 1
-                      AND (
-                           (t.cve_usuario = :u1 AND IFNULL(t.Activo,'1') IN ('1','S','SI','TRUE'))
-                        OR (p.id_user = :u2)
-                      )
-                    ORDER BY c.des_cia
-                ";
-                $paramsEmp['u1'] = $user;
-                $paramsEmp['u2'] = $user;
-            } else {
-                // Fallback si no hay usuario (no debería pasar por auth_check)
-                $sqlEmp = "SELECT cve_cia, des_cia, clave_empresa FROM c_compania WHERE IFNULL(Activo, 1) = 1 ORDER BY des_cia";
-            }
-
-            $data['empresas'] = db_all($sqlEmp, $paramsEmp);
+            $data['empresas'] = db_all("
+                SELECT 
+                    cve_cia, 
+                    des_cia, 
+                    clave_empresa
+                FROM c_compania
+                WHERE IFNULL(Activo, 1) = 1
+                ORDER BY des_cia
+            ");
         } catch (Throwable $e) {
             $data['empresas_error'] = $e->getMessage();
         }
@@ -134,7 +109,6 @@ function init_filtros(PDO $pdo): void
     // ===================== ALMACENES (c_almacenp) =====================
     if ($useSection('almacenes')) {
         try {
-            $user = $_SESSION['username'] ?? '';
             $paramsAlm = [];
             $whereAlm = ["IFNULL(a.Activo,1) = 1"];
 
@@ -142,19 +116,6 @@ function init_filtros(PDO $pdo): void
             if ($empresa !== '') {
                 $whereAlm[] = "a.cve_cia = :empresa_id";
                 $paramsAlm['empresa_id'] = $empresa;
-            }
-
-            // Filtrar por usuario
-            if ($user !== '') {
-                $whereAlm[] = "
-                    (
-                        EXISTS (SELECT 1 FROM trel_us_alm t WHERE t.cve_almac = a.clave AND t.cve_usuario = :u1 AND IFNULL(t.Activo,'1') IN ('1','S','SI','TRUE'))
-                        OR
-                        EXISTS (SELECT 1 FROM t_usu_alm_pre p WHERE p.cve_almac = a.clave AND p.id_user = :u2)
-                    )
-                ";
-                $paramsAlm['u1'] = $user;
-                $paramsAlm['u2'] = $user;
             }
 
             $sqlAlm = "
@@ -252,14 +213,21 @@ function init_filtros(PDO $pdo): void
         try {
             $data['proveedores'] = db_all("
                 SELECT
-                    ID_Prov,
-                    Cve_Prov,
-                    RazonSocial,
-                    RFC,
+                    ID_Proveedor,
+                    cve_proveedor,
+                    Empresa,
+                    Nombre,
+                    RUT,
+                    direccion,
+                    ciudad,
+                    estado,
+                    pais,
+                    telefono1,
+                    es_transportista,
                     IFNULL(Activo,1) AS Activo
                 FROM c_proveedores
                 WHERE IFNULL(Activo,1) = 1
-                ORDER BY RazonSocial
+                ORDER BY Nombre
             ");
         } catch (Throwable $e) {
             $data['proveedores_error'] = $e->getMessage();
@@ -271,9 +239,14 @@ function init_filtros(PDO $pdo): void
         try {
             $data['vendedores'] = db_all("
                 SELECT
-                    id_vendedor,
-                    Cve_Vend,
+                    Id_Vendedor,
+                    Cve_Vendedor,
                     Nombre,
+                    CalleNumero,
+                    Colonia,
+                    Ciudad,
+                    Estado,
+                    Ban_Ayudante,
                     IFNULL(Activo,1) AS Activo
                 FROM t_vendedores
                 WHERE IFNULL(Activo,1) = 1
@@ -285,34 +258,40 @@ function init_filtros(PDO $pdo): void
     }
 
     // ===================== PRODUCTOS (c_articulo) =====================
-if ($useSection('productos')) {
-    try {
-        $params = [];
-        $where  = ["IFNULL(Activo,1) = 1"];
+    if ($useSection('productos')) {
+        try {
+            $params = [];
+            $where = ["IFNULL(Activo,1) = 1"];
 
-        $sqlProd = "
+            $sqlProd = "
             SELECT
-                id_articulo,
+                id,
                 cve_articulo,
-                descripcion,          -- descripción comercial
-                sku_cliente,
-                UM,                   -- unidad de medida
-                -- banderas de control de lote / serie / caducidad
-                B_Lote,
-                B_Serie,
-                B_Caducidad,
+                des_articulo AS descripcion,
+                des_detallada,
+                cve_umed,
+                PrecioVenta,
+                peso,
+                -- banderas de control
+                control_lotes AS B_Lote,
+                control_numero_series AS B_Serie,
+                Caduca AS B_Caducidad,
+                control_abc,
+                clasificacion,
+                tipo,
+                grupo,
                 IFNULL(Activo,1) AS Activo
             FROM c_articulo
             " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
-            ORDER BY descripcion
+            ORDER BY des_articulo
             LIMIT 5000
         ";
 
-        $data['productos'] = db_all($sqlProd, $params);
-    } catch (Throwable $e) {
-        $data['productos_error'] = $e->getMessage();
+            $data['productos'] = db_all($sqlProd, $params);
+        } catch (Throwable $e) {
+            $data['productos_error'] = $e->getMessage();
+        }
     }
-}
 
 
 
@@ -338,7 +317,7 @@ if ($useSection('productos')) {
                     Seccion        AS seccion,
                     Status,
                     picking,
-                    AreaProduc,
+                    AreaProduccion,
                     AreaStagging,
                     clasif_abc
                 FROM c_ubicacion
@@ -361,15 +340,17 @@ if ($useSection('productos')) {
 
             $sqlLp = "
                 SELECT
-                    id_charola,
-                    codigo,
-                    es_pallet,
-                    es_contenedor,
-                    generica,
+                    IDContenedor,
+                    Clave_Contenedor AS codigo,
+                    CveLP,
+                    descripcion,
+                    tipo,
+                    TipoGen,
+                    Permanente,
                     IFNULL(Activo,1) AS Activo
                 FROM c_charolas
                 " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
-                ORDER BY codigo
+                ORDER BY Clave_Contenedor
                 LIMIT 5000
             ";
 
@@ -380,9 +361,9 @@ if ($useSection('productos')) {
     }
 
     // ===================== ZONA RECEPCIÓN / RETENCIÓN (tubicacionesretencion) =====================
-if ($useSection('zonas_recep')) {
-    try {
-        $data['zonas_recep'] = db_all("
+    if ($useSection('zonas_recep')) {
+        try {
+            $data['zonas_recep'] = db_all("
             SELECT
                 id             AS ID_URecepcion,
                 cve_almacp     AS cve_almac,
@@ -393,10 +374,10 @@ if ($useSection('zonas_recep')) {
             WHERE IFNULL(Activo,1) = 1
             ORDER BY desc_ubicacion
         ");
-    } catch (Throwable $e) {
-        $data['zonas_recep_error'] = $e->getMessage();
+        } catch (Throwable $e) {
+            $data['zonas_recep_error'] = $e->getMessage();
+        }
     }
-}
 
 
     // ===================== ZONA QA / REVISIÓN (t_ubicaciones_revision) =====================
@@ -423,11 +404,16 @@ if ($useSection('zonas_recep')) {
         try {
             $data['zonas_emb'] = db_all("
                 SELECT
-                    ID_UEmbarque,
+                    ID_Embarque,
                     cve_almac,
                     cve_ubicacion,
                     descripcion,
-                    AreaStagging
+                    status,
+                    AreaStagging,
+                    largo,
+                    ancho,
+                    alto,
+                    IFNULL(Activo,1) AS Activo
                 FROM t_ubicacionembarque
                 WHERE IFNULL(Activo,1) = 1
                 ORDER BY descripcion
@@ -441,16 +427,14 @@ if ($useSection('zonas_recep')) {
     if ($useSection('proyectos')) {
         try {
             $params = [];
-            $where = ["IFNULL(Activo,1) = 1"];
 
             $sqlProy = "
                 SELECT
-                    Id_Proyecto,
+                    Id,
                     Cve_Proyecto,
                     Des_Proyecto,
-                    IFNULL(Activo,1) AS Activo
+                    id_almacen
                 FROM c_proyecto
-                " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
                 ORDER BY Des_Proyecto
             ";
 
