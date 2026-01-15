@@ -2,6 +2,21 @@
 require_once __DIR__ . '/../../app/db.php';
 header('Content-Type: application/json; charset=utf-8');
 
+/*
+  geo_clientes_data.php
+  Fuente para geo_distribucion_clientes.php
+
+  Ajuste clave:
+  - relclirutas.IdCliente en tu BD puede venir como:
+      a) id_destinatario numérico (legacy)
+      b) clave de cliente (ej. CLI0000000292)
+      c) fallback "DEST_123" (cuando no viene clave)
+    Por eso, el JOIN contra c_destinatarios debe contemplar los 3 casos.
+
+  Además:
+  - Se agrega LEFT JOIN a reldaycli para indicar si el destinatario tiene visitas (Lu..Do > 0).
+*/
+
 try {
   $pdo = db_pdo();
 
@@ -44,11 +59,35 @@ try {
       c.limite_credito,
       rc.IdRuta AS ruta_id,
       r.cve_ruta,
-      r.descripcion AS ruta_nombre
+      r.descripcion AS ruta_nombre,
+      /* Visitas (derivado de reldaycli) */
+      CASE
+        WHEN dy.Id IS NULL THEN 0
+        WHEN (COALESCE(dy.Lu,0)+COALESCE(dy.Ma,0)+COALESCE(dy.Mi,0)+COALESCE(dy.Ju,0)+COALESCE(dy.Vi,0)+COALESCE(dy.Sa,0)+COALESCE(dy.Do,0)) > 0 THEN 1
+        ELSE 0
+      END AS tiene_visita
     FROM relclirutas rc
-    INNER JOIN c_destinatarios d ON d.id_destinatario = rc.IdCliente
+
+    /* JOIN robusto a destinatarios:
+       - Si rc.IdCliente es numérico -> id_destinatario
+       - Si rc.IdCliente es 'DEST_123' -> id_destinatario = 123
+       - Si rc.IdCliente es clave (CLI..., DEMO...) -> se une por d.Cve_Clte
+    */
+    INNER JOIN c_destinatarios d ON (
+         (rc.IdCliente REGEXP '^[0-9]+$' AND d.id_destinatario = CAST(rc.IdCliente AS UNSIGNED))
+      OR (rc.IdCliente LIKE 'DEST\\_%' AND d.id_destinatario = CAST(SUBSTRING(rc.IdCliente,6) AS UNSIGNED))
+      OR (rc.IdCliente NOT REGEXP '^[0-9]+$' AND rc.IdCliente NOT LIKE 'DEST\\_%' AND d.Cve_Clte = rc.IdCliente)
+    )
+
     LEFT JOIN c_cliente c ON c.Cve_Clte = d.Cve_Clte
     INNER JOIN t_ruta r ON r.ID_Ruta = rc.IdRuta
+
+    /* reldaycli es por destinatario (Id_Destinatario) */
+    LEFT JOIN reldaycli dy
+      ON dy.Cve_Almac = rc.IdEmpresa
+     AND dy.Cve_Ruta  = CAST(rc.IdRuta AS CHAR)
+     AND dy.Id_Destinatario = d.id_destinatario
+
     WHERE rc.IdEmpresa = :emp
       " . (count($where) ? " AND " . implode(" AND ", $where) : "") . "
     ORDER BY r.cve_ruta, d.razonsocial
@@ -60,12 +99,14 @@ try {
 
   // Normaliza lat/lng a float
   foreach ($rows as &$x) {
-    $x['lat'] = (float)$x['latitud'];
-    $x['lng'] = (float)$x['longitud'];
+    $x['lat'] = (float)($x['latitud'] ?? 0);
+    $x['lng'] = (float)($x['longitud'] ?? 0);
     $x['dias_credito'] = (int)($x['dias_credito'] ?? 0);
     $x['saldo_actual'] = (float)($x['saldo_actual'] ?? 0);
     $x['limite_credito'] = (float)($x['limite_credito'] ?? 0);
+    $x['tiene_visita'] = (int)($x['tiene_visita'] ?? 0);
   }
+  unset($x);
 
   echo json_encode([
     'ok' => true,

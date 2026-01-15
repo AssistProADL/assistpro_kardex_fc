@@ -136,7 +136,6 @@ $totalPages = max(1, (int)ceil($totalRegs / $perPage));
 
 // ============================================================
 //  Consulta principal (solo 25 por página)
-//  ✅ Se agregan 4 columnas de LP/Pallet/Contenedor
 // ============================================================
 $sql = "
     SELECT
@@ -157,11 +156,7 @@ $sql = "
         cap.clave             AS almac_clave,
         cap.nombre            AS almac_nombre,
         com.clave_empresa     AS empresa_clave,
-        com.des_cia           AS empresa_nombre,
-        tc.contenedor_clave,
-        tc.contenedor_lp,
-        tc.pallet_clave,
-        tc.pallet_lp
+        com.des_cia           AS empresa_nombre
     FROM t_cardex tc
     LEFT JOIN c_almacen ca
         ON ca.cve_almac = tc.Cve_Almac
@@ -234,7 +229,7 @@ if ($mids) {
     }
 }
 
-// Ubicaciones (BL)  ✅ MISMO MÉTODO FUNCIONAL: CodigoCSD
+// Ubicaciones (BL)
 $mapUb = [];
 $ubIds = [];
 foreach ($rows as $r) {
@@ -372,9 +367,9 @@ td.text-end{
                 <select name="empresa" class="form-select form-select-sm">
                     <option value="">-- Todas --</option>
                     <?php foreach ($empresas as $e): ?>
-                        <option value="<?= htmlspecialchars((string)$e['cve_cia']) ?>"
+                        <option value="<?= htmlspecialchars($e['cve_cia']) ?>"
                             <?= $f_empresa == $e['cve_cia'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars((string)($e['clave_empresa'].' - '.$e['des_cia'])) ?>
+                            <?= htmlspecialchars($e['clave_empresa'].' - '.$e['des_cia']) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -386,9 +381,9 @@ td.text-end{
                     <option value="">-- Todos --</option>
                     <?php foreach ($almacenes as $a): ?>
                         <?php $txtAlm = $a['clave'].' - '.$a['nombre']; ?>
-                        <option value="<?= htmlspecialchars((string)$a['id']) ?>"
+                        <option value="<?= htmlspecialchars($a['id']) ?>"
                             <?= $f_almacen == $a['id'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars((string)$txtAlm) ?>
+                            <?= htmlspecialchars($txtAlm) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -400,9 +395,9 @@ td.text-end{
                     <option value="">-- Todos --</option>
                     <?php foreach ($articulos as $a): ?>
                         <?php $txt = $a['cve_articulo'].' | '.$a['des_articulo']; ?>
-                        <option value="<?= htmlspecialchars((string)$a['cve_articulo']) ?>"
+                        <option value="<?= htmlspecialchars($a['cve_articulo']) ?>"
                             <?= $f_articulo == $a['cve_articulo'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars((string)$txt) ?>
+                            <?= htmlspecialchars($txt) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -413,9 +408,9 @@ td.text-end{
                 <select name="lote" class="form-select form-select-sm" <?= $f_articulo==''?'disabled':'' ?>>
                     <option value="">-- Todos --</option>
                     <?php foreach ($lotes as $l): ?>
-                        <option value="<?= htmlspecialchars((string)$l['cve_lote']) ?>"
+                        <option value="<?= htmlspecialchars($l['cve_lote']) ?>"
                             <?= $f_lote == $l['cve_lote'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars((string)$l['cve_lote']) ?>
+                            <?= htmlspecialchars($l['cve_lote']) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -424,13 +419,13 @@ td.text-end{
             <div class="col-md-1">
                 <label>F. inicio:</label>
                 <input type="date" name="fini" class="form-control form-control-sm"
-                       value="<?= htmlspecialchars((string)$f_fini) ?>">
+                       value="<?= htmlspecialchars($f_fini) ?>">
             </div>
 
             <div class="col-md-1">
                 <label>F. fin:</label>
                 <input type="date" name="ffin" class="form-control form-control-sm"
-                       value="<?= htmlspecialchars((string)$f_ffin) ?>">
+                       value="<?= htmlspecialchars($f_ffin) ?>">
             </div>
         </div>
 
@@ -444,7 +439,7 @@ td.text-end{
 
     <?php if ($error_sql): ?>
         <div class="alert alert-danger py-1 my-2">
-            Error al consultar Kardex: <?= htmlspecialchars((string)$error_sql) ?></div>
+            Error al consultar Kardex: <?= htmlspecialchars($error_sql) ?></div>
     <?php endif; ?>
 
     <!-- Tabla -->
@@ -468,26 +463,12 @@ td.text-end{
                         <th>Alm Ori</th>
                         <th>BL Ori</th>
                         <th>Zona Ori</th>
-
-                        <!-- ✅ Inserción requerida (después de Zona Ori) -->
-                        <th>Cont Ori</th>
-                        <th>LP Cont Ori</th>
-                        <th>Pallet Ori</th>
-                        <th>LP Pallet Ori</th>
-
                         <th>Stock Ini Ori</th>
                         <th>Mov Ori</th>
                         <th>Stock Fin Ori</th>
                         <th>Alm Dst</th>
                         <th>BL Dst</th>
                         <th>Zona Dst</th>
-
-                        <!-- ✅ Inserción requerida (después de Zona Dst) -->
-                        <th>Cont Dst</th>
-                        <th>LP Cont Dst</th>
-                        <th>Pallet Dst</th>
-                        <th>LP Pallet Dst</th>
-
                         <th>Stock Ini Dst</th>
                         <th>Mov Dst</th>
                         <th>Stock Fin Dst</th>
@@ -510,6 +491,8 @@ td.text-end{
                             $stockIni = (float)$r['stockinicial'];
                             $cant     = (float)$r['cantidad'];
                             $ajuste   = (float)$r['ajuste'];
+                            $entrada  = $cant >= 0 ? $cant : 0;
+                            $salida   = $cant < 0 ? -$cant : 0;
                             $stockFin = $stockIni + $cant + $ajuste;
 
                             // Tipo (E/S/A) aproximado
@@ -523,7 +506,7 @@ td.text-end{
                                 $tipo = '';
                             }
 
-                            // Movimiento firmado
+                            // Movimiento firmado (como en kardex_test: movimiento con signo)
                             $movFirma = $cant + $ajuste;
 
                             // Fecha formateada
@@ -537,21 +520,21 @@ td.text-end{
                                 }
                             }
 
-                            // Campos legacy pendientes:
-                            $proyecto = '';
-                            $uom      = '';
-                            $serie    = '';
-                            $ajId     = '';
-                            $notas    = '';
+                            // Campos que aún no tenemos en legacy:
+                            $proyecto = ''; // pendiente mapear
+                            $uom      = ''; // pendiente mapear
+                            $serie    = ''; // pendiente mapear
+                            $ajId     = ''; // pendiente mapear
+                            $notas    = ''; // pendiente mapear
 
-                            // ORIGEN
+                            // ORIGEN: usamos almacén/zona actual y saldos globales
                             $almOri   = $r['almac_clave'] ?? '';
                             $zonaOri  = $r['zona_clave']  ?? '';
                             $stockIniOri = $stockIni;
                             $movOri       = $movFirma;
                             $stockFinOri  = $stockFin;
 
-                            // DESTINO (por ahora vacíos)
+                            // DESTINO: por ahora vacíos hasta integrar bidireccional real
                             $almDst      = '';
                             $zonaDst     = '';
                             $stockIniDst = '';
@@ -561,55 +544,34 @@ td.text-end{
                             $txId    = $r['id'];
                             $usuario = $r['cve_usuario'];
                             $ref     = $r['Referencia'];
-
-                            // ✅ LP / CONTENEDOR / PALLET
-                            $contClave   = $r['contenedor_clave'] ?? '';
-                            $contLP      = $r['contenedor_lp'] ?? '';
-                            $palletClave = $r['pallet_clave'] ?? '';
-                            $palletLP    = $r['pallet_lp'] ?? '';
                         ?>
                         <tr>
-                            <td><?= htmlspecialchars((string)($fechaTxt ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($tipo ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($proyecto ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($r['cve_articulo'] ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($uom ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($r['cve_lote'] ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($serie ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($ajId ?? '')) ?></td>
+                            <td><?= htmlspecialchars($fechaTxt) ?></td>
+                            <td><?= htmlspecialchars($tipo) ?></td>
+                            <td><?= htmlspecialchars($proyecto) ?></td>
+                            <td><?= htmlspecialchars($r['cve_articulo']) ?></td>
+                            <td><?= htmlspecialchars($uom) ?></td>
+                            <td><?= htmlspecialchars($r['cve_lote']) ?></td>
+                            <td><?= htmlspecialchars($serie) ?></td>
+                            <td><?= htmlspecialchars($ajId) ?></td>
                             <td class="text-end"><?= number_format($ajuste, 4) ?></td>
                             <td class="text-end"><?= number_format($movFirma, 4) ?></td>
-                            <td><?= htmlspecialchars((string)($ref ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($notas ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($almOri ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($oriBL ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($zonaOri ?? '')) ?></td>
-
-                            <!-- ✅ Después de Zona Ori -->
-                            <td><?= htmlspecialchars((string)($contClave ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($contLP ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($palletClave ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($palletLP ?? '')) ?></td>
-
+                            <td><?= htmlspecialchars($ref) ?></td>
+                            <td><?= htmlspecialchars($notas) ?></td>
+                            <td><?= htmlspecialchars($almOri) ?></td>
+                            <td><?= htmlspecialchars($oriBL) ?></td>
+                            <td><?= htmlspecialchars($zonaOri) ?></td>
                             <td class="text-end"><?= number_format($stockIniOri, 4) ?></td>
                             <td class="text-end"><?= number_format($movOri, 4) ?></td>
                             <td class="text-end"><?= number_format($stockFinOri, 4) ?></td>
-
-                            <td><?= htmlspecialchars((string)($almDst ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($desBL ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($zonaDst ?? '')) ?></td>
-
-                            <!-- ✅ Después de Zona Dst -->
-                            <td><?= htmlspecialchars((string)($contClave ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($contLP ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($palletClave ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($palletLP ?? '')) ?></td>
-
-                            <td><?= htmlspecialchars((string)($stockIniDst ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($movDst ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($stockFinDst ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($txId ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($usuario ?? '')) ?></td>
+                            <td><?= htmlspecialchars($almDst) ?></td>
+                            <td><?= htmlspecialchars($desBL) ?></td>
+                            <td><?= htmlspecialchars($zonaDst) ?></td>
+                            <td><?= htmlspecialchars($stockIniDst) ?></td>
+                            <td><?= htmlspecialchars($movDst) ?></td>
+                            <td><?= htmlspecialchars($stockFinDst) ?></td>
+                            <td><?= htmlspecialchars($txId) ?></td>
+                            <td><?= htmlspecialchars($usuario) ?></td>
                             <td>&nbsp;</td>
                         </tr>
                     <?php endforeach; ?>
@@ -624,11 +586,11 @@ td.text-end{
             $queryNext = build_query_without_page(['page' => min($totalPages, $page+1)]);
             ?>
             <?php if ($page > 1): ?>
-                <a href="kardex.php?<?= htmlspecialchars((string)$queryPrev) ?>">&laquo; Anterior</a>
+                <a href="kardex.php?<?= htmlspecialchars($queryPrev) ?>">&laquo; Anterior</a>
             <?php endif; ?>
             <span class="current">Página <?= $page ?> de <?= $totalPages ?></span>
             <?php if ($page < $totalPages): ?>
-                <a href="kardex.php?<?= htmlspecialchars((string)$queryNext) ?>">Siguiente &raquo;</a>
+                <a href="kardex.php?<?= htmlspecialchars($queryNext) ?>">Siguiente &raquo;</a>
             <?php endif; ?>
             <span style="margin-left:8px;">Registros: <?= $totalRegs ?></span>
         </div>

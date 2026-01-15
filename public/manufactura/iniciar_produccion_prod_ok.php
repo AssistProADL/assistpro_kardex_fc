@@ -13,56 +13,11 @@ function f4($n): string { return number_format((float)$n, 4, '.', ','); }
 
 // Unidades discretas (no fraccionables): se redondea hacia arriba la CRT.
 // Ajusta este set si en tu operación existen otras UOM discretas.
-function resolve_uom_key(PDO $pdo, ?string $uomVal): string {
-  $u = trim((string)$uomVal);
-  if ($u === '') return '';
-  // Si ya viene como clave (no numérica), úsala tal cual.
-  if (!ctype_digit($u)) return strtoupper($u);
-
-  // Si viene como ID interno, intentamos resolver a clave de unidad (cve/clave/siglas).
-  $id = (int)$u;
-  $candidates = [
-    // (tabla, id_col, key_col)
-    ['c_unimed', 'id_umed', 'cve_umed'],
-    ['c_unidadmedida', 'id', 'cve'],
-    ['c_unidadmedida', 'IdUnidad', 'Clave'],
-    ['c_unidad_medida', 'id', 'cve'],
-    ['c_unidad_medida', 'IdUnidad', 'Clave'],
-    ['c_uom', 'id', 'cve'],
-    ['c_uom', 'IdUom', 'Clave'],
-  ];
-  foreach ($candidates as [$t,$idc,$kc]) {
-    try {
-      $sql = "SELECT $kc AS k FROM $t WHERE $idc = ? LIMIT 1";
-      $k = db_val($sql, [$id]);
-      if ($k !== null && trim((string)$k) !== '') return strtoupper(trim((string)$k));
-    } catch (Throwable $e) { /* tabla/columna no existe */ }
-  }
-  // Fallback: mostramos el mismo ID para no romper UI.
-  return $u;
-}
-
-function is_discrete_uom_key(?string $uomKey): bool {
-  $u = strtoupper(trim((string)$uomKey));
+function is_discrete_uom(?string $uom): bool {
+  $u = strtoupper(trim((string)$uom));
   if ($u === '') return false;
-  // Unidades discretas (no fraccionables): se redondea al entero superior.
-  $discrete = ['PIEZA','PZ','PZA','PAR','UN','UNI','UNIDAD','UNIDADES','PCS','PC','EA'];
+  $discrete = ['PIEZA','PZ','PZA','PAR','UN','UNI','UNIDAD','UNIDADES'];
   return in_array($u, $discrete, true);
-}
-
-function has_column(PDO $pdo, string $table, string $col): bool {
-  try {
-    $db = db_val("SELECT DATABASE()", []);
-    if (!$db) return false;
-    $sql = "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME=? ";
-    $n = (int)db_val($sql, [$db, $table, $col]);
-    return $n > 0;
-  } catch (Throwable $e) { return false; }
-}
-
-function first_existing_col(PDO $pdo, string $table, array $cols): ?string {
-  foreach ($cols as $c) { if (has_column($pdo, $table, $c)) return $c; }
-  return null;
 }
 
 // Ceil robusto para flotantes (evita que 5.0000000001 suba accidentalmente)
@@ -89,24 +44,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'exec') {
   $foliosRaw = (string)($_POST['folios'] ?? '');
   $bl_mp = (int)($_POST['bl_mp'] ?? 0);
   $bl_pt = (int)($_POST['bl_pt'] ?? 0);
-
-  // Mostrar BL como CodigoCSD (no ID) en el resumen de ejecución
-  $bl_mp_csd = (string)$bl_mp;
-  $bl_pt_csd = (string)$bl_pt;
-  try{
-    if($bl_mp>0 || $bl_pt>0){
-      $rowsCsd = db_all("SELECT idy_ubica, CodigoCSD FROM c_ubicacion WHERE idy_ubica IN (?,?)", [$bl_mp, $bl_pt]);
-      $mapCsd = [];
-      foreach($rowsCsd as $rr){
-        $mapCsd[(int)$rr['idy_ubica']] = (string)($rr['CodigoCSD'] ?? '');
-      }
-      if(isset($mapCsd[$bl_mp]) && $mapCsd[$bl_mp] !== '') $bl_mp_csd = $mapCsd[$bl_mp];
-      if(isset($mapCsd[$bl_pt]) && $mapCsd[$bl_pt] !== '') $bl_pt_csd = $mapCsd[$bl_pt];
-    }
-  }catch(Throwable $e){
-    // fallback: dejamos ID si no existe c_ubicacion/CodigoCSD
-  }
-
 
   $folios = array_values(array_unique(array_filter(array_map('trim', explode(',', $foliosRaw)))));
   if (!$folios) { echo json_encode(['ok'=>false,'error'=>'Folios inválidos']); exit; }
@@ -273,7 +210,6 @@ if ($foliosRaw !== '') {
   if ($f !== '') $folios = [$f];
 }
 if (!$folios) { die('OT no especificada'); }
-$foliosSel = $folios;
 
 $in = implode(',', array_fill(0, count($folios), '?'));
 $sqlOT = "
@@ -301,44 +237,6 @@ if (!$ots) { die('Orden(es) de producción no encontrada(s)'); }
 $esConsolidado = count($ots) > 1;
 $ot0 = $ots[0];
 
-
-// Producto PT (todas las OTs ya fueron validadas para mismo almacén/empresa; el producto puede variar, pero en esta pantalla se consolida por folio).
-$ptArticulo = (string)($ot0['Cve_Articulo'] ?? '');
-
-// Detectar si el PT requiere Lote/Caducidad (best-effort, sin amarrarnos a un esquema fijo)
-$ptReqLote = false; $ptReqCad = false;
-try {
-  // Columnas típicas de bandera (ajustamos a lo que exista)
-  $colML = first_existing_col($pdo, 'c_articulo', ['ManejaLote','maneja_lote','RequiereLote','requiere_lote','UsaLote','usa_lote']);
-  $colMC = first_existing_col($pdo, 'c_articulo', ['ManejaCaducidad','maneja_caducidad','RequiereCaducidad','requiere_caducidad','UsaCaducidad','usa_caducidad']);
-  if ($colML || $colMC) {
-    $sel = "SELECT ".($colML?("$colML AS L"):"0 AS L").", ".($colMC?("$colMC AS C"):"0 AS C")." FROM c_articulo WHERE cve_articulo=? LIMIT 1";
-    $r = db_one($sel, [$ptArticulo]) ?: [];
-    $ptReqLote = ((int)($r['L'] ?? 0)) === 1;
-    $ptReqCad  = ((int)($r['C'] ?? 0)) === 1;
-  }
-} catch (Throwable $e) { /* fallback abajo */ }
-
-// Valores iniciales (si existen en t_ordenprod)
-$ptLote = ''; $ptCad = '';
-try {
-  $colL = first_existing_col($pdo, 't_ordenprod', ['cve_lote','Cve_Lote','lote','Lote']);
-  $colC = first_existing_col($pdo, 't_ordenprod', ['caducidad','Caducidad','fecha_caducidad','FechaCaducidad']);
-  $pick = [];
-  if ($colL) $pick[] = "$colL AS lote";
-  if ($colC) $pick[] = "$colC AS cad";
-  if ($pick) {
-    $in0 = implode(',', array_fill(0, count($foliosSel), '?'));
-    $r0 = db_one("SELECT ".implode(',', $pick)." FROM t_ordenprod WHERE Folio_Pro IN ($in0) LIMIT 1", $foliosSel) ?: [];
-    $ptLote = trim((string)($r0['lote'] ?? ''));
-    $ptCad  = trim((string)($r0['cad'] ?? ''));
-    // Si hay datos existentes, habilitamos edición aunque las banderas no estén disponibles
-    if ($ptLote !== '') $ptReqLote = true;
-    if ($ptCad  !== '') $ptReqCad  = true;
-  }
-} catch (Throwable $e) { /* ignore */ }
-
-
 // Gobernanza (UI)
 $almSet = array_values(array_unique(array_map(fn($r)=>(string)($r['cve_almac'] ?? ''), $ots)));
 $provSet = array_values(array_unique(array_map(fn($r)=>(string)($r['ID_Proveedor'] ?? ''), $ots)));
@@ -348,18 +246,14 @@ $idProv = (int)($ot0['ID_Proveedor'] ?? 0);
 // Labels (clave + descripción) para UI
 $almLabel = (string)$almInt;
 try {
-  // Catálogo real: c_almacenp (id, clave, nombre)
-  $stA = $pdo->prepare("SELECT clave, nombre FROM c_almacenp WHERE id=? LIMIT 1");
+  $stA = $pdo->prepare("SELECT Nombre FROM c_almacen WHERE cve_almac=? LIMIT 1");
   $stA->execute([$almInt]);
-  $rA = $stA->fetch(PDO::FETCH_ASSOC) ?: [];
-  $cveA = trim((string)($rA['clave'] ?? ''));
-  $nomA = trim((string)($rA['nombre'] ?? ''));
-  if ($cveA !== '' && $nomA !== '') $almLabel = $cveA . ' - ' . $nomA;
-  elseif ($cveA !== '') $almLabel = $cveA;
-  elseif ($nomA !== '') $almLabel = $almInt . ' - ' . $nomA;
+  $nm = trim((string)($stA->fetchColumn() ?: ''));
+  if ($nm !== '') $almLabel = $almInt . ' - ' . $nm;
 } catch (Throwable $e) {
-  // Fallback: mostrar solo id
+  // Fallback: mostrar solo clave
 }
+
 $problemaGov = '';
 if ($esConsolidado && (count($almSet) !== 1 || count($provSet) !== 1)) {
   $problemaGov = 'Consolidación no permitida: selecciona OTs de la misma Empresa y Almacén.';
@@ -412,37 +306,7 @@ $stc = $pdo->prepare($sqlComp);
 $stc->execute($folios);
 $raw = $stc->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-// (FIX) No reiniciar $componentes aquí; se usa para render.
-
-// (FIX) Se removió consolidado duplicado (loop1). Se usa el consolidado con redondeo por OT.
-// (FIX) se eliminó reinicio de $componentes para conservar CUR.
-
-// Resolver UMed por componente antes de consolidar (para redondeo POR OT)
-$uMap = [];
-if ($raw) {
-  $artsTmp = [];
-  foreach ($raw as $ln) {
-    $a = (string)($ln['Cve_Articulo'] ?? '');
-    if ($a!=='') $artsTmp[$a]=1;
-  }
-  $artsTmp = array_keys($artsTmp);
-  if ($artsTmp) {
-    $inU = implode(',', array_fill(0, count($artsTmp), '?'));
-    try {
-      $stU = $pdo->prepare("SELECT cve_articulo, unidadMedida AS UMed FROM c_articulo WHERE cve_articulo IN ($inU)");
-      $stU->execute($artsTmp);
-      $urows = $stU->fetchAll(PDO::FETCH_ASSOC) ?: [];
-      foreach ($urows as $ur) {
-        $a = (string)($ur['cve_articulo'] ?? '');
-        if ($a==='') continue;
-        $uMap[$a] = resolve_uom_key($pdo, (string)($ur['UMed'] ?? ''));
-      }
-    } catch (Throwable $e) {
-      // no-op
-    }
-  }
-}
-
+$componentes = []; // art => ['Cve_Articulo','UMed','CUR','CRT','CRT_RAW','Referencia','_qty_sum']
 foreach($raw as $ln){
   $art = (string)($ln['Cve_Articulo'] ?? '');
   if($art==='') continue;
@@ -450,43 +314,64 @@ foreach($raw as $ln){
   $folioLn = (string)($ln['Folio_Pro'] ?? '');
   $otQty   = (float)($otCantByFolio[$folioLn] ?? 0);
 
-  // td_ordenprod.Cantidad se maneja como CRT RAW por OT (total calculado para esa OT).
-  $crtRawOt = (float)($ln['Cantidad'] ?? 0);
-
-  $uKey = $uMap[$art] ?? null;
-
-  // Redondeo por OT para unidades discretas (PIEZA/PAR/UN...). Luego se consolida por suma.
-  $crtOt = is_discrete_uom_key($uKey) ? (float)ceil($crtRawOt) : $crtRawOt;
+  // IMPORTANTE:
+  // td_ordenprod.Cantidad se está manejando como CRT por OT (requerido TOTAL para esa OT),
+  // por lo que NO se debe volver a multiplicar por la cantidad a fabricar.
+  $crtOt = (float)($ln['Cantidad'] ?? 0);
 
   if(!isset($componentes[$art])){
     $componentes[$art] = [
       'Cve_Articulo'=>$art,
-      'UMed'=>$uKey ?? '',
+      'UMed'=>'',
       'CUR'=>0.0,
       'CRT'=>0.0,
       'CRT_RAW'=>0.0,
-      'Referencia'=>null,
+      'Referencia'=>(string)($ln['Referencia'] ?? ''),
       '_qty_sum'=>0.0
     ];
   }
 
-  $componentes[$art]['CRT'] += $crtOt;         // CRT final (por OT redondeada si aplica)
-  $componentes[$art]['CRT_RAW'] += $crtRawOt;  // CRT raw (matemático)
-  $componentes[$art]['_qty_sum'] += $otQty;    // suma de cantidades OT donde el componente participa
+  $componentes[$art]['CRT'] += $crtOt;
+  $componentes[$art]['CRT_RAW'] += $crtOt;
+  $componentes[$art]['_qty_sum'] += $otQty;
 }
 
+// UMed por componente (para reglas de redondeo y display)
+if ($componentes) {
+  $arts = array_keys($componentes);
+  $inA = implode(',', array_fill(0, count($arts), '?'));
+  try {
+    // Nota: en tu UI de BOM ya usas c_articulo.unidadMedida como fuente.
+    $stU = $pdo->prepare("SELECT cve_articulo, unidadMedida AS UMed FROM c_articulo WHERE cve_articulo IN ($inA)");
+    $stU->execute($arts);
+    $urows = $stU->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $uMap = [];
+    foreach ($urows as $ur) {
+      $uMap[(string)($ur['cve_articulo'] ?? '')] = (string)($ur['UMed'] ?? '');
+    }
+    foreach ($componentes as $a => $c) {
+      $componentes[$a]['UMed'] = (string)($uMap[$a] ?? '');
+    }
+  } catch (Throwable $e) {
+    // Fallback silencioso: si no existe c_articulo o unidadMedida, seguimos sin UMed.
+  }
+}
 
-// Calcular CUR consolidada (unitaria) con base en CRT_RAW / ΣCantidadOT (ponderado).
+// Calcular CUR consolidada = CRT / ΣCantidadOT (ponderado)
 foreach($componentes as $art => $c){
   $qty = (float)($c['_qty_sum'] ?? 0);
-  $rawTot = (float)($c['CRT_RAW'] ?? 0);
-  $componentes[$art]['CUR'] = ($qty > 0) ? ($rawTot / $qty) : 0.0;
+  $crt = (float)($c['CRT'] ?? 0);
+  $componentes[$art]['CUR'] = ($qty > 0) ? ($crt / $qty) : 0.0;
   unset($componentes[$art]['_qty_sum']);
 }
 
-
-// UMed por componente (ya resuelta arriba)
-
+// Redondeo operativo: unidades discretas (piezas) deben pedirse en entero superior.
+foreach ($componentes as $art => $c) {
+  $u = (string)($c['UMed'] ?? '');
+  if (is_discrete_uom($u)) {
+    $componentes[$art]['CRT'] = ceil_safe((float)($c['CRT'] ?? 0));
+  }
+}
 
 ksort($componentes);
 $tieneBom = count($componentes) > 0;
@@ -643,7 +528,7 @@ $extra = count($foliosSel) > 5 ? (' … +' . (count($foliosSel)-5)) : '';
             <label class="form-check-label" for="chkPTSame">PT en la misma BL</label>
           </div>
         </div>
-        <select id="selBLPT" class="form-select form-select-sm">
+        <select id="selBLPT" class="form-select form-select-sm" disabled>
           <?php if(count($bls)===0): ?>
             <option value="0">No hay BLs disponibles</option>
           <?php else: ?>
@@ -661,24 +546,8 @@ $extra = count($foliosSel) > 5 ? (' … +' . (count($foliosSel)-5)) : '';
           <?php if($ptArt==='MULTI'): ?>
             PT: múltiple producto, stock no consolidable en una sola línea.
           <?php else: ?>
-            PT — Stock inicial en BL default: Total <?=f4($ptIniTotal)?> (Pzas <?=f4($ptPzasIni)?> | <?=f4($ptTarIni)?>) → Final teórico <b><?=f4($ptFinTeo)?></b>
+            PT — Stock inicial en BL default: Total <?=f4($ptIniTotal)?> (Pzas <?=f4($ptPzasIni)?> | Tar <?=f4($ptTarIni)?>) → Final teórico <b><?=f4($ptFinTeo)?></b>
           <?php endif; ?>
-        </div>
-      </div>
-    </div>
-
-    <div class="row g-3 mb-3">
-      <div class="col-md-3">
-        <label class="form-label mb-0">Lote<?= $ptReqLote ? ' *' : '' ?></label>
-        <input id="inpLote" type="text" class="form-control form-control-sm" value="<?=h($ptLote)?>" <?= $ptReqLote ? '' : 'disabled' ?> placeholder="<?= $ptReqLote ? 'Captura lote' : 'No requerido' ?>">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label mb-0">Caducidad<?= $ptReqCad ? ' *' : '' ?></label>
-        <input id="inpCad" type="date" class="form-control form-control-sm" value="<?=h($ptCad)?>" <?= $ptReqCad ? '' : 'disabled' ?>>
-      </div>
-      <div class="col-md-6 d-flex align-items-end">
-        <div class="small text-muted">
-          Si el PT requiere Lote/Caducidad, captura aquí para arrastrarlo a movimientos y trazabilidad.
         </div>
       </div>
     </div>
@@ -691,18 +560,17 @@ $extra = count($foliosSel) > 5 ? (' … +' . (count($foliosSel)-5)) : '';
             <th>Componente</th>
             <th class="text-center">UMed</th>
             <th class="text-end">CUR</th>
-            <th class="text-end" title="CRT sin redondeo (referencia)">CRT Raw</th>
             <th class="text-end">CRT</th>
-            
+            <th class="text-end" title="CRT sin redondeo (referencia)">CRT Raw</th>
             <th class="text-end">Stock Pzas</th>
             <th class="text-end">Proj Pzas</th>
-            
-            
+            <th class="text-end">Stock Tarima</th>
+            <th class="text-end">Proj Tarima</th>
           </tr>
         </thead>
         <tbody>
           <?php if(!$tieneBom): ?>
-            <tr><td colspan="8" class="text-center text-muted">Sin componentes.</td></tr>
+            <tr><td colspan="10" class="text-center text-muted">Sin componentes.</td></tr>
           <?php else: ?>
             <?php $i=1; foreach($componentes as $a=>$c):
               $crt = (float)($c['CRT'] ?? 0);
@@ -710,18 +578,22 @@ $extra = count($foliosSel) > 5 ? (' … +' . (count($foliosSel)-5)) : '';
               $cur = (float)($c['CUR'] ?? 0);
               $uom = (string)($c['UMed'] ?? '');
               $sp = (float)($stockComp[$a]['pzas'] ?? 0);
+              $stt = (float)($stockComp[$a]['tar'] ?? 0);
               $projP = $sp - $crt;
+              $projT = $stt - $crt;
             ?>
               <tr>
                 <td><?= $i++ ?></td>
                 <td class="fw-semibold"><?=h((string)$a)?></td>
                 <td class="text-center"><?=h($uom!==''?$uom:'—')?></td>
                 <td class="text-end"><?=f4($cur)?></td>
-                <td class="text-end"><?=f4($crtRaw)?></td>
                 <td class="text-end"><?=f4($crt)?></td>
+                <td class="text-end"><?=f4($crtRaw)?></td>
                 <td class="text-end"><?=f4($sp)?></td>
                 <td class="text-end <?=($projP<0?'text-danger fw-bold':'text-success fw-bold')?>"><?=f4($projP)?></td>
-</tr>
+                <td class="text-end"><?=f4($stt)?></td>
+                <td class="text-end <?=($projT<0?'text-danger fw-bold':'text-success fw-bold')?>"><?=f4($projT)?></td>
+              </tr>
             <?php endforeach; ?>
           <?php endif; ?>
         </tbody>
@@ -737,7 +609,7 @@ $extra = count($foliosSel) > 5 ? (' … +' . (count($foliosSel)-5)) : '';
 
     <div class="d-flex justify-content-end gap-2 mt-3">
       <a href="monitor_produccion.php" class="btn btn-outline-secondary btn-sm"><i class="fa fa-arrow-left"></i> Regresar</a>
-      <button id="btnIniciar" class="btn btn-primary btn-sm" <?=($status!=='P' || count($bls)===0 || $problemaGov)?'disabled':''?>>
+      <button id="btnIniciar" class="btn btn-primary btn-sm" <?=($status!=='P' || $blDefault<=0 || count($bls)===0 || $problemaGov)?'disabled':''?>>
         <i class="fa fa-play"></i> Confirmar e Iniciar
       </button>
     </div>
@@ -751,29 +623,24 @@ $extra = count($foliosSel) > 5 ? (' … +' . (count($foliosSel)-5)) : '';
   const selMP = document.getElementById('selBLMP');
   const selPT = document.getElementById('selBLPT');
   const chkSame = document.getElementById('chkPTSame');
-  const inpL = document.getElementById('inpLote');
-  const inpC = document.getElementById('inpCad');
   const metricsBox = document.getElementById('execMetrics');
   const folios = <?= json_encode(implode(',', $foliosSel), JSON_UNESCAPED_UNICODE) ?>;
 
   if(chkSame){
     chkSame.addEventListener('change', function(){
-      if(!selPT || !selMP) return;
-      if(this.checked){ selPT.value = selMP.value; }
+      if(!selPT) return;
+      selPT.disabled = this.checked;
     });
   }
   if(!btn) return;
 
   btn.addEventListener('click', function(){
     const blMP = selMP ? (selMP.value || '0') : '0';
-    const same = (chkSame && chkSame.checked);
-    const blPT = same ? blMP : (selPT ? (selPT.value || '0') : '0');
+    const blPT = (chkSame && chkSame.checked) ? blMP : (selPT ? (selPT.value || '0') : '0');
 
     if(!folios){ alert('Folios inválidos.'); return; }
     if(!blMP || blMP === '0'){ alert('Selecciona BL MP válida.'); return; }
     if(!blPT || blPT === '0'){ alert('Selecciona BL PT válida.'); return; }
-    if(inpL && !inpL.disabled && (inpL.value||'').trim()===''){ alert('Captura Lote.'); return; }
-    if(inpC && !inpC.disabled && (inpC.value||'').trim()===''){ alert('Captura Caducidad.'); return; }
 
     btn.disabled = true;
     btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Ejecutando...';
@@ -783,10 +650,6 @@ $extra = count($foliosSel) > 5 ? (' … +' . (count($foliosSel)-5)) : '';
     body.set('folios', folios);
     body.set('bl_mp', blMP);
     body.set('bl_pt', blPT);
-    const lote = inpL && !inpL.disabled ? (inpL.value||'').trim() : '';
-    const cad  = inpC && !inpC.disabled ? (inpC.value||'').trim() : '';
-    body.set('lote', lote);
-    body.set('caducidad', cad);
 
     fetch('iniciar_produccion.php', {
       method:'POST',
@@ -825,5 +688,3 @@ $extra = count($foliosSel) > 5 ? (' … +' . (count($foliosSel)-5)) : '';
 </script>
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
-</body>
-</html>

@@ -169,17 +169,17 @@ $desde_default = date('Y-m-d', strtotime('-7 days'));
           <tr>
             <th class="nowrap">Sel</th>
             <th>Acciones</th>
-            <th>Folio</th>
-            <th>Producto</th>
-            <th class="text-end">Cant</th>
-            <th>Almacén</th>
             <th>Zona</th>
-            <th>Status</th>
-            <th>Usr Reg</th>
-            <th>Usr Armo</th>
-            <th>Fecha Reg</th>
-            <th class="text-end">Comp</th>
-            <th class="text-end">Cant Comp</th>
+            <th>BL Origen</th>
+            <th>Clave</th>
+            <th>Descripción</th>
+            <th>Lote</th>
+            <th>Caducidad</th>
+            <th class="text-end">Cantidad</th>
+            <th>BL Destino</th>
+            <th>Inicio</th>
+            <th>Fin</th>
+            <th>Avance</th>
           </tr>
         </thead>
       </table>
@@ -264,9 +264,8 @@ function filtros(){
 
 function fmtDT(s){
   if(!s) return '';
-  // si viene "YYYY-MM-DD HH:MM:SS" lo pasamos a "dd/mm/yyyy, hh:mm:ss"
-  const d = new Date(s.replace(' ', 'T'));
-  if(isNaN(d.getTime())) return s;
+  const d = new Date(String(s).replace(' ', 'T'));
+  if(isNaN(d.getTime())) return String(s);
   const dd = String(d.getDate()).padStart(2,'0');
   const mm = String(d.getMonth()+1).padStart(2,'0');
   const yy = d.getFullYear();
@@ -285,6 +284,18 @@ function badgeStatus(s){
   };
   const x = map[s] || [s||'—','bg-light text-dark'];
   return `<span class="badge badge-status ${x[1]}">${x[0]}</span>`;
+}
+
+function barAvance(p){
+  const n = Math.max(0, Math.min(100, parseInt(p||0,10)));
+  const cls = (n>=100) ? 'bg-success' : (n>0 ? 'bg-info' : 'bg-secondary');
+  return `
+    <div class="progress" style="height:14px; min-width:120px">
+      <div class="progress-bar ${cls}" role="progressbar" style="width:${n}%">
+        ${n}%
+      </div>
+    </div>
+  `;
 }
 
 function loadKPIs(){
@@ -342,29 +353,26 @@ $(function(){
           </button>
         `
       },
-      {data:'folio'},
-      {data:'producto'},
-      {data:'cantidad', className:'text-end'},
-      {data:'almacen'},
       {data:'zona'},
-      {data:'status', render:s=>badgeStatus(s)},
-      {data:'usr_reg'},
-      {data:'usr_armo'},
-      {data:'fecha_reg', render:s=>fmtDT(s)},
-      {data:'componentes', className:'text-end'},
-      {data:'cant_componentes', className:'text-end'}
+      {data:'bl_origen'},
+      {data:'clave'},
+      {data:'descripcion'},
+      {data:'lote'},
+      {data:'caducidad'},
+      {data:'cantidad', className:'text-end', render:d=> (d==null||d==='')?'' : Number(d).toFixed(4)},
+      {data:'bl_destino'},
+      {data:'hora_ini', render:s=>fmtDT(s)},
+      {data:'hora_fin', render:s=>fmtDT(s)},
+      {data:'avance', orderable:false, searchable:false, render:p=>barAvance(p)}
     ]
   });
 
-  // filtros
   $("#fEmpresa,#fAlmacen,#fZona,#fStatus,#fDesde,#fHasta").on("change", function(){
     refreshAll();
   });
 
-  // refrescar manual
   $("#btnRefresh").on("click", ()=>refreshAll());
 
-  // auto refresh
   setAuto($("#autoRefresh").is(":checked"));
   $("#autoRefresh").on("change", function(){ setAuto(this.checked); });
 
@@ -386,13 +394,22 @@ $(function(){
           $("#detLines").html(`<tr><td colspan="4" class="text-danger">${(r && r.msg) ? r.msg : 'No se pudo cargar detalle'}</td></tr>`);
           return;
         }
+
         const h = r.header || {};
-        $("#hProd").text(h.producto || '—');
-        $("#hCant").text(h.cantidad || '—');
-        $("#hAlm").text(h.almacen || '—');
-        $("#hZona").text(h.zona || '—');
-        $("#hSta").html(badgeStatus(h.status));
-        $("#hFec").text(fmtDT(h.fecha_reg));
+        // Header tolerante (el API puede regresar distintos alias)
+        const prod = h.producto ?? h.clave ?? h.Cve_Articulo ?? '—';
+        const cant = (h.cantidad ?? h.Cantidad ?? '—');
+        const alm  = h.bl_origen ?? h.almacen ?? h.BL_Origen ?? '—';
+        const zn   = h.zona ?? h.Zona ?? '—';
+        const sta  = h.status ?? h.Status ?? '';
+        const fec  = h.fecha_reg ?? h.FechaReg ?? h.fecha ?? h.Fecha ?? '';
+
+        $("#hProd").text(prod);
+        $("#hCant").text((cant==='—'||cant===null||cant==='') ? '—' : Number(cant).toFixed(4));
+        $("#hAlm").text(alm);
+        $("#hZona").text(zn);
+        $("#hSta").html(badgeStatus(sta));
+        $("#hFec").text(fmtDT(fec));
 
         const lines = r.lines || [];
         if(!lines.length){
@@ -400,11 +417,16 @@ $(function(){
         } else {
           let html='';
           lines.forEach((ln,i)=>{
+            // Lines tolerantes: soporta salida legacy (Cve_Articulo/Cantidad/Referencia)
+            // y salida receta (componente/descripcion/cantidad/referencia)
+            const comp = ln.componente ?? ln.Cve_Articulo ?? ln.Componente ?? '';
+            const qty  = ln.cantidad ?? ln.Cantidad ?? 0;
+            const ref  = ln.referencia ?? ln.Referencia ?? ln.descripcion ?? ln.Descripcion ?? '';
             html += `<tr>
               <td>${i+1}</td>
-              <td>${ln.Cve_Articulo || ''}</td>
-              <td class="text-end">${ln.Cantidad ?? ''}</td>
-              <td>${ln.Referencia ?? ''}</td>
+              <td>${comp}</td>
+              <td class="text-end">${(qty===null||qty==='') ? '' : Number(qty).toFixed(4)}</td>
+              <td>${ref}</td>
             </tr>`;
           });
           $("#detLines").html(html);

@@ -35,22 +35,27 @@ try {
     $almacen_id = $_GET['almacen_id'] ?? '';
     if ($almacen_id === '') err("Falta almacen_id");
 
-    // Asumimos listapromo.id_almacen existe (por tu captura de estructura).
+    // ESQUEMA REAL (según tu phpMyAdmin):
+    // listapromo: id, Lista, Descripcion, Caduca, FechaI, FechaF, Grupo, Activa, Tipo, Cve_Almac
+    // Nota: por_depcont / por_depfical NO existen en este esquema -> los exponemos en 0 para compatibilidad UI.
     $rows = db_all("
       SELECT
         lp.id,
-        IFNULL(lp.cve_gpoart,'') AS clave,
-        IFNULL(lp.des_gpoart,'') AS descripcion,
-        IFNULL(lp.por_depcont,0) AS por_depcont,
-        IFNULL(lp.por_depfical,0) AS por_depfical,
-        IFNULL(lp.Activo,0) AS Activo,
-        IFNULL(lp.id_almacen,0) AS id_almacen,
+        IFNULL(lp.Lista,'')       AS clave,
+        IFNULL(lp.Descripcion,'') AS descripcion,
+        0                         AS por_depcont,
+        0                         AS por_depfical,
+        IFNULL(lp.Activa,0)       AS Activo,
+        IFNULL(lp.Cve_Almac,0)    AS id_almacen,
+        lp.FechaI                 AS fecha_inicio,
+        lp.FechaF                 AS fecha_fin,
+        IFNULL(lp.Tipo,'')        AS tipo,
 
         -- métricas rápidas (motor nuevo)
         (SELECT COUNT(*) FROM promo_scope ps WHERE ps.promo_id = CAST(lp.id AS CHAR) AND ps.activo=1) AS total_scope,
         (SELECT COUNT(*) FROM promo_rule  pr WHERE pr.promo_id = CAST(lp.id AS CHAR) AND pr.activo=1) AS total_rules
       FROM listapromo lp
-      WHERE IFNULL(lp.id_almacen,0) = ?
+      WHERE IFNULL(lp.Cve_Almac,0) = ?
       ORDER BY lp.id DESC
     ", [$almacen_id]);
 
@@ -61,7 +66,25 @@ try {
     $id = $_GET['id'] ?? '';
     if ($id==='') err("Falta id");
 
-    $promo = db_one("SELECT * FROM listapromo WHERE id = ?", [$id]);
+    // Encabezado normalizado para UI (alias a nombres legacy esperados por pantallas viejas)
+    $promo = db_one(
+      "SELECT
+        lp.id,
+        lp.Lista       AS cve_gpoart,
+        lp.Descripcion AS des_gpoart,
+        0              AS por_depcont,
+        0              AS por_depfical,
+        lp.Activa      AS Activo,
+        lp.Cve_Almac   AS id_almacen,
+        lp.Caduca,
+        lp.FechaI,
+        lp.FechaF,
+        lp.Grupo,
+        lp.Tipo
+      FROM listapromo lp
+      WHERE lp.id = ?",
+      [$id]
+    );
     if (!$promo) err("No existe promoción");
 
     // Nuevo motor (si está instalado)
@@ -85,38 +108,42 @@ try {
     $almacen_id = $_POST['id_almacen'] ?? '';
     $clave      = trim($_POST['cve_gpoart'] ?? '');
     $desc       = trim($_POST['des_gpoart'] ?? '');
-    $por_depcont   = $_POST['por_depcont'] ?? 0;
-    $por_depfical  = $_POST['por_depfical'] ?? 0;
     $activo     = isset($_POST['Activo']) ? intval($_POST['Activo']) : 1;
+
+    // opcionales
+    $caduca = isset($_POST['Caduca']) ? intval($_POST['Caduca']) : 0;
+    $fechaI = $_POST['FechaI'] ?? null;
+    $fechaF = $_POST['FechaF'] ?? null;
+    $tipo   = $_POST['Tipo'] ?? '';
+    $grupo  = $_POST['Grupo'] ?? null;
 
     if ($almacen_id==='') err("Falta id_almacen");
     if ($clave==='') err("Falta clave");
     if ($desc==='') err("Falta descripción");
 
-    db_tx(function() use ($id,$almacen_id,$clave,$desc,$por_depcont,$por_depfical,$activo) {
+    $saved_id = db_tx(function() use ($id,$almacen_id,$clave,$desc,$activo,$caduca,$fechaI,$fechaF,$tipo,$grupo) {
       if ($id==='') {
-        dbq("INSERT INTO listapromo (cve_gpoart, des_gpoart, por_depcont, por_depfical, Activo, id_almacen)
-             VALUES (?,?,?,?,?,?)",
-            [$clave,$desc,$por_depcont,$por_depfical,$activo,$almacen_id]);
-        $new_id = db_val("SELECT LAST_INSERT_ID()");
-        return $new_id;
+        dbq("INSERT INTO listapromo (Lista, Descripcion, Caduca, FechaI, FechaF, Grupo, Activa, Tipo, Cve_Almac)
+             VALUES (?,?,?,?,?,?,?,?,?)",
+            [$clave,$desc,$caduca,$fechaI,$fechaF,$grupo,$activo,$tipo,$almacen_id]);
+        return db_val("SELECT LAST_INSERT_ID()");
       } else {
         dbq("UPDATE listapromo
-             SET cve_gpoart=?, des_gpoart=?, por_depcont=?, por_depfical=?, Activo=?, id_almacen=?
+             SET Lista=?, Descripcion=?, Caduca=?, FechaI=?, FechaF=?, Grupo=?, Activa=?, Tipo=?, Cve_Almac=?
              WHERE id=?",
-            [$clave,$desc,$por_depcont,$por_depfical,$activo,$almacen_id,$id]);
+            [$clave,$desc,$caduca,$fechaI,$fechaF,$grupo,$activo,$tipo,$almacen_id,$id]);
         return $id;
       }
     });
 
-    ok(['id'=>$id==='' ? db_val("SELECT LAST_INSERT_ID()") : $id]);
+    ok(['id'=>$saved_id]);
   }
 
   if ($action === 'toggle') {
     $id = $_POST['id'] ?? '';
     $activo = $_POST['Activo'] ?? null;
     if ($id==='' || $activo===null) err("Parámetros incompletos");
-    dbq("UPDATE listapromo SET Activo=? WHERE id=?", [intval($activo), $id]);
+    dbq("UPDATE listapromo SET Activa=? WHERE id=?", [intval($activo), $id]);
     ok();
   }
 
@@ -235,8 +262,8 @@ try {
     if ($promo_id==='') err("Falta promo_id");
 
     // Validar que promo esté activa en listapromo
-    $lp = db_one("SELECT id, Activo FROM listapromo WHERE id=?", [$promo_id]);
-    if (!$lp || intval($lp['Activo'])!==1) err("Promoción inactiva o no existe");
+    $lp = db_one("SELECT id, Activa FROM listapromo WHERE id=?", [$promo_id]);
+    if (!$lp || intval($lp['Activa'])!==1) err("Promoción inactiva o no existe");
 
     // Reglas activas
     $rules = db_all("SELECT * FROM promo_rule WHERE promo_id=? AND activo=1 ORDER BY nivel", [strval($promo_id)]);

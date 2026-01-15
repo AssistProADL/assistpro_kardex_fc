@@ -1,16 +1,20 @@
 <?php
 // public/api/sfa/clientes_asignacion_save.php
-declare(strict_types=1);
+// reldaycli: se mantiene el comportamiento probado (delete+insert por destinatario recibido)
+// relclirutas: NO se resetea; se mantiene histórico y solo se agrega lo nuevo.
+//             Solo se elimina si llega bandera explícita de desasignación (unassign=1 o asignado=0)
 
+declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
-// ---- Helpers de respuesta
 function jexit(array $arr): void {
   echo json_encode($arr, JSON_UNESCAPED_UNICODE);
   exit;
 }
 
-// ---- Cargar conexión PDO (ajusta rutas si tu proyecto difiere)
+/* =========================
+   CONEXIÓN PDO (estándar)
+   ========================= */
 $pdo = null;
 $tryPaths = [
   __DIR__ . '/../../../app/db.php',
@@ -18,12 +22,9 @@ $tryPaths = [
   __DIR__ . '/../../../includes/db.php',
   __DIR__ . '/../../includes/db.php',
 ];
-
 foreach ($tryPaths as $p) {
   if (file_exists($p)) { require_once $p; break; }
 }
-
-// Intentar detectar variable PDO típica
 if (isset($pdo) && $pdo instanceof PDO) {
   // ok
 } elseif (isset($db) && $db instanceof PDO) {
@@ -33,171 +34,187 @@ if (isset($pdo) && $pdo instanceof PDO) {
 } elseif (function_exists('db_conn')) {
   $pdo = db_conn();
 }
-
 if (!$pdo || !($pdo instanceof PDO)) {
-  jexit(['ok'=>0,'error'=>'No se pudo inicializar PDO (db.php).']);
+  jexit(['ok'=>0,'error'=>'No se pudo inicializar PDO']);
 }
 
-// ---- Leer payload (JSON o POST)
+/* =========================
+   LECTURA DE PAYLOAD
+   ========================= */
 $raw = file_get_contents('php://input');
 $payload = null;
 
 if ($raw && strlen(trim($raw)) > 0) {
   $payload = json_decode($raw, true);
   if ($payload === null && json_last_error() !== JSON_ERROR_NONE) {
-    jexit(['ok'=>0,'error'=>'JSON inválido en body','detalle'=>json_last_error_msg()]);
+    jexit(['ok'=>0,'error'=>'JSON inválido','detalle'=>json_last_error_msg()]);
   }
 } else {
   $payload = $_POST ?: [];
 }
 
-// Normalizar params
-$almacen_id = (int)($payload['almacen_id'] ?? $payload['almacen'] ?? $payload['id_almacen'] ?? 0);
-$ruta_id    = (int)($payload['ruta_id']    ?? $payload['ruta']    ?? $payload['id_ruta']    ?? 0);
+$almacen = trim((string)($payload['almacen'] ?? $payload['almacen_id'] ?? ''));
+$ruta    = trim((string)($payload['ruta']    ?? $payload['ruta_id']    ?? ''));
+$items   = $payload['items'] ?? [];
 
-// items puede venir como array ya decodificado o como string JSON en POST
-$items = $payload['items'] ?? $payload['data'] ?? [];
-if (is_string($items)) {
-  $tmp = json_decode($items, true);
-  if (is_array($tmp)) $items = $tmp;
+if ($almacen === '' || $ruta === '' || !is_array($items)) {
+  jexit(['ok'=>0,'error'=>'Parámetros incompletos']);
 }
 
-if ($almacen_id <= 0 || $ruta_id <= 0 || !is_array($items) || count($items) === 0) {
-  jexit([
-    'ok'=>0,
-    'error'=>'Parámetros incompletos (almacen_id/ruta_id/items).',
-    'debug'=>[
-      'almacen_id'=>$almacen_id,
-      'ruta_id'=>$ruta_id,
-      'items_type'=>gettype($items),
-      'items_count'=>is_array($items)?count($items):0
-    ]
-  ]);
-}
-
-// ---- Funciones para días
+/* =========================
+   HELPERS
+   ========================= */
 function daysFromItem(array $it): array {
-  // Prioridad:
-  // 1) flags Lu..Do explícitos
-  // 2) dias_bits (ej "1010100")
-  // 3) days_bits
-  // 4) dias (array)
-  $Lu=$Ma=$Mi=$Ju=$Vi=$Sa=$Do=0;
-
-  $hasExplicit = false;
-  foreach (['Lu','Ma','Mi','Ju','Vi','Sa','Do'] as $k) {
-    if (array_key_exists($k, $it)) { $hasExplicit = true; }
-  }
-
-  if ($hasExplicit) {
-    $Lu = !empty($it['Lu']) ? 1 : 0;
-    $Ma = !empty($it['Ma']) ? 1 : 0;
-    $Mi = !empty($it['Mi']) ? 1 : 0;
-    $Ju = !empty($it['Ju']) ? 1 : 0;
-    $Vi = !empty($it['Vi']) ? 1 : 0;
-    $Sa = !empty($it['Sa']) ? 1 : 0;
-    $Do = !empty($it['Do']) ? 1 : 0;
-    return compact('Lu','Ma','Mi','Ju','Vi','Sa','Do');
-  }
-
-  $bits = $it['dias_bits'] ?? $it['days_bits'] ?? '';
-  if (is_string($bits) && strlen($bits) >= 7) {
-    $bits = substr($bits, 0, 7);
-    $Lu = ($bits[0] === '1') ? 1 : 0;
-    $Ma = ($bits[1] === '1') ? 1 : 0;
-    $Mi = ($bits[2] === '1') ? 1 : 0;
-    $Ju = ($bits[3] === '1') ? 1 : 0;
-    $Vi = ($bits[4] === '1') ? 1 : 0;
-    $Sa = ($bits[5] === '1') ? 1 : 0;
-    $Do = ($bits[6] === '1') ? 1 : 0;
-    return compact('Lu','Ma','Mi','Ju','Vi','Sa','Do');
-  }
-
-  if (!empty($it['dias']) && is_array($it['dias'])) {
-    $d = $it['dias'];
-    $Lu = !empty($d['Lu'] ?? $d['lu'] ?? 0) ? 1 : 0;
-    $Ma = !empty($d['Ma'] ?? $d['ma'] ?? 0) ? 1 : 0;
-    $Mi = !empty($d['Mi'] ?? $d['mi'] ?? 0) ? 1 : 0;
-    $Ju = !empty($d['Ju'] ?? $d['ju'] ?? 0) ? 1 : 0;
-    $Vi = !empty($d['Vi'] ?? $d['vi'] ?? 0) ? 1 : 0;
-    $Sa = !empty($d['Sa'] ?? $d['sa'] ?? 0) ? 1 : 0;
-    $Do = !empty($d['Do'] ?? $d['do'] ?? 0) ? 1 : 0;
-    return compact('Lu','Ma','Mi','Ju','Vi','Sa','Do');
-  }
-
-  return compact('Lu','Ma','Mi','Ju','Vi','Sa','Do');
+  return [
+    'Lu'=>!empty($it['Lu']) ? 1 : 0,
+    'Ma'=>!empty($it['Ma']) ? 1 : 0,
+    'Mi'=>!empty($it['Mi']) ? 1 : 0,
+    'Ju'=>!empty($it['Ju']) ? 1 : 0,
+    'Vi'=>!empty($it['Vi']) ? 1 : 0,
+    'Sa'=>!empty($it['Sa']) ? 1 : 0,
+    'Do'=>!empty($it['Do']) ? 1 : 0,
+  ];
 }
 
-// ---- Guardado transaccional, anti-duplicados
-$okCount = 0;
-$errCount = 0;
-$errors = [];
+function isTruthy($v): bool {
+  if (is_bool($v)) return $v;
+  if (is_numeric($v)) return ((int)$v) !== 0;
+  $s = strtolower(trim((string)$v));
+  return in_array($s, ['1','si','sí','true','t','x','on'], true);
+}
 
+/* =========================
+   TRANSACCIÓN
+   ========================= */
 try {
   $pdo->beginTransaction();
 
-  // Statements preparados
-  $delDup = $pdo->prepare("
+  /* ---- reldaycli (MISMA LÓGICA QUE YA FUNCIONABA) ---- */
+  $delDayByDest = $pdo->prepare("
     DELETE FROM reldaycli
-    WHERE Cve_Almac = ? AND Cve_Ruta = ? AND Id_Destinatario = ?
+     WHERE Cve_Almac = ?
+       AND Cve_Ruta  = ?
+       AND Id_Destinatario = ?
   ");
 
-  $ins = $pdo->prepare("
+  $insDay = $pdo->prepare("
     INSERT INTO reldaycli
-      (Cve_Almac, Cve_Ruta, Cve_Cliente, Id_Destinatario, Cve_Vendedor, Lu, Ma, Mi, Ju, Vi, Sa, Do)
+      (Cve_Almac, Cve_Ruta, Cve_Cliente, Id_Destinatario, Cve_Vendedor,
+       Lu, Ma, Mi, Ju, Vi, Sa, Do)
     VALUES
       (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ");
 
-  foreach ($items as $idx => $it) {
-    if (!is_array($it)) { $errCount++; $errors[]="Item#$idx no es objeto"; continue; }
+  /* ---- relclirutas (MANTENER + AGREGAR; BORRAR SOLO EXPLÍCITO) ---- */
+  // Estructura confirmada:
+  // IdCliente (varchar), IdRuta (int), IdEmpresa (varchar), Fecha (date)
+  $selRelExists = $pdo->prepare("
+    SELECT 1
+      FROM relclirutas
+     WHERE IdEmpresa = ?
+       AND IdRuta    = ?
+       AND IdCliente = ?
+     LIMIT 1
+  ");
 
-    $id_dest = (int)($it['id_destinatario'] ?? $it['Id_Destinatario'] ?? $it['destinatario_id'] ?? 0);
-    $cve_cte = (string)($it['Cve_Cte'] ?? $it['Cve_Cliente'] ?? $it['cve_cliente'] ?? $it['cliente'] ?? '');
-    $cve_vend = (string)($it['Cve_Vendedor'] ?? $it['cve_vendedor'] ?? '');
+  $insRel = $pdo->prepare("
+    INSERT INTO relclirutas
+      (IdCliente, IdRuta, IdEmpresa, Fecha)
+    VALUES
+      (?, ?, ?, CURDATE())
+  ");
 
-    if ($id_dest <= 0) { $errCount++; $errors[]="Item#$idx sin id_destinatario"; continue; }
-    if ($cve_cte === '') { $cve_cte = '0'; } // fallback seguro si no viene
+  $delRelOne = $pdo->prepare("
+    DELETE FROM relclirutas
+     WHERE IdEmpresa = ?
+       AND IdRuta    = ?
+       AND IdCliente = ?
+  ");
 
+  // Cuando se desasigna, también se eliminan sus visitas (si existen)
+  $delDayByDestOnly = $pdo->prepare("
+    DELETE FROM reldaycli
+     WHERE Cve_Almac = ?
+       AND Cve_Ruta  = ?
+       AND Id_Destinatario = ?
+  ");
+
+  $ok = 0;
+  $rel_added = 0;
+  $rel_deleted = 0;
+  $day_saved = 0;
+  $day_deleted = 0;
+
+  foreach ($items as $it) {
+    if (!is_array($it)) continue;
+
+    $idDest = (int)($it['id_destinatario'] ?? $it['Id_Destinatario'] ?? 0);
+    if ($idDest <= 0) continue;
+
+    $cveCliente  = trim((string)($it['cve_cliente'] ?? $it['Cve_Cliente'] ?? ''));
+    $cveVendedor = trim((string)($it['cve_vendedor'] ?? $it['Cve_Vendedor'] ?? ''));
+
+    // Fallback estable para no perder asignación si cve_cliente viene vacío
+    $idClienteRel = ($cveCliente !== '') ? $cveCliente : ('DEST_' . (string)$idDest);
+
+    // Bandera de desasignación (para cuando implementes click "Asignado")
+    $unassign = false;
+    if (array_key_exists('unassign', $it)) $unassign = isTruthy($it['unassign']);
+    if (array_key_exists('asignado', $it)) $unassign = $unassign || (!isTruthy($it['asignado']));
+
+    if ($unassign) {
+      // 1) Quitar asignación
+      $delRelOne->execute([$almacen, (int)$ruta, $idClienteRel]);
+      $rel_deleted += $delRelOne->rowCount() > 0 ? 1 : 0;
+
+      // 2) Quitar días (si existen)
+      $delDayByDestOnly->execute([$almacen, $ruta, $idDest]);
+      $day_deleted += $delDayByDestOnly->rowCount() > 0 ? 1 : 0;
+
+      $ok++;
+      continue;
+    }
+
+    // 1) Mantener/agregar asignación en relclirutas (SIN borrar lo existente)
+    $selRelExists->execute([$almacen, (int)$ruta, $idClienteRel]);
+    $exists = $selRelExists->fetchColumn();
+
+    if (!$exists) {
+      $insRel->execute([$idClienteRel, (int)$ruta, $almacen]);
+      $rel_added++;
+    }
+
+    // 2) Guardar días en reldaycli solo para este destinatario (mantiene comportamiento probado)
     $days = daysFromItem($it);
-
-    // 1) eliminar cualquier duplicado previo para esta combinación
-    $delDup->execute([$almacen_id, $ruta_id, $id_dest]);
-
-    // 2) insertar 1 sola fila con los días correctos
-    $ins->execute([
-      $almacen_id,
-      $ruta_id,
-      $cve_cte,
-      $id_dest,
-      $cve_vend,
-      $days['Lu'], $days['Ma'], $days['Mi'], $days['Ju'], $days['Vi'], $days['Sa'], $days['Do']
+    $delDayByDest->execute([$almacen, $ruta, $idDest]);
+    $insDay->execute([
+      $almacen,
+      $ruta,
+      $cveCliente,
+      $idDest,
+      $cveVendedor,
+      $days['Lu'], $days['Ma'], $days['Mi'],
+      $days['Ju'], $days['Vi'], $days['Sa'], $days['Do']
     ]);
+    $day_saved++;
 
-    $okCount++;
-  }
-
-  if ($errCount > 0 && $okCount === 0) {
-    $pdo->rollBack();
-    jexit(['ok'=>0,'error'=>'No se pudo guardar ningún registro','detalle'=>$errors]);
+    $ok++;
   }
 
   $pdo->commit();
 
   jexit([
     'ok'=>1,
-    'almacen_id'=>$almacen_id,
-    'ruta_id'=>$ruta_id,
-    'total_ok'=>$okCount,
-    'total_err'=>$errCount,
-    'errors'=>$errors
+    'almacen'=>$almacen,
+    'ruta'=>$ruta,
+    'items_procesados'=>$ok,
+    'reldaycli_guardados'=>$day_saved,
+    'reldaycli_borrados'=>$day_deleted,
+    'relclirutas_agregados'=>$rel_added,
+    'relclirutas_borrados'=>$rel_deleted
   ]);
 
 } catch (Throwable $e) {
   if ($pdo->inTransaction()) $pdo->rollBack();
-  jexit([
-    'ok'=>0,
-    'error'=>'Error guardando asignación',
-    'detalle'=>$e->getMessage()
-  ]);
+  jexit(['ok'=>0,'error'=>'Error al guardar','detalle'=>$e->getMessage()]);
 }
