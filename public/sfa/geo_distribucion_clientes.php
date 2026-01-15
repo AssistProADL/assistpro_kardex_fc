@@ -19,7 +19,7 @@ include __DIR__ . '/../bi/_menu_global.php';
 
   <div class="d-flex align-items-start justify-content-between mb-2">
     <div>
-      <h4 class="ap-title mb-0">Distribución de Clientes en el Mapa</h4>
+      <h4 class="ap-title mb-0">Distribución de Clientes en el Mapa 2</h4>
       <div class="ap-sub">Geocerca + reasignación en línea (relclirutas) con herencia a reldaycli. Incluye crédito y saldo.</div>
     </div>
     <div class="d-flex gap-2">
