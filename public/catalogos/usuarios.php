@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../bi/_menu_global.php';
+
 ?>
 
 <style>

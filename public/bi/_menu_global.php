@@ -566,7 +566,6 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Agregar Editar Componentes ',   'url' => 'manufactura/bom.php',                      'icono' => 'fa-industry'],
                 ['titulo' => 'Planeacion OP',                 'url' => 'manufactura/orden_produccion.php',         'icono' => 'fa-flag'],
                 ['titulo' => 'Importador OPs',                'url' => 'manufactura/importador_op.php',              'icono' => 'fa-industry'],
-                ['titulo' => 'Administrador OP',              'url' => 'manufactura/orden_produccion_admin_base.php',         'icono' => 'fa-flag'],
                 ['titulo' => 'Monitor Producción',            'url' => 'manufactura/monitor_produccion.php',       'icono' => 'fa-flag'],
                 
                              ],
@@ -617,6 +616,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
             // REPORTES
             'Reportes' => [
                 ['titulo' => 'Existencias por Ubicacion', 'url' => 'reportes/existencias_ubicacion.php', 'icono' => 'fa-timeline'],
+                ['titulo' => 'Existencia a Detalle', 'url' => 'reportes/existencias_ubicacion_total.php', 'icono' => 'fa-timeline'],
                 ['titulo' => 'Log de Operaciones', 'url' => 'reportes/operaciones.php', 'icono' => 'fa-timeline'],
                 ['titulo' => 'Salidas', 'url' => 'reportes/salidas.php', 'icono' => 'fa-arrow-right-arrow-left'],
                 ['titulo' => 'Kardex | Trazabilidad', 'url' => 'reportes/kardex.php', 'icono' => 'fa-clipboard-list'],

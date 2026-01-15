@@ -1,526 +1,366 @@
 <?php
-// /public/sfa/promociones.php
-require_once __DIR__ . '/../../bi/_menu_global.php';
-?>
-<style>
-  .ap-wrap{ font-size:10px; }
-  .ap-title{ font-weight:700; font-size:14px; }
-  .ap-btn{ font-size:10px; padding:6px 10px; }
-  .ap-table th, .ap-table td{ font-size:10px; vertical-align:middle; }
-  .badge-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; }
-</style>
+// UI: Administración de Promociones (SFA)
+// Ruta esperada: /public/sfa/promociones/promociones.php
+// Depende de: /public/api/promociones/promociones_api.php
+// Detalles (legacy separado): /public/promociones/promocion_reglas.php, /public/promociones/promocion_beneficios.php, /public/promociones/promocion_scope.php
 
-<div class="container-fluid ap-wrap">
-  <div class="d-flex align-items-center justify-content-between mb-2">
-    <div class="ap-title">Administración de Promociones</div>
+// Menú/layout global (si existe en tu proyecto)
+$menu_global = __DIR__ . '/../../bi/_menu_global.php';
+$menu_global_end = __DIR__ . '/../../bi/_menu_global_end.php';
+if (file_exists($menu_global)) { include $menu_global; }
+?>
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-end justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-0">Administración de Promociones</h3>
+      <div class="text-muted small">Motor: Unidad + Monto + Mixta (Rules / Scope / Rewards)</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnDebug" type="button">Debug</button>
+      <button class="btn btn-primary btn-sm" id="btnBuscar" type="button">Buscar</button>
+      <button class="btn btn-success btn-sm" id="btnNuevo" type="button">+ Nuevo</button>
+    </div>
   </div>
 
-  <div class="card mb-2">
+  <div class="card mb-3">
     <div class="card-body">
-      <div class="row g-2 align-items-end">
-        <div class="col-md-6">
-          <label class="form-label">Seleccione un almacén</label>
-          <select id="almacen_id" class="form-select form-select-sm"></select>
-        </div>
-        <div class="col-md-6 text-end">
-          <button class="btn btn-primary ap-btn" onclick="loadPromos()">Buscar</button>
-          <button class="btn btn-success ap-btn" onclick="openPromo()">+ Nuevo</button>
-        </div>
-      </div>
+      <label class="form-label mb-2">Seleccione un almacén</label>
+      <select class="form-select" id="selAlmacen"></select>
+
+      <pre class="mt-3 mb-0 small bg-light p-2 rounded border" id="debugBox" style="display:none; max-height:160px; overflow:auto;"></pre>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-body p-2">
+    <div class="card-body">
       <div class="table-responsive">
-        <table class="table table-bordered table-hover ap-table mb-0">
-          <thead class="table-light">
+        <table class="table table-sm align-middle" id="tblPromos">
+          <thead>
             <tr>
-              <th style="width:90px;">Acciones</th>
-              <th style="width:60px;">Status</th>
-              <th style="width:70px;">ID</th>
-              <th style="width:140px;">Clave</th>
+              <th style="width:280px;">Acciones</th>
+              <th>Status</th>
+              <th>ID</th>
+              <th>Clave</th>
               <th>Descripción</th>
-              <th style="width:110px;">% DepCont</th>
-              <th style="width:110px;">% DepFiscal</th>
-              <th style="width:110px;">Rules</th>
-              <th style="width:110px;">Scope</th>
+              <th>Inicio</th>
+              <th>Fin</th>
+              <th class="text-end">Rules</th>
+              <th class="text-end">Scope</th>
             </tr>
           </thead>
-          <tbody id="tb"></tbody>
+          <tbody id="tbPromos">
+            <tr><td colspan="9" class="text-muted">Cargando...</td></tr>
+          </tbody>
         </table>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Modal Promo -->
-<div class="modal fade" id="mdlPromo" tabindex="-1">
-  <div class="modal-dialog modal-xl">
+<!-- Modal Promo (header) -->
+<div class="modal fade" id="mdlPromo" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <div class="modal-title fw-bold" style="font-size:12px;">Promoción</div>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h5 class="modal-title" id="mdlPromoTitle">Promoción</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
-
-      <div class="modal-body" style="font-size:10px;">
-        <input type="hidden" id="p_id">
-
+      <div class="modal-body">
+        <input type="hidden" id="promo_id" value="">
         <div class="row g-2">
-          <div class="col-md-4">
+          <div class="col-md-5">
             <label class="form-label">Almacén*</label>
-            <select id="p_id_almacen" class="form-select form-select-sm"></select>
+            <select class="form-select" id="promo_almacen"></select>
           </div>
           <div class="col-md-4">
             <label class="form-label">Clave*</label>
-            <input id="p_cve" class="form-control form-control-sm" maxlength="20">
+            <input class="form-control" id="promo_clave" maxlength="80">
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label">Estatus</label>
-            <select id="p_activo" class="form-select form-select-sm">
+            <select class="form-select" id="promo_activa">
               <option value="1">Activa</option>
               <option value="0">Inactiva</option>
             </select>
           </div>
 
-          <div class="col-md-8">
+          <div class="col-12">
             <label class="form-label">Descripción*</label>
-            <input id="p_desc" class="form-control form-control-sm" maxlength="100">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">% DepCont</label>
-            <input id="p_depcont" class="form-control form-control-sm" type="number" step="0.01">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">% DepFiscal</label>
-            <input id="p_depfiscal" class="form-control form-control-sm" type="number" step="0.01">
-          </div>
-        </div>
-
-        <hr class="my-2">
-
-        <!-- Motor Nuevo -->
-        <div class="row g-2">
-          <div class="col-md-6">
-            <div class="fw-bold mb-1">Reglas / Escalones (Monto / Mix)</div>
-            <div class="d-flex gap-1 mb-1">
-              <button class="btn btn-outline-primary ap-btn" onclick="addRule()">+ Regla</button>
-            </div>
-            <div class="table-responsive">
-              <table class="table table-sm table-bordered ap-table">
-                <thead class="table-light">
-                  <tr>
-                    <th style="width:60px;">Nivel</th>
-                    <th style="width:90px;">Trigger</th>
-                    <th style="width:120px;">Monto</th>
-                    <th style="width:110px;">Acumula</th>
-                    <th style="width:70px;">Acc</th>
-                  </tr>
-                </thead>
-                <tbody id="tb_rules"></tbody>
-              </table>
-            </div>
+            <input class="form-control" id="promo_descripcion" maxlength="255">
           </div>
 
-          <div class="col-md-6">
-            <div class="fw-bold mb-1">Alcance (Scope)</div>
-            <div class="row g-1 align-items-end">
-              <div class="col-md-4">
-                <label class="form-label">Tipo</label>
-                <select id="s_tipo" class="form-select form-select-sm">
-                  <option value="CLIENTE">CLIENTE</option>
-                  <option value="RUTA">RUTA</option>
-                  <option value="VENDEDOR">VENDEDOR</option>
-                </select>
-              </div>
-              <div class="col-md-5">
-                <label class="form-label">ID/Clave</label>
-                <input id="s_id" class="form-control form-control-sm">
-              </div>
-              <div class="col-md-3 text-end">
-                <button class="btn btn-outline-primary ap-btn" onclick="addScope()">Agregar</button>
-              </div>
-            </div>
-
-            <div class="table-responsive mt-1">
-              <table class="table table-sm table-bordered ap-table">
-                <thead class="table-light">
-                  <tr>
-                    <th style="width:110px;">Tipo</th>
-                    <th>ID</th>
-                    <th style="width:70px;">Acc</th>
-                  </tr>
-                </thead>
-                <tbody id="tb_scope"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <hr class="my-2">
-
-        <div class="fw-bold mb-1">Beneficios (Rewards) de la regla seleccionada</div>
-        <div class="row g-1 align-items-end">
           <div class="col-md-3">
-            <label class="form-label">Tipo</label>
-            <select id="rw_tipo" class="form-select form-select-sm">
-              <option value="DESC_PCT">DESC_PCT (%)</option>
-              <option value="DESC_MONTO">DESC_MONTO ($)</option>
-              <option value="BONIF_PRODUCTO">BONIF_PRODUCTO</option>
-              <option value="CUPON_PCT_NEXT">CUPON_PCT_NEXT (%)</option>
-              <option value="CUPON_MONTO_NEXT">CUPON_MONTO_NEXT ($)</option>
+            <label class="form-label">Caduca</label>
+            <select class="form-select" id="promo_caduca">
+              <option value="0">No</option>
+              <option value="1">Sí</option>
             </select>
           </div>
-          <div class="col-md-2">
-            <label class="form-label">Valor</label>
-            <input id="rw_valor" class="form-control form-control-sm" type="number" step="0.01">
+          <div class="col-md-3">
+            <label class="form-label">Fecha Inicio</label>
+            <input type="date" class="form-control" id="promo_inicio">
           </div>
-          <div class="col-md-2">
-            <label class="form-label">Artículo</label>
-            <input id="rw_art" class="form-control form-control-sm" placeholder="si aplica">
+          <div class="col-md-3">
+            <label class="form-label">Fecha Fin</label>
+            <input type="date" class="form-control" id="promo_fin">
           </div>
-          <div class="col-md-2">
-            <label class="form-label">Qty</label>
-            <input id="rw_qty" class="form-control form-control-sm" type="number" step="0.0001">
+          <div class="col-md-3">
+            <label class="form-label">Tipo</label>
+            <select class="form-select" id="promo_tipo">
+              <option value="UNIDADES">Unidades</option>
+              <option value="MONTO">Monto</option>
+              <option value="MIXTO">Mixta</option>
+            </select>
           </div>
-          <div class="col-md-3 text-end">
-            <button class="btn btn-outline-success ap-btn" onclick="addReward()">Agregar</button>
+
+          <div class="col-12">
+            <div class="text-muted small">Fiscal/contable no se gestiona aquí (se eliminó del módulo).</div>
           </div>
         </div>
-
-        <div class="table-responsive mt-1">
-          <table class="table table-sm table-bordered ap-table">
-            <thead class="table-light">
-              <tr>
-                <th style="width:160px;">Tipo</th>
-                <th style="width:110px;">Valor</th>
-                <th>Artículo</th>
-                <th style="width:90px;">Qty</th>
-                <th style="width:70px;">Acc</th>
-              </tr>
-            </thead>
-            <tbody id="tb_rewards"></tbody>
-          </table>
-        </div>
-
-        <div class="alert alert-info py-1 mt-2 mb-0" style="font-size:10px;">
-          Tip: usa reglas por monto (MONTO) y asigna rewards híbridos. Luego, desde pedidos/venta podrás “simular” y aplicar.
-        </div>
-
       </div>
-
       <div class="modal-footer">
-        <button class="btn btn-secondary ap-btn" data-bs-dismiss="modal">Cerrar</button>
-        <button class="btn btn-primary ap-btn" onclick="savePromo()">Guardar</button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Cerrar</button>
+        <button class="btn btn-primary" id="btnGuardarPromo" type="button">Guardar</button>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-const API = '../api/sfa/promociones_api.php';
-let mdlPromo;
-let currentRuleId = null;
-let cache = { rules: [], rewards: [], scope: [] };
+(function(){
+  const API = "../../api/promociones/promociones_api.php"; // desde /public/sfa/promociones/
+  const selAlmacen = document.getElementById('selAlmacen');
+  const tbPromos = document.getElementById('tbPromos');
+  const debugBox = document.getElementById('debugBox');
+  const btnDebug = document.getElementById('btnDebug');
+  const btnBuscar = document.getElementById('btnBuscar');
+  const btnNuevo  = document.getElementById('btnNuevo');
 
-document.addEventListener('DOMContentLoaded', async () => {
-  mdlPromo = new bootstrap.Modal(document.getElementById('mdlPromo'));
-  await loadAlmacenes();
-});
+  // Modal
+  const mdlEl = document.getElementById('mdlPromo');
+  const mdl = (window.bootstrap && bootstrap.Modal) ? new bootstrap.Modal(mdlEl) : null;
+  const promo_id = document.getElementById('promo_id');
+  const promo_almacen = document.getElementById('promo_almacen');
+  const promo_clave = document.getElementById('promo_clave');
+  const promo_descripcion = document.getElementById('promo_descripcion');
+  const promo_activa = document.getElementById('promo_activa');
+  const promo_caduca = document.getElementById('promo_caduca');
+  const promo_inicio = document.getElementById('promo_inicio');
+  const promo_fin = document.getElementById('promo_fin');
+  const promo_tipo = document.getElementById('promo_tipo');
+  const btnGuardarPromo = document.getElementById('btnGuardarPromo');
 
-async function apiGet(params){
-  const url = API + '?' + new URLSearchParams(params).toString();
-  const r = await fetch(url);
-  return await r.json();
-}
-async function apiPost(params){
-  const fd = new FormData();
-  Object.keys(params).forEach(k=>fd.append(k, params[k]));
-  const r = await fetch(API, { method:'POST', body: fd });
-  return await r.json();
-}
+  let almacenes = [];
+  let promos = [];
 
-async function loadAlmacenes(){
-  const j = await apiGet({action:'almacenes'});
-  if(!j.ok){ alert(j.error); return; }
-  const sel = document.getElementById('almacen_id');
-  const sel2 = document.getElementById('p_id_almacen');
-  sel.innerHTML = '';
-  sel2.innerHTML = '';
-  j.rows.forEach(a=>{
-    const txt = `(${a.id}) ${a.nombre}`;
-    sel.add(new Option(txt, a.id));
-    sel2.add(new Option(txt, a.id));
-  });
-  if(sel.value) loadPromos();
-}
-
-async function loadPromos(){
-  const almacen_id = document.getElementById('almacen_id').value;
-  const j = await apiGet({action:'list', almacen_id});
-  if(!j.ok){ alert(j.error); return; }
-  const tb = document.getElementById('tb');
-  tb.innerHTML = '';
-  j.rows.forEach(r=>{
-    const dot = r.Activo==1 ? 'background:#1bb34a;' : 'background:#b9b9b9;';
-    tb.insertAdjacentHTML('beforeend', `
-      <tr>
-        <td>
-          <button class="btn btn-outline-primary ap-btn" onclick="openPromo(${r.id})">Ver</button>
-        </td>
-        <td class="text-center"><span class="badge-dot" style="${dot}"></span></td>
-        <td class="text-end">${r.id}</td>
-        <td>${escapeHtml(r.clave)}</td>
-        <td>${escapeHtml(r.descripcion)}</td>
-        <td class="text-end">${Number(r.por_depcont||0).toFixed(2)}</td>
-        <td class="text-end">${Number(r.por_depfical||0).toFixed(2)}</td>
-        <td class="text-end">${r.total_rules||0}</td>
-        <td class="text-end">${r.total_scope||0}</td>
-      </tr>
-    `);
-  });
-}
-
-function openPromo(id=null){
-  document.getElementById('p_id').value = '';
-  document.getElementById('p_cve').value = '';
-  document.getElementById('p_desc').value = '';
-  document.getElementById('p_depcont').value = '0';
-  document.getElementById('p_depfiscal').value = '0';
-  document.getElementById('p_activo').value = '1';
-  document.getElementById('p_id_almacen').value = document.getElementById('almacen_id').value;
-
-  cache = { rules: [], rewards: [], scope: [] };
-  currentRuleId = null;
-  renderRules(); renderScope(); renderRewards();
-
-  if(id){
-    loadPromo(id);
-  } else {
-    mdlPromo.show();
-  }
-}
-
-async function loadPromo(id){
-  const j = await apiGet({action:'get', id});
-  if(!j.ok){ alert(j.error); return; }
-
-  const p = j.promo;
-  document.getElementById('p_id').value = p.id;
-  document.getElementById('p_id_almacen').value = p.id_almacen || document.getElementById('almacen_id').value;
-  document.getElementById('p_cve').value = p.cve_gpoart || '';
-  document.getElementById('p_desc').value = p.des_gpoart || '';
-  document.getElementById('p_depcont').value = p.por_depcont || 0;
-  document.getElementById('p_depfiscal').value = p.por_depfical || 0;
-  document.getElementById('p_activo').value = (p.Activo==1 ? '1':'0');
-
-  cache.rules = j.rules || [];
-  cache.scope = j.scope || [];
-  cache.rewards = j.rewards || [];
-
-  currentRuleId = cache.rules.length ? cache.rules[0].id_rule : null;
-
-  renderRules(); renderScope(); renderRewards();
-  mdlPromo.show();
-}
-
-async function savePromo(){
-  const id = document.getElementById('p_id').value;
-  const params = {
-    action:'save',
-    id,
-    id_almacen: document.getElementById('p_id_almacen').value,
-    cve_gpoart: document.getElementById('p_cve').value.trim(),
-    des_gpoart: document.getElementById('p_desc').value.trim(),
-    por_depcont: document.getElementById('p_depcont').value,
-    por_depfical: document.getElementById('p_depfiscal').value,
-    Activo: document.getElementById('p_activo').value
-  };
-  const j = await apiPost(params);
-  if(!j.ok){ alert(j.error + (j.detalle?("\n"+j.detalle):"")); return; }
-
-  // set id if new
-  if(!id){
-    // No es crítico; solo refrescamos listado y recargamos
-  }
-  await loadPromos();
-  alert('Guardado OK');
-  mdlPromo.hide();
-}
-
-function addRule(){
-  if(!document.getElementById('p_id').value){
-    alert('Guarda primero el encabezado (Promoción) y luego agrega reglas.');
-    return;
+  function logDebug(msg){
+    const ts = new Date().toLocaleTimeString();
+    debugBox.textContent = `[${ts}] ${msg}\n` + debugBox.textContent;
   }
 
-  // UI simple por prompt para no meter otro modal
-  const nivel = prompt('Nivel (1..n):', '1');
-  if(!nivel) return;
+  async function apiGet(params){
+    const url = API + "?" + new URLSearchParams(params).toString();
+    const r = await fetch(url, {credentials:'same-origin'});
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.detalle || j.error || "Error servidor");
+    return j;
+  }
 
-  const monto = prompt('Threshold MONTO (ej. 25000):', '0');
-  if(monto===null) return;
+  async function apiPost(params, body){
+    const url = API + "?" + new URLSearchParams(params).toString();
+    const r = await fetch(url, {
+      method:'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},
+      body: new URLSearchParams(body).toString(),
+      credentials:'same-origin'
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.detalle || j.error || "Error servidor");
+    return j;
+  }
 
-  saveRule({
-    nivel: Number(nivel),
-    trigger_tipo: 'MONTO',
-    threshold_monto: Number(monto),
-    acumula: 'S',
-    acumula_por: 'PERIODO'
+  function getAlmacenId(){
+    const v = selAlmacen.value;
+    return v ? parseInt(v, 10) : 0;
+  }
+
+  function fillAlmacenesSelect(){
+    selAlmacen.innerHTML = "";
+    promo_almacen.innerHTML = "";
+
+    almacenes.forEach(a => {
+      const opt = document.createElement('option');
+      opt.value = a.id_almacen;
+      opt.textContent = `(${a.id_almacen}) ${a.nombre}`;
+      selAlmacen.appendChild(opt);
+
+      const opt2 = opt.cloneNode(true);
+      promo_almacen.appendChild(opt2);
+    });
+  }
+
+  function badgeActivo(activo){
+    return activo ? '<span class="badge bg-success">Activa</span>' : '<span class="badge bg-secondary">Inactiva</span>';
+  }
+
+  function renderPromos(){
+    if (!promos.length){
+      tbPromos.innerHTML = `<tr><td colspan="9" class="text-muted">Sin promociones para este almacén.</td></tr>`;
+      return;
+    }
+    tbPromos.innerHTML = promos.map(p => {
+      const rules = p.rules_count ?? 0;
+      const scope = p.scope_count ?? 0;
+      const inicio = p.fecha_ini || p.inicio || '';
+      const fin = p.fecha_fin || p.fin || '';
+      return `
+        <tr>
+          <td>
+            <div class="btn-group btn-group-sm" role="group">
+              <button class="btn btn-outline-primary" data-act="ver" data-id="${p.id}">Ver</button>
+              <button class="btn btn-outline-secondary" data-act="rules" data-id="${p.id}">Rules</button>
+              <button class="btn btn-outline-secondary" data-act="rewards" data-id="${p.id}">Rewards</button>
+              <button class="btn btn-outline-secondary" data-act="scope" data-id="${p.id}">Scope</button>
+            </div>
+          </td>
+          <td>${badgeActivo(!!p.activo)}</td>
+          <td>${p.id}</td>
+          <td>${(p.clave||'')}</td>
+          <td>${(p.descripcion||'')}</td>
+          <td>${inicio}</td>
+          <td>${fin}</td>
+          <td class="text-end">${rules}</td>
+          <td class="text-end">${scope}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function openPromoModal(p){
+    promo_id.value = p?.id || '';
+    promo_almacen.value = (p?.id_almacen || getAlmacenId() || '');
+    promo_clave.value = p?.clave || '';
+    promo_descripcion.value = p?.descripcion || '';
+    promo_activa.value = (p?.activo ?? 1) ? '1' : '0';
+    promo_caduca.value = (p?.caduca ?? 0) ? '1' : '0';
+    promo_inicio.value = (p?.fecha_ini || p?.inicio || '');
+    promo_fin.value = (p?.fecha_fin || p?.fin || '');
+    promo_tipo.value = (p?.tipo || 'MONTO');
+
+    if (mdl) mdl.show();
+    else mdlEl.style.display='block';
+  }
+
+  async function loadAlmacenes(){
+    const j = await apiGet({action:'almacenes'});
+    almacenes = j.almacenes || [];
+    fillAlmacenesSelect();
+    logDebug(`Almacenes=${almacenes.length}`);
+  }
+
+  async function loadPromos(){
+    const almacenId = getAlmacenId();
+    if (!almacenId){
+      tbPromos.innerHTML = `<tr><td colspan="9" class="text-muted">Seleccione un almacén.</td></tr>`;
+      return;
+    }
+    const j = await apiGet({action:'list', almacen_id: almacenId});
+    promos = j.promos || [];
+    logDebug(`Promos=${promos.length} (almacen=${almacenId})`);
+    renderPromos();
+  }
+
+  function gotoDetalle(kind, promoId){
+    const almacenId = getAlmacenId();
+    if (!almacenId || !promoId){
+      alert("Selecciona almacén y promo.");
+      return;
+    }
+    // Páginas de detalle viven en /public/promociones/
+    const base = "../../promociones/";
+    let page = "";
+    if (kind === "rules") page = "promocion_reglas.php";
+    if (kind === "rewards") page = "promocion_beneficios.php";
+    if (kind === "scope") page = "promocion_scope.php";
+    if (!page) return;
+
+    const url = base + page + "?" + new URLSearchParams({promo_id: promoId, almacen_id: almacenId}).toString();
+    window.location.href = url;
+  }
+
+  // Eventos
+  btnDebug.addEventListener('click', () => {
+    debugBox.style.display = (debugBox.style.display === 'none') ? 'block' : 'none';
   });
-}
+  btnBuscar.addEventListener('click', loadPromos);
 
-async function saveRule(rule){
-  const promo_id = document.getElementById('p_id').value;
-  const j = await apiPost({
-    action:'rule_save',
-    promo_id,
-    id_rule: rule.id_rule || '',
-    nivel: rule.nivel || 1,
-    trigger_tipo: rule.trigger_tipo || 'MONTO',
-    threshold_monto: rule.threshold_monto ?? '',
-    threshold_qty: rule.threshold_qty ?? '',
-    acumula: rule.acumula || 'S',
-    acumula_por: rule.acumula_por || 'PERIODO',
-    min_items_distintos: rule.min_items_distintos ?? '',
-    observaciones: rule.observaciones || ''
+  btnNuevo.addEventListener('click', () => openPromoModal(null));
+
+  selAlmacen.addEventListener('change', loadPromos);
+
+  document.getElementById('tblPromos').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button[data-act]');
+    if (!b) return;
+    const act = b.getAttribute('data-act');
+    const id = parseInt(b.getAttribute('data-id'), 10);
+
+    if (act === 'ver'){
+      try{
+        const j = await apiGet({action:'get', id: id});
+        openPromoModal(j.promo || null);
+      }catch(e){ alert(e.message); }
+      return;
+    }
+    if (act === 'rules' || act === 'rewards' || act === 'scope'){
+      gotoDetalle(act, id);
+      return;
+    }
   });
-  if(!j.ok){ alert(j.error + (j.detalle?("\n"+j.detalle):"")); return; }
-  await loadPromo(promo_id);
-}
 
-async function delRule(id_rule){
-  if(!confirm('¿Desactivar regla y sus rewards?')) return;
-  const promo_id = document.getElementById('p_id').value;
-  const j = await apiPost({action:'rule_del', id_rule});
-  if(!j.ok){ alert(j.error); return; }
-  await loadPromo(promo_id);
-}
-
-function selectRule(id_rule){
-  currentRuleId = id_rule;
-  renderRules();
-  renderRewards();
-}
-
-function renderRules(){
-  const tb = document.getElementById('tb_rules');
-  tb.innerHTML = '';
-  cache.rules.forEach(r=>{
-    const sel = (currentRuleId == r.id_rule) ? 'table-primary' : '';
-    tb.insertAdjacentHTML('beforeend', `
-      <tr class="${sel}" onclick="selectRule(${r.id_rule})" style="cursor:pointer;">
-        <td class="text-end">${r.nivel}</td>
-        <td>${r.trigger_tipo}</td>
-        <td class="text-end">${Number(r.threshold_monto||0).toFixed(2)}</td>
-        <td>${r.acumula}/${r.acumula_por}</td>
-        <td class="text-center">
-          <button class="btn btn-outline-danger ap-btn" onclick="event.stopPropagation();delRule(${r.id_rule});">X</button>
-        </td>
-      </tr>
-    `);
+  btnGuardarPromo.addEventListener('click', async () => {
+    try{
+      const body = {
+        id: promo_id.value || '',
+        id_almacen: promo_almacen.value || '',
+        clave: promo_clave.value.trim(),
+        descripcion: promo_descripcion.value.trim(),
+        activo: promo_activa.value,
+        caduca: promo_caduca.value,
+        fecha_ini: promo_inicio.value,
+        fecha_fin: promo_fin.value,
+        tipo: promo_tipo.value
+      };
+      if (!body.id_almacen || !body.clave || !body.descripcion){
+        alert("Completa: Almacén, Clave, Descripción.");
+        return;
+      }
+      const j = await apiPost({action:'save'}, body);
+      logDebug(`POST save ok id=${j.id || ''}`);
+      if (mdl) mdl.hide();
+      await loadPromos();
+    }catch(e){
+      alert(e.message);
+    }
   });
-}
 
-async function addScope(){
-  const promo_id = document.getElementById('p_id').value;
-  if(!promo_id){ alert('Guarda primero el encabezado.'); return; }
-
-  const tipo = document.getElementById('s_tipo').value;
-  const sid  = document.getElementById('s_id').value.trim();
-  if(!sid){ alert('Captura ID/Clave'); return; }
-
-  const j = await apiPost({action:'scope_save', promo_id, scope_tipo: tipo, scope_id: sid, exclusion:'N'});
-  if(!j.ok){ alert(j.error); return; }
-  await loadPromo(promo_id);
-  document.getElementById('s_id').value = '';
-}
-
-async function delScope(id_scope){
-  if(!confirm('¿Quitar scope?')) return;
-  const promo_id = document.getElementById('p_id').value;
-  const j = await apiPost({action:'scope_del', id_scope});
-  if(!j.ok){ alert(j.error); return; }
-  await loadPromo(promo_id);
-}
-
-function renderScope(){
-  const tb = document.getElementById('tb_scope');
-  tb.innerHTML = '';
-  cache.scope.forEach(s=>{
-    tb.insertAdjacentHTML('beforeend', `
-      <tr>
-        <td>${s.scope_tipo}</td>
-        <td>${escapeHtml(s.scope_id)}</td>
-        <td class="text-center">
-          <button class="btn btn-outline-danger ap-btn" onclick="delScope(${s.id_scope})">X</button>
-        </td>
-      </tr>
-    `);
-  });
-}
-
-async function addReward(){
-  const promo_id = document.getElementById('p_id').value;
-  if(!promo_id){ alert('Guarda primero el encabezado.'); return; }
-  if(!currentRuleId){ alert('Crea/selecciona una regla primero.'); return; }
-
-  const tipo = document.getElementById('rw_tipo').value;
-  const valor = document.getElementById('rw_valor').value;
-  const art = document.getElementById('rw_art').value.trim();
-  const qty = document.getElementById('rw_qty').value;
-
-  const j = await apiPost({
-    action:'reward_save',
-    id_rule: currentRuleId,
-    reward_tipo: tipo,
-    valor: valor,
-    cve_articulo: art,
-    qty: qty,
-    unimed: '',
-    aplica_sobre: 'TOTAL',
-    observaciones: ''
-  });
-  if(!j.ok){ alert(j.error); return; }
-  await loadPromo(promo_id);
-
-  document.getElementById('rw_valor').value = '';
-  document.getElementById('rw_art').value = '';
-  document.getElementById('rw_qty').value = '';
-}
-
-async function delReward(id_reward){
-  if(!confirm('¿Quitar reward?')) return;
-  const promo_id = document.getElementById('p_id').value;
-  const j = await apiPost({action:'reward_del', id_reward});
-  if(!j.ok){ alert(j.error); return; }
-  await loadPromo(promo_id);
-}
-
-function renderRewards(){
-  const tb = document.getElementById('tb_rewards');
-  tb.innerHTML = '';
-  const rows = cache.rewards.filter(x => String(x.id_rule) === String(currentRuleId));
-  rows.forEach(r=>{
-    tb.insertAdjacentHTML('beforeend', `
-      <tr>
-        <td>${r.reward_tipo}</td>
-        <td class="text-end">${r.valor !== null ? Number(r.valor).toFixed(2) : ''}</td>
-        <td>${escapeHtml(r.cve_articulo || '')}</td>
-        <td class="text-end">${r.qty !== null ? Number(r.qty).toFixed(4) : ''}</td>
-        <td class="text-center">
-          <button class="btn btn-outline-danger ap-btn" onclick="delReward(${r.id_reward})">X</button>
-        </td>
-      </tr>
-    `);
-  });
-}
-
-function escapeHtml(s){
-  return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
+  // Init
+  (async function(){
+    try{
+      await loadAlmacenes();
+      if (almacenes.length){
+        // Seleccionar primer almacén por defecto
+        selAlmacen.value = almacenes[0].id_almacen;
+        await loadPromos();
+      }else{
+        tbPromos.innerHTML = `<tr><td colspan="9" class="text-muted">No hay almacenes configurados.</td></tr>`;
+      }
+    }catch(e){
+      tbPromos.innerHTML = `<tr><td colspan="9" class="text-danger">${e.message}</td></tr>`;
+      logDebug("ERROR: " + e.message);
+    }
+  })();
+})();
 </script>
-
 <?php
-require_once __DIR__ . '/../../bi/_menu_global_end.php';
+if (file_exists($menu_global_end)) { include $menu_global_end; }
 ?>
