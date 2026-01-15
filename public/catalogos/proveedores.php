@@ -391,17 +391,13 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       <thead>
         <tr>
           <th>Acciones</th>
-          <th>Req</th>
-          <th>ID</th>
           <th>Clave</th>
-          <th>Empresa</th>
-          <th>Nombre</th>
-          <th>RUT/RFC</th>
-          <th>Ciudad</th>
-          <th>Estado</th>
-          <th>País</th>
-          <th>Tel 1</th>
-          <th>Activo</th>
+          <th>Razón Social</th>
+          <th>Dirección</th>
+          <th>Código Dane</th>
+          <th>Departamento/Estado</th>
+          <th>Municipio/Ciudad</th>
+          <th>Es Transportadora</th>
         </tr>
       </thead>
       <tbody id="tb"></tbody>
@@ -433,113 +429,155 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 <div class="ap-modal" id="mdl">
   <div class="ap-modal-content">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
-      <h3 style="margin:0"><i class="fa fa-industry"></i> Proveedor</h3>
+      <h3 style="margin:0"><i class="fa fa-industry"></i> <span id="mdlTitle">Editar Proveedor</span></h3>
       <button onclick="cerrarModal('mdl')"
         style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
           class="fa fa-times"></i></button>
     </div>
 
-    <div class="ap-chip" style="margin-bottom:10px"><span style="color:#dc3545;font-weight:700">*</span> Obligatorios:
-      <b>Clave</b>, <b>(Empresa o Nombre)</b>, <b>País</b></div>
-
     <input type="hidden" id="ID_Proveedor">
 
-    <div class="ap-form">
-      <div class="ap-field">
-        <div class="ap-label">Clave *</div>
-        <div class="ap-input"><i class="fa fa-hashtag"></i><input id="cve_proveedor" placeholder="PROV-001"></div>
-        <div class="ap-error" id="err_cve">Clave obligatoria.</div>
-      </div>
+    <div class="ap-form" style="grid-template-columns: 1fr 1fr;">
+      <!-- COLUMNA IZQUIERDA -->
+      <div style="display:flex; flex-direction:column; gap:15px;">
+        <div class="ap-field">
+          <div class="ap-label">Clave Proveedor</div>
+          <div class="ap-input"><input id="cve_proveedor" placeholder="1000"></div>
+        </div>
 
-      <div class="ap-field">
-        <div class="ap-label">Empresa</div>
-        <div class="ap-input"><i class="fa fa-building"></i><input id="Empresa" placeholder="Empresa"></div>
-      </div>
+        <div class="ap-field">
+          <div class="ap-label">Razón Social *</div>
+          <div class="ap-input"><input id="Empresa" placeholder="Razón Social"></div>
+        </div>
 
-      <div class="ap-field">
-        <div class="ap-label">Nombre</div>
-        <div class="ap-input"><i class="fa fa-user-tie"></i><input id="Nombre" placeholder="Nombre"></div>
-      </div>
+        <div class="ap-field">
+          <div class="ap-label">Dirección</div>
+          <div class="ap-input"><input id="direccion" placeholder="Dirección"></div>
+        </div>
 
-      <div class="ap-field">
-        <div class="ap-label">RUT / RFC</div>
-        <div class="ap-input"><i class="fa fa-id-card"></i><input id="RUT" placeholder="RFC/RUT"></div>
-      </div>
+        <div class="ap-field">
+          <div class="ap-label">Colonia</div>
+          <div class="ap-input"><input id="colonia" placeholder="Colonia"></div>
+        </div>
 
-      <div class="ap-field" style="grid-column: span 2">
-        <div class="ap-label">Dirección</div>
-        <div class="ap-input"><i class="fa fa-map-marker-alt"></i><input id="direccion" placeholder="Dirección"></div>
-      </div>
+        <div class="ap-field">
+          <div class="ap-label">Código Dane / Código postal *</div>
+          <div class="ap-input"><input id="cve_dane" placeholder="9070"></div>
+        </div>
 
-      <div class="ap-field">
-        <div class="ap-label">Colonia</div>
-        <div class="ap-input"><i class="fa fa-map"></i><input id="colonia" placeholder="Colonia"></div>
-      </div>
+        <div class="ap-field">
+          <div class="ap-label">Municipio/Ciudad</div>
+          <div class="ap-input"><input id="ciudad" placeholder="Ciudad"></div>
+        </div>
 
-      <div class="ap-field">
-        <div class="ap-label">Ciudad</div>
-        <div class="ap-input"><i class="fa fa-city"></i><input id="ciudad" placeholder="Ciudad"></div>
-      </div>
-
-      <div class="ap-field">
-        <div class="ap-label">Estado</div>
-        <div class="ap-input"><i class="fa fa-flag"></i><input id="estado" placeholder="Estado"></div>
-      </div>
-
-      <div class="ap-field">
-        <div class="ap-label">País *</div>
-        <div class="ap-input"><i class="fa fa-globe-americas"></i><input id="pais" placeholder="País"></div>
-        <div class="ap-error" id="err_pais">País obligatorio.</div>
-      </div>
-
-      <div class="ap-field">
-        <div class="ap-label">Teléfono 1</div>
-        <div class="ap-input"><i class="fa fa-phone"></i><input id="telefono1" placeholder="Solo números"
-            oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div>
-      </div>
-
-      <div class="ap-field">
-        <div class="ap-label">Teléfono 2</div>
-        <div class="ap-input"><i class="fa fa-phone"></i><input id="telefono2" placeholder="Solo números"
-            oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div>
-      </div>
-
-      <div class="ap-field">
-        <div class="ap-label">Activo</div>
-        <div class="ap-input"><i class="fa fa-toggle-on"></i>
-          <select id="Activo">
-            <option value="1">Activo</option>
-            <option value="0">Inactivo</option>
-          </select>
+        <div class="ap-field">
+          <div class="ap-label">Departamento/Estado</div>
+          <div class="ap-input"><input id="estado" placeholder="Estado"></div>
         </div>
       </div>
 
-      <div class="ap-field">
-        <div class="ap-label">ID Externo</div>
-        <div class="ap-input"><i class="fa fa-link"></i><input id="ID_Externo" placeholder="Legacy"></div>
-      </div>
+      <!-- COLUMNA DERECHA -->
+      <div style="display:flex; flex-direction:column; gap:15px;">
+        <div class="ap-field">
+          <div class="ap-label">País *</div>
+          <div class="ap-input"><input id="pais" placeholder="México"></div>
+        </div>
 
-      <div class="ap-field">
-        <div class="ap-label">Cve DANE</div>
-        <div class="ap-input"><i class="fa fa-barcode"></i><input id="cve_dane" placeholder="DANE"></div>
-      </div>
+        <div class="ap-field">
+          <div class="ap-label">RUT/RFC</div>
+          <div class="ap-input"><input id="RUT" placeholder="RFC/RUT"></div>
+        </div>
 
-      <div class="ap-field">
-        <div class="ap-label">Latitud</div>
-        <div class="ap-input"><i class="fa fa-location-arrow"></i><input id="latitud" placeholder="19.4326"></div>
-      </div>
+        <div class="ap-field">
+          <div class="ap-label">Teléfono 1</div>
+          <div class="ap-input"><input id="telefono1" placeholder="5512345678"
+              oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div>
+        </div>
 
-      <div class="ap-field">
-        <div class="ap-label">Longitud</div>
-        <div class="ap-input"><i class="fa fa-location-arrow"></i><input id="longitud" placeholder="-99.1332"></div>
+        <div class="ap-field">
+          <div class="ap-label">Teléfono 2</div>
+          <div class="ap-input"><input id="telefono2" placeholder="Teléfono 2"
+              oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div>
+        </div>
+
+        <div class="ap-field">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="es_cliente" value="1" style="width:auto;">
+            <span>Empresas / Proveedor</span>
+          </label>
+        </div>
+
+        <div class="ap-field">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="es_transportista" value="1" style="width:auto;">
+            <span>Es Transportadora</span>
+          </label>
+        </div>
+
+        <div class="ap-field">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="envio_correo_automatico" value="1" style="width:auto;">
+            <span>Enviar reportes automáticos por correo</span>
+          </label>
+        </div>
+
+        <div class="ap-field">
+          <div class="ap-label">Correo 1</div>
+          <div style="display:flex; gap:5px;">
+            <div class="ap-input" style="flex:1;"><input id="correo1" type="email" placeholder="correo@ejemplo.com">
+            </div>
+            <button class="ghost" style="padding:8px 12px; white-space:nowrap;">Eliminar</button>
+          </div>
+        </div>
+
+        <div class="ap-field">
+          <div class="ap-label" style="font-size:11px; color:#666;">Reporte para este correo</div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12px;">
+            <input type="checkbox" id="reporte_existencia" value="1" style="width:auto;">
+            <span>Reporte de Existencia Por Ubicación</span>
+          </label>
+        </div>
+
+        <div class="ap-field">
+          <div class="ap-label">Frecuencia (Días de la semana)</div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:11px;">
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="freq_lunes" value="1" style="width:auto;"> Lunes
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="freq_martes" value="1" style="width:auto;"> Martes
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="freq_miercoles" value="1" style="width:auto;"> Miércoles
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="freq_jueves" value="1" style="width:auto;"> Jueves
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="freq_viernes" value="1" style="width:auto;"> Viernes
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="freq_sabado" value="1" style="width:auto;"> Sábado
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="freq_domingo" value="1" style="width:auto;"> Domingo
+            </label>
+          </div>
+        </div>
+
+        <div class="ap-field">
+          <div class="ap-label">Hora de envío</div>
+          <div class="ap-input"><input id="hora_envio" type="time" placeholder="02:19 p.m."></div>
+        </div>
+
+        <div class="ap-field">
+          <button class="ap-chip primary" onclick="agregarCorreo()"><i class="fa fa-plus"></i> Agregar Correo</button>
+        </div>
       </div>
     </div>
 
-    <div class="ap-error" id="err_empnom" style="margin-top:10px">Debe capturar al menos <b>Empresa</b> o <b>Nombre</b>.
-    </div>
-
-    <div style="text-align:right;margin-top:15px;display:flex;justify-content:flex-end;gap:10px">
-      <button class="ghost" onclick="cerrarModal('mdl')">Cancelar</button>
+    <div style="text-align:right;margin-top:15px;display:flex;justify-content:space-between;gap:10px">
+      <button class="ghost" onclick="cerrarModal('mdl')">Cerrar</button>
       <button class="primary" onclick="guardar()">Guardar</button>
     </div>
   </div>
@@ -683,6 +721,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
       let h = '';
       rows.forEach(p => {
+        const esTransp = Number(p.es_transportista || 0) === 1 ? 'Sí' : 'No';
         h += `
       <tr>
         <td class="ap-actions">
@@ -691,20 +730,16 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             : `<i class="fa fa-edit" title="Editar" onclick="editar(${p.ID_Proveedor})"></i>
                <i class="fa fa-trash" title="Inactivar" onclick="eliminar(${p.ID_Proveedor})"></i>`}
         </td>
-        <td>${reqDot(p)}</td>
-        <td>${p.ID_Proveedor || ''}</td>
         <td><b>${p.cve_proveedor || ''}</b></td>
         <td>${p.Empresa || ''}</td>
-        <td>${p.Nombre || ''}</td>
-        <td>${p.RUT || ''}</td>
-        <td>${p.ciudad || ''}</td>
+        <td>${p.direccion || ''}</td>
+        <td>${p.cve_dane || ''}</td>
         <td>${p.estado || ''}</td>
-        <td>${p.pais || ''}</td>
-        <td>${p.telefono1 || ''}</td>
-        <td>${Number(p.Activo || 0) === 1 ? '<span class="ap-chip ok">Sí</span>' : '<span class="ap-chip warn">No</span>'}</td>
+        <td>${p.ciudad || ''}</td>
+        <td>${esTransp}</td>
       </tr>`;
       });
-      tb.innerHTML = h || `<tr><td colspan="12" style="text-align:center;color:#6c757d;padding:20px">Sin resultados</td></tr>`;
+      tb.innerHTML = h || `<tr><td colspan="8" style="text-align:center;color:#6c757d;padding:20px">Sin resultados</td></tr>`;
       setPager();
     });
   }
@@ -713,46 +748,49 @@ require_once __DIR__ . '/../bi/_menu_global.php';
   function limpiar() { q.value = ''; qLast = ''; page = 1; cargar(); }
   function toggleInactivos() { verInactivos = !verInactivos; page = 1; cargar(); }
 
-  function hideErrors() {
-    err_cve.style.display = 'none';
-    err_pais.style.display = 'none';
-    err_empnom.style.display = 'none';
-  }
-
-  function validar() {
-    hideErrors();
-    let ok = true;
-    if (!cve_proveedor.value.trim()) { err_cve.style.display = 'block'; ok = false; }
-    if (!pais.value.trim()) { err_pais.style.display = 'block'; ok = false; }
-    if (!Empresa.value.trim() && !Nombre.value.trim()) { err_empnom.style.display = 'block'; ok = false; }
-    return ok;
-  }
-
   function nuevo() {
-    document.querySelectorAll('#mdl input').forEach(i => i.value = '');
-    document.querySelectorAll('#mdl select').forEach(s => { if (s.id === 'Activo') s.value = '1'; });
+    document.getElementById('mdlTitle').innerText = 'Nuevo Proveedor';
+    document.querySelectorAll('#mdl input[type="text"], #mdl input[type="email"], #mdl input[type="time"]').forEach(i => i.value = '');
+    document.querySelectorAll('#mdl input[type="checkbox"]').forEach(c => c.checked = false);
     ID_Proveedor.value = '';
-    hideErrors();
     mdl.style.display = 'block';
   }
 
   function editar(id) {
     fetch(API + '?action=get&id=' + id).then(r => r.json()).then(p => {
-      for (let k in p) {
+      document.getElementById('mdlTitle').innerText = 'Editar Proveedor #' + p.ID_Proveedor;
+      
+      // Text inputs
+      ['ID_Proveedor', 'cve_proveedor', 'Empresa', 'direccion', 'colonia', 'cve_dane', 
+       'ciudad', 'estado', 'pais', 'RUT', 'telefono1', 'telefono2'].forEach(k => {
         const el = document.getElementById(k);
         if (el) el.value = (p[k] === null || p[k] === undefined) ? '' : p[k];
-      }
-      hideErrors();
+      });
+      
+      // Checkboxes
+      document.getElementById('es_cliente').checked = Number(p.es_cliente || 0) === 1;
+      document.getElementById('es_transportista').checked = Number(p.es_transportista || 0) === 1;
+      document.getElementById('envio_correo_automatico').checked = Number(p.envio_correo_automatico || 0) === 1;
+      
       mdl.style.display = 'block';
     });
   }
 
   function guardar() {
-    if (!validar()) return;
     const fd = new FormData();
     fd.append('action', ID_Proveedor.value ? 'update' : 'create');
-    document.querySelectorAll('#mdl input').forEach(i => fd.append(i.id, i.value));
-    document.querySelectorAll('#mdl select').forEach(s => fd.append(s.id, s.value));
+    
+    // Text fields
+    ['ID_Proveedor', 'cve_proveedor', 'Empresa', 'direccion', 'colonia', 'cve_dane',
+     'ciudad', 'estado', 'pais', 'RUT', 'telefono1', 'telefono2'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) fd.append(id, el.value);
+    });
+    
+    // Checkboxes (send 1 or 0)
+    fd.append('es_cliente', document.getElementById('es_cliente').checked ? 1 : 0);
+    fd.append('es_transportista', document.getElementById('es_transportista').checked ? 1 : 0);
+    fd.append('envio_correo_automatico', document.getElementById('envio_correo_automatico').checked ? 1 : 0);
 
     fetch(API, { method: 'POST', body: fd })
       .then(r => r.json())
@@ -765,6 +803,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         loadCards();
         cargar();
       });
+  }
+
+  function agregarCorreo() {
+    alert('Funcionalidad de agregar correo en desarrollo');
   }
 
   function eliminar(id) {

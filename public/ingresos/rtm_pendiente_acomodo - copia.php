@@ -439,27 +439,22 @@ $API_FILTROS = '../api/filtros_assistpro.php?action=init';
         const btn = ev.target.closest ? ev.target.closest('.rtm-btn-ver') : null;
         if(!btn) return;
         const set = (id, val)=>{ const el = $(id); if(el) el.textContent = val || ''; };
-
-        // IDs reales del modal (más explícito)
-        set('m_empresa',   btn.dataset.empresa);
-        set('m_almacen',   btn.dataset.almacen);
-        set('m_zona',      btn.dataset.zona);
-        set('m_proveedor', btn.dataset.proveedor);
-        set('m_bl',        btn.dataset.bl);
-        set('m_sku',       btn.dataset.sku);
-        set('m_desc',      btn.dataset.desc);
-        set('m_lote',      btn.dataset.lote);
-        set('m_cad',       btn.dataset.cad);
-        set('m_pend',      btn.dataset.pend);
+        set('m_emp',  btn.dataset.empresa);
+        set('m_alm',  btn.dataset.almacen);
+        set('m_zona', btn.dataset.zona);
+        set('m_prov', btn.dataset.proveedor);
+        set('m_sku',  btn.dataset.sku);
+        set('m_desc', btn.dataset.desc);
+        set('m_lote', btn.dataset.lote);
+        set('m_cad',  btn.dataset.cad);
+        set('m_bl',   btn.dataset.bl);
+        set('m_pend', btn.dataset.pend);
 
         // Bootstrap modal (si está disponible)
         if(window.jQuery && window.jQuery.fn && window.jQuery.fn.modal){
           window.jQuery('#rtmDetalleModal').modal('show');
         }else{
-          // fallback (por si no cargó bootstrap): mínimo viable
-          alert(
-            `Zona: ${btn.dataset.zona}\nProveedor: ${btn.dataset.proveedor}\nSKU: ${btn.dataset.sku}\nLote: ${btn.dataset.lote}\nPendiente: ${btn.dataset.pend}`
-          );
+          alert(`SKU: ${btn.dataset.sku}\nLote: ${btn.dataset.lote}\nPendiente: ${btn.dataset.pend}`);
         }
       });
 

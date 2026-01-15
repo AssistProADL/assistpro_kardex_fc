@@ -169,17 +169,17 @@ $desde_default = date('Y-m-d', strtotime('-7 days'));
           <tr>
             <th class="nowrap">Sel</th>
             <th>Acciones</th>
-            <th>Folio</th>
-            <th>Producto</th>
-            <th class="text-end">Cant</th>
-            <th>Almacén</th>
             <th>Zona</th>
-            <th>Status</th>
-            <th>Usr Reg</th>
-            <th>Usr Armo</th>
-            <th>Fecha Reg</th>
-            <th class="text-end">Comp</th>
-            <th class="text-end">Cant Comp</th>
+            <th>BL Origen</th>
+            <th>Clave</th>
+            <th>Descripción</th>
+            <th>Lote</th>
+            <th>Caducidad</th>
+            <th class="text-end">Cantidad</th>
+            <th>BL Destino</th>
+            <th>Inicio</th>
+            <th>Fin</th>
+            <th>Avance</th>
           </tr>
         </thead>
       </table>
@@ -287,6 +287,18 @@ function badgeStatus(s){
   return `<span class="badge badge-status ${x[1]}">${x[0]}</span>`;
 }
 
+function barAvance(p){
+  const n = Math.max(0, Math.min(100, parseInt(p||0,10)));
+  const cls = (n>=100) ? 'bg-success' : (n>0 ? 'bg-info' : 'bg-secondary');
+  return `
+    <div class="progress" style="height:14px; min-width:120px">
+      <div class="progress-bar ${cls}" role="progressbar" style="width:${n}%">
+        ${n}%
+      </div>
+    </div>
+  `;
+}
+
 function loadKPIs(){
   $.getJSON(API, {...filtros(), action:'stats'})
     .done(r=>{
@@ -328,6 +340,7 @@ $(function(){
         return {...d, ...filtros()};
       }
     },
+    // Orden por Inicio (si no viene, el API puede mapearlo a fecha_reg)
     order:[[10,'desc']],
     columns:[
       {
@@ -342,17 +355,18 @@ $(function(){
           </button>
         `
       },
-      {data:'folio'},
-      {data:'producto'},
-      {data:'cantidad', className:'text-end'},
-      {data:'almacen'},
+      // === Orden de columnas operativo (incluye Sel/Acciones al inicio) ===
       {data:'zona'},
-      {data:'status', render:s=>badgeStatus(s)},
-      {data:'usr_reg'},
-      {data:'usr_armo'},
-      {data:'fecha_reg', render:s=>fmtDT(s)},
-      {data:'componentes', className:'text-end'},
-      {data:'cant_componentes', className:'text-end'}
+      {data:'bl_origen'},
+      {data:'clave'},
+      {data:'descripcion'},
+      {data:'lote'},
+      {data:'caducidad'},
+      {data:'cantidad', className:'text-end', render:d=> (d==null||d==='')?'' : Number(d).toFixed(4)},
+      {data:'bl_destino'},
+      {data:'hora_ini', render:s=>fmtDT(s)},
+      {data:'hora_fin', render:s=>fmtDT(s)},
+      {data:'avance', orderable:false, searchable:false, render:p=>barAvance(p)}
     ]
   });
 
