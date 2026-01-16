@@ -1,479 +1,593 @@
 <?php
 // public/control_patios/patios_admin.php
+// Importante: NO modificar _menu_global.php / _menu_global_end.php (lo usan todas las vistas)
+// Este tablero NO depende de nombres de columnas en catálogos: consume filtros_assistpro.php.
+
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../app/db.php';
-require_once __DIR__ . '/../bi/_menu_global.php';
+$empresa_id  = isset($_GET['empresa_id']) ? trim((string)$_GET['empresa_id']) : '';
+$almacenp_id = isset($_GET['almacenp_id']) ? trim((string)$_GET['almacenp_id']) : '';
 
-/*
- * EMPRESAS:       c_compania
- * ALMACENES:      c_almacenp (id, clave, nombre)
- * TRANSPORTISTAS: c_proveedores (es_transportista = 1)
- * TRANSPORTES:    t_transporte
- */
-
-// EMPRESAS (filtro superior)
-$empresas = db_all("
-    SELECT cve_cia, des_cia
-    FROM c_compania
-    WHERE COALESCE(Activo,1) = 1
-    ORDER BY des_cia
-");
-
-// ALMACENES (filtro y modal)
-$almacenesp = db_all("
-    SELECT id, clave, nombre
-    FROM c_almacenp
-    ORDER BY clave, nombre
-");
-
-// TRANSPORTISTAS (Empresa Transportista)
-$transportistas = db_all("
-    SELECT ID_Proveedor, cve_proveedor, Nombre
-    FROM c_proveedores
-    WHERE COALESCE(Activo,1) = 1
-      AND COALESCE(es_transportista,0) = 1
-    ORDER BY Nombre
-");
-
-// TRANSPORTES (unidad física)
-$transportes = db_all("
-    SELECT id, ID_Transporte, Nombre, Placas
-    FROM t_transporte
-    ORDER BY ID_Transporte
-");
+include __DIR__ . '/../bi/_menu_global.php';
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<title>Administración de Patios</title>
-<link rel="stylesheet" href="/assets/bootstrap.min.css">
-<link rel="stylesheet" href="/assets/fontawesome.min.css">
-<script src="/assets/jquery.min.js"></script>
-<script src="/assets/bootstrap.bundle.min.js"></script>
+<div class="container-fluid" style="max-width: 1600px;">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+    <div>
+      <h3 class="mb-0">Administración de Patios</h3>
+      <div class="small text-muted">Selecciona empresa y almacén. Luego presiona <b>Nueva visita</b> o <b>Refrescar</b>.</div>
+      <div id="alertaTop" class="mt-1 small" style="display:none;"></div>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnRefrescar">
+        <i class="fa-solid fa-rotate"></i> Refrescar
+      </button>
+      <button class="btn btn-primary btn-sm" id="btnNuevaVisita">
+        <i class="fa-solid fa-plus"></i> Nueva visita
+      </button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-body py-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted mb-1">Empresa (c_compania)</label>
+          <select class="form-select form-select-sm" id="empresaSelect">
+            <option value="">(Seleccione)</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-5">
+          <label class="form-label small text-muted mb-1">Almacén / Patio (c_almacenp.id)</label>
+          <select class="form-select form-select-sm" id="almacenSelect" disabled>
+            <option value="">(Seleccione)</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-md-3 d-flex justify-content-end gap-2">
+          <button class="btn btn-outline-secondary btn-sm w-100" id="btnAplicar">
+            <i class="fa-solid fa-filter"></i> Aplicar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Encabezados de columnas -->
+  <div class="row g-3 mb-2">
+    <div class="col-6 col-lg-3 text-center">
+      <div class="fw-bold">1. CITA <span class="badge bg-light text-dark border" id="countCita">0</span></div>
+    </div>
+    <div class="col-6 col-lg-3 text-center">
+      <div class="fw-bold">2. ARRIBO / EN PATIO <span class="badge bg-light text-dark border" id="countPATIO">0</span></div>
+    </div>
+    <div class="col-6 col-lg-3 text-center">
+      <div class="fw-bold">3. INSPECCIÓN / QA <span class="badge bg-light text-dark border" id="countQA">0</span></div>
+    </div>
+    <div class="col-6 col-lg-3 text-center">
+      <div class="fw-bold">4. CARGA / DESCARGA <span class="badge bg-light text-dark border" id="countCARGA">0</span></div>
+    </div>
+  </div>
+
+  <!-- Tablero -->
+  <div class="row g-3" id="tablero">
+    <div class="col-lg-3">
+      <div class="colBox" data-col="CITA">
+        <div class="colBody" id="colCita"></div>
+      </div>
+    </div>
+
+    <div class="col-lg-3">
+      <div class="colBox" data-col="EN_PATIO">
+        <div class="colBody" id="colPATIO"></div>
+      </div>
+    </div>
+
+    <div class="col-lg-3">
+      <div class="colBox" data-col="QA">
+        <div class="colBody" id="colQA"></div>
+      </div>
+    </div>
+
+    <div class="col-lg-3">
+      <div class="colBox" data-col="EN_DESCARGA">
+        <div class="colBody" id="colCARGA"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Vincular OCs -->
+<div class="modal fade" id="modalOC" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background: var(--adl-primary); color:#fff;">
+        <h5 class="modal-title"><i class="fa-solid fa-link"></i> Vincular órdenes de compra</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="ocError" class="alert alert-danger py-2 small" style="display:none;"></div>
+
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+          <div class="small text-muted">
+            Selecciona OCs pendientes y presiona <b>Vincular seleccionadas</b>.
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-sm" id="btnRecargarOCs">
+              <i class="fa-solid fa-rotate"></i> Recargar
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th style="width:36px;"><input type="checkbox" id="chkAllOCs"></th>
+                <th>OC / Folio</th>
+                <th>Proveedor</th>
+                <th class="text-end">Monto</th>
+                <th>Origen</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyOCs">
+              <tr><td colspan="5" class="text-center text-muted py-4">Sin datos</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <button class="btn btn-primary" id="btnVincularSeleccionadas">
+          <i class="fa-solid fa-check"></i> Vincular seleccionadas
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <style>
-body { font-size:12px; }
-.etapa-card {
-    border:1px solid #ddd; border-radius:8px;
-    padding:6px; margin-bottom:8px; font-size:11px;
-    background-color:#ffffff;
-    box-shadow:0 1px 3px rgba(0,0,0,0.08);
-}
-.etapa-header {
-    font-weight:bold; font-size:12px;
-    display:flex; align-items:center;
-}
-.etapa-header img.etapa-truck {
-    width:32px; height:32px;
-    object-fit:contain;
-    margin-right:6px;
-}
-.estado-pill {
-    display:inline-block; padding:2px 6px; border-radius:10px;
-    font-size:10px; color:#fff;
-}
-.estado-OK         { background:#28a745; }
-.estado-PENDIENTE  { background:#6c757d; }
-.estado-EN_PROCESO { background:#ffc107; color:#000; }
-.estado-REVISION   { background:#17a2b8; }
-.estado-ERROR      { background:#dc3545; }
-.small-label { font-size:10px; }
-.col-etapa-title {
-    font-weight:bold; font-size:12px; text-align:center; margin-bottom:4px;
-    text-transform:uppercase;
-}
-#msg-global { font-size:11px; }
+  /* Solo estilos locales del tablero. Todo lo global vive en _menu_global.php */
+  .colBox{
+    background:#fff;
+    border:1px solid rgba(0,0,0,.08);
+    border-radius:14px;
+    min-height: 160px;
+  }
+  .colBody{ padding: 6px; min-height: 140px; }
+  .cardVisita{
+    border:1px solid rgba(0,0,0,.10);
+    border-radius:14px;
+    padding:10px 10px 8px 10px;
+    box-shadow: 0 1px 8px rgba(0,0,0,.05);
+    background: #fff;
+    margin-bottom: 10px;
+  }
+  .cardVisita.critica{
+    border-color: rgba(220,53,69,.35);
+    box-shadow: 0 1px 10px rgba(220,53,69,.10);
+  }
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    border:1px solid rgba(0,0,0,.10);
+    background:#f8f9fa;
+    border-radius:999px;
+    padding:2px 8px;
+    font-size:12px;
+    color:#333;
+  }
+  .pill-danger{ background: rgba(220,53,69,.08); border-color: rgba(220,53,69,.20); color:#b02a37; }
+  .pill-muted{ background:#f3f4f6; border-color:#e5e7eb; color:#6b7280; }
+  .pill-ok{ background: rgba(25,135,84,.08); border-color: rgba(25,135,84,.20); color:#146c43; }
+  .btn-xs{ padding:.25rem .45rem; font-size:.78rem; border-radius:10px; }
+  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  .miniTitle{ font-weight:700; letter-spacing:.2px; }
+  .sub{ font-size:12px; color:#6b7280; }
 </style>
-</head>
-
-<body>
-<div class="container-fluid mt-2">
-    <h5>Administración de Patios</h5>
-
-    <div id="msg-global" class="text-muted mb-1">
-        Selecciona empresa y almacén. Luego presiona <b>Nueva visita</b>.
-    </div>
-
-    <!-- FILTROS -->
-    <div class="row mb-2">
-        <div class="col-md-3">
-            <label class="small-label">Empresa (c_compania)</label>
-            <select id="f_empresa" class="form-control form-control-sm">
-                <option value="">(Seleccione)</option>
-                <?php foreach ($empresas as $e): ?>
-                    <option value="<?= htmlspecialchars((string)$e['cve_cia']) ?>">
-                        <?= htmlspecialchars((string)$e['cve_cia'].' - '.(string)$e['des_cia']) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="col-md-4">
-            <label class="small-label">Almacén / Patio (c_almacenp.id)</label>
-            <select id="f_almacenp" class="form-control form-control-sm">
-                <option value="">(Seleccione)</option>
-                <?php foreach ($almacenesp as $a): ?>
-                    <?php
-                        $id    = (string)$a['id'];
-                        $clave = (string)$a['clave'];
-                        $nom   = (string)$a['nombre'];
-                    ?>
-                    <option value="<?= htmlspecialchars($id) ?>">
-                        <?= htmlspecialchars($clave.' - '.$nom) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="col-md-3 d-flex align-items-end">
-            <button id="btn_refrescar"
-                    class="btn btn-outline-secondary btn-sm me-2"
-                    type="button">
-                Refrescar
-            </button>
-
-            <button id="btn_nueva_visita"
-                    class="btn btn-primary btn-sm"
-                    type="button"
-                    data-bs-toggle="modal"
-                    data-bs-target="#modalNuevaVisita">
-                Nueva visita
-            </button>
-        </div>
-    </div>
-
-    <!-- TABLERO 4 ETAPAS -->
-    <div class="row">
-        <div class="col-md-3">
-            <div class="col-etapa-title">1. Cita</div>
-            <div id="col-etapa-1"></div>
-        </div>
-        <div class="col-md-3">
-            <div class="col-etapa-title">2. Arribo / En Patio</div>
-            <div id="col-etapa-2"></div>
-        </div>
-        <div class="col-md-3">
-            <div class="col-etapa-title">3. Inspección / QA</div>
-            <div id="col-etapa-3"></div>
-        </div>
-        <div class="col-md-3">
-            <div class="col-etapa-title">4. Carga / Descarga</div>
-            <div id="col-etapa-4"></div>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL NUEVA VISITA -->
-<div class="modal fade" id="modalNuevaVisita">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <form id="formNuevaVisita">
-        <div class="modal-header">
-            <h6 class="modal-title">Registrar nueva visita</h6>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-
-        <div class="modal-body">
-
-            <!-- empresa_id (c_compania) oculto, tomado del filtro -->
-            <input type="hidden" id="nv_empresa" name="empresa_id">
-
-            <div class="row mb-2">
-                <div class="col-md-5">
-                    <label class="small-label">Empresa Transportista</label>
-                    <select id="nv_proveedor" name="transportista_id" class="form-control form-control-sm">
-                        <option value="">Seleccione...</option>
-                        <?php foreach ($transportistas as $p): ?>
-                            <option value="<?= htmlspecialchars((string)$p['ID_Proveedor']) ?>">
-                                <?= htmlspecialchars((string)$p['cve_proveedor'].' - '.(string)$p['Nombre']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-5">
-                    <label class="small-label">Almacén / Patio</label>
-                    <select id="nv_almacenp" name="almacenp_id" class="form-control form-control-sm">
-                        <option value="">Seleccione...</option>
-                        <?php foreach ($almacenesp as $a): ?>
-                            <?php
-                                $id    = (string)$a['id'];
-                                $clave = (string)$a['clave'];
-                                $nom   = (string)$a['nombre'];
-                            ?>
-                            <option value="<?= htmlspecialchars($id) ?>">
-                                <?= htmlspecialchars($clave.' - '.$nom) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-            </div>
-
-            <div class="mb-2">
-                <label class="small-label">Transporte (unidad)</label>
-                <select id="nv_transporte" name="id_transporte" class="form-control form-control-sm">
-                    <option value="">Seleccione...</option>
-                    <?php foreach ($transportes as $t): ?>
-                        <option value="<?= $t['id'] ?>">
-                            <?= htmlspecialchars($t['ID_Transporte'].' - '.$t['Nombre'].' ['.$t['Placas'].']') ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="mb-2">
-                <label class="small-label">Observaciones</label>
-                <textarea id="nv_observaciones" name="observaciones" rows="2"
-                          class="form-control form-control-sm"></textarea>
-            </div>
-
-            <div id="nv-msg" class="text-muted small"></div>
-        </div>
-
-        <div class="modal-footer">
-            <button class="btn btn-secondary btn-sm" type="button" data-bs-dismiss="modal">Cerrar</button>
-            <button class="btn btn-primary btn-sm" type="submit">Guardar visita</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL VINCULAR OCs -->
-<div class="modal fade" id="modalOC">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <form id="formVincularOC">
-        <div class="modal-header">
-            <h6 class="modal-title">Vincular OCs</h6>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-
-        <div class="modal-body">
-            <input type="hidden" id="id_visita_oc" name="id_visita">
-            <div id="lista-ocs"></div>
-            <div id="oc-msg" class="text-muted small mt-2"></div>
-        </div>
-
-        <div class="modal-footer">
-            <button class="btn btn-secondary btn-sm" type="button" data-bs-dismiss="modal">Cerrar</button>
-            <button class="btn btn-primary btn-sm" type="submit">Vincular</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 
 <script>
-function mostrarMensaje(msg, tipo="info") {
-    const el = $("#msg-global");
-    el.removeClass("text-muted text-danger text-success");
-    if (tipo === "error") el.addClass("text-danger");
-    else if (tipo === "ok") el.addClass("text-success");
-    else el.addClass("text-muted");
-    el.text(msg);
-}
+(function(){
+  // Rutas API (ajusta si tu base path cambia)
+  const API_FILTROS = "../api/filtros_assistpro.php";
+  const API_PATIOS  = "../api/control_patios/api_control_patios.php";
 
-function pill(estado) {
-    if (!estado) estado = "PENDIENTE";
-    return `<span class="estado-pill estado-${estado}">${estado}</span>`;
-}
+  // Estado
+  let empresa_id  = "<?= htmlspecialchars($empresa_id, ENT_QUOTES) ?>";
+  let almacenp_id = "<?= htmlspecialchars($almacenp_id, ENT_QUOTES) ?>";
+  let visitaActiva = null; // {id_visita, ...} para modal OC
 
-function renderTablero(rows) {
-    $("#col-etapa-1, #col-etapa-2, #col-etapa-3, #col-etapa-4").empty();
+  // DOM
+  const empresaSelect = document.getElementById("empresaSelect");
+  const almacenSelect = document.getElementById("almacenSelect");
+  const btnAplicar    = document.getElementById("btnAplicar");
+  const btnRefrescar  = document.getElementById("btnRefrescar");
+  const btnNuevaVisita= document.getElementById("btnNuevaVisita");
 
-    if (!rows || rows.length === 0) {
-        mostrarMensaje("No hay visitas registradas. Usa 'Nueva visita'.");
-        return;
+  const colCita  = document.getElementById("colCita");
+  const colPATIO = document.getElementById("colPATIO");
+  const colQA    = document.getElementById("colQA");
+  const colCARGA = document.getElementById("colCARGA");
+
+  const countCita  = document.getElementById("countCita");
+  const countPATIO = document.getElementById("countPATIO");
+  const countQA    = document.getElementById("countQA");
+  const countCARGA = document.getElementById("countCARGA");
+
+  const alertaTop = document.getElementById("alertaTop");
+
+  // Modal OCs
+  const modalOCEl = document.getElementById("modalOC");
+  const modalOC   = new bootstrap.Modal(modalOCEl);
+  const tbodyOCs  = document.getElementById("tbodyOCs");
+  const ocError   = document.getElementById("ocError");
+  const chkAllOCs = document.getElementById("chkAllOCs");
+  const btnVincularSeleccionadas = document.getElementById("btnVincularSeleccionadas");
+  const btnRecargarOCs = document.getElementById("btnRecargarOCs");
+
+  // Utils
+  const fmtMoney = (n) => {
+    const v = Number(n||0);
+    return v.toLocaleString('es-MX', {style:'currency', currency:'MXN'});
+  };
+
+  const minutesDiff = (iso) => {
+    if(!iso) return null;
+    const d = new Date(iso.replace(' ', 'T'));
+    if(isNaN(d.getTime())) return null;
+    return Math.floor((Date.now() - d.getTime())/60000);
+  };
+
+  const humanAging = (mins) => {
+    if(mins === null) return "-";
+    const h = Math.floor(mins/60);
+    const m = mins%60;
+    if(h <= 0) return `${m}m`;
+    return `${h}h ${m}m`;
+  };
+
+  const safeText = (v) => (v === null || v === undefined) ? "" : String(v);
+
+  async function apiGet(url){
+    const r = await fetch(url, {headers: {'Accept':'application/json'}});
+    const t = await r.text();
+    try { return JSON.parse(t); } catch(e){ return {ok:false, error:"Respuesta no-JSON", raw:t}; }
+  }
+
+  function setTopAlert(type, html){
+    alertaTop.style.display = "block";
+    alertaTop.className = "mt-1 small alert py-1 px-2 " + (type === "danger" ? "alert-danger" : type === "warning" ? "alert-warning" : "alert-info");
+    alertaTop.innerHTML = html;
+  }
+  function clearTopAlert(){
+    alertaTop.style.display = "none";
+    alertaTop.innerHTML = "";
+  }
+
+  // Catálogos por API existente
+  async function cargarEmpresas(){
+    empresaSelect.innerHTML = `<option value="">(Seleccione)</option>`;
+    almacenSelect.innerHTML = `<option value="">(Seleccione)</option>`;
+    almacenSelect.disabled = true;
+
+    // filtros_assistpro suele soportar init (si en tu API el action difiere, ajusta aquí)
+    const data = await apiGet(`${API_FILTROS}?action=empresas`);
+    if(!data || data.ok === false){
+      setTopAlert("danger", `<i class="fa-solid fa-triangle-exclamation"></i> No pude cargar empresas. ${safeText(data?.error||"")}`);
+      return;
     }
 
-    mostrarMensaje("Tablero actualizado.","ok");
+    // Acepta formatos: {ok:true, data:[...]} o arreglo directo
+    const arr = Array.isArray(data) ? data : (data.data || data.empresas || []);
+    arr.forEach(e=>{
+      const id  = e.cve_cia ?? e.id ?? e.empresa_id ?? "";
+      const txt = e.des_cia ?? e.nombre ?? e.razon_social ?? e.clave_empresa ?? id;
+      if(!id) return;
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = `${id} - ${txt}`;
+      empresaSelect.appendChild(opt);
+    });
 
-    rows.forEach(function(r){
-        const header =
-        `<div class="etapa-header">
-            <img src="/assets/img/truck_card.png" class="etapa-truck" alt="Transporte">
-            <div>
-              <div><strong>${r.id_transporte_cod} - ${r.nombre_transporte}</strong>
-                  <span class="text-muted">[${r.placas||""}]</span>
-              </div>
-              <div class="small-label">Visita #${r.id_visita}</div>
+    if(empresa_id){
+      empresaSelect.value = empresa_id;
+      await cargarAlmacenes(empresa_id);
+      if(almacenp_id) almacenSelect.value = almacenp_id;
+    }
+  }
+
+  async function cargarAlmacenes(emp){
+    almacenSelect.innerHTML = `<option value="">(Seleccione)</option>`;
+    almacenSelect.disabled = true;
+
+    if(!emp) return;
+
+    const data = await apiGet(`${API_FILTROS}?action=almacenes&empresa_id=${encodeURIComponent(emp)}`);
+    if(!data || data.ok === false){
+      setTopAlert("danger", `<i class="fa-solid fa-triangle-exclamation"></i> No pude cargar almacenes. ${safeText(data?.error||"")}`);
+      return;
+    }
+
+    const arr = Array.isArray(data) ? data : (data.data || data.almacenes || []);
+    arr.forEach(a=>{
+      const id  = a.id ?? a.id_almacenp ?? a.cve_almac ?? "";
+      const txt = a.nombre ?? a.des_almac ?? a.clave ?? id;
+      if(!id) return;
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = `${id} - ${txt}`;
+      almacenSelect.appendChild(opt);
+    });
+
+    almacenSelect.disabled = false;
+  }
+
+  // Render tarjetas
+  function tarjetaVisita(v){
+    // v debe venir del API patios (tablero)
+    const idCita = safeText(v.id_cita || v.cita || v.id || "");
+    const idVis  = safeText(v.id_visita || v.visita || "");
+    const andEN  = safeText(v.id_anden_actual || v.anden || "-");
+    const est    = safeText(v.estatus || v.status || "PENDIENTE");
+
+    const llego  = safeText(v.fecha_llegada || v.llego || v.fecha || "");
+    const mins   = minutesDiff(llego);
+    const aging  = humanAging(mins);
+
+    // criticidad configurable (ej: > 8 horas)
+    const critica = (mins !== null && mins >= 8*60);
+
+    const pillEstatus = (est === "EN_DESCARGA" || est === "CARGA" || est === "DESCARGA") ? "pill-ok"
+                     : (est === "ASIGNADO_ANDEN") ? "pill-ok"
+                     : (critica) ? "pill-danger" : "pill-danger";
+
+    return `
+      <div class="cardVisita ${critica ? "critica" : ""}" data-idvisita="${idVis}">
+        <div class="d-flex align-items-start justify-content-between">
+          <div>
+            <div class="miniTitle">
+              <i class="fa-solid fa-truck-moving me-1"></i>
+              <span class="mono">${idCita}</span>
+              <span class="text-muted">-</span>
+              <span class="mono">${idVis}</span>
             </div>
-        </div>`;
+            <div class="sub">Visita #${idVis} · ${est}</div>
+          </div>
+          <div class="d-flex flex-column align-items-end gap-1">
+            <span class="pill ${pillEstatus}"><i class="fa-solid fa-circle-dot"></i> ${est}</span>
+            <span class="pill pill-muted"><i class="fa-regular fa-clock"></i> Aging: ${aging}</span>
+          </div>
+        </div>
 
-        const body =
-        `<div class="mt-1">
-            <div><span class="small-label">Andén:</span> ${r.id_anden_actual||"-"}</div>
-            <div><span class="small-label">Llegó:</span> ${r.fecha_llegada||"-"}</div>
-        </div>`;
+        <div class="mt-2 d-flex flex-wrap gap-2">
+          <span class="pill"><i class="fa-solid fa-dolly"></i> Andén: ${andEN}</span>
+          <span class="pill"><i class="fa-solid fa-calendar-check"></i> Llegó: ${llego || "-"}</span>
+        </div>
 
-        const btn =
-        `<button class="btn btn-outline-primary btn-sm btn-vincular-oc mt-1"
-                 data-id_visita="${r.id_visita}">
-            Vincular OCs
-         </button>`;
+        <div class="mt-2 d-flex gap-2">
+          <button class="btn btn-outline-primary btn-xs" data-action="vincular-ocs">
+            <i class="fa-solid fa-link"></i> Vincular OCs
+          </button>
+        </div>
+      </div>
+    `;
+  }
 
-        $("#col-etapa-1").append(`<div class="etapa-card">${header}${pill(r.etapa1_estado)}${body}${btn}</div>`);
-        $("#col-etapa-2").append(`<div class="etapa-card">${header}${pill(r.etapa2_estado)}${body}${btn}</div>`);
-        $("#col-etapa-3").append(`<div class="etapa-card">${header}${pill(r.etapa3_estado)}${body}${btn}</div>`);
-        $("#col-etapa-4").append(`<div class="etapa-card">${header}${pill(r.etapa4_estado)}${body}${btn}</div>`);
-    });
-}
+  function renderTablero(items){
+    const by = { CITA:[], EN_PATIO:[], QA:[], EN_DESCARGA:[] };
 
-function cargarTablero() {
-    const empresa_id  = $("#f_empresa").val();
-    const almacenp_id = $("#f_almacenp").val();
-
-    $.getJSON("patios_tablero_api.php", {
-        empresa_id  : empresa_id,
-        almacenp_id : almacenp_id
-    }).done(function(resp){
-        if (!resp.ok) {
-            mostrarMensaje("Error al cargar tablero: "+resp.error,"error");
-            return;
-        }
-        renderTablero(resp.data);
-    }).fail(function(xhr){
-        mostrarMensaje("Error de comunicación con el servidor.","error");
-        console.log('Error AJAX tablero:', xhr.status, xhr.statusText, xhr.responseText);
-    });
-}
-
-function cargarOCsPendientes(id_visita) {
-    $("#lista-ocs").html("Cargando...");
-    $("#oc-msg").text("");
-
-    const almacenp_id = $("#f_almacenp").val();
-
-    $.getJSON("patios_oc_pendientes.php", {almacenp_id:almacenp_id})
-    .done(function(resp){
-        if (!resp.ok) {
-            $("#lista-ocs").html("");
-            $("#oc-msg").text(resp.error);
-            return;
-        }
-
-        const rows = resp.data||[];
-        if (!rows.length) {
-            $("#lista-ocs").html("");
-            $("#oc-msg").text("No hay OCs pendientes para este almacén.");
-            return;
-        }
-
-        let html = `<table class="table table-sm table-bordered">
-        <thead><tr>
-            <th></th><th>OC</th><th>Proveedor</th><th>Fecha</th><th>Pendiente</th>
-        </tr></thead><tbody>`;
-
-        rows.forEach(function(oc){
-            html += `
-            <tr>
-                <td><input type="checkbox" class="chk-oc" value="${oc.oc_id}"></td>
-                <td>${oc.folio_oc}</td>
-                <td>${oc.proveedor_id||""}</td>
-                <td>${oc.fecha_oc||""}</td>
-                <td>${oc.cant_pendiente||0}</td>
-            </tr>`;
-        });
-
-        html += `</tbody></table>`;
-        $("#lista-ocs").html(html);
-    });
-}
-
-$(function(){
-
-    $("#btn_refrescar").on("click", cargarTablero);
-    cargarTablero();
-    setInterval(cargarTablero, 15000);
-
-    $("#btn_nueva_visita").on("click", function(){
-        const emp = $("#f_empresa").val();
-        const alm = $("#f_almacenp").val();
-
-        $("#nv_empresa").val(emp || '');
-        $("#nv_almacenp").val(alm || '');
-        $("#nv_proveedor").val('');
-        $("#nv_transporte").val('');
-        $("#nv_observaciones").val('');
-        $("#nv-msg").text('');
-
-        if (!emp || !alm) {
-            mostrarMensaje("Sugerencia: selecciona empresa y almacén antes de registrar.","error");
-        }
+    (items||[]).forEach(v=>{
+      // Normaliza estatus a columnas
+      const est = safeText(v.estatus || "");
+      if(est === "EN_PATIO" || est === "ASIGNADO_ANDEN") by.EN_PATIO.push(v);
+      else if(est === "QA" || est === "INSPECCION" || est === "EN_QA") by.QA.push(v);
+      else if(est === "EN_DESCARGA" || est === "CARGA" || est === "DESCARGA") by.EN_DESCARGA.push(v);
+      else by.CITA.push(v);
     });
 
-    $("#formNuevaVisita").on("submit", function(e){
-        e.preventDefault();
-        $("#nv-msg").text("Guardando...");
+    colCita.innerHTML  = by.CITA.map(tarjetaVisita).join("")  || `<div class="text-center text-muted py-4">Sin visitas</div>`;
+    colPATIO.innerHTML = by.EN_PATIO.map(tarjetaVisita).join("")|| `<div class="text-center text-muted py-4">Sin visitas</div>`;
+    colQA.innerHTML    = by.QA.map(tarjetaVisita).join("")    || `<div class="text-center text-muted py-4">Sin visitas</div>`;
+    colCARGA.innerHTML = by.EN_DESCARGA.map(tarjetaVisita).join("")|| `<div class="text-center text-muted py-4">Sin visitas</div>`;
 
-        $.post("patios_nueva_visita.php", $(this).serialize()
-        ).done(function(resp){
-            if (typeof resp === "string") {
-                try { resp = JSON.parse(resp); } catch(e) {}
-            }
+    countCita.textContent  = by.CITA.length;
+    countPATIO.textContent = by.EN_PATIO.length;
+    countQA.textContent    = by.QA.length;
+    countCARGA.textContent = by.EN_DESCARGA.length;
 
-            if (!resp || !resp.ok) {
-                $("#nv-msg").text((resp && resp.error) ? resp.error : "Error al guardar visita");
-                return;
-            }
+    // KPI superior (espera crítica)
+    const crit = (items||[]).filter(v=>{
+      const mins = minutesDiff(v.fecha_llegada || v.llego || "");
+      return mins !== null && mins >= 8*60;
+    }).length;
 
-            $("#nv-msg").text("Visita registrada (#"+resp.id_visita+")");
-            cargarTablero();
-            setTimeout(function(){
-                $("#modalNuevaVisita").modal("hide");
-            }, 800);
+    if(crit > 0){
+      setTopAlert("warning", `<i class="fa-solid fa-triangle-exclamation"></i> Atención: <b>${crit}</b> visitas en espera crítica`);
+    }else{
+      clearTopAlert();
+    }
+  }
 
-        }).fail(function(xhr){
-            $("#nv-msg").text("Error de servidor.");
-            console.error('Error AJAX nueva_visita:', xhr.status, xhr.statusText, xhr.responseText);
-        });
+  async function cargarTablero(){
+    // Limpia si no hay selección
+    if(!empresa_id || !almacenp_id){
+      renderTablero([]);
+      return;
+    }
+
+    const url = `${API_PATIOS}?action=tablero&empresa_id=${encodeURIComponent(empresa_id)}&almacenp_id=${encodeURIComponent(almacenp_id)}`;
+    const data = await apiGet(url);
+
+    if(!data || data.ok === false){
+      setTopAlert("danger", `<i class="fa-solid fa-triangle-exclamation"></i> Error al cargar tablero: ${safeText(data?.error||"")}`);
+      renderTablero([]);
+      return;
+    }
+
+    const items = data.data || [];
+    renderTablero(items);
+  }
+
+  // Modal OCs (consume tus UIs existentes si ya resuelven queries)
+  async function cargarOCsPendientes(){
+    ocError.style.display = "none";
+    ocError.innerHTML = "";
+    tbodyOCs.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">Cargando...</td></tr>`;
+
+    if(!visitaActiva?.id_visita){
+      tbodyOCs.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">Selecciona una visita</td></tr>`;
+      return;
+    }
+
+    // Tu API patios debe exponer esto (si ya existe en tu api_control_patios, perfecto)
+    const url = `${API_PATIOS}?action=oc_pendientes&id_visita=${encodeURIComponent(visitaActiva.id_visita)}&empresa_id=${encodeURIComponent(empresa_id)}&almacenp_id=${encodeURIComponent(almacenp_id)}`;
+    const data = await apiGet(url);
+
+    if(!data || data.ok === false){
+      ocError.style.display = "block";
+      ocError.innerHTML = safeText(data?.error || "No fue posible cargar OCs");
+      tbodyOCs.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">Sin datos</td></tr>`;
+      return;
+    }
+
+    const arr = data.data || [];
+    if(!arr.length){
+      tbodyOCs.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">No hay OCs pendientes</td></tr>`;
+      return;
+    }
+
+    tbodyOCs.innerHTML = arr.map((x,i)=>{
+      const id = x.id_origen ?? x.id ?? i;
+      const folio = x.folio_origen ?? x.folio ?? "-";
+      const prov  = x.proveedor ?? x.proveedor_nombre ?? x.proveedor_id ?? "-";
+      const monto = x.monto_total ?? x.monto ?? 0;
+      const orig  = `${safeText(x.sistema_origen||"")}/${safeText(x.tabla_origen||"")}`.replace(/^\/|\/$/g,'') || "-";
+
+      return `
+        <tr>
+          <td><input class="chkOC" type="checkbox" value="${safeText(id)}" data-folio="${safeText(folio)}"></td>
+          <td class="mono">${safeText(folio)}</td>
+          <td>${safeText(prov)}</td>
+          <td class="text-end">${fmtMoney(monto)}</td>
+          <td class="small text-muted">${safeText(orig)}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  async function vincularOCsSeleccionadas(){
+    ocError.style.display = "none";
+    ocError.innerHTML = "";
+
+    const chks = Array.from(document.querySelectorAll(".chkOC:checked"));
+    if(!chks.length){
+      ocError.style.display = "block";
+      ocError.innerHTML = "Selecciona al menos una OC.";
+      return;
+    }
+
+    const ids = chks.map(c=>c.value);
+
+    const url = `${API_PATIOS}?action=vincular_oc`;
+    const payload = new URLSearchParams();
+    payload.set("empresa_id", empresa_id);
+    payload.set("almacenp_id", almacenp_id);
+    payload.set("id_visita", visitaActiva.id_visita);
+    payload.set("ids", ids.join(","));
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type":"application/x-www-form-urlencoded"},
+      body: payload.toString()
     });
 
-    $(document).on("click",".btn-vincular-oc",function(){
-        const id_visita = $(this).data("id_visita");
-        $("#id_visita_oc").val(id_visita);
-        cargarOCsPendientes(id_visita);
-        $("#modalOC").modal("show");
-    });
+    const t = await r.text();
+    let data = null;
+    try { data = JSON.parse(t); } catch(e){ data = {ok:false, error:"Respuesta no-JSON", raw:t}; }
 
-    $("#formVincularOC").on("submit", function(e){
-        e.preventDefault();
-        const id_visita = $("#id_visita_oc").val();
-        const oc_ids = $(".chk-oc:checked").map(function(){ return this.value }).get();
+    if(!data || data.ok === false){
+      ocError.style.display = "block";
+      ocError.innerHTML = safeText(data?.error || "No fue posible vincular.");
+      return;
+    }
 
-        if (!oc_ids.length) {
-            $("#oc-msg").text("Seleccione al menos una OC.");
-            return;
-        }
+    modalOC.hide();
+    await cargarTablero();
+  }
 
-        $("#oc-msg").text("Vinculando...");
+  // Eventos
+  empresaSelect.addEventListener("change", async ()=>{
+    empresa_id = empresaSelect.value || "";
+    almacenp_id = "";
+    await cargarAlmacenes(empresa_id);
+  });
 
-        $.post("patios_vincular_oc.php", {
-            id_visita:id_visita,
-            oc_ids: oc_ids.join(",")
-        }).done(function(resp){
-            if (typeof resp === "string") {
-                try { resp = JSON.parse(resp); } catch(e) {}
-            }
-            if (!resp || !resp.ok) {
-                $("#oc-msg").text((resp && resp.error) ? resp.error : "Error al vincular.");
-                return;
-            }
-            $("#oc-msg").text("OC vinculada.");
-            cargarTablero();
-            setTimeout(function(){
-                $("#modalOC").modal("hide");
-            }, 800);
-        });
-    });
+  btnAplicar.addEventListener("click", async ()=>{
+    empresa_id = empresaSelect.value || "";
+    almacenp_id = almacenSelect.value || "";
 
-});
+    // Persistencia por querystring (mejor UX)
+    const url = new URL(window.location.href);
+    if(empresa_id) url.searchParams.set("empresa_id", empresa_id); else url.searchParams.delete("empresa_id");
+    if(almacenp_id) url.searchParams.set("almacenp_id", almacenp_id); else url.searchParams.delete("almacenp_id");
+    window.history.replaceState({}, "", url.toString());
+
+    await cargarTablero();
+  });
+
+  btnRefrescar.addEventListener("click", cargarTablero);
+
+  btnNuevaVisita.addEventListener("click", ()=>{
+    if(!empresaSelect.value || !almacenSelect.value){
+      setTopAlert("danger", `<i class="fa-solid fa-triangle-exclamation"></i> Selecciona empresa y almacén antes de crear una visita.`);
+      return;
+    }
+    // Reutiliza tu UI existente (si ya la tienes)
+    // Ajusta la ruta si cambió en tu proyecto:
+    const go = `patios_nueva_visita.php?empresa_id=${encodeURIComponent(empresaSelect.value)}&almacenp_id=${encodeURIComponent(almacenSelect.value)}`;
+    window.location.href = go;
+  });
+
+  document.addEventListener("click", async (ev)=>{
+    const btn = ev.target.closest("[data-action]");
+    if(!btn) return;
+
+    const action = btn.getAttribute("data-action");
+    const card = btn.closest(".cardVisita");
+    if(!card) return;
+
+    const idVisita = card.getAttribute("data-idvisita");
+    if(!idVisita) return;
+
+    if(action === "vincular-ocs"){
+      visitaActiva = {id_visita: idVisita};
+      chkAllOCs.checked = false;
+      modalOC.show();
+      await cargarOCsPendientes();
+    }
+  });
+
+  chkAllOCs.addEventListener("change", ()=>{
+    const all = Array.from(document.querySelectorAll(".chkOC"));
+    all.forEach(c=>c.checked = chkAllOCs.checked);
+  });
+
+  btnVincularSeleccionadas.addEventListener("click", vincularOCsSeleccionadas);
+  btnRecargarOCs.addEventListener("click", cargarOCsPendientes);
+
+  // Init
+  (async function init(){
+    await cargarEmpresas();
+    if(empresa_id && almacenp_id){
+      await cargarTablero();
+    }else{
+      renderTablero([]);
+    }
+  })();
+
+})();
 </script>
 
-</body>
-</html>
-<?php
-require_once __DIR__ . '/../bi/_menu_global_end.php';
-?>
+<?php include __DIR__ . '/../bi/_menu_global_end.php'; ?>

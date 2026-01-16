@@ -337,36 +337,6 @@ if ($op) {
 
       $folio   = trim($data['folio'] ?? '');
       $cveAlm  = trim($data['cve_almac'] ?? '');
-
-      // Normaliza cve_almac: puede venir como id de almacenp o como clave (ej. WHCR)
-      $cveAlmRaw = $cveAlm;
-      $cveAlmNum = null;
-      if ($cveAlmRaw !== '') {
-        if (is_numeric($cveAlmRaw)) {
-          $tmp = (int)$cveAlmRaw;
-          // 1) si ya es cve_almac
-          $q = $pdo->prepare("SELECT cve_almac FROM c_almacen WHERE cve_almac = ? LIMIT 1");
-          $q->execute([$tmp]);
-          $r = $q->fetch(PDO::FETCH_ASSOC);
-          if ($r && isset($r['cve_almac'])) {
-            $cveAlmNum = (int)$r['cve_almac'];
-          } else {
-            // 2) si viene como cve_almacenp, lo convertimos a cve_almac
-            $q = $pdo->prepare("SELECT cve_almac FROM c_almacen WHERE cve_almacenp = ? LIMIT 1");
-            $q->execute([$tmp]);
-            $r = $q->fetch(PDO::FETCH_ASSOC);
-            if ($r && isset($r['cve_almac'])) $cveAlmNum = (int)$r['cve_almac'];
-          }
-        } else {
-          // 3) si viene como clave (WHCR/W8/etc)
-          $q = $pdo->prepare("SELECT cve_almac FROM c_almacen WHERE clave = ? LIMIT 1");
-          $q->execute([$cveAlmRaw]);
-          $r = $q->fetch(PDO::FETCH_ASSOC);
-          if ($r && isset($r['cve_almac'])) $cveAlmNum = (int)$r['cve_almac'];
-        }
-      }
-      if ($cveAlmNum !== null) $cveAlm = (string)$cveAlmNum;
-
       $zonaId  = trim($data['zona_id'] ?? '');
 
       // BL origen (MP) y BL destino (PT)
