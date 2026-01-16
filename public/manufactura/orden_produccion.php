@@ -121,7 +121,7 @@ if ($op) {
     exit;
   }
 
-  // Usuarios (c_usuario) — para Cve_Usuario al guardar
+  // Usuarios (c_usuario) — para Cve_Usuario al Guardar
   if ($op === 'usuarios') {
     header('Content-Type: application/json; charset=utf-8');
     try {
@@ -762,7 +762,7 @@ include __DIR__ . '/../bi/_menu_global.php';
                     <div class="col-md-3">
                         <label class="form-label mb-0">BL Manufactura</label>
                         <select id="selBLManu" class="form-select form-select-sm">
-                            <option value="">Seleccione BL de manufactura</option>
+                            <option value="">Seleccione BL de Manufactura</option>
                         </select>
                         <div class="subtext">BL = Bin Location (c_ubicacion.CodigoCSD). Solo AreaProduccion='S'.</div>
                     </div>
@@ -1018,7 +1018,7 @@ include __DIR__ . '/../bi/_menu_global.php';
             // --- BLs por zona (AreaProduccion='S')
             function loadBLs() {
                 const zona = $('#selZona').val();
-                const $b = $('#selBLManu').empty().append('<option value="">Seleccione BL de manufactura</option>');
+                const $b = $('#selBLManu').empty().append('<option value="">Seleccione BL de Manufactura</option>');
                 const $d = $('#selBLDestino').empty().append('<option value="">Seleccione BL destino</option>');
                 if (!zona) return;
 
