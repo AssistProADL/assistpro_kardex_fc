@@ -84,6 +84,7 @@ try {
             v.cve_lote,
             v.id_caja,
             v.nTarima,
+            ch.CveLP AS CveLP,
             v.cantidad AS existencia_total,
             v.epc,
             v.code,
@@ -100,6 +101,14 @@ try {
             ) AS existencia_disponible
 
         FROM v_inv_existencia_multinivel v
+
+        /*
+          nTarima es el ID interno del contenedor/tarima.
+          Para UI debemos exponer la clave visible del LP: c_charolas.CveLP
+          Relación Kardex: c_charolas.IDContenedor = v.nTarima
+        */
+        LEFT JOIN c_charolas ch
+               ON ch.IDContenedor = v.nTarima
 
         LEFT JOIN (
             SELECT
