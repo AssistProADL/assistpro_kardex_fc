@@ -48,7 +48,7 @@ if (file_exists($menuStart)) require_once $menuStart;
         <table class="table table-bordered table-hover ap-table mb-0">
           <thead class="table-light">
             <tr>
-              <th style="width:240px;">Acciones</th>
+              <th style="width:90px;">Acciones</th>
               <th style="width:60px;">Status</th>
               <th style="width:70px;">ID</th>
               <th style="width:160px;">Clave</th>
@@ -239,14 +239,7 @@ async function loadPromos(){
       const dot = (parseInt(r.Activo||0)===1) ? 'background:#1bb34a;' : 'background:#b9b9b9;';
       tb.insertAdjacentHTML('beforeend', `
         <tr>
-          <td>
-            <div class="btn-group btn-group-sm" role="group">
-              <button class="btn btn-outline-primary ap-btn" onclick="openPromo(${r.id})">Ver</button>
-              <button class="btn btn-outline-secondary ap-btn" onclick="gotoRules(${r.id})">Rules</button>
-              <button class="btn btn-outline-success ap-btn" onclick="gotoRewards(${r.id})">Rewards</button>
-              <button class="btn btn-outline-warning ap-btn" onclick="gotoScope(${r.id})">Scope</button>
-            </div>
-          </td>
+          <td><button class="btn btn-outline-primary ap-btn" onclick="openPromo(${r.id})">Ver</button></td>
           <td class="text-center"><span class="badge-dot" style="${dot}"></span></td>
           <td class="text-end">${r.id}</td>
           <td>${escapeHtml(r.clave || r.cve_gpoart || '')}</td>
@@ -265,20 +258,6 @@ async function loadPromos(){
     alert('Error al listar.\n\n' + e.message + '\n\nRevisa Debug.');
   }
 }
-
-// Navegación a pantallas de detalle (mismo folder: /public/sfa/promociones/)
-function _gotoDetalle(page, promo_id){
-  const almacen_id = document.getElementById('almacen_id').value;
-  if(!almacen_id){
-    alert('Seleccione un almacén primero.');
-    return;
-  }
-  const url = `${page}?promo_id=${encodeURIComponent(promo_id)}&almacen_id=${encodeURIComponent(almacen_id)}`;
-  window.location.href = url;
-}
-function gotoRules(promo_id){   _gotoDetalle('promocion_reglas.php', promo_id); }
-function gotoRewards(promo_id){ _gotoDetalle('promocion_beneficios.php', promo_id); }
-function gotoScope(promo_id){   _gotoDetalle('promocion_scope.php', promo_id); }
 
 function openPromo(id=null){
   document.getElementById('p_id').value = '';

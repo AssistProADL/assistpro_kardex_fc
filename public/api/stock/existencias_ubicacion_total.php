@@ -9,11 +9,14 @@ try {
     // =========================
     // Parámetros de entrada
     // =========================
+    // Filtros (soporta búsqueda directa por artículo y BL/CodigoCSD)
     $cve_articulo      = $_GET['cve_articulo'] ?? null;
     $cve_lote          = $_GET['cve_lote'] ?? null;
     $nivel             = $_GET['nivel'] ?? null;
     $cve_almac         = $_GET['cve_almac'] ?? null;
     $idy_ubica         = $_GET['idy_ubica'] ?? null;
+    $bl                = $_GET['bl'] ?? null; // CodigoCSD
+    $incluir_negativos = (int)($_GET['incluir_negativos'] ?? 0);
     $solo_disponible   = isset($_GET['solo_disponible']) ? (bool)$_GET['solo_disponible'] : false;
     $incluir_cero      = isset($_GET['incluir_cero']) ? (bool)$_GET['incluir_cero'] : false;
     $limit             = isset($_GET['limit']) ? (int)$_GET['limit'] : 500;
@@ -50,12 +53,20 @@ try {
         $bind[':idy_ubica'] = $idy_ubica;
     }
 
-    if (!$incluir_cero) {
-        $where[] = "v.cantidad > 0";
+    if ($bl !== null && $bl !== '') {
+        $where[] = "v.bl = :bl";
+        $bind[':bl'] = $bl;
     }
 
+    // Reglas de visibilidad de stock:
+    // - Default: solo positivos (v.cantidad > 0)
+    // - incluir_cero=1: positivos + ceros (v.cantidad >= 0)
+    // - incluir_negativos=1: no filtramos por signo (incluye negativos)
+    // - solo_disponible=1: fuerza a positivos (para "disponible")
     if ($solo_disponible) {
         $where[] = "v.cantidad > 0";
+    } elseif (!$incluir_negativos) {
+        $where[] = $incluir_cero ? "v.cantidad >= 0" : "v.cantidad > 0";
     }
 
     $whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
@@ -73,6 +84,7 @@ try {
             v.cve_lote,
             v.id_caja,
             v.nTarima,
+            ch.CveLP AS CveLP,
             v.cantidad AS existencia_total,
             v.epc,
             v.code,
@@ -89,6 +101,14 @@ try {
             ) AS existencia_disponible
 
         FROM v_inv_existencia_multinivel v
+
+        /*
+          nTarima es el ID interno del contenedor/tarima.
+          Para UI debemos exponer la clave visible del LP: c_charolas.CveLP
+          Relación Kardex: c_charolas.IDContenedor = v.nTarima
+        */
+        LEFT JOIN c_charolas ch
+               ON ch.IDContenedor = v.nTarima
 
         LEFT JOIN (
             SELECT
