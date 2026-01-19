@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>AssistPro ER</title>
+
+  <link rel="icon" href="../assets/logo/assistpro-er.svg">
+
+  <!-- CSS base (si existe) -->
+  <link rel="stylesheet" href="css/rf.css?v=1">
+
+  <!-- Font Awesome v6 -->
+  <link rel="stylesheet" href="../bi/assets/fontawesome6/css/all.min.css">
+
+  <!-- Estilo compacto (igual a menu.php) -->
+  <style>
+    :root{
+      --ap-blue:#000f9f;
+      --ap-blue-2:#0016c9;
+      --ap-bg:#f4f6fb;
+      --ap-text:#0e1630;
+      --ap-muted:#6b778c;
+      --ap-card:#ffffff;
+      --ap-shadow: 0 10px 26px rgba(12, 23, 54, .10);
+      --ap-radius: 18px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--ap-bg);
+      color: var(--ap-text);
+    }
+
+    .wrap{
+      min-height:100%;
+      display:flex;
+      align-items:flex-start;
+      justify-content:center;
+      padding: 16px 10px 18px;
+    }
+
+    .card{
+      width:100%;
+      max-width: 380px;
+      background: var(--ap-card);
+      border-radius: var(--ap-radius);
+      box-shadow: var(--ap-shadow);
+      padding: 14px 14px 12px;
+    }
+
+    .head{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .logoBox{
+      width: 64px;
+      height: 64px;
+      border-radius: 14px;
+      background: #fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow: 0 6px 16px rgba(12,23,54,.08);
+      overflow:hidden;
+      flex: 0 0 auto;
+    }
+    .logoBox img{width:56px;height:56px;object-fit:contain;display:block}
+
+    .titleBox{flex:1}
+    .brand{font-weight:900;letter-spacing:.2px;margin:0;font-size:18px;line-height:1.1}
+    .sub{margin:2px 0 0;font-size:12px;color:var(--ap-muted)}
+
+    .alert{
+      display:none;
+      margin: 10px 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-size: 13px;
+      background: rgba(0,15,159,.06);
+      color: var(--ap-text);
+      border: 1px solid rgba(0,15,159,.12);
+    }
+
+    .field{margin: 10px 0}
+    label{display:block;font-size:12px;font-weight:800;color:var(--ap-muted);margin:0 0 6px}
+
+    .inputRow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      border: 1px solid rgba(12,23,54,.12);
+      background:#fff;
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+
+    .ico{color: var(--ap-blue);opacity:.95;min-width:18px;text-align:center}
+
+    input,select{
+      border:0;
+      outline:0;
+      width:100%;
+      font-size:14px;
+      background:transparent;
+      color: var(--ap-text);
+    }
+
+    .btn{
+      width:100%;
+      border:0;
+      background: linear-gradient(135deg, var(--ap-blue), var(--ap-blue-2));
+      color:#fff;
+      border-radius: 14px;
+      padding: 12px 12px;
+      font-weight: 900;
+      letter-spacing:.3px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      cursor:pointer;
+      margin: 12px 0 8px;
+      box-shadow: 0 10px 22px rgba(0,15,159,.18);
+      user-select:none;
+      font-size: 14px;
+    }
+
+    .footer{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+      font-size: 11px;
+      color: var(--ap-muted);
+      padding-top: 6px;
+    }
+    .footer b{color:#2b3b63}
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+
+      <div class="head">
+        <div class="logoBox">
+          <img src="../assets/logo/assistpro-er.svg" alt="AssistPro ER">
+        </div>
+
+        <div class="titleBox">
+          <p class="brand">AssistPRO · ER</p>
+          <p class="sub">Acceso operativo</p>
+        </div>
+      </div>
+
+      <div id="msg" class="alert rf-alert"></div>
+
+      <form id="loginForm" autocomplete="off">
+        <div class="field">
+          <label for="usuario">Usuario</label>
+          <div class="inputRow">
+            <span class="ico"><i class="fa-solid fa-user"></i></span>
+            <input id="usuario" type="text" value="wmsmaster" inputmode="text" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="pwd">Password / PIN</label>
+          <div class="inputRow">
+            <span class="ico"><i class="fa-solid fa-key"></i></span>
+            <input id="pwd" type="password" value="" autocomplete="off" inputmode="numeric">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="almacen">Almacén</label>
+          <div class="inputRow">
+            <span class="ico"><i class="fa-solid fa-warehouse"></i></span>
+            <select id="almacen"></select>
+          </div>
+        </div>
+
+        <button class="btn" type="submit">
+          <i class="fa-solid fa-right-to-bracket"></i>
+          <span>INGRESAR</span>
+        </button>
+
+        <div class="footer">
+          <span>Powered by</span> <b>Adventech Logística</b>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <script src="js/config.js?v=1"></script>
+  <script src="js/login.js?v=1"></script>
+</body>
+</html>

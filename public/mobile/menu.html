@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AssistPro Mobile - Menú</title>
+  <link rel="stylesheet" href="css/rf.css" />
+</head>
+<body>
+
+<div class="container">
+  <div class="card">
+
+    <div class="header">
+      <div id="u"></div>
+      <div id="a"></div>
+    </div>
+
+    <a class="menu-btn" href="#">
+      <i class="fa-solid fa-truck-ramp-box"></i>
+      <span>1 RECEPCIÓN</span>
+    </a>
+
+    <a class="menu-btn" href="#">
+      <i class="fa-solid fa-warehouse"></i>
+      <span>2 ACOMODO</span>
+    </a>
+
+    <a class="menu-btn" href="#">
+      <i class="fa-solid fa-right-left"></i>
+      <span>3 TRASLADOS</span>
+    </a>
+
+    <a class="menu-btn" href="#">
+      <i class="fa-solid fa-layer-group"></i>
+      <span>4 PALLETIZACIÓN</span>
+    </a>
+
+    <a class="menu-btn" href="#">
+      <i class="fa-solid fa-hand-holding-box"></i>
+      <span>5 PICKING</span>
+    </a>
+
+    <a class="menu-btn" href="#">
+      <i class="fa-solid fa-clipboard-check"></i>
+      <span>6 INVENTARIOS</span>
+    </a>
+
+    <a class="menu-btn" href="#">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <span>7 CONSULTAS</span>
+    </a>
+
+    <button class="btn2" id="logout">
+      <i class="fa-solid fa-arrow-right-from-bracket"></i>
+      <span>CERRAR SESIÓN</span>
+    </button>
+
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem("ap_token");
+  if (!token) location.href = "index.html";
+
+  const u = JSON.parse(localStorage.getItem("ap_usuario") || "{}");
+  const a = localStorage.getItem("ap_almacen") || "";
+
+  document.getElementById("u").textContent =
+    "Usuario " + (u.nombre || u.cve_usuario || "OPERADOR");
+
+  document.getElementById("a").textContent = "ALM: " + a;
+
+  document.getElementById("logout").onclick = () => {
+    localStorage.clear();
+    location.href = "index.html";
+  };
+</script>
+
+</body>
+</html>

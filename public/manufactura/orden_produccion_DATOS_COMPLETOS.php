@@ -54,18 +54,14 @@ function stock_disponible_en_bl(PDO $pdo, string $zona_cve_almac, string $bl, st
     return (float) ($row['stock'] ?? 0);
 }
 
-function table_has_col(PDO $pdo, string $table, string $col): bool
-{
+function table_has_col(PDO $pdo, string $table, string $col): bool {
     $st = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1");
-    $st->execute([$table, $col]);
-    return (bool) $st->fetchColumn();
+    $st->execute([$table,$col]);
+    return (bool)$st->fetchColumn();
 }
-function detect_folio_col(PDO $pdo): string
-{
-    if (table_has_col($pdo, 't_ordenprod', 'Folio_Pro'))
-        return 'Folio_Pro';
-    if (table_has_col($pdo, 't_ordenprod', 'folio'))
-        return 'folio';
+function detect_folio_col(PDO $pdo): string {
+    if (table_has_col($pdo,'t_ordenprod','Folio_Pro')) return 'Folio_Pro';
+    if (table_has_col($pdo,'t_ordenprod','folio')) return 'folio';
     // fallback
     return 'Folio_Pro';
 }
@@ -85,11 +81,10 @@ function next_folio_ot(PDO $pdo, string $pref = 'OT'): string
     $seq = 1;
 
     if ($max) {
-        $parts = explode('-', (string) $max);
+        $parts = explode('-', (string)$max);
         if (count($parts) === 2) {
-            $n = (int) $parts[1];
-            if ($n > 0)
-                $seq = $n + 1;
+            $n = (int)$parts[1];
+            if ($n > 0) $seq = $n + 1;
         }
     }
 
@@ -105,61 +100,61 @@ $op = $_GET['op'] ?? $_POST['op'] ?? null;
 
 if ($op) {
 
-    // Folio siguiente (OTyyyymmdd-00001)
-    if ($op === 'next_folio') {
-        header('Content-Type: application/json; charset=utf-8');
-        try {
-            $hoy = date('Ymd');
-            $pref = 'OT' . $hoy . '-';
-            $max = db_val("SELECT MAX(Folio_Pro) FROM t_ordenprod WHERE Folio_Pro LIKE ?", [$pref . '%']);
-            if (!$max) {
-                $next = $pref . '00001';
-            } else {
-                $num = intval(substr($max, strlen($pref)));
-                $next = $pref . str_pad((string) ($num + 1), 5, '0', STR_PAD_LEFT);
-            }
-            echo json_encode(['ok' => true, 'folio' => $next], JSON_UNESCAPED_UNICODE);
-        } catch (Throwable $e) {
-            http_response_code(500);
-            echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
-        }
-        exit;
+  // Folio siguiente (OTyyyymmdd-00001)
+  if ($op === 'next_folio') {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+      $hoy = date('Ymd');
+      $pref = 'OT' . $hoy . '-';
+      $max = db_val("SELECT MAX(Folio_Pro) FROM t_ordenprod WHERE Folio_Pro LIKE ?", [$pref . '%']);
+      if (!$max) {
+        $next = $pref . '00001';
+      } else {
+        $num = intval(substr($max, strlen($pref)));
+        $next = $pref . str_pad((string)($num + 1), 5, '0', STR_PAD_LEFT);
+      }
+      echo json_encode(['ok'=>true,'folio'=>$next], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+      http_response_code(500);
+      echo json_encode(['ok'=>false,'error'=>$e->getMessage()], JSON_UNESCAPED_UNICODE);
     }
+    exit;
+  }
 
-    // Usuarios (c_usuario) — para Cve_Usuario al Guardar
-    if ($op === 'usuarios') {
-        header('Content-Type: application/json; charset=utf-8');
-        try {
-            $cia = $_GET['cve_cia'] ?? $_GET['cia'] ?? null;
-            // Activo puede venir como int; status también existe en algunas instalaciones
-            $sql = "SELECT id_user, cve_usuario, nombre_completo, cve_cia, Activo, status
+  // Usuarios (c_usuario) — para Cve_Usuario al guardar
+  if ($op === 'usuarios') {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+      $cia = $_GET['cve_cia'] ?? $_GET['cia'] ?? null;
+      // Activo puede venir como int; status también existe en algunas instalaciones
+      $sql = "SELECT id_user, cve_usuario, nombre_completo, cve_cia, Activo, status
               FROM c_usuario
               WHERE (Activo IS NULL OR Activo = 1)
                 AND (status IS NULL OR status <> 'B')";
-            $params = [];
-            if ($cia !== null && $cia !== '' && $cia !== '0') {
-                $sql .= " AND (cve_cia = ?)";
-                $params[] = $cia;
-            }
-            $sql .= " ORDER BY nombre_completo";
-            $rows = db_all($sql, $params);
-            $out = array_map(function ($r) {
-                return [
-                    'id_user' => $r['id_user'] ?? null,
-                    'cve_usuario' => $r['cve_usuario'] ?? null,
-                    'nombre_completo' => $r['nombre_completo'] ?? null,
-                    'cve_cia' => $r['cve_cia'] ?? null,
-                ];
-            }, $rows ?: []);
-            echo json_encode(['ok' => true, 'data' => $out], JSON_UNESCAPED_UNICODE);
-        } catch (Throwable $e) {
-            http_response_code(500);
-            echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
-        }
-        exit;
+      $params = [];
+      if ($cia !== null && $cia !== '' && $cia !== '0') {
+        $sql .= " AND (cve_cia = ?)";
+        $params[] = $cia;
+      }
+      $sql .= " ORDER BY nombre_completo";
+      $rows = db_all($sql, $params);
+      $out = array_map(function($r){
+        return [
+          'id_user' => $r['id_user'] ?? null,
+          'cve_usuario' => $r['cve_usuario'] ?? null,
+          'nombre_completo' => $r['nombre_completo'] ?? null,
+          'cve_cia' => $r['cve_cia'] ?? null,
+        ];
+      }, $rows ?: []);
+      echo json_encode(['ok'=>true,'data'=>$out], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+      http_response_code(500);
+      echo json_encode(['ok'=>false,'error'=>$e->getMessage()], JSON_UNESCAPED_UNICODE);
     }
+    exit;
+  }
 
-    // Zonas (c_almacen) por almacén lógico
+  // Zonas (c_almacen) por almacén lógico
     // Zonas (c_almacen) por almacén lógico (cve_almacenp)
     // Nota: c_almacen.cve_almacenp es INT. El almacén lógico viene de c_almacenp.id (API filtros_almacenes.php).
     if ($op === 'zonas_by_almacenp') {
@@ -302,131 +297,92 @@ if ($op) {
     }
 
     // Explosión de materiales (BOM: t_artcompuesto)
+    
 
-
-    // ---------- GENERAR FOLIO OT (OTAAAAMMDD-00001) ----------
-    if ($op === 'next_folio') {
-        header('Content-Type: application/json; charset=utf-8');
-        try {
-            $hoy = date('Ymd');
-            $pref = "OT{$hoy}-";
-            $max = db_val("SELECT MAX(Folio_Pro) FROM t_ordenprod WHERE Folio_Pro LIKE ?", [$pref . "%"]);
-            $seq = 1;
-            if ($max) {
-                // Extrae la parte numérica final
-                if (preg_match('/^OT\d{8}-(\d{5})$/', $max, $mm)) {
-                    $seq = ((int) $mm[1]) + 1;
-                } else {
-                    // fallback: toma últimos 5 dígitos si existen
-                    $tail = substr($max, -5);
-                    if (ctype_digit($tail))
-                        $seq = ((int) $tail) + 1;
-                }
-            }
-            $folio = $pref . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
-            echo json_encode(['ok' => true, 'folio' => $folio], JSON_UNESCAPED_UNICODE);
-        } catch (Throwable $e) {
-            echo json_encode(['ok' => false, 'msg' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+  // ---------- GENERAR FOLIO OT (OTAAAAMMDD-00001) ----------
+  if ($op === 'next_folio') {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+      $hoy = date('Ymd');
+      $pref = "OT{$hoy}-";
+      $max = db_val("SELECT MAX(Folio_Pro) FROM t_ordenprod WHERE Folio_Pro LIKE ?", [$pref . "%"]);
+      $seq = 1;
+      if ($max) {
+        // Extrae la parte numérica final
+        if (preg_match('/^OT\d{8}-(\d{5})$/', $max, $mm)) {
+          $seq = ((int)$mm[1]) + 1;
+        } else {
+          // fallback: toma últimos 5 dígitos si existen
+          $tail = substr($max, -5);
+          if (ctype_digit($tail)) $seq = ((int)$tail) + 1;
         }
-        exit;
+      }
+      $folio = $pref . str_pad((string)$seq, 5, '0', STR_PAD_LEFT);
+      echo json_encode(['ok' => true, 'folio' => $folio], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+      echo json_encode(['ok' => false, 'msg' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
     }
+    exit;
+  }
 
+  
+  // ---------- GUARDAR OT (t_ordenprod + td_ordenprod) ----------
+  if ($op === 'guardar_ot') {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+      $payload = $_POST['payload'] ?? '';
+      if ($payload === '') throw new Exception('Payload requerido.');
+      $data = json_decode($payload, true);
+      if (!is_array($data)) throw new Exception('Payload inválido.');
 
-    // ---------- GUARDAR OT (t_ordenprod + td_ordenprod) ----------
-    if ($op === 'guardar_ot') {
-        header('Content-Type: application/json; charset=utf-8');
-        try {
-            $payload = $_POST['payload'] ?? '';
-            if ($payload === '')
-                throw new Exception('Payload requerido.');
-            $data = json_decode($payload, true);
-            if (!is_array($data))
-                throw new Exception('Payload inválido.');
+      $folio   = trim($data['folio'] ?? '');
+      $cveAlm  = trim($data['cve_almac'] ?? '');
+      $zonaId  = trim($data['zona_id'] ?? '');
 
-            $folio = trim($data['folio'] ?? '');
-            $cveAlm = trim($data['cve_almac'] ?? '');
+      // BL origen (MP) y BL destino (PT)
+      $blOri   = trim($data['bl_origen'] ?? ($data['bl'] ?? ''));
+      $blDest  = trim($data['bl_destino'] ?? '');
 
-            // Normaliza cve_almac: puede venir como id de almacenp o como clave (ej. WHCR)
-            $cveAlmRaw = $cveAlm;
-            $cveAlmNum = null;
-            if ($cveAlmRaw !== '') {
-                if (is_numeric($cveAlmRaw)) {
-                    $tmp = (int) $cveAlmRaw;
-                    // 1) si ya es cve_almac
-                    $q = $pdo->prepare("SELECT cve_almac FROM c_almacen WHERE cve_almac = ? LIMIT 1");
-                    $q->execute([$tmp]);
-                    $r = $q->fetch(PDO::FETCH_ASSOC);
-                    if ($r && isset($r['cve_almac'])) {
-                        $cveAlmNum = (int) $r['cve_almac'];
-                    } else {
-                        // 2) si viene como cve_almacenp, lo convertimos a cve_almac
-                        $q = $pdo->prepare("SELECT cve_almac FROM c_almacen WHERE cve_almacenp = ? LIMIT 1");
-                        $q->execute([$tmp]);
-                        $r = $q->fetch(PDO::FETCH_ASSOC);
-                        if ($r && isset($r['cve_almac']))
-                            $cveAlmNum = (int) $r['cve_almac'];
-                    }
-                } else {
-                    // 3) si viene como clave (WHCR/W8/etc)
-                    $q = $pdo->prepare("SELECT cve_almac FROM c_almacen WHERE clave = ? LIMIT 1");
-                    $q->execute([$cveAlmRaw]);
-                    $r = $q->fetch(PDO::FETCH_ASSOC);
-                    if ($r && isset($r['cve_almac']))
-                        $cveAlmNum = (int) $r['cve_almac'];
-                }
-            }
-            if ($cveAlmNum !== null)
-                $cveAlm = (string) $cveAlmNum;
+      $prod    = trim($data['producto'] ?? '');
+      $cant    = (float)($data['cantidad'] ?? 0);
+      $otErp   = trim($data['ot_erp'] ?? '');
+      $pedido  = trim($data['pedido'] ?? '');
+      $fOT     = trim($data['fecha_ot'] ?? '');
+      $fComp   = trim($data['fecha_comp'] ?? '');
+      $umed    = $data['id_umed'] ?? null;
 
-            $zonaId = trim($data['zona_id'] ?? '');
+      // Usuario que registra
+      $usrReg  = trim($data['usuario'] ?? '');
 
-            // BL origen (MP) y BL destino (PT)
-            $blOri = trim($data['bl_origen'] ?? ($data['bl'] ?? ''));
-            $blDest = trim($data['bl_destino'] ?? '');
+      $det = $data['detalles'] ?? [];
+      if ($folio === '' || $cveAlm === '' || $zonaId === '' || $blOri === '' || $blDest === '' || $prod === '' || !($cant > 0)) {
+        throw new Exception('Faltan datos obligatorios (almacén, zona, BL origen, BL destino, producto, cantidad, folio).');
+      }
+      if ($usrReg === '') {
+        throw new Exception('Seleccione el usuario que registra la OT.');
+      }
+      if (!is_array($det) || count($det) === 0) {
+        throw new Exception('No hay componentes para guardar.');
+      }
 
-            $prod = trim($data['producto'] ?? '');
-            $cant = (float) ($data['cantidad'] ?? 0);
-            $otErp = trim($data['ot_erp'] ?? '');
-            $pedido = trim($data['pedido'] ?? '');
-            $fOT = trim($data['fecha_ot'] ?? '');
-            $fComp = trim($data['fecha_comp'] ?? '');
-            $umed = $data['id_umed'] ?? null;
+      // Resolver idy_ubica (origen/destino) desde CodigoCSD
+      $idyOri = db_val("SELECT idy_ubica FROM c_ubicacion WHERE cve_almac = ? AND CodigoCSD = ? LIMIT 1", [$cveAlm, $blOri]);
+      $idyDest = db_val("SELECT idy_ubica FROM c_ubicacion WHERE cve_almac = ? AND CodigoCSD = ? LIMIT 1", [$cveAlm, $blDest]);
+      if (!$idyOri)  throw new Exception('BL origen no existe en c_ubicacion para el almacén seleccionado.');
+      if (!$idyDest) throw new Exception('BL destino no existe en c_ubicacion para el almacén seleccionado.');
 
-            // Usuario que registra
-            $usrReg = trim($data['usuario'] ?? '');
+      $pdo->beginTransaction();
 
-            $det = $data['detalles'] ?? [];
-            if ($folio === '' || $cveAlm === '' || $zonaId === '' || $blOri === '' || $blDest === '' || $prod === '' || !($cant > 0)) {
-                throw new Exception('Faltan datos obligatorios (almacén, zona, BL origen, BL destino, producto, cantidad, folio).');
-            }
-            if ($usrReg === '') {
-                throw new Exception('Seleccione el usuario que registra la OT.');
-            }
-            if (!is_array($det) || count($det) === 0) {
-                throw new Exception('No hay componentes para guardar.');
-            }
+      // Evitar duplicados por Folio_Pro
+      $existe = db_val("SELECT COUNT(*) FROM t_ordenprod WHERE Folio_Pro = ?", [$folio]);
+      if ((int)$existe > 0) {
+        throw new Exception("El folio ya existe: {$folio}");
+      }
 
-            // Resolver idy_ubica (origen/destino) desde CodigoCSD
-            // IMPORTANTE: Los BL están en c_ubicacion por ZONA (cve_almac), no por almacén lógico
-            $idyOri = db_val("SELECT idy_ubica FROM c_ubicacion WHERE cve_almac = ? AND CodigoCSD = ? LIMIT 1", [$zonaId, $blOri]);
-            $idyDest = db_val("SELECT idy_ubica FROM c_ubicacion WHERE cve_almac = ? AND CodigoCSD = ? LIMIT 1", [$zonaId, $blDest]);
-            if (!$idyOri)
-                throw new Exception('BL origen no existe en c_ubicacion para el almacén seleccionado.');
-            if (!$idyDest)
-                throw new Exception('BL destino no existe en c_ubicacion para el almacén seleccionado.');
+      $fechaOT = $fOT ? (date('Y-m-d 00:00:00', strtotime($fOT))) : date('Y-m-d H:i:s');
 
-            $pdo->beginTransaction();
-
-            // Evitar duplicados por Folio_Pro
-            $existe = db_val("SELECT COUNT(*) FROM t_ordenprod WHERE Folio_Pro = ?", [$folio]);
-            if ((int) $existe > 0) {
-                throw new Exception("El folio ya existe: {$folio}");
-            }
-
-            $fechaOT = $fOT ? (date('Y-m-d 00:00:00', strtotime($fOT))) : date('Y-m-d H:i:s');
-
-            // Inserta encabezado (TODOS los campos clave del flujo)
-            $sqlH = "INSERT INTO t_ordenprod
+      // Inserta encabezado (TODOS los campos clave del flujo)
+      $sqlH = "INSERT INTO t_ordenprod
         (Folio_Pro, FolioImport, cve_almac, Cve_Articulo, Cantidad, Fecha, FechaReg,
          Referencia, Status, id_umed, id_zona_almac,
          Cve_Usuario, Cve_Almac_Ori, idy_ubica, idy_ubica_dest)
@@ -435,57 +391,56 @@ if ($op) {
          :ref, :status, :id_umed, :zona,
          :usr, :almori, :idy_ori, :idy_dest)";
 
-            $stmtH = $pdo->prepare($sqlH);
-            $stmtH->execute([
-                ':folio' => $folio,
-                ':folioimp' => $pedido !== '' ? $pedido : null,
-                ':alm' => $cveAlm,
-                ':art' => $prod,
-                ':cant' => $cant,
-                ':fecha' => $fechaOT,
-                ':ref' => $otErp !== '' ? $otErp : null,
-                ':status' => 'P',
-                ':id_umed' => (is_numeric($umed) ? (int) $umed : null),
-                ':zona' => (is_numeric($zonaId) ? (int) $zonaId : null),
-                ':usr' => $usrReg,
-                ':almori' => $cveAlm,
-                ':idy_ori' => (int) $idyOri,
-                ':idy_dest' => (int) $idyDest,
-            ]);
+      $stmtH = $pdo->prepare($sqlH);
+      $stmtH->execute([
+        ':folio'     => $folio,
+        ':folioimp'  => $pedido !== '' ? $pedido : null,
+        ':alm'       => $cveAlm,
+        ':art'       => $prod,
+        ':cant'      => $cant,
+        ':fecha'     => $fechaOT,
+        ':ref'       => $otErp !== '' ? $otErp : null,
+        ':status'    => 'P',
+        ':id_umed'   => (is_numeric($umed) ? (int)$umed : null),
+        ':zona'      => (is_numeric($zonaId) ? (int)$zonaId : null),
+        ':usr'       => $usrReg,
+        ':almori'    => $cveAlm,
+        ':idy_ori'   => (int)$idyOri,
+        ':idy_dest'  => (int)$idyDest,
+      ]);
 
-            // Inserta detalle (componentes) - amarra BL origen en el detalle
-            $sqlD = "INSERT INTO td_ordenprod
-        (Folio_Pro, Cve_Articulo, Fecha_Prod, Cantidad, Activo, Referencia, Cve_Almac_Ori)
+      // Inserta detalle (componentes) - amarra BL origen en el detalle
+      $sqlD = "INSERT INTO td_ordenprod
+        (Folio_Pro, Cve_Articulo, Fecha_Prod, Cantidad, Activo, Referencia, Cve_Almac_Ori, idy_ubica)
         VALUES
-        (:folio, :art, :fecha, :cant, 1, :ref, :almori)";
-            $stmtD = $pdo->prepare($sqlD);
+        (:folio, :art, :fecha, :cant, 1, :ref, :almori, :idy_ori)";
+      $stmtD = $pdo->prepare($sqlD);
 
-            foreach ($det as $r) {
-                $artComp = trim($r['componente'] ?? $r['Cve_Articulo'] ?? '');
-                $cantTot = (float) ($r['cant_total'] ?? $r['Cantidad'] ?? 0);
-                if ($artComp === '')
-                    continue;
-                $stmtD->execute([
-                    ':folio' => $folio,
-                    ':art' => $artComp,
-                    ':fecha' => $fechaOT,
-                    ':cant' => $cantTot,
-                    ':ref' => $otErp !== '' ? $otErp : null,
-                    ':almori' => $cveAlm,
-                ]);
-            }
+      foreach ($det as $r) {
+        $artComp = trim($r['componente'] ?? $r['Cve_Articulo'] ?? '');
+        $cantTot = (float)($r['cant_total'] ?? $r['Cantidad'] ?? 0);
+        if ($artComp === '' ) continue;
+        $stmtD->execute([
+          ':folio'   => $folio,
+          ':art'     => $artComp,
+          ':fecha'   => $fechaOT,
+          ':cant'    => $cantTot,
+          ':ref'     => $otErp !== '' ? $otErp : null,
+          ':almori'  => $cveAlm,
+          ':idy_ori' => (int)$idyOri,
+        ]);
+      }
 
-            $pdo->commit();
-            echo json_encode(['ok' => true, 'folio' => $folio], JSON_UNESCAPED_UNICODE);
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction())
-                $pdo->rollBack();
-            echo json_encode(['ok' => false, 'msg' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
-        }
-        exit;
+      $pdo->commit();
+      echo json_encode(['ok' => true, 'folio' => $folio], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+      if ($pdo->inTransaction()) $pdo->rollBack();
+      echo json_encode(['ok' => false, 'msg' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
     }
+    exit;
+  }
 
-    if ($op === 'explosion') {
+if ($op === 'explosion') {
         header('Content-Type: application/json; charset=utf-8');
         try {
             $padre = trim($_POST['prod'] ?? '');
@@ -551,7 +506,7 @@ if ($op) {
         exit;
     }
 
-
+    
     // Guardar OT (t_ordenprod + td_ordenprod)
     if ($op === 'guardar_ot') {
         header('Content-Type: application/json; charset=utf-8');
@@ -559,29 +514,24 @@ if ($op) {
             $folio = trim($_POST['folio'] ?? '');
             $empresa = trim($_POST['empresa'] ?? '');
             $almacen = trim($_POST['almacen'] ?? '');
-            $zona = trim($_POST['zona'] ?? '');
-            $bl = trim($_POST['bl'] ?? '');
-            $prod = trim($_POST['producto'] ?? '');
-            $cant = (float) ($_POST['cantidad'] ?? 0);
-            $ot_erp = trim($_POST['ot_erp'] ?? '');
-            $pedido = trim($_POST['pedido'] ?? '');
-            $f_ot = trim($_POST['fecha_ot'] ?? date('Y-m-d'));
-            $f_comp = trim($_POST['fecha_compromiso'] ?? date('Y-m-d'));
+            $zona    = trim($_POST['zona'] ?? '');
+            $bl      = trim($_POST['bl'] ?? '');
+            $prod    = trim($_POST['producto'] ?? '');
+            $cant    = (float)($_POST['cantidad'] ?? 0);
+            $ot_erp  = trim($_POST['ot_erp'] ?? '');
+            $pedido  = trim($_POST['pedido'] ?? '');
+            $f_ot    = trim($_POST['fecha_ot'] ?? date('Y-m-d'));
+            $f_comp  = trim($_POST['fecha_compromiso'] ?? date('Y-m-d'));
             $detalle = $_POST['detalle'] ?? '[]';
             if (is_string($detalle)) {
                 $detalle = json_decode($detalle, true);
             }
-            if (!is_array($detalle))
-                $detalle = [];
+            if (!is_array($detalle)) $detalle = [];
 
-            if ($folio === '')
-                $folio = next_folio_ot($pdo, 'OT');
-            if ($prod === '' || !($cant > 0))
-                throw new Exception('Producto y cantidad son obligatorios.');
-            if (!$almacen || !$zona || !$bl)
-                throw new Exception('Seleccione almacén, zona y BL.');
-            if (count($detalle) === 0)
-                throw new Exception('No hay componentes calculados para guardar.');
+            if ($folio === '') $folio = next_folio_ot($pdo, 'OT');
+            if ($prod === '' || !($cant > 0)) throw new Exception('Producto y cantidad son obligatorios.');
+            if (!$almacen || !$zona || !$bl) throw new Exception('Seleccione almacén, zona y BL.');
+            if (count($detalle) === 0) throw new Exception('No hay componentes calculados para guardar.');
 
             $folioCol = detect_folio_col($pdo);
 
@@ -592,8 +542,8 @@ if ($op) {
             $vals = [];
             $pars = [];
 
-            $add = function ($col, $val) use (&$cols, &$vals, &$pars, $pdo) {
-                if (table_has_col($pdo, 't_ordenprod', $col)) {
+            $add = function($col, $val) use (&$cols,&$vals,&$pars,$pdo){
+                if (table_has_col($pdo,'t_ordenprod',$col)) {
                     $cols[] = $col;
                     $ph = ':' . $col;
                     $vals[] = $ph;
@@ -630,13 +580,11 @@ if ($op) {
             $usr = $_SESSION['username'] ?? $_SESSION['usuario'] ?? $_SESSION['user'] ?? 'SYSTEM';
             $add('Cve_Usuario', $usr);
 
-            if (count($cols) === 0)
-                throw new Exception('No se pudo mapear columnas de t_ordenprod.');
+            if (count($cols) === 0) throw new Exception('No se pudo mapear columnas de t_ordenprod.');
 
             // Evitar duplicar mismo folio: si ya existe, aborta
             $exists = db_val("SELECT COUNT(*) FROM t_ordenprod WHERE $folioCol = ?", [$folio]);
-            if ((int) $exists > 0)
-                throw new Exception('El folio ya existe: ' . $folio);
+            if ((int)$exists > 0) throw new Exception('El folio ya existe: ' . $folio);
 
             $sqlH = "INSERT INTO t_ordenprod (" . implode(',', $cols) . ") VALUES (" . implode(',', $vals) . ")";
             $stH = $pdo->prepare($sqlH);
@@ -644,37 +592,32 @@ if ($op) {
 
             // Insert detalle
             $folioDetCol = null;
-            if (table_has_col($pdo, 'td_ordenprod', 'Folio_Pro'))
-                $folioDetCol = 'Folio_Pro';
-            elseif (table_has_col($pdo, 'td_ordenprod', 'folio'))
-                $folioDetCol = 'folio';
-            elseif (table_has_col($pdo, 'td_ordenprod', $folioCol))
-                $folioDetCol = $folioCol;
+            if (table_has_col($pdo,'td_ordenprod','Folio_Pro')) $folioDetCol = 'Folio_Pro';
+            elseif (table_has_col($pdo,'td_ordenprod','folio')) $folioDetCol = 'folio';
+            elseif (table_has_col($pdo,'td_ordenprod',$folioCol)) $folioDetCol = $folioCol;
 
-            $colArt = table_has_col($pdo, 'td_ordenprod', 'Cve_Articulo') ? 'Cve_Articulo' : (table_has_col($pdo, 'td_ordenprod', 'cve_articulo') ? 'cve_articulo' : 'Cve_Articulo');
-            $colCant = table_has_col($pdo, 'td_ordenprod', 'Cantidad') ? 'Cantidad' : (table_has_col($pdo, 'td_ordenprod', 'cantidad') ? 'cantidad' : 'Cantidad');
+            $colArt = table_has_col($pdo,'td_ordenprod','Cve_Articulo') ? 'Cve_Articulo' : (table_has_col($pdo,'td_ordenprod','cve_articulo') ? 'cve_articulo' : 'Cve_Articulo');
+            $colCant= table_has_col($pdo,'td_ordenprod','Cantidad') ? 'Cantidad' : (table_has_col($pdo,'td_ordenprod','cantidad') ? 'cantidad' : 'Cantidad');
 
             foreach ($detalle as $d) {
                 $c = trim($d['componente'] ?? $d['Cve_Articulo'] ?? $d['cve_articulo'] ?? '');
-                $q = (float) ($d['cant_solicitada'] ?? $d['cant_total'] ?? $d['Cantidad'] ?? $d['cantidad'] ?? 0);
-                if ($c === '' || !($q > 0))
-                    continue;
+                $q = (float)($d['cant_solicitada'] ?? $d['cant_total'] ?? $d['Cantidad'] ?? $d['cantidad'] ?? 0);
+                if ($c === '' || !($q > 0)) continue;
 
                 if ($folioDetCol) {
                     $sqlD = "INSERT INTO td_ordenprod ($folioDetCol,$colArt,$colCant) VALUES (?,?,?)";
-                    $pdo->prepare($sqlD)->execute([$folio, $c, $q]);
+                    $pdo->prepare($sqlD)->execute([$folio,$c,$q]);
                 } else {
                     // Si no hay folio en detalle, intentamos con id_ord/id_ordenprod si existe (no se infiere aquí)
                     $sqlD = "INSERT INTO td_ordenprod ($colArt,$colCant) VALUES (?,?)";
-                    $pdo->prepare($sqlD)->execute([$c, $q]);
+                    $pdo->prepare($sqlD)->execute([$c,$q]);
                 }
             }
 
             $pdo->commit();
             echo json_encode(['ok' => true, 'folio' => $folio], JSON_UNESCAPED_UNICODE);
         } catch (Throwable $e) {
-            if ($pdo->inTransaction())
-                $pdo->rollBack();
+            if ($pdo->inTransaction()) $pdo->rollBack();
             echo json_encode(['ok' => false, 'msg' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
         exit;
@@ -764,13 +707,13 @@ include __DIR__ . '/../bi/_menu_global.php';
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label mb-0">Usuario (registra)</label>
-                        <select id="selUsuario" class="form-select form-select-sm">
-                            <option value="">Seleccione Usuario</option>
-                        </select>
-                    </div>
+                    <label class="form-label mb-0">Usuario (registra)</label>
+                    <select id="selUsuario" class="form-select form-select-sm">
+                        <option value="">Seleccione Usuario</option>
+                    </select>
+                </div>
 
-                    <div class="col-md-3">
+                <div class="col-md-3">
                         <label class="form-label mb-0">Almacén</label>
                         <select id="selAlmacen" class="form-select form-select-sm">
                             <option value="">Seleccione almacén</option>
@@ -789,7 +732,7 @@ include __DIR__ . '/../bi/_menu_global.php';
                     <div class="col-md-3">
                         <label class="form-label mb-0">BL Manufactura</label>
                         <select id="selBLManu" class="form-select form-select-sm">
-                            <option value="">Seleccione BL de Manufactura</option>
+                            <option value="">Seleccione BL de manufactura</option>
                         </select>
                         <div class="subtext">BL = Bin Location (c_ubicacion.CodigoCSD). Solo AreaProduccion='S'.</div>
                     </div>
@@ -855,8 +798,7 @@ include __DIR__ . '/../bi/_menu_global.php';
 
                     <div class="col-md-4 d-flex align-items-end">
                         <button id="btnCalcular" class="btn btn-success btn-sm w-100">
-                            <span id="spCalcular" class="spinner-border spinner-border-sm me-2 d-none" role="status"
-                                aria-hidden="true"></span><i class="bi bi-calculator"></i> Calcular requerimientos
+                            <span id="spCalcular" class="spinner-border spinner-border-sm me-2 d-none" role="status" aria-hidden="true"></span><i class="bi bi-calculator"></i> Calcular requerimientos
                         </button>
                     </div>
 
@@ -957,18 +899,18 @@ include __DIR__ . '/../bi/_menu_global.php';
 
                 // API corporativa de usuarios
                 $.getJSON('../api/usuarios.php', { action: 'list' })
-                    .done(function (resp) {
+                    .done(function(resp){
                         // Soportar dos formatos: {success:true,data:[...]} o arreglo directo
                         const rows = (resp && resp.data) ? resp.data : (Array.isArray(resp) ? resp : []);
-                        rows.forEach(function (r) {
+                        rows.forEach(function(r){
                             const id = (r.cve_usuario ?? r.usuario ?? r.id ?? '').toString().trim();
                             const label = (r.nombre_completo ?? r.nombre ?? r.username ?? id).toString().trim();
-                            if (id !== '') {
+                            if(id !== ''){
                                 $u.append(`<option value="${id}">${label}</option>`);
                             }
                         });
                     })
-                    .fail(function () {
+                    .fail(function(){
                         console.warn('No se pudo cargar usuarios desde ../api/usuarios.php');
                     });
             }
@@ -983,9 +925,9 @@ include __DIR__ . '/../bi/_menu_global.php';
                     const arr = Array.isArray(r) ? r : (r && r.data ? r.data : []);
 
                     arr.forEach(a => {
-                        const id = String(a.almacenp_id ?? a.almacenep_id ?? a.id ?? a.cve_almacenp ?? '');
+                        const id  = String(a.almacenp_id ?? a.almacenep_id ?? a.id ?? a.cve_almacenp ?? '');
                         const txt = (`${a.clave ? '(' + a.clave + ') ' : ''}${a.nombre ?? ''}`).trim() || id;
-                        if (!id) return;
+                        if(!id) return;
                         $s.append(`<option value="${id.replaceAll('"', '&quot;')}">${txt}</option>`);
                     });
 
@@ -1000,7 +942,7 @@ include __DIR__ . '/../bi/_menu_global.php';
                         // 2) si aún está vacío, toma el primer <option> con value != ""
                         current = ($s.val() || '').toString().trim();
                         if (!current) {
-                            const firstOpt = $s.find('option').filter(function () { return (this.value || '').toString().trim() !== ''; }).first().val();
+                            const firstOpt = $s.find('option').filter(function(){ return (this.value||'').toString().trim()!==''; }).first().val();
                             if (firstOpt) $s.val(firstOpt);
                         }
                     }
@@ -1046,7 +988,7 @@ include __DIR__ . '/../bi/_menu_global.php';
             // --- BLs por zona (AreaProduccion='S')
             function loadBLs() {
                 const zona = $('#selZona').val();
-                const $b = $('#selBLManu').empty().append('<option value="">Seleccione BL de Manufactura</option>');
+                const $b = $('#selBLManu').empty().append('<option value="">Seleccione BL de manufactura</option>');
                 const $d = $('#selBLDestino').empty().append('<option value="">Seleccione BL destino</option>');
                 if (!zona) return;
 
@@ -1205,16 +1147,17 @@ include __DIR__ . '/../bi/_menu_global.php';
                 if (!lastDetalles || lastDetalles.length === 0) { toast('No hay componentes calculados.', 'warning'); return; }
 
                 const payload = {
-                    folio: folio,
-                    ot_erp: ($('#txtOtErp').val() || '').trim(),
-                    pedido: '',
-                    cve_almac: almacen_id.toString(),
-                    zona_id: zona_id.toString(),
+                    folio_pro: folio,
+                    folio_erp: ($('#txtOtErp').val() || '').trim(),
+                    empresa_id: empresa_id,
+                    almacen_id: almacen_id,
+                    zona_id: zona_id,
                     bl_origen: bl_origen,
                     bl_destino: bl_destino,
                     usuario: usuario,
                     producto: prodSel.cve_articulo,
-                    id_umed: (prodSel.unidadMedida || ''),
+                    descripcion: (prodSel.descripcion || ''),
+                    umed: (prodSel.unidadMedida || ''),
                     cantidad: cant,
                     fecha_ot: ($('#dtFechaOT').val() || '').trim(),
                     fecha_comp: ($('#dtFechaCompromiso').val() || '').trim(),

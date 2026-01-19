@@ -414,6 +414,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Dashboard Inventarios', 'url' => 'dashboard/adm_inventarios.php', 'icono' => 'fa-warehouse'],
                 ['titulo' => 'Ocupación Almacén', 'url' => 'dashboard/ocupacion_almacen.php', 'icono' => 'fa-chart-line'],
                 ['titulo' => 'Kardex Dashboard', 'url' => 'dashboard/kardex.php', 'icono' => 'fa-file-lines'],
+                ['titulo' => 'AssistPro ER Mobile', 'url' => 'mobile/index.html', 'icono' => 'fa-file-lines'],
             ],
 
             // ADMINISTRACIÓN
