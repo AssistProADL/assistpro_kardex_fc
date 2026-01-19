@@ -130,8 +130,6 @@
  */
 const API_ART = '../../api/articulos_api.php';
 const API_STK = '../../api/stock/existencias_ubicacion_total.php';
-const API_STK_BL = '../../api/stock/existencias_por_bl.php';
-const API_STK_LP = '../../api/stock/existencias_por_lp.php';
 
 let mode = "producto";   // producto | bl | lp
 let debounceT = null;
@@ -159,12 +157,12 @@ function setMode(m){
   }else if(m==='bl'){
     document.getElementById('titleTop').textContent = 'BL';
     document.getElementById('subTop').textContent = 'Consulta por BL (CódigoCSD/Ubicación)';
-    document.getElementById('hintTxt').innerHTML = 'Escribe un BL (<b>CódigoCSD</b>) y presiona <b>Enter</b> para consultar.';
+    document.getElementById('hintTxt').innerHTML = 'Escribe un BL (<b>CódigoCSD</b>). Enter selecciona la primera coincidencia.';
     document.getElementById('q').placeholder = 'Buscar BL (2+ caracteres)';
   }else{
     document.getElementById('titleTop').textContent = 'LP/Cont';
     document.getElementById('subTop').textContent = 'Consulta por License Plate / Contenedor';
-    document.getElementById('hintTxt').innerHTML = 'Escribe un LP/Contenedor y presiona <b>Enter</b> para consultar.';
+    document.getElementById('hintTxt').innerHTML = 'Escribe un LP/Contenedor. Enter selecciona la primera coincidencia.';
     document.getElementById('q').placeholder = 'Buscar LP/Cont (2+ caracteres)';
   }
 
@@ -251,20 +249,8 @@ elQ.addEventListener('input', ()=>{
 elQ.addEventListener('keydown', (e)=>{
   if(e.key === 'Enter'){
     e.preventDefault();
-
-    // Producto: mantiene flujo de coincidencias (NO tocar)
-    if(mode === 'producto'){
-      const first = document.querySelector('#matches .item');
-      if(first) first.click();
-      return;
-    }
-
-    // BL / LP: selección directa (Enter consulta)
-    const v = elQ.value.trim();
-    if(v.length < 2){ showMsg('Captura al menos 2 caracteres.'); return; }
-
-    const tag = (mode === 'bl') ? 'BL' : 'LP/CONT';
-    selectKey(v, '', tag);
+    const first = document.querySelector('#matches .item');
+    if(first) first.click();
   }
 });
 
@@ -302,9 +288,9 @@ async function searchMatches(q){
     return;
   }
 
-  // BL / LP: selección directa (Enter consulta).
+  // BL / LP: aquí puedes mantener tus match si ya tienes endpoint “match”
+  showMsg("Para BL/LP usa selección directa (no se cambió este flujo).");
   hideMatches();
-  clearMsg();
 }
 
 function renderMatchList(list, tag){
@@ -338,18 +324,8 @@ async function loadDetail(){
   const alm = localStorage.getItem('mobile_almacen') || '';
   const key = selected.key;
 
-  let url = '';
-
-  if(mode === 'producto'){
-    // Producto: este endpoint es el bueno (NO tocar)
-    url = `${API_STK}?cve_articulo=${encodeURIComponent(key)}&almacen=${encodeURIComponent(alm)}&limit=500`;
-  }else if(mode === 'bl'){
-    // BL: microservicio por CodigoCSD
-    url = `${API_STK_BL}?bl=${encodeURIComponent(key)}&almacen=${encodeURIComponent(alm)}&limit=500`;
-  }else{
-    // LP: microservicio por CveLP
-    url = `${API_STK_LP}?CveLP=${encodeURIComponent(key)}&almacen=${encodeURIComponent(alm)}&limit=500`;
-  }
+  // Producto: este endpoint es el bueno
+  const url = `${API_STK}?cve_articulo=${encodeURIComponent(key)}&almacen=${encodeURIComponent(alm)}&limit=500`;
   const json = await fetchJson(url);
 
   if(json && json.ok === 0){

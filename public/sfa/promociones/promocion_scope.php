@@ -1,9 +1,9 @@
-<?php include '../bi/_menu_global.php'; ?>
+<?php include '../../bi/_menu_global.php'; ?>
 <?php
 $promo_id = $_GET['id'] ?? null;
 if (!$promo_id) {
     echo '<div class="alert alert-danger">Error: Promoción no especificada. <a href="promociones.php">Volver</a></div>';
-    include '../bi/_menu_global_end.php';
+    include '../../bi/_menu_global_end.php';
     exit;
 }
 
@@ -158,4 +158,4 @@ if (!$promo_id) {
     });
 </script>
 
-<?php include '../bi/_menu_global_end.php'; ?>
+<?php include '../../bi/_menu_global_end.php'; ?>

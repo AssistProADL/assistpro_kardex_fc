@@ -1,5 +1,5 @@
 <?php
-include '../bi/_menu_global.php';
+include '../../bi/_menu_global.php';
 ?>
 
 <div class="container-fluid mt-3">
@@ -83,5 +83,5 @@ include '../bi/_menu_global.php';
 </script>
 
 <?php
-include '../bi/_menu_global_end.php';
+include '../../bi/_menu_global_end.php';
 ?>
