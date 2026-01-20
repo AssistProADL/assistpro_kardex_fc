@@ -65,38 +65,6 @@ pipeline {
             }
         }
 
-        // ========== DATABASE SYNC STAGE ==========
-        stage('Sync Database Schema') {
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'QA'
-                    expression { env.GIT_BRANCH == 'origin/main' }
-                    expression { env.GIT_BRANCH == 'origin/QA' }
-                }
-            }
-            steps {
-                echo "🗃️ Sincronizando esquema de BD..."
-                script {
-                    // Copiar script al servidor y ejecutar
-                    sshagent(['server-dev']) {
-                        def targetEnv = ''
-                        if (env.BRANCH_NAME == 'QA' || env.GIT_BRANCH == 'origin/QA') {
-                            targetEnv = 'qa'
-                        } else if (env.BRANCH_NAME == 'main' || env.GIT_BRANCH == 'origin/main') {
-                            targetEnv = 'all'  // Sincroniza a CANADA y FOAM
-                        }
-                        
-                        if (targetEnv) {
-                            sh """
-                                scp -o StrictHostKeyChecking=no scripts/sync-db-schema.sh root@89.117.146.27:/tmp/
-                                ssh -o StrictHostKeyChecking=no root@89.117.146.27 'chmod +x /tmp/sync-db-schema.sh && /tmp/sync-db-schema.sh -y ${targetEnv}'
-                            """
-                        }
-                    }
-                }
-            }
-        }
 
         // ========== DEPLOY STAGES ==========
         stage('Deploy - Development') {
