@@ -212,7 +212,7 @@
           <span>2 ACOMODO</span>
         </a>
 
-        <a class="btn" href="traslados/index.php">
+        <a class="btn" href="traslados/traslado_lp.php">
           <i class="fa-solid fa-right-left"></i>
           <span>3 TRASLADOS</span>
         </a>
