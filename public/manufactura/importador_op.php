@@ -3,7 +3,7 @@
 // Importador definitivo de Ordenes de Trabajo (OT) con afectacion a BD + kardex + existencias
 // Reglas clave:
 // - Cada LINEA del CSV = 1 OT (1 cabecera en t_ordenprod)
-// - Componentes se obtienen de BOM: t_artcompuesto (Cve_Articulo = producto compuesto)
+// - Componentes se obtienen de BOM: t_artcompuesto (Cve_ArtComponente = producto compuesto)
 // - Redondeo SOLO para componentes "pieza" (heuristica por unidad de medida)
 // - Consolidacion de MP solo para afectacion (evento global por FolioImport)
 // - LPs NO obligatorios: si no existen se crean genericos en c_charolas (tipo Pallet/Contenedor)
@@ -11,6 +11,62 @@
 // - Hora inicio/fin se guardan en t_ordenprod.Hora_Ini/Hora_Fin y td_ordenprod (no existe hora: se guarda en Activo/Referencia via run rows)
 
 require_once __DIR__ . '/../../app/db.php';
+
+// ------------------------------
+// Ajax JSON hardening (evita respuestas no-JSON por warnings/fatals)
+// ------------------------------
+$__AP_AJAX = (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action']));
+if ($__AP_AJAX) {
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    ini_set('display_errors', '0');
+    error_reporting(E_ALL);
+    ob_start();
+}
+
+function ap_json_exit(array $payload, int $http=200): void {
+    if (!headers_sent()) {
+        http_response_code($http);
+        header('Content-Type: application/json; charset=utf-8');
+    } else {
+        http_response_code($http);
+    }
+    $out = json_encode($payload, JSON_UNESCAPED_UNICODE);
+    if ($out === false) {
+        $out = '{"ok":0,"msg":"No se pudo serializar JSON"}';
+    }
+    // Limpia cualquier output previo (warnings, espacios)
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    echo $out;
+    exit;
+}
+
+set_error_handler(function($severity, $message, $file, $line) {
+    global $__AP_AJAX;
+    if (!$__AP_AJAX) return false;
+    ap_json_exit([
+        'ok'=>0,
+        'msg'=>'PHP warning/notice',
+        'detail'=>"$message at $file:$line"
+    ], 500);
+});
+
+register_shutdown_function(function() {
+    global $__AP_AJAX;
+    if (!$__AP_AJAX) return;
+    $e = error_get_last();
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        ap_json_exit([
+            'ok'=>0,
+            'msg'=>'PHP fatal',
+            'detail'=>($e['message'] ?? '').' at '.($e['file'] ?? '').':'.($e['line'] ?? '')
+        ], 500);
+    }
+});
+
 
 // ------------------------------
 // Config
@@ -199,10 +255,24 @@ function ap_get_user(PDO $pdo, string $cve_usuario): ?array {
 function ap_get_almacen(PDO $pdo, string $clave): ?array {
   $clave = trim($clave);
   if ($clave==='') return null;
-  $st = $pdo->prepare("SELECT id, clave FROM c_almacenp WHERE UPPER(TRIM(clave)) = UPPER(TRIM(?)) AND (Activo IS NULL OR Activo<>0) LIMIT 1");
-  $st->execute([$clave]);
-  $r = $st->fetch(PDO::FETCH_ASSOC);
-  return $r ?: null;
+
+  // Primero intenta con c_almacen (asistpro core)
+  if (ap_has_table($pdo, 'c_almacen')) {
+    $st = $pdo->prepare("SELECT cve_almac AS id, clave_almacen AS clave, Activo FROM c_almacen WHERE UPPER(TRIM(clave_almacen)) = UPPER(TRIM(?)) AND (Activo IS NULL OR Activo<>0) LIMIT 1");
+    $st->execute([$clave]);
+    $r = $st->fetch(PDO::FETCH_ASSOC);
+    if ($r) return $r;
+  }
+
+  // Fallback legacy: c_almacenp
+  if (ap_has_table($pdo, 'c_almacenp')) {
+    $st = $pdo->prepare("SELECT id, clave, Activo FROM c_almacenp WHERE UPPER(TRIM(clave)) = UPPER(TRIM(?)) AND (Activo IS NULL OR Activo<>0) LIMIT 1");
+    $st->execute([$clave]);
+    $r = $st->fetch(PDO::FETCH_ASSOC);
+    return $r ?: null;
+  }
+
+  return null;
 }
 
 function ap_get_ubicacion_por_csd(PDO $pdo, string $csd): ?array {
@@ -292,6 +362,26 @@ function ap_get_bom(PDO $pdo, string $producto): array {
   $st2->execute([$producto]);
   return $st2->fetchAll(PDO::FETCH_ASSOC);
 }
+
+
+function ap_find_op_by_ref(PDO $pdo, string $folioImport, string $otCliente): ?array {
+  $folioImport = trim($folioImport);
+  $otCliente = trim($otCliente);
+  if ($folioImport==='' || $otCliente==='') return null;
+
+  $col = null;
+  if (ap_has_col($pdo,'t_ordenprod','Referencia')) $col='Referencia';
+  elseif (ap_has_col($pdo,'t_ordenprod','OT_Cliente')) $col='OT_Cliente';
+  elseif (ap_has_col($pdo,'t_ordenprod','OTCliente')) $col='OTCliente';
+
+  if (!$col) return null;
+
+  $sql = "SELECT id, Folio_Pro FROM t_ordenprod WHERE FolioImport = :fi AND `$col` = :ref ORDER BY id DESC LIMIT 1";
+  $st = $pdo->prepare($sql);
+  $st->execute([':fi'=>$folioImport, ':ref'=>$otCliente]);
+  $r = $st->fetch();
+  return $r ?: null;
+}
 // ------------------------------
 // Existencias (upsert acumulativo)
 // ------------------------------
@@ -380,7 +470,7 @@ if ($action === 'layout') {
   exit;
 }
 
-if ($action === 'preview' || $action === 'process') {
+if (in_array($action, ['preview','process1','process2'], true)) {
   if (!isset($_FILES['csv']) || $_FILES['csv']['error'] !== UPLOAD_ERR_OK) {
     ap_send_json(['ok'=>false,'msg'=>'Archivo CSV requerido'], 400);
   }
@@ -390,6 +480,29 @@ if ($action === 'preview' || $action === 'process') {
   if (!ap_read_csv_rows($tmp, $meta)) {
     ap_send_json(['ok'=>false,'msg'=>'No se pudo leer el CSV'], 400);
   }
+
+  // --- INIT PDO & CAPTURE WARNINGS (evita respuesta no-JSON por warnings/notices) ---
+  $php_warnings = [];
+  if ($debug) {
+    ini_set('display_errors','0');
+    ini_set('html_errors','0');
+    error_reporting(E_ALL);
+  }
+  set_error_handler(function($errno, $errstr, $errfile, $errline) use (&$php_warnings) {
+    $php_warnings[] = [
+      'errno' => $errno,
+      'msg'   => $errstr,
+      'file'  => basename((string)$errfile),
+      'line'  => $errline,
+    ];
+    return true;
+  });
+
+  $pdo = db_pdo();
+  if (!$pdo) {
+    ap_send_json(['ok'=>0,'msg'=>'No se pudo abrir conexion DB (db_pdo devolvio null).','warnings'=>$php_warnings], 500);
+  }
+  $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
   // validar columnas
   $present = array_values(array_unique($meta['cols_norm']));
@@ -402,7 +515,6 @@ if ($action === 'preview' || $action === 'process') {
     ap_send_json(['ok'=>false,'msg'=>'Faltan columnas: '.implode(', ', $missing), 'missing'=>$missing]);
   }
 
-  $pdo = db();
   $rows = $meta['rows'];
 
   // Determinar FolioImport del batch (misma para todo el archivo):
@@ -503,6 +615,8 @@ if ($action === 'preview' || $action === 'process') {
   try {
     $pdo->beginTransaction();
 
+    $modo = $action; // process1 o process2
+
     // registrar run
     $runId = null;
     if (ap_has_table($pdo,'ap_import_runs')) {
@@ -538,6 +652,17 @@ if ($action === 'preview' || $action === 'process') {
       $foliosPro[] = $folioPro;
 
       // Cabecera OT
+    // Si estamos en Fase 2, intenta reusar la OT ya creada (evita duplicados)
+    $existing = null;
+    if ($action === 'process2') {
+      $existing = ap_find_op_by_ref($pdo, $folioImp, $otc);
+      if ($existing) {
+        $folioPro = $existing['Folio_Pro'];
+              }
+    }
+
+    if (!$existing) {
+
       $sqlH = "INSERT INTO t_ordenprod (Folio_Pro, FolioImport, cve_almac, Cve_Articulo, Cve_Lote, Cantidad, Cant_Prod, Cve_Usuario, Fecha, Usr_Armo, Hora_Ini, Status, Referencia, Cve_Almac_Ori, Tipo, idy_ubica, idy_ubica_dest)
                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
       $pdo->prepare($sqlH)->execute([
@@ -602,6 +727,19 @@ if ($action === 'preview' || $action === 'process') {
             ->execute([$runId, $ln, json_encode($data, JSON_UNESCAPED_UNICODE)]);
       }
 
+
+
+      // Si la OT ya existia (Fase 2) y no cargamos detalle, lo tomamos de BD para consolidar
+      if ($existing && empty($detailByFolio[$folioPro])) {
+        $stD = $pdo->prepare("SELECT Cve_Articulo, Cantidad, UMed, EsPieza FROM td_ordenprod WHERE Folio_Pro=?");
+        $stD->execute([$folioPro]);
+        $detailByFolio[$folioPro] = $stD->fetchAll(PDO::FETCH_ASSOC) ?: [];
+      }
+      if ($action === 'process1') {
+        // Fase 1: solo registra OT + detalle (sin existencias / kardex)
+        continue;
+      }
+
       // PT existencias (empaque logico): crear LP si es necesario
       $almId = (int)($a['id'] ?? 0);
       $idProv = $DEFAULT_ID_PROVEEDOR;
@@ -643,6 +781,7 @@ if ($action === 'preview' || $action === 'process') {
       ]);
     }
 
+    if ($action === 'process2') {
     // Consolidacion MP por FolioImport: suma de td_ordenprod de los foliosPro generados
     // Salida MP: un evento global por componente
     if ($foliosPro) {
@@ -673,6 +812,7 @@ if ($action === 'preview' || $action === 'process') {
     $pdo->prepare("UPDATE t_ordenprod SET Hora_Fin=?, Status='T' WHERE FolioImport=?")
         ->execute([$horaFin, $folioImp]);
 
+    }
     if ($runId) {
       $pdo->prepare("UPDATE ap_import_runs SET status='OK', total_ok=total_lineas WHERE id=?")->execute([$runId]);
     }
@@ -681,6 +821,7 @@ if ($action === 'preview' || $action === 'process') {
 
     ap_send_json(['ok'=>true,'msg'=>'Importacion y produccion aplicada','folioImport'=>$folioImp,'foliosPro'=>$foliosPro]);
 
+  }
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     ap_send_json(['ok'=>false,'msg'=>'Error al procesar: '.$e->getMessage(), 'folioImport'=>$folioImp], 500);
@@ -729,14 +870,14 @@ if ($action === 'preview' || $action === 'process') {
           <label class="form-label">CSV</label>
           <input type="file" id="csv" class="form-control form-control-sm" accept=".csv"/>
         </div>
-        <div class="col-12 col-md-6 text-end">
-          <button class="btn btn-secondary btn-sm" id="btnPrev">Previsualizar</button>
-          <button class="btn btn-primary btn-sm" id="btnProc">Procesar (BD + Kardex)</button>
-        </div>
+        <button class="btn btn-secondary btn-sm" id="btnPrev">Previsualizar</button>
+            <button class="btn btn-outline-primary btn-sm" id="btnP1">Procesar Fase 1 (OTs)</button>
+            <button class="btn btn-primary btn-sm" id="btnP2">Procesar Fase 2 (Consolidar + Kardex)</button>
       </div>
 
       <hr/>
       <div id="msg"></div>
+      <div id="pre"></div>
       <div class="table-responsive">
         <table class="table table-sm table-striped" id="tbl" style="display:none">
           <thead><tr>
@@ -767,45 +908,72 @@ function setOverlay(on, text){
 function alertBox(type, html){ return `<div class="alert alert-${type} py-2">${html}</div>`; }
 
 async function send(action){
-  const f = document.getElementById('csv').files[0];
-  if(!f){ msg.innerHTML = alertBox('warning','Selecciona un CSV'); return; }
+  const fileInput = document.getElementById('csv');
+  const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+  if(!file){
+    alert('Selecciona un CSV.');
+    return;
+  }
+
   const fd = new FormData();
   fd.append('action', action);
-  fd.append('csv', f);
+  fd.append('csv', file);
 
-  setOverlay(true, (action==='preview') ? 'Validando layout y calculando componentes...' : 'Procesando importacion: creando OTs, consolidando MP y registrando PT...');
-  msg.innerHTML=''; errs.innerHTML=''; tbody.innerHTML=''; tbl.style.display='none';
+  const url = window.location.href; // conserva ?debug=1
+
+  const msg = (action==='preview')
+    ? 'Previsualizando...'
+    : (action==='process1')
+      ? 'Procesando Fase 1 (OTs)...'
+      : 'Procesando Fase 2 (Consolidacion + Kardex)...';
+
+  setOverlay(true, msg);
 
   try{
-    const res = await fetch('', {method:'POST', body:fd});
-    const data = await res.json();
-    if(!res.ok || !data.ok){
-      msg.innerHTML = alertBox('danger', data.msg || 'Error');
-      if(data.errors){
-        errs.innerHTML = alertBox('warning', `<b>Errores:</b><br>${data.errors.map(e=>`Linea ${e.line}: ${e.errors.join(' | ')}`).join('<br>')}`);
+    const res = await fetch(url, { method:'POST', body: fd, credentials: 'same-origin' });
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const raw = await res.text();
+
+    let data = null;
+    if(ct.includes('application/json')){
+      try{ data = JSON.parse(raw); }catch(e){ data = { ok:false, msg:'Respuesta JSON invalida', raw: raw }; }
+    } else {
+      // normalmente significa warning/notice, redirect (login), o HTML inesperado
+      data = { ok:false, msg:'Respuesta no-JSON desde servidor', raw: raw };
+    }
+
+    if(!data.ok){
+      const pre = document.getElementById('pre');
+      if(pre){
+        pre.innerHTML = '';
+        const box = document.createElement('pre');
+        box.style.whiteSpace='pre-wrap';
+        box.textContent = (data.msg||'Error') + "\n\n" + (data.raw||'');
+        pre.appendChild(box);
       }
+      alert(data.msg || 'Error');
       return;
     }
 
-    msg.innerHTML = alertBox('success', `${data.ok ? 'OK' : ''} FolioImport: <b>${data.folioImport}</b>`);
-    if(data.rows){
-      tbl.style.display='table';
-      data.rows.forEach(r=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.line}</td><td>${r.FolioImport}</td><td>${r.OT_Cliente}</td><td>${r.Producto}</td><td>${r.Cantidad}</td><td>${r.MP_CodigoCSD}</td><td>${r.PT_CodigoCSD}</td><td>${r.LP_Contenedor||''}</td><td>${r.LP_Pallet||''}</td><td>${r.Componentes}</td>`;
-        tbody.appendChild(tr);
-      });
+    // OK
+    if(action==='preview'){
+      document.getElementById('pre').innerHTML = data.html || '';
+    } else {
+      alert(data.msg || 'OK');
+      if(data.html){ document.getElementById('pre').innerHTML = data.html; }
     }
-    if(data.foliosPro){
-      msg.innerHTML += alertBox('info', `OTs generadas: <b>${data.foliosPro.length}</b> (primer folio: ${data.foliosPro[0]})`);
-    }
-  } finally {
+
+  }catch(err){
+    console.error(err);
+    alert('Error de red o servidor. Revisa consola y/o habilita ?debug=1');
+  }finally{
     setOverlay(false);
   }
 }
 
 document.getElementById('btnPrev').addEventListener('click', ()=>send('preview'));
-document.getElementById('btnProc').addEventListener('click', ()=>{ if(confirm('Esto afectara BD/Kardex/Existencias. Continuar?')) send('process'); });
+document.getElementById('btnP1').addEventListener('click', ()=>{ if(confirm('Fase 1: solo creara OTs y detalle (sin kardex). Continuar?')) send('process1'); });
+document.getElementById('btnP2').addEventListener('click', ()=>{ if(confirm('Fase 2: consolidara MP y registrara PT + kardex/existencias. Continuar?')) send('process2'); });
 </script>
 </div>
 <?php

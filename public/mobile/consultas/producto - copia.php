@@ -130,6 +130,8 @@
  */
 const API_ART = '../../api/articulos_api.php';
 const API_STK = '../../api/stock/existencias_ubicacion_total.php';
+const API_STK_BL = '../../api/stock/existencias_por_bl.php';
+const API_STK_LP = '../../api/stock/existencias_por_lp.php';
 
 let mode = "producto";   // producto | bl | lp
 let debounceT = null;
@@ -157,12 +159,12 @@ function setMode(m){
   }else if(m==='bl'){
     document.getElementById('titleTop').textContent = 'BL';
     document.getElementById('subTop').textContent = 'Consulta por BL (CódigoCSD/Ubicación)';
-    document.getElementById('hintTxt').innerHTML = 'Escribe un BL (<b>CódigoCSD</b>). Enter selecciona la primera coincidencia.';
+    document.getElementById('hintTxt').innerHTML = 'Escribe un BL (<b>CódigoCSD</b>) y presiona <b>Enter</b> para consultar.';
     document.getElementById('q').placeholder = 'Buscar BL (2+ caracteres)';
   }else{
     document.getElementById('titleTop').textContent = 'LP/Cont';
     document.getElementById('subTop').textContent = 'Consulta por License Plate / Contenedor';
-    document.getElementById('hintTxt').innerHTML = 'Escribe un LP/Contenedor. Enter selecciona la primera coincidencia.';
+    document.getElementById('hintTxt').innerHTML = 'Escribe un LP/Contenedor y presiona <b>Enter</b> para consultar.';
     document.getElementById('q').placeholder = 'Buscar LP/Cont (2+ caracteres)';
   }
 
@@ -238,6 +240,71 @@ async function fetchJson(url){
   try{ return JSON.parse(txt); }catch(e){ return { ok:false, _raw: txt.substring(0,220) }; }
 }
 
+
+// --- Formateo corporativo (materia prima a granel): 4 decimales, miles con "," y decimal con "."
+const QTY_FMT = new Intl.NumberFormat('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+function toNum(v){
+  if(v === null || v === undefined) return 0;
+  if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if(!s) return 0;
+  const cleaned = s.replaceAll(',', '');
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+function fmtQty(v){
+  return QTY_FMT.format(toNum(v));
+}
+function trunc(s, n){
+  s = String(s ?? '');
+  return s.length > n ? s.slice(0, n-1) + '…' : s;
+}
+
+// Cache en memoria de descripciones (evita consultas repetidas)
+const articuloCache = new Map();
+
+async function fetchArticuloDesc(cve){
+  const k = String(cve ?? '').trim();
+  if(!k) return '';
+  if(articuloCache.has(k)) return articuloCache.get(k);
+
+  // Reusa el catálogo que ya funciona: action=list&q=
+  const url = `${API_ART}?action=list&q=${encodeURIComponent(k)}&limit=1`;
+  const j = await fetchJson(url);
+  const rows = normalizeRows(j);
+  const r = rows && rows[0] ? rows[0] : null;
+  const desc = r ? pick(r, ['des_articulo','descripcion','des_detallada','nombre'], '') : '';
+  articuloCache.set(k, desc);
+  return desc;
+}
+
+async function enrichArticulos(rows){
+  // Enriquecemos cve_articulo -> descripción para BL y LP (y también producto si hace falta)
+  const keys = Array.from(new Set(rows
+    .map(r => pick(r, ['cve_articulo','sku','articulo'], ''))
+    .filter(Boolean)
+  ));
+
+  // Pool simple de concurrencia para no saturar el server
+  const concurrency = 6;
+  let i = 0;
+  async function worker(){
+    while(i < keys.length){
+      const idx = i; i += 1;
+      await fetchArticuloDesc(keys[idx]);
+    }
+  }
+
+  const workers = Array.from({length: Math.min(concurrency, keys.length)}, worker);
+  await Promise.all(workers);
+
+  // Adjuntamos desc al row para render
+  rows.forEach(r => {
+    const k = pick(r, ['cve_articulo','sku','articulo'], '');
+    r.__art_desc = k ? (articuloCache.get(k) || '') : '';
+  });
+}
+
 // input behavior
 const elQ = document.getElementById('q');
 elQ.addEventListener('input', ()=>{
@@ -249,8 +316,20 @@ elQ.addEventListener('input', ()=>{
 elQ.addEventListener('keydown', (e)=>{
   if(e.key === 'Enter'){
     e.preventDefault();
-    const first = document.querySelector('#matches .item');
-    if(first) first.click();
+
+    // Producto: mantiene flujo de coincidencias (NO tocar)
+    if(mode === 'producto'){
+      const first = document.querySelector('#matches .item');
+      if(first) first.click();
+      return;
+    }
+
+    // BL / LP: selección directa (Enter consulta)
+    const v = elQ.value.trim();
+    if(v.length < 2){ showMsg('Captura al menos 2 caracteres.'); return; }
+
+    const tag = (mode === 'bl') ? 'BL' : 'LP/CONT';
+    selectKey(v, '', tag);
   }
 });
 
@@ -288,9 +367,9 @@ async function searchMatches(q){
     return;
   }
 
-  // BL / LP: aquí puedes mantener tus match si ya tienes endpoint “match”
-  showMsg("Para BL/LP usa selección directa (no se cambió este flujo).");
+  // BL / LP: selección directa (Enter consulta).
   hideMatches();
+  clearMsg();
 }
 
 function renderMatchList(list, tag){
@@ -324,8 +403,18 @@ async function loadDetail(){
   const alm = localStorage.getItem('mobile_almacen') || '';
   const key = selected.key;
 
-  // Producto: este endpoint es el bueno
-  const url = `${API_STK}?cve_articulo=${encodeURIComponent(key)}&almacen=${encodeURIComponent(alm)}&limit=500`;
+  let url = '';
+
+  if(mode === 'producto'){
+    // Producto: este endpoint es el bueno (NO tocar)
+    url = `${API_STK}?cve_articulo=${encodeURIComponent(key)}&almacen=${encodeURIComponent(alm)}&limit=500`;
+  }else if(mode === 'bl'){
+    // BL: microservicio por CodigoCSD
+    url = `${API_STK_BL}?bl=${encodeURIComponent(key)}&almacen=${encodeURIComponent(alm)}&limit=500`;
+  }else{
+    // LP: microservicio por CveLP
+    url = `${API_STK_LP}?CveLP=${encodeURIComponent(key)}&almacen=${encodeURIComponent(alm)}&limit=500`;
+  }
   const json = await fetchJson(url);
 
   if(json && json.ok === 0){
@@ -341,17 +430,20 @@ async function loadDetail(){
     return;
   }
 
+  // Enriquecer artículos (descripcion) para BL/LP/Producto cuando aplique
+  await enrichArticulos(rows);
+
   const box = document.getElementById('rows');
   box.innerHTML = '';
 
   // KPI total: usa el KPI del API si viene, si no recalcula
   let total = 0;
   if(json && json.kpis && json.kpis.existencia_total !== undefined){
-    total = parseFloat(String(json.kpis.existencia_total).replaceAll(',','')) || 0;
+    total = toNum(json.kpis.existencia_total);
   }else{
     rows.forEach(r=>{
       const cantS = pick(r, ['existencia_total','cantidad','existencia','qty','cant','total'], '0');
-      const cant = parseFloat(String(cantS).replaceAll(',','')) || 0;
+      const cant = toNum(cantS);
       total += cant;
     });
   }
@@ -364,12 +456,14 @@ async function loadDetail(){
 
     // LP/Cont: mostrar CveLP (clave visible)
     const lp   = pick(r, ['CveLP','LP','lp','license_plate','contenedor','charola'], '—');
+    const art  = pick(r, ['cve_articulo','sku','articulo'], '—');
+    const desc = pick(r, ['__art_desc'], '');
 
     const lote = pick(r, ['cve_lote','lote','lot','batch'], '—');
     const cad  = pick(r, ['Caducidad','caducidad','fecha_caducidad','cad'], '—');
 
     const cantS= pick(r, ['existencia_total','cantidad','existencia','qty','cant','total'], '0');
-    const cant = parseFloat(String(cantS).replaceAll(',','')) || 0;
+    const cant = toNum(cantS);
 
     if(ub && ub !== '—') ubis.add(ub);
 
@@ -377,15 +471,15 @@ async function loadDetail(){
     row.className = 'tblRow';
     row.innerHTML = `
       <div><b>${escapeHtml(ub)}</b></div>
-      <div class="muted">${escapeHtml(lp)}</div>
+      <div class="muted" title="${escapeHtml(art + (desc ? ' - ' + desc : ''))}">${escapeHtml(lp)}<br><small>${escapeHtml(art)}${desc ? ' - ' + escapeHtml(trunc(desc, 28)) : ''}</small></div>
       <div class="muted">${escapeHtml(lote)}</div>
       <div class="muted">${escapeHtml(cad)}</div>
-      <div><b>${cant.toLocaleString()}</b></div>
+      <div><b>${fmtQty(cant)}</b></div>
     `;
     box.appendChild(row);
   });
 
-  document.getElementById('kTot').textContent = total.toLocaleString();
+  document.getElementById('kTot').textContent = fmtQty(total);
   document.getElementById('kUbi').textContent = ubis.size.toLocaleString();
   showResult();
 }

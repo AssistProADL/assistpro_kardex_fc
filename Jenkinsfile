@@ -154,6 +154,35 @@ pipeline {
             }
         }
 
+        stage('Deploy - ADVL (Production)') {
+            when {
+                anyOf {
+                    branch 'main'
+                    expression { env.GIT_BRANCH == 'origin/main' }
+                }
+            }
+            steps {
+                echo "🚀 Deploy ADVL (PRODUCTION)"
+                sshagent(['server-dev']) {
+                    script {
+                        def serverIP = '212.56.46.7'
+                        def user = 'root'
+                        def containerName = 'kardex-fc-advl'
+                        def storagePath = '/home/kardex-fc-storage-advl'
+                        def port = '8896'
+                        
+                        // Variables de BD para ADVL
+                        def dbHost = '89.117.146.27'
+                        def dbName = 'assistpro_etl_fc_advl'
+                        def dbUser = 'root2'
+                        def dbPass = 'AdvLogMysql21#'
+                        
+                        deployContainer(serverIP, user, containerName, storagePath, port, 'PROD', dbHost, dbName, dbUser, dbPass)
+                    }
+                }
+            }
+        }
+
         stage('Deploy - Foam(Production)') {
             when {
                 anyOf {
