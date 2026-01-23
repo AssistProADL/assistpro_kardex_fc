@@ -1,134 +1,97 @@
 <?php
 // public/api/vas/cobranza.php
+// GET: devuelve pedidos con VAS pendiente/aplicado (vw_vas_pendiente_cobro)
+// POST action=facturar: marca items de vas_pedido_servicio como facturados
+
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../../app/db.php';
 
-function jerr($msg, $type='VALIDATION', $detalle=[]) {
-  echo json_encode(["ok"=>0,"error"=>$type,"msg"=>$msg,"detalle"=>$detalle], JSON_UNESCAPED_UNICODE);
+function jerr($msg, $detalle=null, $http=200) {
+  http_response_code($http);
+  echo json_encode(["ok"=>0,"msg"=>$msg,"detalle"=>$detalle], JSON_UNESCAPED_UNICODE);
   exit;
 }
 function jok($data=null, $msg="OK") {
   $out=["ok"=>1,"msg"=>$msg];
-  if ($data!==null) $out["data"]=$data;
+  if ($data !== null) $out["data"] = $data;
   echo json_encode($out, JSON_UNESCAPED_UNICODE);
   exit;
 }
-function req_user($body){
-  $h = $_SERVER['HTTP_X_USER'] ?? '';
-  $u = trim($h) !== '' ? trim($h) : trim($body['usuario'] ?? '');
-  return $u !== '' ? $u : 'API';
-}
 
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$raw = file_get_contents('php://input');
-$body = [];
-if ($raw) {
-  $tmp = json_decode($raw, true);
-  if (json_last_error() === JSON_ERROR_NONE && is_array($tmp)) $body = $tmp;
-}
+$action = trim($_GET['action'] ?? '');
 
-$IdEmpresa = $_GET['IdEmpresa'] ?? ($body['IdEmpresa'] ?? null);
-if (!$IdEmpresa) jerr("Falta IdEmpresa");
+try {
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'facturar') {
+    $raw = file_get_contents('php://input');
+    $j = json_decode($raw, true);
+    if (!is_array($j)) jerr("JSON inválido", substr($raw,0,200));
 
-if ($method === 'GET') {
-  $owner_id = isset($_GET['owner_id']) ? intval($_GET['owner_id']) : 0;
+    $IdEmpresa = $j['IdEmpresa'] ?? $j['idEmpresa'] ?? null;
+    $ids = $j['id_pedidos'] ?? $j['id_pedido'] ?? null;
+
+    if (!$IdEmpresa) jerr("Falta IdEmpresa");
+    if (!is_array($ids) || !count($ids)) jerr("Falta id_pedidos[]");
+
+    // normaliza ids a enteros
+    $ids = array_values(array_filter(array_map('intval', $ids), fn($x)=>$x>0));
+    if (!count($ids)) jerr("id_pedidos vacío");
+
+    // folio_factura: se puede dejar manual después. Aquí ponemos un folio por lote.
+    $folio = 'FAC-' . date('Ymd-His');
+    $now = date('Y-m-d H:i:s');
+
+    $in = implode(',', array_fill(0, count($ids), '?'));
+    $sql = "UPDATE vas_pedido_servicio
+            SET estatus = 'facturado',
+                folio_factura = IFNULL(NULLIF(folio_factura,''), ?),
+                fecha_factura = IFNULL(fecha_factura, ?)
+            WHERE IdEmpresa = ?
+              AND id_pedido IN ($in)
+              AND estatus IN ('pendiente','aplicado')";
+    $params = array_merge([$folio, $now, $IdEmpresa], $ids);
+
+    // Ejecuta UPDATE (en este proyecto db_all ejecuta statements preparados; el resultado puede ser [])
+    db_all($sql, $params);
+    jok(["folio_factura"=>$folio, "ids"=>$ids], "Facturado");
+  }
+
+  // GET
+  $IdEmpresa = $_GET['IdEmpresa'] ?? $_GET['idEmpresa'] ?? null;
+  if (!$IdEmpresa) jerr("Falta IdEmpresa");
+
+  $owner_id = isset($_GET['owner_id']) && $_GET['owner_id'] !== '' ? intval($_GET['owner_id']) : null;
   $fi = $_GET['fecha_inicio'] ?? null;
   $ff = $_GET['fecha_fin'] ?? null;
 
-  $sql = "
-    SELECT
-      ps.id_pedido,
-      p.Fol_folio AS folio,
-      p.Fec_Pedido AS fecha_pedido,
-      p.Id_Proveedor,
-      pr.Nombre AS owner_nombre,
-      p.Cve_clte,
-      c.RazonSocial AS cliente,
-      SUM(ps.total) AS importe_vas,
-      SUM(CASE WHEN ps.estatus='pendiente' THEN 1 ELSE 0 END) AS items_pendiente,
-      SUM(CASE WHEN ps.estatus='aplicado' THEN 1 ELSE 0 END) AS items_aplicado
-    FROM vas_pedido_servicio ps
-    JOIN th_pedido p ON p.id_pedido = ps.id_pedido
-    LEFT JOIN c_proveedores pr ON pr.ID_Proveedor = p.Id_Proveedor
-    LEFT JOIN c_cliente c ON c.Cve_Clte = p.Cve_clte
-    WHERE ps.IdEmpresa = :e
-      AND ps.estatus IN ('pendiente','aplicado')
-  ";
-  $par = ["e"=>$IdEmpresa];
+  // defaults: última semana si no viene
+  if (!$ff) $ff = date('Y-m-d');
+  if (!$fi) $fi = date('Y-m-d', strtotime('-7 days'));
 
-  if ($owner_id > 0) { $sql .= " AND p.Id_Proveedor = :oid "; $par["oid"] = $owner_id; }
-  if ($fi) { $sql .= " AND p.Fec_Pedido >= :fi "; $par["fi"] = $fi; }
-  if ($ff) { $sql .= " AND p.Fec_Pedido <= :ff "; $par["ff"] = $ff; }
+  $sql = "SELECT IdEmpresa,
+                 cve_almac,
+                 id_pedido,
+                 folio_pedido,
+                 fecha_pedido,
+                 id_cliente,
+                 cliente,
+                 importe_vas,
+                 items_pendiente,
+                 items_aplicado
+          FROM vw_vas_pendiente_cobro
+          WHERE IdEmpresa = :e
+            AND fecha_pedido BETWEEN :fi AND :ff";
+  $p = ["e"=>$IdEmpresa, "fi"=>$fi, "ff"=>$ff];
 
-  $sql .= "
-    GROUP BY ps.id_pedido, p.Fol_folio, p.Fec_Pedido, p.Id_Proveedor, pr.Nombre, p.Cve_clte, c.RazonSocial
-    ORDER BY p.Fec_Pedido DESC
-    LIMIT 500
-  ";
-
-  $rows = db_all($sql, $par);
-  jok($rows);
-}
-
-if ($method === 'POST') {
-  $action = $body['action'] ?? '';
-  if ($action !== 'facturar') jerr("action inválida; use action='facturar'");
-
-  $id_pedido = intval($body['id_pedido'] ?? 0);
-  $folio_factura = trim($body['folio_factura'] ?? '');
-  $fecha_factura = $body['fecha_factura'] ?? date('Y-m-d H:i:s');
-  $facturar_por_pedido = intval($body['facturar_por_pedido'] ?? 0);
-
-  if ($id_pedido <= 0) jerr("Falta id_pedido");
-  if ($folio_factura === '') jerr("folio_factura requerido");
-
-  $ids = $body['ids'] ?? [];
-  if ($facturar_por_pedido === 1) {
-    $tmp = db_all("SELECT id
-                   FROM vas_pedido_servicio
-                   WHERE IdEmpresa=:e AND id_pedido=:p
-                     AND estatus IN ('pendiente','aplicado')",
-                  ["e"=>$IdEmpresa, "p"=>$id_pedido]);
-    $ids = array_map(fn($r)=>intval($r['id']), $tmp);
-    if (!count($ids)) jerr("No hay items para facturar", "CONFLICT");
-  } else {
-    if (!is_array($ids) || !count($ids)) jerr("ids (items) requerido o use facturar_por_pedido=1");
-    $ids = array_map('intval', $ids);
+  if ($owner_id) {
+    $sql .= " AND id_cliente = :oid";
+    $p["oid"] = $owner_id;
   }
 
-  $user = req_user($body);
-  $facturados = 0;
+  $sql .= " ORDER BY fecha_pedido DESC, id_pedido DESC LIMIT 2000";
 
-  db_tx(function() use ($IdEmpresa, $id_pedido, $ids, $folio_factura, $fecha_factura, $user, &$facturados) {
-    foreach ($ids as $id) {
-      if ($id <= 0) continue;
+  $rows = db_all($sql, $p);
+  jok($rows);
 
-      $it = db_one("SELECT id, estatus
-                    FROM vas_pedido_servicio
-                    WHERE id=:id AND IdEmpresa=:e AND id_pedido=:p",
-                  ["id"=>$id, "e"=>$IdEmpresa, "p"=>$id_pedido]);
-      if (!$it) continue;
-      if ($it['estatus'] === 'facturado') continue;
-
-      dbq("UPDATE vas_pedido_servicio
-           SET estatus='facturado',
-               folio_factura=:f,
-               fecha_factura=:ff,
-               updated_at=NOW(),
-               updated_by=:u
-           WHERE id=:id AND IdEmpresa=:e AND id_pedido=:p",
-          [
-            "f"=>$folio_factura,
-            "ff"=>$fecha_factura,
-            "u"=>$user,
-            "id"=>$id, "e"=>$IdEmpresa, "p"=>$id_pedido
-          ]);
-
-      $facturados++;
-    }
-  });
-
-  jok(["facturados"=>$facturados, "id_pedido"=>$id_pedido, "folio_factura"=>$folio_factura], "Marcado como facturado");
+} catch (Throwable $ex) {
+  jerr("Error en API", $ex->getMessage(), 200);
 }
-
-jerr("Método no soportado", "VALIDATION", ["method"=>$method]);

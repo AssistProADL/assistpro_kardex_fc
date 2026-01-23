@@ -1,285 +1,286 @@
 <?php
 // /public/mobile/menu.php
-// Menú móvil standalone (sin sesiones, usa localStorage)
-header('Content-Type: text/html; charset=utf-8');
-?>
-<!doctype html>
+?><!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>AssistPro ER · Menú</title>
 
-  <!-- Font Awesome (si ya lo tienes cargado globalmente en el web no importa, aquí lo pedimos directo) -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <!-- CSS mobile -->
+  <link rel="stylesheet" href="css/rf.css?v=1">
 
-  <!-- Tu CSS móvil -->
-  <link rel="stylesheet" href="css/rf.css?v=<?=time()?>">
+  <!-- Font Awesome v6 (si ya lo tienes global, puedes quitarlo) -->
+  <link rel="stylesheet" href="../bi/assets/fontawesome6/css/all.min.css">
 
   <style>
-    /* Hardening para handhelds */
-    :root{ --maxw: 420px; }
-    body{
-      margin:0;
-      background:#f3f5f9;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      -webkit-text-size-adjust: 100%;
-      text-size-adjust: 100%;
+    /* Ajuste ultra mobile-first (480x800) */
+    :root{
+      --ap-blue:#000f9f;   /* azul corporativo */
+      --ap-blue-2:#0016c9;
+      --ap-bg:#f4f6fb;
+      --ap-text:#0e1630;
+      --ap-muted:#6b778c;
+      --ap-card:#ffffff;
+      --ap-shadow: 0 10px 26px rgba(12, 23, 54, .10);
+      --ap-radius: 18px;
     }
 
-    .page{
-      min-height: 100dvh;
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--ap-bg);
+      color: var(--ap-text);
+    }
+
+    .wrap{
+      min-height:100%;
       display:flex;
       align-items:flex-start;
       justify-content:center;
-      padding: 14px 10px 22px;
+      padding: 16px 10px 18px;
     }
 
     .card{
       width:100%;
-      max-width: var(--maxw);
-      background:#fff;
-      border-radius: 16px;
-      box-shadow: 0 12px 26px rgba(16, 24, 40, .10);
-      border: 1px solid rgba(0,0,0,.06);
-      overflow:hidden;
+      max-width: 380px; /* <- CLAVE: ancho real para 4–5" */
+      background: var(--ap-card);
+      border-radius: var(--ap-radius);
+      box-shadow: var(--ap-shadow);
+      padding: 14px 14px 12px;
     }
 
-    .header{
+    .head{
       display:flex;
       align-items:center;
-      gap:12px;
-      padding: 14px 14px 10px;
+      gap: 12px;
+      margin-bottom: 10px;
     }
 
-    .logoWrap{
-      width: 64px;
+    .logoBox{
+      width: 64px;  /* ~4x vs 16px-20px anterior */
       height: 64px;
+      border-radius: 14px;
+      background: #fff;
       display:flex;
       align-items:center;
       justify-content:center;
-      border-radius: 14px;
-      border: 1px solid rgba(0,0,0,.08);
-      background:#fff;
+      box-shadow: 0 6px 16px rgba(12,23,54,.08);
       flex: 0 0 auto;
       overflow:hidden;
     }
-    /* LOGO x4 aprox (comparado con el mini que tenías) */
-    .logoWrap img{
-      height: 72px;           /* <= aquí crece el logo */
-      width: auto;
+    .logoBox img{
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
       display:block;
     }
 
-    .headText{
-      flex:1;
-      min-width:0;
-    }
-
-    .title{
-      font-weight:800;
-      letter-spacing:.2px;
-      margin:0;
+    .titleBox{flex:1}
+    .brand{
+      font-weight: 900;
+      letter-spacing: .2px;
+      margin: 0;
       font-size: 18px;
       line-height: 1.1;
     }
-    .subtitle{
-      margin:4px 0 0;
+    .sub{
+      margin: 2px 0 0;
       font-size: 12px;
-      color:#667085;
+      color: var(--ap-muted);
     }
 
-    .badge{
+    .pill{
       margin-left:auto;
-      background: rgba(0, 40, 160, .08);
-      color:#0028A0;
-      border: 1px solid rgba(0, 40, 160, .15);
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-weight: 800;
       font-size: 12px;
-      white-space:nowrap;
-      flex: 0 0 auto;
+      font-weight: 800;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(0,15,159,.08);
+      color: var(--ap-blue);
+      white-space: nowrap;
     }
 
-    .body{
-      padding: 10px 14px 14px;
-    }
-
-    .grid{
-      display:grid;
-      grid-template-columns: 1fr; /* móvil: una columna */
-      gap:10px;
-    }
-
-    /* Si hay espacio (desktop/tablet) permite 2 columnas, pero NO en handheld pequeño */
-    @media (min-width: 520px){
-      .grid{ grid-template-columns: 1fr 1fr; }
-      :root{ --maxw: 460px; }
-    }
-
-    .btn{
-      appearance:none;
-      border:0;
+    .heroBtn{
       width:100%;
-      cursor:pointer;
+      border:0;
+      background: linear-gradient(135deg, var(--ap-blue), var(--ap-blue-2));
+      color:#fff;
       border-radius: 14px;
-      padding: 14px 14px;
+      padding: 12px 12px;
       font-weight: 900;
       letter-spacing:.3px;
       display:flex;
       align-items:center;
       justify-content:center;
       gap:10px;
+      cursor:pointer;
+      margin: 10px 0 12px;
+      box-shadow: 0 10px 22px rgba(0,15,159,.18);
       text-decoration:none;
       user-select:none;
-      -webkit-tap-highlight-color: transparent;
+      font-size: 14px;
     }
-    .btn-primary{
-      background:#0017A8; /* tono corporativo tipo lateral */
+    .heroBtn i{opacity:.95}
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .btn{
+      border:0;
+      border-radius: 14px;
+      padding: 11px 10px;
+      background: var(--ap-blue);
       color:#fff;
-      box-shadow: 0 10px 20px rgba(0, 23, 168, .18);
+      font-weight: 900;
+      letter-spacing:.2px;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      text-decoration:none;
+      box-shadow: 0 8px 18px rgba(0,15,159,.16);
+      font-size: 13px;
+      line-height: 1;
+      min-height: 44px; /* accesible */
     }
-    .btn-primary:active{ transform: translateY(1px); }
+    .btn i{font-size: 15px}
 
-    .btn-outline{
-      background:#fff;
-      color:#0017A8;
-      border: 2px solid rgba(0, 23, 168, .25);
+    .btn.secondary{
+      background: #0b1220;
+      box-shadow: 0 8px 18px rgba(11,18,32,.18);
     }
 
-    .btn-black{
-      background:#111827;
-      color:#fff;
-    }
-
-    .btn-wide{
-      grid-column: 1 / -1; /* ocupa todo */
+    .btn.wide{
+      grid-column: 1 / -1;
     }
 
     .footer{
-      padding: 10px 14px 14px;
-      text-align:center;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
       font-size: 11px;
-      color:#667085;
+      color: var(--ap-muted);
+      padding-top: 6px;
     }
-    .footer b{ color:#1f2937; }
+    .footer b{color:#2b3b63}
 
-    /* Ajustes ultra chicos */
-    @media (max-width: 420px){
-      :root{ --maxw: 380px; }
-      .logoWrap{ width:56px; height:56px; }
-      .logoWrap img{ height: 64px; }
-      .title{ font-size: 17px; }
-    }
-    @media (max-width: 360px){
-      :root{ --maxw: 340px; }
-      .btn{ padding: 12px 12px; }
-      .badge{ font-size: 11px; }
-    }
+    /* Anti-scroll horizontal en pantallas chicas */
+    *{box-sizing:border-box}
   </style>
 </head>
 
 <body>
-  <div class="page">
+  <div class="wrap">
     <div class="card">
-      <div class="header">
-        <div class="logoWrap" title="AssistPro ER">
-          <!-- Ajusta ruta si tu logo está en otro lugar -->
+
+      <div class="head">
+        <div class="logoBox">
           <img src="../assets/logo/assistpro-er.svg" alt="AssistPro ER">
         </div>
 
-        <div class="headText">
-          <h1 class="title">ASSISTPRO · ER</h1>
-          <p class="subtitle">Usuario: <b id="lblUser">—</b></p>
+        <div class="titleBox">
+          <p class="brand">AssistPRO · ER</p>
+          <p class="sub">Acceso operativo <span id="uLabel"></span></p>
         </div>
 
-        <div class="badge" id="lblAlm">ALM: —</div>
+        <div class="pill" id="almPill">ALM: —</div>
       </div>
 
-      <div class="body">
-        <!-- Botón destacado: Consultas / Stock -->
-        <a class="btn btn-primary btn-wide" href="stock.php">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          CONSULTAS · STOCK
+      <!-- CTA principal: Consultas (módulo más rápido para dar valor) -->
+      <a class="heroBtn" href="consultas/index.php" id="btnConsultas">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <span>CONSULTAS · STOCK</span>
+      </a>
+
+      <!-- Menú operativo -->
+      <div class="grid">
+        <a class="btn" href="recepcion/index.php">
+          <i class="fa-solid fa-dolly"></i>
+          <span>1 RECEPCIÓN</span>
         </a>
 
-        <div style="height:10px"></div>
+        <a class="btn" href="acomodo/index.php">
+          <i class="fa-solid fa-warehouse"></i>
+          <span>2 ACOMODO</span>
+        </a>
 
-        <div class="grid">
-          <a class="btn btn-primary" href="recepcion.php">
-            <i class="fa-solid fa-truck-ramp-box"></i>
-            1 RECEPCIÓN
-          </a>
+        <a class="btn" href="traslados/traslado_lp.php">
+          <i class="fa-solid fa-right-left"></i>
+          <span>3 TRASLADOS</span>
+        </a>
 
-          <a class="btn btn-primary" href="acomodo.php">
-            <i class="fa-solid fa-warehouse"></i>
-            2 ACOMODO
-          </a>
+        <a class="btn" href="palletizacion/index.php">
+          <i class="fa-solid fa-layer-group"></i>
+          <span>4 PALLETIZACIÓN</span>
+        </a>
 
-          <a class="btn btn-primary" href="traslados.php">
-            <i class="fa-solid fa-right-left"></i>
-            3 TRASLADOS
-          </a>
+        <a class="btn" href="picking/index.php">
+          <i class="fa-solid fa-box-open"></i>
+          <span>5 PICKING</span>
+        </a>
 
-          <a class="btn btn-primary" href="palletizacion.php">
-            <i class="fa-solid fa-layer-group"></i>
-            4 PALLETIZACIÓN
-          </a>
+        <a class="btn" href="inventarios/index.php">
+          <i class="fa-solid fa-clipboard-check"></i>
+          <span>6 INVENTARIOS</span>
+        </a>
 
-          <a class="btn btn-primary" href="picking.php">
-            <i class="fa-solid fa-box"></i>
-            5 PICKING
-          </a>
+        <a class="btn wide" href="consultas/index.php">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span>7 CONSULTAS</span>
+        </a>
 
-          <a class="btn btn-primary" href="inventarios.php">
-            <i class="fa-solid fa-clipboard-check"></i>
-            6 INVENTARIOS
-          </a>
-
-          <a class="btn btn-primary" href="consultas.php">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            7 CONSULTAS
-          </a>
-
-          <button class="btn btn-black btn-wide" id="btnLogout" type="button">
-            <i class="fa-solid fa-right-from-bracket"></i>
-            CERRAR SESIÓN
-          </button>
-        </div>
+        <button class="btn secondary wide" id="btnLogout" type="button">
+          <i class="fa-solid fa-right-from-bracket"></i>
+          <span>CERRAR SESIÓN</span>
+        </button>
       </div>
 
       <div class="footer">
-        Powered by <b>Adventech Logística</b>
+        <span>Powered by</span> <b>Adventech Logística</b>
       </div>
+
     </div>
   </div>
 
-<script>
-(function(){
-  // 1) Validación de “sesión” móvil via localStorage
-  const user = localStorage.getItem('mobile_user') || '';
-  const alm  = localStorage.getItem('mobile_almacen') || '';
-  const almNom = localStorage.getItem('mobile_almacen_nombre') || '';
+  <script>
+    (function(){
+      // Sin sesiones: controlamos el “estado” por localStorage
+      const user = localStorage.getItem('mobile_user') || '';
+      const alm  = localStorage.getItem('mobile_almacen') || '';
+      const almName = localStorage.getItem('mobile_almacen_nombre') || '';
 
-  if(!user || !alm){
-    // si entran directo a menu.php sin login
-    window.location.href = 'index.html';
-    return;
-  }
+      // Si no hay login operativo, fuera (y siempre a mobile)
+      if(!user || !alm){
+        window.location.href = 'index.html';
+        return;
+      }
 
-  // 2) Pintar encabezados
-  document.getElementById('lblUser').textContent = user;
-  document.getElementById('lblAlm').textContent = 'ALM: ' + (almNom ? almNom : alm);
+      // UI labels
+      const uLabel = document.getElementById('uLabel');
+      const almPill = document.getElementById('almPill');
 
-  // 3) Logout
-  document.getElementById('btnLogout').addEventListener('click', function(){
-    localStorage.removeItem('mobile_user');
-    localStorage.removeItem('mobile_almacen');
-    localStorage.removeItem('mobile_almacen_nombre');
-    window.location.href = 'index.html';
-  });
-})();
-</script>
+      uLabel.textContent = '· Usuario: ' + user;
+
+      let almTxt = almName ? almName : alm;
+      // Si almName viene "WH5" y alm también, evitamos duplicados
+      almPill.textContent = 'ALM: ' + almTxt;
+
+      // Logout
+      document.getElementById('btnLogout').addEventListener('click', function(){
+        localStorage.removeItem('mobile_user');
+        localStorage.removeItem('mobile_almacen');
+        localStorage.removeItem('mobile_almacen_nombre');
+        window.location.href = 'index.html';
+      });
+    })();
+  </script>
 </body>
 </html>

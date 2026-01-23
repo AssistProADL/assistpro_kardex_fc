@@ -1,200 +1,334 @@
 <?php
-// public/vas/vas_clientes.php
-require_once __DIR__ . '/../bi/_menu_global.php';
+// public/vas/vas_cliente.php
+require_once __DIR__ . '/../../app/db.php';
+
+// Empresas (mismo patrón que servicios_vas.php)
+$cia = db_all("SELECT cve_cia, des_cia FROM c_compania ORDER BY des_cia");
+
+// Defaults
+$defaultCia = (int)($cia[0]['cve_cia'] ?? 1);
 ?>
-<div class="container-fluid" style="padding:14px;">
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>VAS · Servicios por Cliente</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+
+  <style>
+    :root{ --corp:#0b2e83; }
+    .page-title{ color:var(--corp); font-weight:700; letter-spacing:.2px; }
+    .card-soft{ border:1px solid #e9eef7; border-radius:14px; box-shadow:0 6px 18px rgba(16,24,40,.06); }
+    .card-soft .card-header{ background:rgba(11,46,131,.06); border-bottom:1px solid #e9eef7; font-weight:700; color:var(--corp); }
+    .kpi{ font-weight:800; font-size:1.6rem; }
+    table.dataTable tbody td{ padding-top:.45rem !important; padding-bottom:.45rem !important; vertical-align:middle; }
+    .btn-xs{ padding:.2rem .45rem; font-size:.78rem; border-radius:.45rem; }
+    .badge-soft{ background:rgba(11,46,131,.10); color:var(--corp); border:1px solid rgba(11,46,131,.18); }
+    .select2-container .select2-selection--single{ height:38px; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered{ line-height:38px; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow{ height:38px; }
+  </style>
+</head>
+<body>
+
+<?php require_once __DIR__ . '/../bi/_menu_global.php'; ?>
+
+<div class="container-fluid py-3">
   <div class="d-flex align-items-center justify-content-between mb-2">
     <div>
-      <div style="font-weight:800;font-size:18px;color:#000F9F;">
-        VAS · Servicios por Cliente / Dueño de Mercancía
-      </div>
-      <div style="font-size:12px;color:#666;">
-        Configura qué servicios VAS se cobran por Owner (c_proveedores.es_cliente=1) o por Cliente (c_cliente).
-      </div>
+      <h4 class="page-title mb-0">VAS · Servicios por Cliente</h4>
+      <div class="text-muted" style="font-size:.9rem;">Matriz de precios (vw_vas_servicios_cliente) con filtros por compañía y almacén.</div>
     </div>
-    <div class="text-end" style="font-size:12px;color:#666;">
-      <span class="badge" style="background:#000F9F;">AssistPro</span>
-    </div>
+    <span class="badge badge-soft">API</span>
   </div>
 
-  <!-- Filtros -->
-  <div class="card mb-2" style="border:1px solid #e5e7eb; box-shadow:0 2px 8px rgba(0,0,0,.04);">
-    <div class="card-body" style="padding:10px;">
+  <div class="card card-soft mb-3">
+    <div class="card-header">Filtros</div>
+    <div class="card-body">
       <div class="row g-2 align-items-end">
         <div class="col-md-3">
-          <label class="form-label" style="font-size:12px;">Empresa (IdEmpresa)</label>
-          <input id="IdEmpresa" class="form-control form-control-sm" value="1" />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label" style="font-size:12px;">Almacén (cve_almac)</label>
-          <input id="cve_almac" class="form-control form-control-sm" placeholder="opcional" />
-        </div>
-
-        <div class="col-md-3">
-          <label class="form-label" style="font-size:12px;">Owner (ID_Proveedor es_cliente=1)</label>
-          <input id="owner_id" type="number" class="form-control form-control-sm" placeholder="ID_Proveedor" />
+          <label class="form-label mb-1">Compañía</label>
+          <select id="IdEmpresa" class="form-select">
+            <?php foreach($cia as $c): ?>
+              <option value="<?= (int)$c['cve_cia'] ?>" <?= ((int)$c['cve_cia']===$defaultCia?'selected':'') ?>>
+                <?= htmlspecialchars($c['des_cia']) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
         </div>
 
         <div class="col-md-3">
-          <label class="form-label" style="font-size:12px;">Cliente (id_cliente)</label>
-          <input id="id_cliente" type="number" class="form-control form-control-sm" placeholder="id_cliente" />
+          <label class="form-label mb-1">Almacén (contexto)</label>
+          <select id="cve_almac" class="form-select">
+            <option value="Todos">Todos</option>
+          </select>
+          <div class="text-muted" style="font-size:.78rem" id="srcHint"></div>
         </div>
 
-        <div class="col-md-12 d-flex gap-2 mt-1">
-          <button id="btnLoad" class="btn btn-sm" style="background:#000F9F;color:#fff;">
-            <i class="fa fa-rotate"></i> Cargar
-          </button>
-          <button id="btnSave" class="btn btn-sm" style="background:#95E1BF;color:#191817;border:1px solid #7ad7ad;">
-            <i class="fa fa-floppy-disk"></i> Guardar Cambios
-          </button>
-          <div class="ms-auto" id="msg" style="font-size:12px;color:#666;"></div>
+        <div class="col-md-4">
+          <label class="form-label mb-1">Buscar</label>
+          <input id="q" class="form-control" placeholder="cliente / servicio / clave" />
+        </div>
+
+        <div class="col-md-2 d-flex gap-2">
+          <button id="btnAplicar" class="btn btn-primary w-100">Aplicar</button>
+          <button id="btnLimpiar" class="btn btn-outline-secondary w-100">Limpiar</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Tabla -->
-  <div class="card" style="border:1px solid #e5e7eb; box-shadow:0 2px 8px rgba(0,0,0,.04);">
-    <div class="card-body" style="padding:10px;">
-      <div class="table-responsive" style="max-height:70vh; overflow:auto;">
-        <table class="table table-sm table-hover align-middle" style="font-size:12px;">
-          <thead style="position:sticky;top:0;background:#f8fafc;z-index:2;">
-            <tr>
-              <th style="width:90px;">Asignado</th>
-              <th>Servicio</th>
-              <th style="width:160px;">Tipo Cobro</th>
-              <th style="width:140px;" class="text-end">Precio</th>
-              <th style="width:120px;" class="text-center">Activo</th>
-            </tr>
-          </thead>
-          <tbody id="tbody">
-            <tr><td colspan="5" style="color:#999;">Cargue un Owner o Cliente…</td></tr>
-          </tbody>
-        </table>
+  <div class="row g-3 mb-3">
+    <div class="col-md-3">
+      <div class="card card-soft">
+        <div class="card-header">Servicios activos</div>
+        <div class="card-body"><div class="kpi" id="kpiActivos">0</div></div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card card-soft">
+        <div class="card-header">Servicios total</div>
+        <div class="card-body"><div class="kpi" id="kpiTotal">0</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card card-soft">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Detalle</span>
+      <small class="text-muted">Acciones a la izquierda · espaciado compacto</small>
+    </div>
+    <div class="card-body">
+      <table id="tbl" class="table table-striped table-hover w-100">
+        <thead>
+          <tr>
+            <th style="width:90px;">Acciones</th>
+            <th>Cliente</th>
+            <th>Servicio</th>
+            <th>Tipo cobro</th>
+            <th class="text-end">Precio base</th>
+            <th class="text-end">Precio cliente</th>
+            <th class="text-end">Precio final</th>
+            <th>Moneda</th>
+            <th style="width:70px;">Activo</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal edición -->
+<div class="modal fade" id="mdlEdit" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-md modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar precio cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="m_id_cliente">
+        <input type="hidden" id="m_id_servicio">
+        <input type="hidden" id="m_cve_almac">
+
+        <div class="mb-2">
+          <div class="fw-semibold" id="m_cliente"></div>
+          <div class="text-muted" id="m_servicio" style="font-size:.9rem"></div>
+        </div>
+
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label mb-1">Precio base</label>
+            <input id="m_precio_base" class="form-control" readonly>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label mb-1">Moneda</label>
+            <input id="m_moneda" class="form-control" readonly>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label mb-1">Precio cliente</label>
+            <input id="m_precio_cliente" type="number" step="0.01" class="form-control" placeholder="(vacío = usar base)">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label mb-1">Activo</label>
+            <select id="m_activo" class="form-select">
+              <option value="1">Sí</option>
+              <option value="0">No</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="alert alert-info mt-3 mb-0" style="font-size:.85rem">
+          Estrategia comercial: si “Precio cliente” está vacío, el sistema cobra “Precio base”.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button id="btnGuardar" class="btn btn-primary">Guardar</button>
       </div>
     </div>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
-const apiBase = '/assistpro_kardex_fc/public/api/vas';
+  const apiBase = '/assistpro_kardex_fc/public/api';
+  const apiVas  = `${apiBase}/vas/clientes_servicios.php`;
+  const apiAlm  = `${apiBase}/filtros_almacenes.php`;
 
-const el = (id)=>document.getElementById(id);
-const msg = (t, ok=true)=>{ el('msg').innerHTML = ok ? `<span style="color:#0a7a2f;">${t}</span>` : `<span style="color:#b42318;">${t}</span>`; };
+  let dt;
 
-function getQuery(){
-  const IdEmpresa = el('IdEmpresa').value.trim();
-  const cve_almac = el('cve_almac').value.trim();
-  const owner_id = parseInt(el('owner_id').value||'0',10);
-  const id_cliente = parseInt(el('id_cliente').value||'0',10);
-
-  if(!IdEmpresa) throw new Error('Falta IdEmpresa');
-  if(owner_id<=0 && id_cliente<=0) throw new Error('Capture owner_id o id_cliente');
-
-  const p = new URLSearchParams();
-  p.set('IdEmpresa', IdEmpresa);
-  if(cve_almac) p.set('cve_almac', cve_almac);
-  if(owner_id>0) p.set('owner_id', owner_id);
-  else p.set('id_cliente', id_cliente);
-  return { IdEmpresa, cve_almac, owner_id, id_cliente, qs: p.toString() };
-}
-
-function render(rows){
-  const tb = el('tbody');
-  tb.innerHTML = '';
-  if(!rows || !rows.length){
-    tb.innerHTML = `<tr><td colspan="5" style="color:#999;">Sin servicios…</td></tr>`;
-    return;
+  function money(v){
+    if(v === null || v === undefined || v === '') return '';
+    const n = Number(v);
+    if(Number.isNaN(n)) return v;
+    return n.toFixed(2);
   }
 
-  for(const r of rows){
-    const checked = parseInt(r.habilitado||0,10)===1;
-    const activo = (r.Activo===null || r.Activo===undefined) ? 1 : parseInt(r.Activo,10);
-    const tipo = (r.tipo_cobro_cliente || r.tipo_cobro_default || 'fijo');
-    const precio = (r.precio_cliente!==null && r.precio_cliente!==undefined) ? r.precio_cliente : r.precio_base;
+  async function loadAlmacenes(){
+    const cve_cia = $('#IdEmpresa').val();
+    const url = `${apiAlm}?action=almacenes&cve_cia=${encodeURIComponent(cve_cia)}`;
+    $('#srcHint').text(`Fuente: ${url.replace(apiBase+'/','api/')}`);
+    const res = await fetch(url);
+    const j = await res.json();
 
-    const tr = document.createElement('tr');
-    tr.dataset.id_servicio = r.id_servicio;
+    const $s = $('#cve_almac');
+    const keep = $s.val() || 'Todos';
+    $s.empty().append(`<option value="Todos">Todos</option>`);
 
-    tr.innerHTML = `
-      <td>
-        <input type="checkbox" class="chk" ${checked?'checked':''}>
-      </td>
-      <td>
-        <div style="font-weight:700;">${escapeHtml(r.nombre||'')}</div>
-        <div style="font-size:11px;color:#666;">${escapeHtml(r.clave_servicio||'')}</div>
-      </td>
-      <td>
-        <select class="form-select form-select-sm tipo">
-          ${['fijo','por_pieza','por_pedido','por_hora'].map(t=>`<option value="${t}" ${t===tipo?'selected':''}>${t}</option>`).join('')}
-        </select>
-      </td>
-      <td class="text-end">
-        <input type="number" step="0.01" class="form-control form-control-sm precio text-end" value="${precio??0}">
-      </td>
-      <td class="text-center">
-        <select class="form-select form-select-sm act" style="max-width:110px;margin:0 auto;">
-          <option value="1" ${activo===1?'selected':''}>Activo</option>
-          <option value="0" ${activo===0?'selected':''}>Inactivo</option>
-        </select>
-      </td>
-    `;
-    tb.appendChild(tr);
+    if(j && j.ok && Array.isArray(j.data)){
+      j.data.forEach(r=>{
+        const v = r.clave ? r.clave : (r.almacenp_id ?? r.almacen_id ?? '');
+        const label = r.nombre ?? v;
+        if(v) $s.append(`<option value="${String(v).replaceAll('"','&quot;')}">${label}</option>`);
+      });
+    }
+    $s.val(keep);
+    $s.trigger('change.select2');
   }
-}
 
-function escapeHtml(s){
-  return (''+s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
-}
+  async function loadGrid(){
+    const IdEmpresa = $('#IdEmpresa').val();
+    const cve_almac = $('#cve_almac').val();
+    const q = $('#q').val().trim();
 
-async function load(){
-  try{
-    msg('Cargando…');
-    const { qs } = getQuery();
-    const res = await fetch(`${apiBase}/clientes_servicios.php?${qs}`);
-    const js = await res.json();
-    if(!js.ok) throw new Error(js.msg || 'Error');
-    render(js.data.servicios || []);
-    msg('Servicios cargados');
-  }catch(e){
-    render([]);
-    msg(e.message, false);
+    const url = `${apiVas}?action=grid&IdEmpresa=${encodeURIComponent(IdEmpresa)}&cve_almac=${encodeURIComponent(cve_almac)}&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url);
+    const j = await res.json();
+
+    const rows = (j && j.ok && j.data && Array.isArray(j.data.rows)) ? j.data.rows : [];
+    const kpi  = (j && j.ok && j.data && j.data.kpi) ? j.data.kpi : {total:0,activos:0};
+
+    $('#kpiTotal').text(kpi.total ?? 0);
+    $('#kpiActivos').text(kpi.activos ?? 0);
+
+    dt.clear().rows.add(rows).draw();
   }
-}
 
-async function save(){
-  try{
-    msg('Guardando…');
-    const { IdEmpresa, cve_almac, owner_id, id_cliente } = getQuery();
+  function openEdit(row){
+    $('#m_id_cliente').val(row.id_cliente);
+    $('#m_id_servicio').val(row.id_servicio);
+    $('#m_cve_almac').val(row.cve_almac || '');
 
-    const rows = Array.from(document.querySelectorAll('#tbody tr'));
-    const items = rows.map(tr=>{
-      const id_servicio = parseInt(tr.dataset.id_servicio||'0',10);
-      const habilitado = tr.querySelector('.chk')?.checked ? 1 : 0;
-      const tipo_cobro = tr.querySelector('.tipo')?.value || 'fijo';
-      const precio_cliente = parseFloat(tr.querySelector('.precio')?.value || '0');
-      const Activo = parseInt(tr.querySelector('.act')?.value || '1',10);
-      return { id_servicio, Activo: habilitado ? Activo : 0, tipo_cobro, precio_cliente };
-    });
+    $('#m_cliente').text(row.cliente || row.RazonSocial || '');
+    $('#m_servicio').text(`${row.clave_servicio || ''} · ${row.servicio || ''}`);
 
-    const payload = { IdEmpresa, cve_almac, items };
-    if(owner_id>0) payload.owner_id = owner_id;
-    else payload.id_cliente = id_cliente;
+    $('#m_precio_base').val(money(row.precio_base));
+    $('#m_moneda').val(row.moneda || 'MXN');
+    $('#m_precio_cliente').val(row.precio_cliente ?? '');
+    $('#m_activo').val(String(row.Activo ?? 1));
 
-    const res = await fetch(`${apiBase}/clientes_servicios.php`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+    const mdl = new bootstrap.Modal(document.getElementById('mdlEdit'));
+    mdl.show();
+  }
+
+  async function saveEdit(){
+    const payload = {
+      IdEmpresa: Number($('#IdEmpresa').val()),
+      cve_almac: $('#m_cve_almac').val() || null,
+      id_cliente: Number($('#m_id_cliente').val()),
+      id_servicio: Number($('#m_id_servicio').val()),
+      precio_cliente: ($('#m_precio_cliente').val().trim() === '' ? null : Number($('#m_precio_cliente').val())),
+      Activo: Number($('#m_activo').val()),
+      usuario: 'API'
+    };
+
+    const res = await fetch(apiVas, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify(payload)
     });
-    const js = await res.json();
-    if(!js.ok) throw new Error(js.msg || 'Error guardando');
-    msg('Cambios guardados');
-    await load();
-  }catch(e){
-    msg(e.message, false);
+    const j = await res.json();
+    if(!j.ok){
+      alert(j.msg || 'No se pudo guardar');
+      return;
+    }
+    bootstrap.Modal.getInstance(document.getElementById('mdlEdit')).hide();
+    await loadGrid();
   }
-}
 
-el('btnLoad').addEventListener('click', load);
-el('btnSave').addEventListener('click', save);
-</scr
+  $(async function(){
+    $('#IdEmpresa, #cve_almac').select2({ width:'100%' });
+
+    dt = $('#tbl').DataTable({
+      pageLength: 25,
+      lengthMenu: [10,25,50,100],
+      order: [[1,'asc'],[2,'asc']],
+      data: [],
+      columns: [
+        { data: null, orderable:false, render: (d,t,row)=>{
+            return `
+              <button class="btn btn-outline-primary btn-xs me-1" data-act="edit">Editar</button>
+            `;
+          }
+        },
+        { data: 'cliente', render:(d,t,row)=> (row.cliente || row.RazonSocial || '') },
+        { data: 'servicio' },
+        { data: 'tipo_cobro' },
+        { data: 'precio_base', className:'text-end', render:(d)=> money(d) },
+        { data: 'precio_cliente', className:'text-end', render:(d)=> (d===null||d===undefined||d===''? '' : money(d)) },
+        { data: 'precio_final', className:'text-end', render:(d)=> money(d) },
+        { data: 'moneda' },
+        { data: 'Activo', render:(d)=> (Number(d)===1?'<span class="badge text-bg-success">Sí</span>':'<span class="badge text-bg-secondary">No</span>') }
+      ],
+      language: { url: 'https://cdn.datatables.net/plug-ins/1.13.8/i18n/es-ES.json' }
+    });
+
+    $('#tbl tbody').on('click','button[data-act="edit"]', function(){
+      const row = dt.row($(this).closest('tr')).data();
+      openEdit(row);
+    });
+
+    $('#btnGuardar').on('click', saveEdit);
+
+    $('#btnAplicar').on('click', async ()=>{ await loadGrid(); });
+    $('#btnLimpiar').on('click', async ()=>{
+      $('#q').val('');
+      $('#cve_almac').val('Todos').trigger('change');
+      await loadGrid();
+    });
+
+    $('#IdEmpresa').on('change', async ()=>{
+      await loadAlmacenes();
+      await loadGrid();
+    });
+
+    await loadAlmacenes();
+    await loadGrid();
+  });
+</script>
+
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
+</body>
+</html>

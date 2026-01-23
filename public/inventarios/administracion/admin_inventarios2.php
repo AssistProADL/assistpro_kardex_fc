@@ -128,11 +128,8 @@ SELECT
   TRIM(COALESCE(ap.clave,''))  AS almacen_clave,
   TRIM(COALESCE(ap.nombre,'')) AS almacen_nombre,
   TRIM(COALESCE(u.nombre_completo,'')) AS usuario_nombre,
-  COALESCE(JSON_LENGTH(p.bls_json),0) AS bls_planeados,
   $bls_expr AS bls_cnt
 FROM inventario i
-LEFT JOIN th_plan_inventarios p
-  ON p.id_inventario = i.id_inventario
 LEFT JOIN c_almacenp ap
   ON CAST(ap.id AS UNSIGNED) = i.cve_almacenp
 LEFT JOIN c_usuario u
@@ -182,7 +179,7 @@ foreach($rows as $r){
       </div>
     </div>
     <div class="d-flex gap-2">
-      <a href="../planeacion/planificar_inventario.php" class="btn btn-primary btn-sm">
+      <a href="/public/inventarios/planeacion/planificar_inventarios.php" class="btn btn-primary btn-sm">
         + Nuevo plan
       </a>
     </div>
@@ -231,7 +228,7 @@ foreach($rows as $r){
       </div>
       <div class="col-12 d-flex gap-2 mt-2">
         <button class="btn btn-primary btn-sm">Aplicar</button>
-        <a class="btn btn-outline-secondary btn-sm" href="admin_inventarios.php">Limpiar</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/public/inventarios/administracion/admin_inventarios.php">Limpiar</a>
         <div class="ms-auto text-muted" style="font-size:12px; padding-top:6px;">
           Máx. 2000 registros
         </div>
@@ -251,14 +248,12 @@ foreach($rows as $r){
             <th>Almacén</th>
             <th style="width:220px;">Usuario</th>
             <th style="width:140px;">Fecha</th>
-            <th style="width:120px;" class="text-center">Planeados</th>
-            <th style="width:120px;" class="text-center">Generados</th>
-            <th style="width:90px;" class="text-center">Detalle</th>
+            <th style="width:120px;">Ubicaciones</th>
           </tr>
         </thead>
         <tbody>
         <?php if(!$rows): ?>
-          <tr><td colspan="10" class="text-center text-muted p-4">Sin resultados.</td></tr>
+          <tr><td colspan="8" class="text-center text-muted p-4">Sin resultados.</td></tr>
         <?php else: foreach($rows as $r):
           $st = strtoupper(trim((string)$r['estado']));
           $badge = 'badge-soft';
@@ -272,8 +267,7 @@ foreach($rows as $r){
           $usrTxt = trim((string)($r['usuario_nombre'] ?? ''));
           if($usrTxt==='') $usrTxt = '—';
 
-          $bls_planeados = (int)($r['bls_planeados'] ?? 0);
-          $bls_generados = (int)($r['bls_cnt'] ?? 0);
+          $bls = (int)($r['bls_cnt'] ?? 0);
         ?>
           <tr>
             <td><?= (int)$r['id_inventario'] ?></td>
@@ -286,11 +280,7 @@ foreach($rows as $r){
             <td><?= h($almTxt) ?></td>
             <td><?= h($usrTxt) ?></td>
             <td><?= h(fmt_ddmmyyyy($r['fecha_creacion'])) ?></td>
-            <td class="text-center"><span class="badge badge-soft"><?= $bls_planeados ?></span></td>
-            <td class="text-center"><span class="badge badge-soft"><?= $bls_generados ?></span></td>
-            <td class="text-center">
-              <a class="btn btn-outline-primary btn-sm" style="padding:2px 8px; font-size:12px;" href="../planeacion/plan_inventario_detalle.php?folio=<?= urlencode($r['folio']) ?>">Ver</a>
-            </td>
+            <td class="text-center"><span class="badge badge-soft"><?= $bls ?></span></td>
           </tr>
         <?php endforeach; endif; ?>
         </tbody>
