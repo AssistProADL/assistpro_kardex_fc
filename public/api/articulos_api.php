@@ -48,37 +48,103 @@ try {
     $where = [];
     $p = [];
     if (!$inactivos)
-      $where[] = "IFNULL(Activo,1)=1";
+      $where[] = "IFNULL(a.Activo,1)=1";
+
+    // Filtros específicos
+    $grupo = clean($_GET['grupo'] ?? '');
+    $tipo = clean($_GET['tipo'] ?? '');
+    $clasificacion = clean($_GET['clasificacion'] ?? '');
+    $compuesto = clean($_GET['compuesto'] ?? '');
+    $caduca = clean($_GET['caduca'] ?? '');
+
+    if ($grupo !== '') {
+      $where[] = "a.grupo = :grupo";
+      $p[':grupo'] = $grupo;
+    }
+    if ($tipo !== '') {
+      $where[] = "a.tipo = :tipo";
+      $p[':tipo'] = $tipo;
+    }
+    if ($clasificacion !== '') {
+      $where[] = "a.clasificacion = :clasificacion";
+      $p[':clasificacion'] = $clasificacion;
+    }
+    if ($compuesto !== '') {
+      $where[] = "a.Compuesto = :compuesto";
+      $p[':compuesto'] = $compuesto;
+    }
+    if ($caduca !== '') {
+      $where[] = "a.Caduca = :caduca";
+      $p[':caduca'] = $caduca;
+    }
+
     if ($q !== '') {
       // Fix: Unique parameters for each usage to avoid HY093 on some drivers
       $where[] = "(
-        cve_articulo LIKE :q1 OR des_articulo LIKE :q2 OR des_detallada LIKE :q3
-        OR tipo LIKE :q4 OR grupo LIKE :q5 OR clasificacion LIKE :q6
-        OR Cve_SAP LIKE :q7 OR cve_alt LIKE :q8 OR barras2 LIKE :q9 OR barras3 LIKE :q10
-        OR CAST(id AS CHAR) LIKE :q11 OR CAST(cve_almac AS CHAR) LIKE :q12
+        a.cve_articulo LIKE :q1 OR a.des_articulo LIKE :q2 OR a.des_detallada LIKE :q3
+        OR a.tipo LIKE :q4 OR a.grupo LIKE :q5 OR a.clasificacion LIKE :q6
+        OR a.Cve_SAP LIKE :q7 OR a.cve_alt LIKE :q8 OR a.barras2 LIKE :q9 OR a.barras3 LIKE :q10
+        OR CAST(a.id AS CHAR) LIKE :q11 OR CAST(a.cve_almac AS CHAR) LIKE :q12
+        OR gpo.des_gpoart LIKE :q13
       )";
-      for ($i = 1; $i <= 12; $i++)
+      for ($i = 1; $i <= 13; $i++)
         $p[":q$i"] = "%$q%";
     }
 
     // 1. Get Total Count
-    $sqlCount = "SELECT COUNT(*) FROM c_articulo";
+    $sqlCount = "SELECT COUNT(*) FROM c_articulo a
+                 LEFT JOIN c_gpoarticulo gpo ON gpo.id = a.grupo
+                 LEFT JOIN c_sgpoarticulo sgpo ON sgpo.id = a.clasificacion
+                 LEFT JOIN c_ssgpoarticulo ssgpo ON ssgpo.id = a.tipo
+                 LEFT JOIN c_unimed um ON um.id_umed = a.unidadMedida
+                 LEFT JOIN c_almacenp alm ON alm.id = a.cve_almac
+                 LEFT JOIN c_tipo_producto tp ON tp.clave = a.tipo_producto
+                 LEFT JOIN c_proveedores prov ON prov.ID_Proveedor = a.ID_Proveedor
+                 LEFT JOIN c_tipocaja tc ON tc.id_tipocaja = a.cve_tipcaja
+                 LEFT JOIN c_monedas mon ON mon.Id_Moneda = a.cve_moneda
+                 LEFT JOIN c_ubicacion ubi ON ubi.idy_ubica = a.mav_cveubica";
     if ($where)
       $sqlCount .= " WHERE " . implode(" AND ", $where);
     $total = (int) db_val($sqlCount, $p);
 
     // 2. Get Data
     $sql = "SELECT
-            cve_almac, id, cve_articulo, des_articulo, des_detallada,
-            unidadMedida, cve_umed, imp_costo, PrecioVenta,
-            tipo, grupo, clasificacion, Compuesto, Caduca,
-            control_lotes, control_numero_series, control_garantia, tipo_garantia, valor_garantia,
-            ecommerce_activo, ecommerce_categoria, ecommerce_subcategoria, ecommerce_destacado,
-            Activo
-          FROM c_articulo";
+            a.id, a.cve_articulo, a.des_articulo, a.des_detallada,
+            a.unidadMedida, a.cve_umed, 
+            um.des_umed as unidadMedida_nombre,
+            a.imp_costo, a.PrecioVenta,
+            a.tipo, a.grupo, a.grupo as grupo_raw, a.clasificacion,
+            gpo.des_gpoart as grupo_nombre,
+            sgpo.des_sgpoart as clasificacion_nombre,
+            ssgpo.des_ssgpoart as tipo_nombre,
+            a.cve_almac, alm.nombre as almacen_nombre,
+            a.tipo_producto, tp.descripcion as tipo_producto_nombre,
+            a.Compuesto, a.Caduca,
+            a.control_lotes, a.control_numero_series, a.control_garantia, a.tipo_garantia, a.valor_garantia,
+            a.ecommerce_activo, a.ecommerce_categoria, a.ecommerce_subcategoria, a.ecommerce_destacado,
+            a.cve_codprov, a.barras2, a.barras3,
+            a.alto, a.ancho, a.fondo, (a.alto * a.ancho * a.fondo) as volumen, a.peso,
+            a.num_multiplo, a.cajas_palet, a.umas, a.cve_alt as clave_alterna,
+            a.Usa_Envase,
+            prov.Nombre as proveedor_nombre,
+            tc.descripcion as tipo_caja_nombre,
+            mon.Des_Moneda as moneda_nombre,
+            ubi.Ubicacion as ubicacion_nombre,
+            a.Activo
+          FROM c_articulo a
+          LEFT JOIN c_gpoarticulo gpo ON gpo.id = a.grupo
+          LEFT JOIN c_sgpoarticulo sgpo ON sgpo.id = a.clasificacion
+          LEFT JOIN c_ssgpoarticulo ssgpo ON ssgpo.id = a.tipo
+          LEFT JOIN c_unimed um ON um.id_umed = a.unidadMedida
+          LEFT JOIN c_almacenp alm ON alm.id = a.cve_almac
+          LEFT JOIN c_tipo_producto tp ON tp.clave = a.tipo_producto
+          LEFT JOIN c_proveedores prov ON prov.ID_Proveedor = a.ID_Proveedor
+          LEFT JOIN c_tipocaja tc ON tc.id_tipocaja = a.cve_tipcaja
+          LEFT JOIN c_monedas mon ON mon.Id_Moneda = a.cve_moneda
+          LEFT JOIN c_ubicacion ubi ON ubi.idy_ubica = a.mav_cveubica";
     if ($where)
       $sql .= " WHERE " . implode(" AND ", $where);
-    $sql .= " ORDER BY IFNULL(Activo,1) DESC, des_articulo ASC LIMIT $limit OFFSET $offset";
+    $sql .= " ORDER BY IFNULL(a.Activo,1) DESC, a.des_articulo ASC LIMIT $limit OFFSET $offset";
 
     $totalPages = ceil($total / $limit);
 
@@ -165,6 +231,20 @@ try {
       'ecommerce_categoria' => nd($_POST['ecommerce_categoria'] ?? null),
       'ecommerce_subcategoria' => nd($_POST['ecommerce_subcategoria'] ?? null),
       'ecommerce_destacado' => norm01($_POST['ecommerce_destacado'] ?? 0, 0),
+
+      'alto' => nd($_POST['alto'] ?? null),
+      'ancho' => nd($_POST['ancho'] ?? null),
+      'fondo' => nd($_POST['fondo'] ?? null),
+      'peso' => nd($_POST['peso'] ?? null),
+      'num_multiplo' => nd($_POST['num_multiplo'] ?? null),
+      'cajas_palet' => nd($_POST['cajas_palet'] ?? null),
+
+      'Usa_Envase' => nd($_POST['Usa_Envase'] ?? null),
+      'tipo_producto' => nd($_POST['tipo_producto'] ?? null),
+      'umas' => nd($_POST['umas'] ?? null),
+      'control_abc' => nd($_POST['control_abc'] ?? null),
+
+      'ID_Proveedor' => nd($_POST['proveedor'] ?? null),
 
       'Activo' => norm01($_POST['Activo'] ?? 1, 1),
     ];
@@ -287,6 +367,79 @@ try {
       fputcsv($out, $line);
     }
     fclose($out);
+    exit;
+  }
+
+  // ===================== AUTOCOMPLETE (CATALOGOS CON JERARQUÍA) =====================
+  if ($action == 'autocomplete') {
+    $field = clean($_GET['field'] ?? '');
+    $cve_almac = clean($_GET['cve_almac'] ?? '');
+    $parent_id = clean($_GET['parent_id'] ?? '');
+
+    $sql = "";
+    $params = [];
+
+    switch ($field) {
+      case 'almacen':
+        $sql = "SELECT id, nombre FROM c_almacenp WHERE 1=1 ORDER BY nombre";
+        break;
+
+      case 'grupo':
+        $sql = "SELECT id, des_gpoart as nombre FROM c_gpoarticulo WHERE IFNULL(Activo,1)=1";
+        if ($cve_almac && $cve_almac !== '' && $cve_almac !== '0') {
+          $sql .= " AND (id_almacen = ? OR id_almacen IS NULL)";
+          $params[] = (int) $cve_almac;
+        }
+        $sql .= " ORDER BY des_gpoart";
+        break;
+
+      case 'clasificacion':
+        $sql = "SELECT id, des_sgpoart as nombre, cve_gpoart FROM c_sgpoarticulo WHERE IFNULL(Activo,1)=1";
+        if ($cve_almac && $cve_almac !== '' && $cve_almac !== '0') {
+          $sql .= " AND (id_almacen = ? OR id_almacen IS NULL)";
+          $params[] = (int) $cve_almac;
+        }
+        if ($parent_id && $parent_id !== '' && $parent_id !== '0') {
+          $sql .= " AND cve_gpoart = ?";
+          $params[] = (int) $parent_id;
+        }
+        $sql .= " ORDER BY des_sgpoart";
+        break;
+
+      case 'tipo':
+        $sql = "SELECT id, des_ssgpoart as nombre, cve_sgpoart FROM c_ssgpoarticulo WHERE IFNULL(Activo,1)=1";
+        if ($cve_almac && $cve_almac !== '' && $cve_almac !== '0') {
+          $sql .= " AND (id_almacen = ? OR id_almacen IS NULL)";
+          $params[] = (int) $cve_almac;
+        }
+        if ($parent_id && $parent_id !== '' && $parent_id !== '0') {
+          $sql .= " AND cve_sgpoart = ?";
+          $params[] = (int) $parent_id;
+        }
+        $sql .= " ORDER BY des_ssgpoart";
+        break;
+
+      case 'proveedor':
+        $sql = "SELECT ID_Proveedor as id, Nombre as nombre FROM c_proveedores ORDER BY Nombre";
+        break;
+
+      case 'unidadMedida':
+        $sql = "SELECT id_umed as id, des_umed as nombre FROM c_unimed ORDER BY des_umed";
+        break;
+
+      case 'tipo_producto':
+        $sql = "SELECT clave as id, descripcion as nombre FROM c_tipo_producto ORDER BY descripcion";
+        break;
+
+      default:
+        echo json_encode(['values' => []]);
+        exit;
+    }
+
+    // Use positional parameters (?) instead of named parameters to avoid HY093
+    $rows = db_all($sql, $params);
+
+    echo json_encode(['values' => $rows], JSON_UNESCAPED_UNICODE);
     exit;
   }
 

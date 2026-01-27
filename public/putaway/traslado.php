@@ -414,8 +414,8 @@ $usuario = $_SESSION['usuario'] ?? $_SESSION['user'] ?? $_SESSION['cve_usuario']
     if (ok === null) {
       msg.innerHTML = `<div class="ap-msg-box" style="display:block; background:#f1f5f9; color:#64748b;">${t}</div>`;
     } else {
-      msg.innerHTML = ok 
-        ? `<div class="ap-msg-box success"><i class="bi bi-check-circle-fill me-2"></i>${t}</div>` 
+      msg.innerHTML = ok
+        ? `<div class="ap-msg-box success"><i class="bi bi-check-circle-fill me-2"></i>${t}</div>`
         : `<div class="ap-msg-box error"><i class="bi bi-exclamation-triangle-fill me-2"></i>${t}</div>`;
     }
   }
@@ -636,6 +636,38 @@ $usuario = $_SESSION['usuario'] ?? $_SESSION['user'] ?? $_SESSION['cve_usuario']
     }
 
     setMsg(`Aplicado ✅ Folio: ${j.folio} · Modo: ${j.modo}`, true);
+
+    // --- INTEGRACIÓN KARDEX (REQ: Traslado LP <-> BL) ---
+    try {
+      const kUrl = '../api/kardex/api_registrar_kardex.php';
+      const blDest = elBL.value.trim();
+      const lpDest = chk.checked ? elLPDest.value.trim() : '';
+
+      // Iteramos cada item movido para registrarlo individualmente
+      for (const r of state.rows) {
+        const kPayload = {
+          tipo_movimiento: 'TRASLADO',  // Regla de Negocio
+          cve_articulo: r.cve_articulo,
+          cantidad: r.cantidad,
+          origen: state.blOrigen, // Ubicación Origen
+          destino: blDest,         // Ubicación Destino
+          usuario: usuario,
+          lp_origen: state.lpOrigen,
+          lp_destino: lpDest,
+          referencia: `Folio: ${j.folio}`
+        };
+
+        // Enviar silenciosamente (await para orden, pero catch para no bloquear UX confirmada)
+        await fetch(kUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(kPayload)
+        });
+      }
+    } catch (errK) {
+      console.error("Warning: Fallo al registrar Kardex", errK);
+    }
+    // -----------------------------------------------------
 
     // Post-commit
     await lookupOrigen();
