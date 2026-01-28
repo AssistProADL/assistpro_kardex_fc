@@ -15,9 +15,9 @@ $action = $_GET['action'] ?? $_POST['action'] ?? 'list';
 function jexit($ok, $msg = '', $data = [], $extra = [])
 {
   echo json_encode(array_merge([
-    'ok' => (bool)$ok,
-    'success' => (bool)$ok,
-    'msg' => (string)$msg,
+    'ok' => (bool) $ok,
+    'success' => (bool) $ok,
+    'msg' => (string) $msg,
     'data' => $data
   ], $extra));
   exit;
@@ -34,8 +34,8 @@ try {
        Respuesta: ok/data[{id_user,cve_usuario,nombre_completo,text}]
     */
     case 'select':
-      $includeInactive = (int)($_GET['include_inactive'] ?? 0);
-      $q = trim((string)($_GET['q'] ?? ''));
+      $includeInactive = (int) ($_GET['include_inactive'] ?? 0);
+      $q = trim((string) ($_GET['q'] ?? ''));
 
       $where = [];
       $params = [];
@@ -77,6 +77,23 @@ try {
       jexit(true, 'OK', $rows);
       break;
 
+    /* ================= PERFILES (GET PROFILES FROM t_perfilesusuarios) =================
+       - action=perfiles
+       Respuesta: ok/data[{ID_PERFIL, PER_NOMBRE}]
+    */
+    case 'perfiles':
+      $stmt = $pdo->prepare("
+        SELECT ID_PERFIL, PER_NOMBRE
+        FROM t_perfilesusuarios
+        WHERE COALESCE(Activo, 1) = 1
+        ORDER BY PER_NOMBRE
+      ");
+      $stmt->execute();
+      $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+      jexit(true, 'OK', $rows);
+      break;
+
 
     /* ================= LIST (DATATABLES / ADMIN) =================
        - action=list
@@ -85,9 +102,17 @@ try {
        Devuelve: success/data/recordsTotal/recordsFiltered (+ ok/msg por compat)
     */
     case 'list':
-      $includeInactive = (int)($_GET['include_inactive'] ?? 0);
+      $includeInactive = (int) ($_GET['include_inactive'] ?? 0);
       $search = $_GET['search']['value'] ?? ($_GET['search'] ?? '');
-      $search = trim((string)$search);
+      $search = trim((string) $search);
+
+      // Pagination parameters
+      $start = (int) ($_GET['start'] ?? 0);
+      $length = (int) ($_GET['length'] ?? 25);
+      if ($length < 1)
+        $length = 25;
+      if ($length > 100)
+        $length = 100; // Max 100 records
 
       $where = [];
       $params = [];
@@ -104,6 +129,12 @@ try {
 
       $whereClause = $where ? "WHERE " . implode(" AND ", $where) : "";
 
+      // Get total count
+      $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM c_usuario $whereClause");
+      $stmtCount->execute($params);
+      $total = (int) $stmtCount->fetchColumn();
+
+      // Get paginated data
       $stmt = $pdo->prepare("
         SELECT id_user,
                TRIM(cve_usuario)      AS cve_usuario,
@@ -113,8 +144,9 @@ try {
         FROM c_usuario
         $whereClause
         ORDER BY nombre_completo
+        LIMIT ? OFFSET ?
       ");
-      $stmt->execute($params);
+      $stmt->execute(array_merge($params, [$length, $start]));
       $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
       echo json_encode([
@@ -122,30 +154,53 @@ try {
         'success' => true,
         'msg' => 'OK',
         'data' => $data,
-        'recordsTotal' => count($data),
-        'recordsFiltered' => count($data)
+        'recordsTotal' => $total,
+        'recordsFiltered' => $total
       ]);
       exit;
 
 
+    /* ================= TIPOS DE USUARIO ================= */
+    case 'tipos_usuario':
+      $stmt = $pdo->prepare("SELECT id_tipo, des_tipo FROM c_tipousuario WHERE COALESCE(Activo, 1)=1 ORDER BY id_tipo");
+      $stmt->execute();
+      $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+      jexit(true, 'OK', $rows);
+      break;
+
+    /* ================= EMPRESAS ================= */
+    case 'empresas':
+      $stmt = $pdo->prepare("SELECT cve_cia, des_cia FROM c_compania WHERE COALESCE(Activo, 1)=1 ORDER BY des_cia");
+      $stmt->execute();
+      $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+      jexit(true, 'OK', $rows);
+      break;
+
     /* ================= GET ================= */
     case 'get':
-      $id = (int)($_GET['id_user'] ?? 0);
+      $id = (int) ($_GET['id_user'] ?? 0);
       $stmt = $pdo->prepare("SELECT * FROM c_usuario WHERE id_user=?");
       $stmt->execute([$id]);
       $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
+      if ($row)
+        $row['pwd_usuario'] = ''; // Clear password
       echo json_encode(['ok' => true, 'success' => true, 'row' => $row]);
       exit;
 
 
     /* ================= CREATE ================= */
     case 'create':
+      $pwd = $_POST['pwd_usuario'] ?? '';
+      $pwdConfirm = $_POST['pwd_confirm'] ?? '';
+      if ($pwd !== $pwdConfirm)
+        jexit(false, 'Las contraseñas no coinciden');
+
       $stmt = $pdo->prepare("
         INSERT INTO c_usuario
         (cve_usuario,nombre_completo,email,perfil,
-         des_usuario,pwd_usuario,status,Activo,ban_usuario,fec_ingreso)
-        VALUES (?,?,?,?,?,?,?,?,?,NOW())
+         des_usuario,pwd_usuario,status,Activo,ban_usuario,
+         cve_cia, id_tipo_usuario, fec_ingreso)
+        VALUES (?,?,?,?,?,?,?,?,1,?,?,NOW())
       ");
       $stmt->execute([
         $_POST['cve_usuario'] ?? '',
@@ -153,10 +208,11 @@ try {
         $_POST['email'] ?? '',
         $_POST['perfil'] ?? '',
         $_POST['des_usuario'] ?? '',
-        '', // pwd no se usa aquí
+        $pwd,
         $_POST['status'] ?? 'A',
         $_POST['Activo'] ?? 1,
-        1, // ban_usuario
+        (int) ($_POST['cve_cia'] ?? 0) ?: null,
+        (int) ($_POST['id_tipo_usuario'] ?? 0) ?: null
       ]);
 
       echo json_encode([
@@ -170,6 +226,29 @@ try {
 
     /* ================= UPDATE ================= */
     case 'update':
+      $pwd = $_POST['pwd_usuario'] ?? '';
+      $pwdConfirm = $_POST['pwd_confirm'] ?? '';
+      $sqlPwd = "";
+      $params = [
+        $_POST['cve_usuario'] ?? '',
+        $_POST['nombre_completo'] ?? '',
+        $_POST['email'] ?? '',
+        $_POST['perfil'] ?? '',
+        $_POST['des_usuario'] ?? '',
+        $_POST['status'] ?? '',
+        $_POST['Activo'] ?? 1,
+        (int) ($_POST['cve_cia'] ?? 0) ?: null,
+        (int) ($_POST['id_tipo_usuario'] ?? 0) ?: null
+      ];
+
+      if ($pwd !== '') {
+        if ($pwd !== $pwdConfirm)
+          jexit(false, 'Las contraseñas no coinciden');
+        $sqlPwd = ", pwd_usuario=?";
+        $params[] = $pwd;
+      }
+      $params[] = (int) ($_POST['id_user'] ?? 0);
+
       $stmt = $pdo->prepare("
         UPDATE c_usuario SET
           cve_usuario=?,
@@ -178,19 +257,13 @@ try {
           perfil=?,
           des_usuario=?,
           status=?,
-          Activo=?
+          Activo=?,
+          cve_cia=?,
+          id_tipo_usuario=?
+          $sqlPwd
         WHERE id_user=?
       ");
-      $stmt->execute([
-        $_POST['cve_usuario'] ?? '',
-        $_POST['nombre_completo'] ?? '',
-        $_POST['email'] ?? '',
-        $_POST['perfil'] ?? '',
-        $_POST['des_usuario'] ?? '',
-        $_POST['status'] ?? '',
-        $_POST['Activo'] ?? 1,
-        (int)($_POST['id_user'] ?? 0),
-      ]);
+      $stmt->execute($params);
 
       echo json_encode(['ok' => true, 'success' => true, 'message' => 'Usuario actualizado correctamente']);
       exit;
@@ -199,7 +272,7 @@ try {
     /* ================= SOFT DELETE ================= */
     case 'delete':
       $stmt = $pdo->prepare("UPDATE c_usuario SET Activo=0 WHERE id_user=?");
-      $stmt->execute([(int)($_POST['id_user'] ?? 0)]);
+      $stmt->execute([(int) ($_POST['id_user'] ?? 0)]);
       echo json_encode(['ok' => true, 'success' => true, 'message' => 'Usuario inactivado']);
       exit;
 
@@ -207,7 +280,7 @@ try {
     /* ================= RECOVER ================= */
     case 'recover':
       $stmt = $pdo->prepare("UPDATE c_usuario SET Activo=1 WHERE id_user=?");
-      $stmt->execute([(int)($_POST['id_user'] ?? 0)]);
+      $stmt->execute([(int) ($_POST['id_user'] ?? 0)]);
       echo json_encode(['ok' => true, 'success' => true, 'message' => 'Usuario recuperado']);
       exit;
 
@@ -248,7 +321,8 @@ try {
       }
 
       $fh = fopen($_FILES['file']['tmp_name'], 'r');
-      if (!$fh) jexit(false, 'No se pudo leer el archivo', []);
+      if (!$fh)
+        jexit(false, 'No se pudo leer el archivo', []);
 
       fgetcsv($fh); // header
 
@@ -268,7 +342,8 @@ try {
 
       while (($row = fgetcsv($fh)) !== false) {
         // Si el CSV no trae las 7 columnas esperadas, evitamos reventar silenciosamente
-        if (count($row) < 7) continue;
+        if (count($row) < 7)
+          continue;
         $sql->execute($row);
       }
       fclose($fh);

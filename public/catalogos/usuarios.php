@@ -5,55 +5,95 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
 <style>
     /* =========================================================
-   ASSISTPRO STYLES
+   ASSISTPRO STYLES - Catálogo de Usuarios
 ========================================================= */
     body {
-        font-family: system-ui, -apple-system, sans-serif;
-        background: #f4f6fb;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #e9ecef;
         margin: 0;
+        color: #212529;
     }
 
     .ap-container {
-        padding: 20px;
-        font-size: 13px;
+        padding: 10px 15px;
+        font-size: 12px;
         max-width: 100%;
         margin: 0 auto;
     }
 
     /* TITLE */
     .ap-title {
-        font-size: 20px;
+        font-size: 16px;
         font-weight: 600;
-        color: #0b5ed7;
-        margin-bottom: 20px;
+        color: #212529;
+        margin-bottom: 10px;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
+    }
+
+    /* CARDS (KPIs) */
+    .ap-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .ap-card {
+        background: #fff;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 8px 10px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .ap-card:hover {
+        border-color: #adb5bd;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+
+    .ap-card .h {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #495057;
+        font-size: 12px;
+    }
+
+    .ap-card .v {
+        font-size: 20px;
+        font-weight: 700;
+        color: #212529;
     }
 
     /* TOOLBAR */
     .ap-toolbar {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 6px;
         align-items: center;
-        margin-bottom: 15px;
+        margin-bottom: 8px;
         background: #fff;
-        padding: 10px;
-        border-radius: 10px;
-        border: 1px solid #e0e6ed;
+        padding: 8px 10px;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
     }
 
     .ap-search {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         flex: 1;
-        min-width: 300px;
-        background: #f8f9fa;
-        padding: 6px 12px;
-        border-radius: 8px;
-        border: 1px solid #dee2e6;
+        min-width: 250px;
+        background: #fff;
+        padding: 5px 10px;
+        border-radius: 4px;
+        border: 1px solid #ced4da;
     }
 
     .ap-search i {
@@ -65,39 +105,39 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         background: transparent;
         outline: none;
         width: 100%;
-        font-size: 13px;
+        font-size: 12px;
     }
 
     /* CHIPS / BUTTONS */
     .ap-chip {
-        font-size: 12px;
-        background: #f1f3f5;
+        font-size: 11px;
+        background: #f8f9fa;
         color: #495057;
         border: 1px solid #dee2e6;
-        border-radius: 20px;
-        padding: 5px 12px;
+        border-radius: 4px;
+        padding: 5px 10px;
         display: inline-flex;
-        gap: 6px;
+        gap: 5px;
         align-items: center;
         cursor: pointer;
         font-weight: 500;
         transition: all 0.2s;
+        white-space: nowrap;
     }
 
     .ap-chip:hover {
         background: #e9ecef;
-        color: #212529;
-        border-color: #ced4da;
+        border-color: #adb5bd;
     }
 
     .ap-chip.primary {
-        background: #0b5ed7;
+        background: #0d6efd;
         color: #fff;
-        border-color: #0b5ed7;
+        border-color: #0d6efd;
     }
 
     .ap-chip.primary:hover {
-        background: #0a58ca;
+        background: #0b5ed7;
     }
 
     .ap-chip.ok {
@@ -119,11 +159,14 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     /* GRID */
     .ap-grid {
         background: #fff;
-        border: 1px solid #e0e6ed;
-        border-radius: 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
         overflow: hidden;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-        height: calc(100vh - 240px);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .ap-grid-wrapper {
+        max-height: calc(100vh - 220px);
         overflow-y: auto;
     }
 
@@ -134,23 +177,25 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
     .ap-grid th {
         background: #f8f9fa;
-        padding: 12px;
+        padding: 8px 10px;
         text-align: left;
         font-weight: 600;
         color: #495057;
-        border-bottom: 1px solid #dee2e6;
+        border-bottom: 2px solid #dee2e6;
         white-space: nowrap;
         position: sticky;
         top: 0;
         z-index: 10;
+        font-size: 11px;
     }
 
     .ap-grid td {
-        padding: 10px 12px;
+        padding: 6px 10px;
         border-bottom: 1px solid #f1f3f5;
         color: #212529;
         vertical-align: middle;
         white-space: nowrap;
+        font-size: 11px;
     }
 
     .ap-grid tr:hover td {
@@ -164,14 +209,14 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
     .ap-actions i {
         cursor: pointer;
-        margin-right: 12px;
+        margin-right: 10px;
         color: #6c757d;
         transition: color 0.2s;
-        font-size: 14px;
+        font-size: 13px;
     }
 
     .ap-actions i:hover {
-        color: #0b5ed7;
+        color: #0d6efd;
     }
 
     /* MODAL */
@@ -192,22 +237,61 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
     .ap-modal-content {
         background: #fff;
-        width: 800px;
+        width: 700px;
         max-width: 95%;
         max-height: 90vh;
-        border-radius: 12px;
+        border-radius: 8px;
         display: flex;
         flex-direction: column;
         overflow-y: auto;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-        padding: 20px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        padding: 15px 20px;
+    }
+
+    .ap-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #e9ecef;
+    }
+
+    .ap-modal-header h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #212529;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .ap-modal-header button {
+        background: transparent;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        color: #6c757d;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+    }
+
+    .ap-modal-header button:hover {
+        background: #f8f9fa;
+        color: #212529;
     }
 
     .ap-form {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 15px;
-        margin-top: 15px;
+        gap: 12px;
+        margin-top: 10px;
     }
 
     .ap-form.full {
@@ -217,29 +301,34 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     .ap-field {
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: 4px;
     }
 
     .ap-label {
         font-weight: 500;
-        font-size: 13px;
+        font-size: 11px;
         color: #495057;
     }
 
     .ap-input {
         display: flex;
         align-items: center;
-        gap: 10px;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 8px 12px;
+        gap: 8px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 6px 10px;
         background: #fff;
         transition: all 0.2s;
     }
 
     .ap-input:focus-within {
-        border-color: #0b5ed7;
-        box-shadow: 0 0 0 3px rgba(11, 94, 215, 0.1);
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+    }
+
+    .ap-input i {
+        color: #6c757d;
+        font-size: 12px;
     }
 
     .ap-input input,
@@ -248,7 +337,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         border: none;
         outline: none;
         width: 100%;
-        font-size: 14px;
+        font-size: 12px;
         color: #212529;
         background: transparent;
         font-family: inherit;
@@ -264,49 +353,62 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-top: 15px;
+        margin-top: 8px;
         padding: 0 5px;
+        font-size: 11px;
+    }
+
+    .ap-pager-info {
+        color: #6c757d;
+    }
+
+    .ap-pager-controls {
+        display: flex;
+        gap: 5px;
+    }
+
+    /* MODAL FOOTER */
+    .ap-modal-footer {
+        text-align: right;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
     }
 
     button.primary {
-        background: #0b5ed7;
+        background: #0d6efd;
         color: #fff;
         border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
+        padding: 6px 14px;
+        border-radius: 4px;
         font-weight: 500;
         cursor: pointer;
         transition: background 0.2s;
+        font-size: 12px;
     }
 
     button.primary:hover {
-        background: #0a58ca;
-    }
-
-    button.danger {
-        background: #dc3545;
-        color: #fff;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-weight: 500;
-        cursor: pointer;
+        background: #0b5ed7;
     }
 
     button.ghost {
         background: #fff;
         color: #495057;
         border: 1px solid #dee2e6;
-        padding: 8px 16px;
-        border-radius: 6px;
+        padding: 6px 14px;
+        border-radius: 4px;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s;
+        font-size: 12px;
     }
 
     button.ghost:hover {
-        background: #f1f3f5;
-        border-color: #ced4da;
+        background: #f8f9fa;
+        border-color: #adb5bd;
     }
 </style>
 
@@ -340,20 +442,22 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
     <!-- GRID -->
     <div class="ap-grid">
-        <table>
-            <thead>
-                <tr>
-                    <th>Acciones</th>
-                    <th>ID</th>
-                    <th>Clave</th>
-                    <th>Nombre</th>
-                    <th>Email</th>
-                    <th>Perfil</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody id="tb"></tbody>
-        </table>
+        <div class="ap-grid-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Acciones</th>
+                        <th>ID</th>
+                        <th>Clave</th>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Perfil</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="tb"></tbody>
+            </table>
+        </div>
     </div>
 
     <!-- PAGER -->
@@ -363,18 +467,16 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 <!-- MODAL EDIT/NEW -->
 <div class="ap-modal" id="mdl">
     <div class="ap-modal-content">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
-            <h3 style="margin:0"><i class="fa fa-user"></i> <span id="mdlTitle">Usuario</span></h3>
-            <button onclick="cerrarModal('mdl')"
-                style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
-                    class="fa fa-times"></i></button>
+        <div class="ap-modal-header">
+            <h3><i class="fa fa-user"></i> <span id="mdlTitle">Usuario</span></h3>
+            <button onclick="cerrarModal('mdl')"><i class="fa fa-times"></i></button>
         </div>
 
         <input type="hidden" id="id_user" value="0">
 
         <div class="ap-form">
             <div class="ap-field">
-                <div class="ap-label">Clave</div>
+                <div class="ap-label">Clave | Nombre Usuario</div>
                 <div class="ap-input"><i class="fa fa-key"></i><input id="cve_usuario"></div>
             </div>
             <div class="ap-field">
@@ -382,13 +484,52 @@ require_once __DIR__ . '/../bi/_menu_global.php';
                 <div class="ap-input"><i class="fa fa-user"></i><input id="nombre_completo"></div>
             </div>
             <div class="ap-field">
-                <div class="ap-label">Email</div>
+                <div class="ap-label">Correo</div>
                 <div class="ap-input"><i class="fa fa-envelope"></i><input id="email" type="email"></div>
             </div>
             <div class="ap-field">
-                <div class="ap-label">Perfil</div>
-                <div class="ap-input"><i class="fa fa-id-badge"></i><input id="perfil"></div>
+                <div class="ap-label">Perfil de usuario</div>
+                <div class="ap-input"><i class="fa fa-id-badge"></i>
+                    <select id="perfil">
+                        <option value="">Seleccione...</option>
+                    </select>
+                </div>
             </div>
+
+            <div class="ap-field">
+                <div class="ap-label">Contraseña</div>
+                <div class="ap-input"><i class="fa fa-lock"></i><input id="pwd_usuario" type="password"
+                        autocomplete="new-password"></div>
+            </div>
+            <div class="ap-field">
+                <div class="ap-label">Confirmar Contraseña</div>
+                <div class="ap-input"><i class="fa fa-lock"></i><input id="pwd_confirm" type="password"
+                        autocomplete="new-password"></div>
+            </div>
+
+            <div class="ap-field" style="grid-column: span 2">
+                <div class="ap-label">Empresa</div>
+                <div class="ap-input"><i class="fa fa-building"></i>
+                    <select id="cve_cia">
+                        <option value="">Seleccione...</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="ap-field" style="grid-column: span 2">
+                <div class="ap-label">Descripción</div>
+                <div class="ap-input"><i class="fa fa-align-left"></i><input id="des_usuario"></div>
+            </div>
+        </div>
+
+        <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
+            <div class="ap-label" style="margin-bottom:8px">Tipo de Usuario</div>
+            <div id="tipos_usuario_container" style="display:flex; flex-wrap:wrap; gap:15px;">
+                <!-- Radio Buttons dinámicos aquí -->
+            </div>
+        </div>
+
+        <div class="ap-form" style="display:none"> <!-- Ocultos por default o reubicados si se necesita -->
             <div class="ap-field">
                 <div class="ap-label">Status</div>
                 <div class="ap-input"><i class="fa fa-toggle-on"></i>
@@ -409,14 +550,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             </div>
         </div>
 
-        <div class="ap-form full" style="margin-top:10px;">
-            <div class="ap-field">
-                <div class="ap-label">Descripción</div>
-                <div class="ap-input"><i class="fa fa-align-left"></i><textarea id="des_usuario"></textarea></div>
-            </div>
-        </div>
-
-        <div style="text-align:right;margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
+        <div class="ap-modal-footer">
             <button class="ghost" onclick="cerrarModal('mdl')">Cancelar</button>
             <button class="primary" onclick="guardar()">Guardar</button>
         </div>
@@ -426,11 +560,9 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 <!-- MODAL IMPORT -->
 <div class="ap-modal" id="mdlImport">
     <div class="ap-modal-content" style="width:500px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
-            <h3 style="margin:0"><i class="fa fa-upload"></i> Importar CSV</h3>
-            <button onclick="cerrarModal('mdlImport')"
-                style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
-                    class="fa fa-times"></i></button>
+        <div class="ap-modal-header">
+            <h3><i class="fa fa-upload"></i> Importar CSV</h3>
+            <button onclick="cerrarModal('mdlImport')"><i class="fa fa-times"></i></button>
         </div>
 
         <div class="ap-chip" style="margin-bottom:15px; width:100%; justify-content:center;">
@@ -444,7 +576,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
         <div id="importResult" style="margin-top:15px;"></div>
 
-        <div style="margin-top:15px; display:flex; gap:10px; justify-content:flex-end;">
+        <div class="ap-modal-footer">
             <button class="primary" onclick="importarCSV()"><i class="fa fa-cloud-arrow-up"></i> Importar</button>
         </div>
     </div>
@@ -511,6 +643,28 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             .catch(e => console.error(e));
     }
 
+    // Cache de perfiles cargados desde t_perfilesusuarios
+    let perfilesCache = {};
+
+    async function cargarPerfilesCache() {
+        try {
+            const r = await fetch(API + '?action=perfiles');
+            const j = await r.json();
+            if (j.success && j.data) {
+                perfilesCache = {};
+                j.data.forEach(p => {
+                    perfilesCache[p.ID_PERFIL] = p.PER_NOMBRE;
+                });
+            }
+        } catch (e) {
+            console.error('Error cargando perfiles:', e);
+        }
+    }
+
+    function getPerfilNombre(perfil) {
+        return perfilesCache[perfil] || perfil || 'Sin perfil';
+    }
+
     function renderGrid(rows) {
         const tb = document.getElementById('tb');
         if (!rows.length) {
@@ -535,7 +689,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         <td>${esc(r.cve_usuario)}</td>
         <td>${esc(r.nombre_completo)}</td>
         <td>${esc(r.email)}</td>
-        <td>${esc(r.perfil)}</td>
+        <td>${getPerfilNombre(r.perfil)}</td>
         <td><span class="ap-chip ${statusCls}" style="padding:2px 8px;font-size:11px;">${statusTxt}</span></td>
       </tr>`;
         }).join('');
@@ -551,15 +705,81 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         const next = curPage < totalPages ? `<button class="ap-chip" onclick="refrescar(${curPage + 1})"><i class="fa fa-chevron-right"></i></button>` : '';
 
         p.innerHTML = `
-      <div style="font-size:12px;color:#666">
+      <div class="ap-pager-info">
          Mostrando ${start}-${end} de ${filtered} registros
       </div>
-      <div style="display:flex;gap:5px">
+      <div class="ap-pager-controls">
         ${prev}
         <span class="ap-chip" style="cursor:default">Página ${curPage}</span>
         ${next}
       </div>
     `;
+    }
+
+    function esc(s) {
+        if (s == null) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function postAction(act, id) {
+        const fd = new FormData();
+        fd.append('action', act);
+        fd.append('id_user', id);
+        fetch(API, { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(j => {
+                if (j.success) { showMsg(j.message, 'ok'); refrescar(); }
+                else showMsg(j.message, 'warn');
+            })
+            .catch(e => console.error(e));
+    }
+    function cargarEmpresas() {
+        fetch(API + '?action=empresas')
+            .then(r => r.json())
+            .then(j => {
+                if (j.success && j.data) {
+                    const sel = document.getElementById('cve_cia');
+                    const currentVal = sel.value;
+                    sel.innerHTML = '<option value="">Seleccione...</option>' +
+                        j.data.map(c => `<option value="${c.cve_cia}">${esc(c.des_cia)}</option>`).join('');
+                    if (currentVal) sel.value = currentVal;
+                }
+            })
+            .catch(e => console.error(e));
+    }
+
+    function cargarTiposUsuario() {
+        fetch(API + '?action=tipos_usuario')
+            .then(r => r.json())
+            .then(j => {
+                if (j.success && j.data) {
+                    const div = document.getElementById('tipos_usuario_container');
+                    div.innerHTML = j.data.map(t => `
+                        <label style="display:flex; align-items:center; gap:5px; font-size:12px; cursor:pointer;">
+                            <input type="radio" name="id_tipo_usuario" value="${t.id_tipo}">
+                            ${esc(t.des_tipo)}
+                        </label>
+                    `).join('');
+                }
+            })
+            .catch(e => console.error(e));
+    }
+
+    function cargarPerfiles() {
+        fetch(API + '?action=perfiles')
+            .then(r => r.json())
+            .then(j => {
+                if (j.success && j.data) {
+                    const sel = document.getElementById('perfil');
+                    const currentValue = sel.value;
+
+                    sel.innerHTML = '<option value="">Seleccione...</option>' +
+                        j.data.map(p => `<option value="${p.ID_PERFIL}">${esc(p.PER_NOMBRE)}</option>`).join('');
+
+                    if (currentValue) sel.value = currentValue;
+                }
+            })
+            .catch(e => console.error('Error cargando perfiles:', e));
     }
 
     function buscar() { refrescar(1); }
@@ -569,12 +789,19 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     }
 
     function nuevo() {
-        document.getElementById('mdlTitle').innerText = 'Nuevo Usuario';
+        document.getElementById('mdlTitle').innerText = 'Agregar Usuario';
         document.getElementById('id_user').value = 0;
 
-        ['cve_usuario', 'nombre_completo', 'email', 'perfil', 'des_usuario'].forEach(id => document.getElementById(id).value = '');
+        ['cve_usuario', 'nombre_completo', 'email', 'perfil', 'des_usuario', 'pwd_usuario', 'pwd_confirm', 'cve_cia'].forEach(id => document.getElementById(id).value = '');
         document.getElementById('status').value = 'A';
         document.getElementById('Activo').value = 1;
+
+        cargarPerfiles();
+        cargarEmpresas();
+        cargarTiposUsuario();
+
+        // Asegurar renderizado
+        setTimeout(() => document.querySelectorAll('input[name="id_tipo_usuario"]').forEach(r => r.checked = false), 100);
 
         abrirModal('mdl');
     }
@@ -585,17 +812,46 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             .then(j => {
                 if (!j.success && !j.id_user) { showMsg(j.message || 'Error al cargar', 'warn'); return; }
                 const u = j.row || j;
-                document.getElementById('mdlTitle').innerText = 'Editar Usuario #' + u.id_user;
-                document.getElementById('id_user').value = u.id_user;
-                document.getElementById('cve_usuario').value = u.cve_usuario || '';
-                document.getElementById('nombre_completo').value = u.nombre_completo || '';
-                document.getElementById('email').value = u.email || '';
-                document.getElementById('perfil').value = u.perfil || '';
-                document.getElementById('des_usuario').value = u.des_usuario || '';
-                document.getElementById('status').value = u.status || 'A';
-                document.getElementById('Activo').value = u.Activo || 1;
 
-                abrirModal('mdl');
+                // Cargar catálogos
+                cargarPerfiles();
+                cargarEmpresas();
+                cargarTiposUsuario();
+
+                setTimeout(() => {
+                    document.getElementById('mdlTitle').innerText = 'Editar Usuario #' + u.id_user;
+                    document.getElementById('id_user').value = u.id_user;
+                    document.getElementById('cve_usuario').value = u.cve_usuario || '';
+                    document.getElementById('nombre_completo').value = u.nombre_completo || '';
+                    document.getElementById('email').value = u.email || '';
+                    document.getElementById('perfil').value = u.perfil || '';
+                    document.getElementById('des_usuario').value = u.des_usuario || '';
+                    document.getElementById('status').value = u.status || 'A';
+                    document.getElementById('Activo').value = u.Activo || 1;
+                    document.getElementById('cve_cia').value = u.cve_cia || '';
+
+                    document.getElementById('pwd_usuario').value = '';
+                    document.getElementById('pwd_confirm').value = '';
+
+                    // Set radio button con reintento seguro
+                    const setRadio = () => {
+                        const radios = document.querySelectorAll('input[name="id_tipo_usuario"]');
+                        let marked = false;
+                        radios.forEach(r => {
+                            if (parseInt(r.value) === parseInt(u.id_tipo_usuario)) {
+                                r.checked = true;
+                                marked = true;
+                            }
+                        });
+                        return marked;
+                    };
+
+                    if (!setRadio()) {
+                        setTimeout(setRadio, 300); // Retry if rendering was slow
+                    }
+
+                    abrirModal('mdl');
+                }, 200);
             });
     }
 
@@ -607,13 +863,30 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         fd.append('action', isUpdate ? 'update' : 'create');
         if (isUpdate) fd.append('id_user', id);
 
-        fd.append('cve_usuario', document.getElementById('cve_usuario').value);
-        fd.append('nombre_completo', document.getElementById('nombre_completo').value);
-        fd.append('email', document.getElementById('email').value);
+        // Campos requeridos básicos
+        const cve = document.getElementById('cve_usuario').value.trim();
+        const nom = document.getElementById('nombre_completo').value.trim();
+
+        if (!cve || !nom) { showMsg('Clave y Nombre son obligatorios', 'warn'); return; }
+
+        // Validar Tipo de Usuario
+        const selectedTipo = document.querySelector('input[name="id_tipo_usuario"]:checked');
+        if (!selectedTipo) { showMsg('Debe seleccionar un Tipo de Usuario', 'warn'); return; }
+
+        fd.append('cve_usuario', cve);
+        fd.append('nombre_completo', nom);
+        fd.append('email', document.getElementById('email').value.trim());
         fd.append('perfil', document.getElementById('perfil').value);
         fd.append('des_usuario', document.getElementById('des_usuario').value);
         fd.append('status', document.getElementById('status').value);
         fd.append('Activo', document.getElementById('Activo').value);
+        fd.append('cve_cia', document.getElementById('cve_cia').value);
+
+        // Passwords
+        fd.append('pwd_usuario', document.getElementById('pwd_usuario').value);
+        fd.append('pwd_confirm', document.getElementById('pwd_confirm').value);
+
+        fd.append('id_tipo_usuario', selectedTipo.value);
 
         fetch(API, { method: 'POST', body: fd })
             .then(r => r.json())
@@ -692,7 +965,11 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     }
 
     // Init
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+        cargarPerfiles();
+        cargarTiposUsuario();
+        // cargarEmpresas() se carga al abrir el modal para asegurar datos frescos, 
+        // pero podríamos llamarlo aquí tambien. Dejémoslo en nuevo/editar.
         refrescar(1);
     });
 </script>
