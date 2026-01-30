@@ -207,7 +207,7 @@ const AP_USR = <?php echo json_encode($USR); ?>;
 
 // rutas
 const API_FILTROS = '../api/filtros_assistpro.php';
-const API_IMPORT  = '../api/importador_traslados.php';
+const API_IMPORT  = '../api/importadores/api_imp_tras_entre_almacenes.php';
 
 // modal helpers (BS5 / BS4+jQ / fallback)
 function apShowModal(id){
@@ -395,7 +395,7 @@ document.addEventListener('DOMContentLoaded', function(){
     fd.append('action','procesar');
 
     const impactar=document.getElementById('modal_chk_impactar_kardex').checked?'1':'0';
-    fd.append('impactar_kardex',impactar);
+    fd.append('impacta_kardex',impactar);
 
     document.getElementById('usuario_importa').value = AP_USR || 'SISTEMA';
     fd.set('usuario_importa', document.getElementById('usuario_importa').value);

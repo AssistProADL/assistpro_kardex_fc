@@ -1,79 +1,115 @@
 <?php
-// public/api/lp/lp_tr.php
+// public/api/lp/lp_traslado.php
 // Traslado entre ubicaciones por LP (CveLP) / Contenedor (IDContenedor)
 // Fases: init | preview | execute
 
+declare(strict_types=1);
+
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
 require_once __DIR__ . '/../../../app/auth_check.php';
 require_once __DIR__ . '/../../../app/db.php';
+
+/**
+ * ✅ CLAVE: db.php expone $GLOBALS['pdo'] SOLO si se llama db_pdo()
+ * NO vamos a cambiar db.php; solo lo inicializamos aquí.
+ */
+try {
+    if (function_exists('db_pdo')) {
+        db_pdo(); // inicializa y setea $GLOBALS['pdo']
+    }
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode([
+        'ok' => false,
+        'msg' => 'No se pudo inicializar DB: ' . $e->getMessage(),
+        'code' => 'DB_INIT_FAIL'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 global $pdo;
 if (!isset($pdo) || !($pdo instanceof PDO)) {
     http_response_code(500);
     echo json_encode([
         'ok' => false,
-        'msg' => 'No se detectó conexión PDO ($pdo). Revisa app/db.php.',
+        'msg' => 'No se detectó conexión PDO ($pdo). db.php requiere db_pdo().',
         'code' => 'NO_PDO'
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-function jexit($ok, $msg, $extra = [], $http = 200) {
+/* =========================
+ * Helpers
+ * ========================= */
+function jexit(bool $ok, string $msg, array $extra = [], int $http = 200): void {
     http_response_code($http);
     echo json_encode(array_merge([
-        'ok' => (bool)$ok,
-        'msg' => (string)$msg,
+        'ok' => $ok,
+        'msg' => $msg,
     ], $extra), JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-function p($key, $default = '') {
-    return isset($_POST[$key]) ? $_POST[$key] : (isset($_GET[$key]) ? $_GET[$key] : $default);
+function p(string $key, $default = '') {
+    return $_POST[$key] ?? ($_GET[$key] ?? $default);
 }
 
-function s($v) {
+function s($v): string {
     return trim((string)$v);
 }
 
-function now() {
+function now(): string {
     return date('Y-m-d H:i:s');
 }
 
-function uuid_tx() {
-    // tx_id simple y suficientemente único para operación (sin extensiones)
+function uuid_tx(): string {
     return 'LPTR-' . date('YmdHis') . '-' . substr(bin2hex(random_bytes(6)), 0, 12);
 }
 
-$action = s(p('action', 'init'));
+/**
+ * Detecta tabla real de tarimas (blindaje: plural vs singular)
+ */
+function tarima_table(): string {
+    // db_table_exists viene de db.php
+    if (function_exists('db_table_exists')) {
+        if (db_table_exists('ts_existenciatarimas')) return 'ts_existenciatarimas'; // tu estándar (plural)
+        if (db_table_exists('ts_existenciatarima'))  return 'ts_existenciatarima';  // fallback (singular)
+    }
+    // si no pudiéramos detectar, nos quedamos con plural (lo más probable)
+    return 'ts_existenciatarimas';
+}
+
+/* =========================
+ * Inputs
+ * ========================= */
+$action = s(p('action', 'init'));      // init | preview | execute
 $lp     = s(p('lp', ''));              // CveLP lógico
-$idc    = s(p('id_contenedor', ''));   // IDContenedor físico (int)
-$code   = s(p('code', ''));            // clave visual (si la manejan en existencias)
-$dst    = s(p('idy_ubica_dst', ''));   // destino
+$idc    = s(p('id_contenedor', ''));    // IDContenedor físico
+$code   = s(p('code', ''));            // code/clave visual (si aplica)
+$dst    = s(p('idy_ubica_dst', ''));    // destino idy_ubica
 $ref    = s(p('referencia', ''));      // referencia humana
 $user   = s(p('cve_usuario', ''));     // opcional: si no, se toma de sesión
 
-// --- usuario: si tu auth_check define algo, lo respetamos
 if ($user === '') {
-    if (isset($_SESSION['cve_usuario'])) $user = (string)$_SESSION['cve_usuario'];
-    elseif (isset($_SESSION['user'])) $user = (string)$_SESSION['user'];
+    if (!empty($_SESSION['cve_usuario'])) $user = (string)$_SESSION['cve_usuario'];
+    elseif (!empty($_SESSION['username'])) $user = (string)$_SESSION['username'];
+    elseif (!empty($_SESSION['user'])) $user = (string)$_SESSION['user'];
 }
 if ($user === '') $user = 'SYSTEM';
 
-// -----------------------------------------------------------
-// 1) Resolver contenedor/LP
-// -----------------------------------------------------------
-function resolve_lp_container(PDO $pdo, $lp, $idc, $code) {
-    // Priorizamos lp -> c_charolas.CveLP
-    // Si no hay lp, buscamos por IDContenedor
-    // Si no hay, intentamos por code (si code está en existencias, buscamos Id_Caja o ntarima y de ahí charola)
+/* ============================================================
+ * 1) Resolver LP / Contenedor
+ * ============================================================ */
+function resolve_lp_container(PDO $pdo, string $lp, string $idc, string $code): array {
     $out = [
         'found' => false,
         'IDContenedor' => null,
         'CveLP' => null,
         'tipo' => null,
         'idy_ubica' => null,
-        'clave_fisica' => null, // si existe en c_charolas (depende de tu esquema)
+        'clave_fisica' => null,
     ];
 
     if ($lp !== '') {
@@ -107,8 +143,7 @@ function resolve_lp_container(PDO $pdo, $lp, $idc, $code) {
     }
 
     if ($code !== '') {
-        // buscar en existencias por code y inferir contenedor/tarima
-        // cajas: code pertenece a caja/cont (Id_Caja)
+        // Inferir desde existencias cajas: Id_Caja / nTarima
         $st = $pdo->prepare("SELECT Id_Caja, nTarima FROM ts_existenciacajas WHERE code = :c LIMIT 1");
         $st->execute([':c' => $code]);
         $ex = $st->fetch(PDO::FETCH_ASSOC);
@@ -130,8 +165,9 @@ function resolve_lp_container(PDO $pdo, $lp, $idc, $code) {
             }
         }
 
-        // tarima: code pertenece a tarima/LP (ntarima)
-        $st = $pdo->prepare("SELECT ntarima FROM ts_existenciatarima WHERE code = :c LIMIT 1");
+        // Inferir desde tarima (tabla puede ser plural o singular)
+        $tTar = tarima_table();
+        $st = $pdo->prepare("SELECT ntarima FROM {$tTar} WHERE code = :c LIMIT 1");
         $st->execute([':c' => $code]);
         $et = $st->fetch(PDO::FETCH_ASSOC);
         if ($et && !empty($et['ntarima'])) {
@@ -153,14 +189,13 @@ function resolve_lp_container(PDO $pdo, $lp, $idc, $code) {
     return $out;
 }
 
-// -----------------------------------------------------------
-// 2) Contenido del LP (cajas + tarimas)
-// -----------------------------------------------------------
-function load_lp_contents(PDO $pdo, $idContenedor) {
-    // Resumen por artículo/lote y con almacén para kardex
+/* ============================================================
+ * 2) Contenido del LP / Contenedor
+ * ============================================================ */
+function load_lp_contents(PDO $pdo, string $idContenedor): array {
     $rows = [];
 
-    // cajas: PiezasXCaja por Id_Caja o por nTarima
+    // cajas
     $st = $pdo->prepare("
         SELECT
             Cve_Almac AS cve_almac,
@@ -179,7 +214,8 @@ function load_lp_contents(PDO $pdo, $idContenedor) {
         $rows[] = $r;
     }
 
-    // tarimas: existencia por ntarima
+    // tarima (plural/singular)
+    $tTar = tarima_table();
     $st = $pdo->prepare("
         SELECT
             cve_almac AS cve_almac,
@@ -187,7 +223,7 @@ function load_lp_contents(PDO $pdo, $idContenedor) {
             cve_articulo,
             lote AS cve_lote,
             SUM(COALESCE(existencia,0)) AS qty
-        FROM ts_existenciatarima
+        FROM {$tTar}
         WHERE ntarima = :idc
         GROUP BY cve_almac, idy_ubica, cve_articulo, lote
     ");
@@ -198,18 +234,18 @@ function load_lp_contents(PDO $pdo, $idContenedor) {
         $rows[] = $r;
     }
 
-    // Limpieza: qty > 0
+    // qty > 0
     $rows = array_values(array_filter($rows, function($x){
-        return (float)$x['qty'] > 0;
+        return (float)($x['qty'] ?? 0) > 0;
     }));
 
     return $rows;
 }
 
-// -----------------------------------------------------------
-// 3) Validar destino
-// -----------------------------------------------------------
-function validate_dest(PDO $pdo, $idy) {
+/* ============================================================
+ * 3) Validar destino
+ * ============================================================ */
+function validate_dest(PDO $pdo, string $idy): array {
     if ($idy === '' || !ctype_digit($idy)) return [false, 'Destino inválido.'];
     $st = $pdo->prepare("SELECT idy_ubica, CodigoCSD FROM c_ubicacion WHERE idy_ubica = :u LIMIT 1");
     $st->execute([':u' => $idy]);
@@ -218,9 +254,9 @@ function validate_dest(PDO $pdo, $idy) {
     return [true, $u];
 }
 
-// -----------------------------------------------------------
-// 4) Acción: INIT
-// -----------------------------------------------------------
+/* ============================================================
+ * Acción: INIT
+ * ============================================================ */
 if ($action === 'init') {
     if ($lp === '' && $idc === '' && $code === '') {
         jexit(false, 'Proporciona lp, id_contenedor o code.', ['code' => 'MISSING_INPUT'], 400);
@@ -231,18 +267,17 @@ if ($action === 'init') {
         jexit(false, 'No se encontró el LP/Contenedor en c_charolas.', ['code' => 'NOT_FOUND'], 404);
     }
 
-    $idCont = $hdr['IDContenedor'];
-    if ($idCont === null || $idCont === '') {
+    $idCont = (string)($hdr['IDContenedor'] ?? '');
+    if ($idCont === '') {
         jexit(false, 'El registro no tiene IDContenedor. No se puede operar traslado.', ['code' => 'NO_CONTAINER'], 409);
     }
 
     $contents = load_lp_contents($pdo, $idCont);
 
-    // Origen inferido (si hay contenido, tomamos idy_ubica dominante)
-    $ori = null;
+    // Origen inferido (dominante)
     $oriCounts = [];
     foreach ($contents as $r) {
-        $k = (string)$r['idy_ubica'];
+        $k = (string)($r['idy_ubica'] ?? '');
         if ($k === '') continue;
         $oriCounts[$k] = ($oriCounts[$k] ?? 0) + 1;
     }
@@ -258,6 +293,7 @@ if ($action === 'init') {
             'header' => $hdr,
             'origen_idy_ubica' => $ori,
             'contents' => $contents,
+            'tarima_table' => tarima_table(),
         ],
         'inherit' => [
             'movement' => 'lp_tr',
@@ -267,35 +303,30 @@ if ($action === 'init') {
     ]);
 }
 
-// -----------------------------------------------------------
-// 5) Acción: PREVIEW
-// -----------------------------------------------------------
+/* ============================================================
+ * Acción: PREVIEW
+ * ============================================================ */
 if ($action === 'preview') {
     if ($lp === '' && $idc === '' && $code === '') {
         jexit(false, 'Proporciona lp, id_contenedor o code.', ['code' => 'MISSING_INPUT'], 400);
     }
+
     $hdr = resolve_lp_container($pdo, $lp, $idc, $code);
     if (!$hdr['found']) jexit(false, 'No se encontró el LP/Contenedor en c_charolas.', ['code'=>'NOT_FOUND'], 404);
 
-    $idCont = $hdr['IDContenedor'];
-    if ($idCont === null || $idCont === '') jexit(false, 'No hay IDContenedor.', ['code'=>'NO_CONTAINER'], 409);
+    $idCont = (string)($hdr['IDContenedor'] ?? '');
+    if ($idCont === '') jexit(false, 'No hay IDContenedor.', ['code'=>'NO_CONTAINER'], 409);
 
     [$okDst, $dstRow] = validate_dest($pdo, $dst);
-    if (!$okDst) jexit(false, $dstRow, ['code'=>'BAD_DEST'], 400);
+    if (!$okDst) jexit(false, (string)$dstRow, ['code'=>'BAD_DEST'], 400);
 
     $contents = load_lp_contents($pdo, $idCont);
-    if (!$contents) {
-        // puede ser “nació vacío”, pero traslado vacío se permite si lo quieres; aquí lo permitimos, solo avisamos.
-        $warn = ['LP sin existencias. Traslado aplicará solo cambio de ubicación del contenedor.'];
-    } else {
-        $warn = [];
-    }
+    $warn = $contents ? [] : ['LP sin existencias. Traslado aplicará solo cambio de ubicación del contenedor.'];
 
-    // Origen inferido
-    $ori = null;
+    // Origen inferido (dominante)
     $oriCounts = [];
     foreach ($contents as $r) {
-        $k = (string)$r['idy_ubica'];
+        $k = (string)($r['idy_ubica'] ?? '');
         if ($k === '') continue;
         $oriCounts[$k] = ($oriCounts[$k] ?? 0) + 1;
     }
@@ -306,11 +337,10 @@ if ($action === 'preview') {
         $ori = (string)($hdr['idy_ubica'] ?? '');
     }
 
-    // Resumen ejecutivo
     $sum = [
         'lineas' => count($contents),
-        'skus' => count(array_unique(array_map(fn($x)=>$x['cve_articulo'], $contents))),
-        'qty_total' => array_sum(array_map(fn($x)=>(float)$x['qty'], $contents)),
+        'skus' => count(array_unique(array_map(fn($x)=> (string)$x['cve_articulo'], $contents))),
+        'qty_total' => array_sum(array_map(fn($x)=> (float)$x['qty'], $contents)),
         'origen_idy_ubica' => $ori,
         'destino_idy_ubica' => (string)$dstRow['idy_ubica'],
         'destino_codigo' => (string)$dstRow['CodigoCSD'],
@@ -322,6 +352,7 @@ if ($action === 'preview') {
             'summary' => $sum,
             'contents' => $contents,
             'warnings' => $warn,
+            'tarima_table' => tarima_table(),
         ],
         'inherit' => [
             'movement' => 'lp_tr',
@@ -331,30 +362,31 @@ if ($action === 'preview') {
     ]);
 }
 
-// -----------------------------------------------------------
-// 6) Acción: EXECUTE (transaccional)
-// -----------------------------------------------------------
+/* ============================================================
+ * Acción: EXECUTE (transaccional)
+ * ============================================================ */
 if ($action === 'execute') {
     if ($lp === '' && $idc === '' && $code === '') {
         jexit(false, 'Proporciona lp, id_contenedor o code.', ['code' => 'MISSING_INPUT'], 400);
     }
+
     $hdr = resolve_lp_container($pdo, $lp, $idc, $code);
     if (!$hdr['found']) jexit(false, 'No se encontró el LP/Contenedor en c_charolas.', ['code'=>'NOT_FOUND'], 404);
 
-    $idCont = $hdr['IDContenedor'];
-    if ($idCont === null || $idCont === '') jexit(false, 'No hay IDContenedor.', ['code'=>'NO_CONTAINER'], 409);
+    $idCont = (string)($hdr['IDContenedor'] ?? '');
+    if ($idCont === '') jexit(false, 'No hay IDContenedor.', ['code'=>'NO_CONTAINER'], 409);
 
     [$okDst, $dstRow] = validate_dest($pdo, $dst);
-    if (!$okDst) jexit(false, $dstRow, ['code'=>'BAD_DEST'], 400);
+    if (!$okDst) jexit(false, (string)$dstRow, ['code'=>'BAD_DEST'], 400);
 
     $contents = load_lp_contents($pdo, $idCont);
 
-    // Origen inferido (dominante)
+    // Origen inferido
     $ori = (string)($hdr['idy_ubica'] ?? '');
     if ($contents) {
         $oriCounts = [];
         foreach ($contents as $r) {
-            $k = (string)$r['idy_ubica'];
+            $k = (string)($r['idy_ubica'] ?? '');
             if ($k === '') continue;
             $oriCounts[$k] = ($oriCounts[$k] ?? 0) + 1;
         }
@@ -371,26 +403,24 @@ if ($action === 'execute') {
     $tx = uuid_tx();
     if ($ref === '') $ref = $tx;
 
-    // Identidad física vs lógica
-    $cont_fisico = $hdr['clave_fisica'] ?? (string)$idCont;  // clave contenedor físico
-    $lp_logico   = $hdr['CveLP'] ?? '';                      // CveLP lógico
+    $cont_fisico = (string)($hdr['clave_fisica'] ?? $idCont);
+    $lp_logico   = (string)($hdr['CveLP'] ?? '');
 
-    // Tipo de movimiento (ajústalo a tu catálogo real si difiere)
-    $TIPO_TRASLADO = 3;
+    // Ajusta a tu catálogo real si aplica
+    $TIPO_TRASLADO = 12;
 
     try {
         $pdo->beginTransaction();
 
         // 1) Actualizar ubicación del contenedor/charola (si existe el campo)
-        //    No fallamos si no existe columna idy_ubica (por variaciones). Hacemos try.
         try {
             $st = $pdo->prepare("UPDATE c_charolas SET idy_ubica = :dst WHERE IDContenedor = :idc");
             $st->execute([':dst' => (int)$dstRow['idy_ubica'], ':idc' => $idCont]);
         } catch (Throwable $e) {
-            // no bloquea
+            // no bloquea (esquemas variados)
         }
 
-        // 2) Actualizar existencias (ubicación) - cajas
+        // 2) Actualizar existencias cajas
         $st = $pdo->prepare("
             UPDATE ts_existenciacajas
             SET idy_ubica = :dst
@@ -399,17 +429,17 @@ if ($action === 'execute') {
         $st->execute([':dst' => (int)$dstRow['idy_ubica'], ':idc' => $idCont]);
         $affCajas = $st->rowCount();
 
-        // 3) Actualizar existencias (ubicación) - tarima
+        // 3) Actualizar existencias tarima (plural/singular)
+        $tTar = tarima_table();
         $st = $pdo->prepare("
-            UPDATE ts_existenciatarima
+            UPDATE {$tTar}
             SET idy_ubica = :dst
             WHERE ntarima = :idc
         ");
         $st->execute([':dst' => (int)$dstRow['idy_ubica'], ':idc' => $idCont]);
         $affTar = $st->rowCount();
 
-        // 4) Registrar kardex (doble apunte por renglón: salida + entrada)
-        //    t_cardex: usamos Cve_Almac/cve_almac de las existencias para mantener consistencia.
+        // 4) Kardex (doble apunte por renglón)
         $kInserted = 0;
 
         if ($contents) {
@@ -425,12 +455,14 @@ if ($action === 'execute') {
             ");
 
             foreach ($contents as $r) {
-                $alm = (int)$r['cve_almac'];
-                $art = (string)$r['cve_articulo'];
-                $lote = (string)$r['cve_lote'];
-                $qty = (float)$r['qty'];
+                $alm  = (int)($r['cve_almac'] ?? 0);
+                $art  = (string)($r['cve_articulo'] ?? '');
+                $lote = (string)($r['cve_lote'] ?? '');
+                $qty  = (float)($r['qty'] ?? 0);
 
-                // SALIDA (origen -> destino) cantidad negativa
+                if ($art === '' || $qty <= 0) continue;
+
+                // salida (negativo)
                 $ins->execute([
                     ':fecha' => now(),
                     ':tipo' => $TIPO_TRASLADO,
@@ -451,7 +483,7 @@ if ($action === 'execute') {
                 ]);
                 $kInserted++;
 
-                // ENTRADA (destino) cantidad positiva
+                // entrada (positivo)
                 $ins->execute([
                     ':fecha' => now(),
                     ':tipo' => $TIPO_TRASLADO,
@@ -476,7 +508,6 @@ if ($action === 'execute') {
 
         $pdo->commit();
 
-        // Reconsultar “final”
         $finalContents = load_lp_contents($pdo, $idCont);
 
         $summary = [
@@ -488,6 +519,7 @@ if ($action === 'execute') {
             'rows_moved_cajas' => $affCajas,
             'rows_moved_tarima' => $affTar,
             'kardex_rows_inserted' => $kInserted,
+            'tarima_table' => tarima_table(),
         ];
 
         jexit(true, 'TRASLADO EJECUTADO', [
@@ -501,15 +533,15 @@ if ($action === 'execute') {
                 'user' => $user,
                 'ts' => now(),
                 'extra' => [
-                    'contenedor_fisico' => $cont_fisico,  // clave contenedor físico
-                    'lp_logico' => $lp_logico,            // CveLP (license plate lógico)
+                    'contenedor_fisico' => $cont_fisico,
+                    'lp_logico' => $lp_logico,
                 ]
             ]
         ]);
 
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        jexit(false, 'Error al ejecutar traslado: '.$e->getMessage(), ['code'=>'TX_FAIL'], 500);
+        jexit(false, 'Error al ejecutar traslado: ' . $e->getMessage(), ['code'=>'TX_FAIL'], 500);
     }
 }
 

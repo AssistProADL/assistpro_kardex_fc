@@ -450,7 +450,8 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Ajustes | Incidencias', 'url' => 'catalogos/ajustes_incidencias.php', 'icono' => 'fa-triangle-exclamation'],
                 ['titulo' => 'QA | Cuarentena', 'url' => 'catalogos/qa_cuarentena.php', 'icono' => 'fa-triangle-exclamation'],
 
-
+                ['titulo' => 'Tipo de Pedidos', 'url' => 'catalogos/tipo_pedido.php', 'icono' => 'fa-layer-group'],
+              
                 ['titulo' => 'Tipo de Prioridad', 'url' => 'catalogos/tipos_prioridad.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Formas de Pago', 'url' => 'catalogos/formas_pago.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Configuracion de Tickets', 'url' => 'catalogos/ticket.php', 'icono' => 'fa-layer-group'],
@@ -498,15 +499,16 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Administración Comercial',      'url' => 'sfa/destinatarios_config.php',       'icono' => 'fa-tags'],
                 ['titulo' => 'Lista de Precios',              'url' => 'sfa/lista_precios.php',              'icono' => 'fa-tags'],
                 ['titulo' => 'Lista de Descuentos',           'url' => 'sfa/lista_descuentos.php',           'icono' => 'fa-percent'],
-                ['titulo' => 'Promociones',                   'url' => 'sfa/promociones/promociones.php',        'icono' => 'fa-gift'],
-                ['titulo' => 'Simulador Promociones',         'url' => 'sfa/promociones/simulador.php',        'icono' => 'fa-gift'],
-                 ['titulo' => 'Asignación de Activos', 'url' => 'sfa/activos_control.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Activos', 'url' => 'sfa/activos.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Tipos de Activos', 'url' => 'sfa/activo_tipos.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Propietario Activos', 'url' => 'sfa/activos_propiedad.php', 'icono' => 'fa-percent'],
-                ['titulo' => 'Status Activos', 'url' => 'sfa/activo_estados.php', 'icono' => 'fa-gift'],
-                ['titulo' => 'Condicion Activos', 'url' => 'sfa/activo_condicion.php', 'icono' => 'fa-layer-group'],
-                ['titulo' => 'Encuestas', 'url' => 'sfa/encuestas.php', 'icono' => 'fa-layer-group'],
+                ['titulo' => 'Promociones',                   'url' => 'sfa/promociones/promo_design.php',   'icono' => 'fa-gift'],
+                ['titulo' => 'Admin Promociones',             'url' => 'sfa/promociones/promociones.php',    'icono' => 'fa-gift'],
+                ['titulo' => 'Simulador Promociones',         'url' => 'sfa/promociones/simulador.php',      'icono' => 'fa-gift'],
+                ['titulo' => 'Asignación de Activos', 	      'url' => 'sfa/activos_control.php',            'icono' => 'fa-tags'],
+                ['titulo' => 'Activos',                       'url' => 'sfa/activos.php',                    'icono' => 'fa-tags'],
+                ['titulo' => 'Tipos de Activos',              'url' => 'sfa/activo_tipos.php',               'icono' => 'fa-tags'],
+                ['titulo' => 'Propietario Activos',           'url' => 'sfa/activos_propiedad.php',          'icono' => 'fa-percent'],
+                ['titulo' => 'Status Activos',                'url' => 'sfa/activo_estados.php',             'icono' => 'fa-gift'],
+                ['titulo' => 'Condicion Activos',             'url' => 'sfa/activo_condicion.php',           'icono' => 'fa-layer-group'],
+                ['titulo' => 'Encuestas',                     'url' => 'sfa/encuestas.php',                  'icono' => 'fa-layer-group'],
             ],
 
             // TMS
@@ -551,6 +553,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'PutAway (Acomodo)',            'url' => 'putaway/putaway_acomodo.php',             'icono' => 'fa-right-left'],
                 ['titulo' => 'Traslado',                     'url' => 'putaway/traslado.php',                    'icono' => 'fa-box-archive'],
                 ['titulo' => 'Traslado entre Almacenes',     'url' => 'putaway/traslado_entre_almacenes.php',    'icono' => 'fa-box-archive'],
+                ['titulo' => 'Importador traslado entre almacenes', 'url' => 'importadores/importador_traslado_almacenes.php', 'icono' => 'fa-box-archive'],
             ],
 
             // PICKING
@@ -575,6 +578,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
             'QA Auditoría' => [
                 ['titulo' => 'Auditoria y Empaque', 'url' => 'qa_auditoria/auditoriayempaque.php', 'icono' => 'fa-industry'],
                 ['titulo' => 'Admin', 'url' => 'qa_auditoria/admin.php', 'icono' => 'fa-flag'],
+                ['titulo' => 'Control de calidad', 'url' => 'qa_auditoria/movimientos.php', 'icono' => 'fa-flag'],
                 ['titulo' => 'Admin QA', 'url' => 'qa_auditoria/listas_adminqa.php', 'icono' => 'fa-screwdriver-wrench'],
                 ['titulo' => 'Listas QA Cuarentena', 'url' => 'qa_auditoria/listas_qacuarentena.php', 'icono' => 'fa-screwdriver-wrench'],
             ],
@@ -639,12 +643,13 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // UTILERÍAS
             'Utilerías' => [
-                ['titulo' => 'Conexión SAP B1', 'url' => 'conexion_ws/config_conexion_ws.php', 'icono' => 'fa-timeline'],
-                ['titulo' => 'Log de Operaciones', 'url' => 'utilerias/log_operaciones.php', 'icono' => 'fa-timeline'],
-                ['titulo' => 'Log WebServices', 'url' => 'utilerias/log_ws.php', 'icono' => 'fa-arrow-right-arrow-left'],
-                ['titulo' => 'Browser ETL', 'url' => 'etl/etl_browser.php', 'icono' => 'fa-timeline'],
-                ['titulo' => 'Administrador Procesos ', 'url' => 'etl/administrador_procesos.php', 'icono' => 'fa-arrow-right-arrow-left'],
-                ['titulo' => 'Generador de Catálogos', 'url' => 'utilerias/generador.php', 'icono' => 'fa-clipboard-list'],
+                ['titulo' => 'Catálogo de Importadores',      'url' => 'utilerias/catalogo_importadores.php',    'icono' => 'fa-timeline'],              
+                ['titulo' => 'Conexión SAP B1',               'url' => 'conexion_ws/config_conexion_ws.php',     'icono' => 'fa-timeline'],
+                ['titulo' => 'Log de Operaciones',            'url' => 'utilerias/log_operaciones.php',          'icono' => 'fa-timeline'],
+                ['titulo' => 'Log WebServices',               'url' => 'utilerias/log_ws.php',                   'icono' => 'fa-arrow-right-arrow-left'],
+                ['titulo' => 'Browser ETL',                   'url' => 'etl/etl_browser.php',                    'icono' => 'fa-timeline'],
+                ['titulo' => 'Administrador Procesos ',       'url' => 'etl/administrador_procesos.php',         'icono' => 'fa-arrow-right-arrow-left'],
+                ['titulo' => 'Generador de Catálogos',        'url' => 'utilerias/generador.php', 'icono' => 'fa-clipboard-list'],
             ],
         ];
         ?>
