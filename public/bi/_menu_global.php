@@ -649,8 +649,14 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Log WebServices',               'url' => 'utilerias/log_ws.php',                   'icono' => 'fa-arrow-right-arrow-left'],
                 ['titulo' => 'Browser ETL',                   'url' => 'etl/etl_browser.php',                    'icono' => 'fa-timeline'],
                 ['titulo' => 'Administrador Procesos ',       'url' => 'etl/administrador_procesos.php',         'icono' => 'fa-arrow-right-arrow-left'],
-                ['titulo' => 'Generador de Catálogos',        'url' => 'utilerias/generador.php', 'icono' => 'fa-clipboard-list'],
+                ['titulo' => 'Generador de Catálogos',        'url' => 'utilerias/generador.php', 		 'icono' => 'fa-clipboard-list'],
             ],
+	    // PQRS
+		'PQRS' => [
+                ['titulo' => 'Control de incidencias', 'url' => 'pqrs/pqrs.php', 'icono' => 'fa-timeline'],
+                
+            ],
+
         ];
         ?>
 

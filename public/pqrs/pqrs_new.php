@@ -1,429 +1,371 @@
 <?php
-// =====================================================
-// PQRS - Nuevo Caso (v2)
-// Ruta: /public/pqrs/pqrs_new.php
-// =====================================================
-
-// Importante: para que funcionen header() aunque el menú imprima HTML
-ob_start();
-
 require_once __DIR__ . '/../bi/_menu_global.php';
 require_once __DIR__ . '/../../app/db.php';
-db_pdo();
-global $pdo;
-
-function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
-
-// API endpoints
-$API_PQRS    = "pqrs_api.php";
-$API_PEDIDOS = "../api/pedidos/pedidos_api.php"; // tu API de clientes (action=clientes)
-
-// Almacenes (clave de negocio)
-$almacenes = [];
-try {
-  $st = $pdo->query("SELECT clave, nombre FROM c_almacenp WHERE COALESCE(Activo,1)=1 ORDER BY nombre");
-  $almacenes = $st->fetchAll(PDO::FETCH_ASSOC);
-} catch(Throwable $e){ $almacenes=[]; }
-
-// Catálogos PQRS (status/tipo/ref/motivos)
-$cats = ['status'=>[], 'tipo'=>[], 'ref'=>[], 'motivos'=>['REGISTRO'=>[]]];
-try {
-  $json = @file_get_contents($API_PQRS . "?action=catalogos");
-  $cats = json_decode($json ?: '{}', true) ?: $cats;
-} catch(Throwable $e){}
-
-// Mensajes PRG
-$ok = (isset($_GET['ok']) && $_GET['ok']=='1');
-$folio_ok = trim((string)($_GET['folio'] ?? ''));
-
-// ------------------------------
-// POST: Guardar (PRG)
-// ------------------------------
-$errors = [];
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  try {
-    $payload = [
-      'cve_clte'           => trim($_POST['cve_clte'] ?? ''),
-      'cve_almacen'        => trim($_POST['cve_almacen'] ?? ''),
-      'tipo'               => trim($_POST['tipo'] ?? ''),
-      'ref_tipo'           => trim($_POST['ref_tipo'] ?? ''),
-      'ref_folio'          => trim($_POST['ref_folio'] ?? ''),
-      'reporta_nombre'     => trim($_POST['reporta_nombre'] ?? ''),
-      'reporta_contacto'   => trim($_POST['reporta_contacto'] ?? ''),
-      'reporta_cargo'      => trim($_POST['reporta_cargo'] ?? ''),
-      'responsable_recibo' => trim($_POST['responsable_recibo'] ?? ''),
-      'responsable_accion' => trim($_POST['responsable_accion'] ?? ''),
-      'asunto'             => trim($_POST['asunto'] ?? ''),
-      'descripcion'        => trim($_POST['descripcion'] ?? ''),
-      'motivo_registro_id' => (int)($_POST['motivo_registro_id'] ?? 0),
-      'motivo_registro_txt'=> trim($_POST['motivo_registro_txt'] ?? ''),
-      'susceptible_cobro'  => (int)($_POST['susceptible_cobro'] ?? 0) ? 1 : 0,
-      'monto_estimado'     => trim($_POST['monto_estimado'] ?? ''),
-      'status_clave'       => trim($_POST['status_clave'] ?? 'NUEVA'),
-    ];
-
-    // Validación mínima UI (la API vuelve a validar)
-    if ($payload['cve_clte']==='') $errors[] = "Cliente es obligatorio.";
-    if ($payload['cve_almacen']==='') $errors[] = "Almacén/CEDIS es obligatorio.";
-    if (!in_array($payload['tipo'], ['P','Q','R','S'], true)) $errors[] = "Tipo PQRS es obligatorio.";
-    if ($payload['ref_tipo']==='') $errors[] = "Tipo de referencia es obligatorio.";
-    if ($payload['ref_folio']==='') $errors[] = "Folio de referencia es obligatorio.";
-    if ($payload['reporta_nombre']==='') $errors[] = "Quién reporta es obligatorio.";
-    if ($payload['responsable_recibo']==='') $errors[] = "Responsable interno (recibe) es obligatorio.";
-    if ($payload['descripcion']==='') $errors[] = "Descripción es obligatoria.";
-
-    if (!$errors) {
-      // Llamada server-side a la API PQRS (crear)
-      $opts = [
-        'http' => [
-          'method'  => 'POST',
-          'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
-          'content' => http_build_query(array_merge($payload, ['action'=>'crear'])),
-          'timeout' => 15
-        ]
-      ];
-      $ctx = stream_context_create($opts);
-      $resp = file_get_contents($API_PQRS, false, $ctx);
-      $data = json_decode($resp ?: '{}', true);
-
-      if (!$data || empty($data['ok'])) {
-        $errors[] = ($data['error'] ?? 'No se pudo guardar.');
-      } else {
-        // PRG: redirige y deja form limpio
-        $folio = $data['folio'] ?? '';
-        header("Location: pqrs_new.php?ok=1&folio=" . urlencode($folio));
-        exit;
-      }
-    }
-  } catch(Throwable $e) {
-    $errors[] = "Error al guardar: " . $e->getMessage();
-  }
-}
-
-$usuario = (string)($_SESSION['usuario'] ?? 'Usuario WMS');
 ?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Nueva Incidencia (PQRS)</title>
 
-<div class="container-fluid">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h3 class="mb-0">Nueva Incidencia (PQRS v2)</h3>
-    <a class="btn btn-outline-secondary" href="pqrs.php"><i class="fas fa-arrow-left"></i> Regresar</a>
-  </div>
-
-  <?php if ($ok): ?>
-    <div class="alert alert-success">
-      <i class="fas fa-check-circle"></i>
-      Guardado exitoso<?= $folio_ok ? (". Folio: <b>".h($folio_ok)."</b>") : "" ?>.
-      <span class="ml-2 text-muted">Formulario listo para una nueva captura.</span>
-    </div>
-  <?php endif; ?>
-
-  <?php if ($errors): ?>
-    <div class="alert alert-danger">
-      <b>Validación</b>
-      <ul class="mb-0">
-        <?php foreach($errors as $e): ?><li><?= h($e) ?></li><?php endforeach; ?>
-      </ul>
-    </div>
-  <?php endif; ?>
-
-  <form method="post" id="frmPQRS">
-    <!-- BLOQUE 1 -->
-    <div class="card mb-3">
-      <div class="card-header"><b>Datos base</b></div>
-      <div class="card-body">
-
-        <div class="row">
-          <div class="col-md-4">
-            <label class="font-weight-bold">Almacén / CEDIS <span class="text-danger">*</span></label>
-            <select name="cve_almacen" class="form-control" required>
-              <option value="">Seleccione</option>
-              <?php foreach($almacenes as $a): ?>
-                <option value="<?= h($a['clave']) ?>" <?= (($_POST['cve_almacen'] ?? '')===$a['clave']?'selected':'') ?>>
-                  <?= h($a['clave']) ?> - <?= h($a['nombre']) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-
-          <div class="col-md-4">
-            <label class="font-weight-bold">Tipo PQRS <span class="text-danger">*</span></label>
-            <select name="tipo" class="form-control" required>
-              <option value="">Seleccione</option>
-              <option value="P" <?= (($_POST['tipo'] ?? '')==='P'?'selected':'') ?>>Petición</option>
-              <option value="Q" <?= (($_POST['tipo'] ?? '')==='Q'?'selected':'') ?>>Queja</option>
-              <option value="R" <?= (($_POST['tipo'] ?? '')==='R'?'selected':'') ?>>Reclamo</option>
-              <option value="S" <?= (($_POST['tipo'] ?? '')==='S'?'selected':'') ?>>Sugerencia</option>
-            </select>
-          </div>
-
-          <div class="col-md-4">
-            <label class="font-weight-bold">Status <span class="text-danger">*</span></label>
-            <select name="status_clave" class="form-control" required>
-              <?php
-                $selSt = $_POST['status_clave'] ?? 'NUEVA';
-                $statusRows = $cats['status'] ?? [];
-                if (!$statusRows) {
-                  $statusRows = [
-                    ['clave'=>'NUEVA','nombre'=>'Nueva'],
-                    ['clave'=>'EN_PROCESO','nombre'=>'En proceso'],
-                    ['clave'=>'EN_ESPERA','nombre'=>'En espera'],
-                    ['clave'=>'CERRADA','nombre'=>'Cerrada'],
-                    ['clave'=>'NO_PROCEDE','nombre'=>'No procede'],
-                  ];
-                }
-                foreach($statusRows as $s):
-              ?>
-                <option value="<?= h($s['clave']) ?>" <?= ($selSt===$s['clave']?'selected':'') ?>>
-                  <?= h($s['nombre']) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-        </div>
-
-        <hr/>
-
-        <div class="row">
-          <div class="col-md-6">
-            <label class="font-weight-bold">Cliente <span class="text-danger">*</span></label>
-            <select class="form-control" name="cve_clte" id="cve_clte" required></select>
-            <small class="text-muted">Escribe para buscar por clave / razón social / RFC.</small>
-          </div>
-
-          <div class="col-md-3">
-            <label class="font-weight-bold">Referencia tipo <span class="text-danger">*</span></label>
-            <select class="form-control" name="ref_tipo" id="ref_tipo" required>
-              <?php
-                $refRows = $cats['ref'] ?? [];
-                if (!$refRows) $refRows = [
-                  ['clave'=>'PEDIDO','nombre'=>'Pedido'],
-                  ['clave'=>'OC','nombre'=>'Orden de compra'],
-                  ['clave'=>'EMBARQUE','nombre'=>'Embarque'],
-                  ['clave'=>'GARANTIA','nombre'=>'Garantía'],
-                  ['clave'=>'OTRO','nombre'=>'Otro'],
-                ];
-                $selRef = $_POST['ref_tipo'] ?? 'PEDIDO';
-              ?>
-              <?php foreach($refRows as $r): ?>
-                <option value="<?= h($r['clave']) ?>" <?= ($selRef===$r['clave']?'selected':'') ?>><?= h($r['nombre']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-
-          <div class="col-md-3">
-            <label class="font-weight-bold">Pedido / OC / Embarque <span class="text-danger">*</span></label>
-            <!-- Select dependiente: pedidos del cliente si ref_tipo=PEDIDO -->
-            <select class="form-control" name="ref_folio" id="ref_folio" required></select>
-            <small class="text-muted" id="refHint">Primero elige cliente, luego selecciona la referencia.</small>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- BLOQUE 2 -->
-    <div class="card mb-3">
-      <div class="card-header"><b>Quién reporta y responsables</b></div>
-      <div class="card-body">
-        <div class="row">
-          <div class="col-md-4">
-            <label class="font-weight-bold">Quién reporta <span class="text-danger">*</span></label>
-            <input class="form-control" name="reporta_nombre" required value="<?= h($_POST['reporta_nombre'] ?? '') ?>" placeholder="Nombre de contacto / quien levanta la PQRS">
-          </div>
-          <div class="col-md-4">
-            <label class="font-weight-bold">Contacto</label>
-            <input class="form-control" name="reporta_contacto" value="<?= h($_POST['reporta_contacto'] ?? '') ?>" placeholder="Correo / Teléfono">
-          </div>
-          <div class="col-md-4">
-            <label class="font-weight-bold">Cargo</label>
-            <input class="form-control" name="reporta_cargo" value="<?= h($_POST['reporta_cargo'] ?? '') ?>" placeholder="Puesto / área">
-          </div>
-        </div>
-
-        <div class="row mt-3">
-          <div class="col-md-6">
-            <label class="font-weight-bold">Responsable interno (recibe) <span class="text-danger">*</span></label>
-            <input class="form-control" name="responsable_recibo" required value="<?= h($_POST['responsable_recibo'] ?? $usuario) ?>">
-          </div>
-          <div class="col-md-6">
-            <label class="font-weight-bold">Responsable de la acción (atiende)</label>
-            <input class="form-control" name="responsable_accion" value="<?= h($_POST['responsable_accion'] ?? '') ?>" placeholder="Se puede asignar después">
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- BLOQUE 3 -->
-    <div class="card mb-3">
-      <div class="card-header"><b>Contenido del caso</b></div>
-      <div class="card-body">
-        <div class="row">
-          <div class="col-md-8">
-            <label class="font-weight-bold">Asunto</label>
-            <input class="form-control" name="asunto" value="<?= h($_POST['asunto'] ?? '') ?>" placeholder="Resumen ejecutivo">
-          </div>
-          <div class="col-md-4">
-            <label class="font-weight-bold">Motivo (catálogo)</label>
-            <select class="form-control" name="motivo_registro_id">
-              <option value="">Seleccione</option>
-              <?php foreach(($cats['motivos']['REGISTRO'] ?? []) as $m): ?>
-                <option value="<?= (int)$m['id_motivo'] ?>" <?= ((int)($_POST['motivo_registro_id'] ?? 0)===(int)$m['id_motivo']?'selected':'') ?>>
-                  <?= h($m['nombre']) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <small class="text-muted">Si no está en catálogo, usa “Motivo texto”.</small>
-          </div>
-        </div>
-
-        <div class="row mt-3">
-          <div class="col-md-12">
-            <label class="font-weight-bold">Motivo (texto)</label>
-            <input class="form-control" name="motivo_registro_txt" value="<?= h($_POST['motivo_registro_txt'] ?? '') ?>" placeholder="Fallback / detalle adicional">
-          </div>
-        </div>
-
-        <div class="row mt-3">
-          <div class="col-md-12">
-            <label class="font-weight-bold">Descripción <span class="text-danger">*</span></label>
-            <textarea class="form-control" name="descripcion" rows="5" required placeholder="Hechos, evidencia, alcance, impacto..."><?= h($_POST['descripcion'] ?? '') ?></textarea>
-          </div>
-        </div>
-
-        <hr/>
-
-        <div class="row">
-          <div class="col-md-4">
-            <div class="custom-control custom-switch mt-2">
-              <input type="checkbox" class="custom-control-input" id="swCobro" name="susceptible_cobro" value="1" <?= ((int)($_POST['susceptible_cobro'] ?? 0)===1?'checked':'') ?>>
-              <label class="custom-control-label font-weight-bold" for="swCobro">Susceptible a cobro</label>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <label class="font-weight-bold">Monto estimado</label>
-            <input class="form-control" name="monto_estimado" value="<?= h($_POST['monto_estimado'] ?? '') ?>" placeholder="Ej. 1500.00">
-          </div>
-          <div class="col-md-4"></div>
-        </div>
-
-      </div>
-    </div>
-
-    <div class="d-flex justify-content-end mb-5">
-      <a class="btn btn-outline-secondary mr-2" href="pqrs.php">Cancelar</a>
-      <button class="btn btn-success" type="submit">
-        <i class="fas fa-save"></i> Guardar
-      </button>
-    </div>
-
-  </form>
-</div>
-
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<!-- Select2 -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
+<!-- Bootstrap Icons -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+
+<style>
+/* =========================
+   FONDO GENERAL
+========================= */
+body{
+  font-family:'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  background:#f1f5f9;
+  color:#334155;
+}
+
+/* =========================
+   TITULOS
+========================= */
+h3{
+  font-weight:600;
+  color:#0f172a;
+  margin-bottom:1rem;
+}
+
+/* =========================
+   CARDS / SECCIONES
+========================= */
+.card{
+  background:#ffffff;
+  border-radius:12px;
+  border:1px solid #e2e8f0;
+  box-shadow:0 8px 22px rgba(15,23,42,.06);
+  margin-bottom:1.5rem;
+}
+
+/* BARRA SUPERIOR DE CADA SECCIÓN */
+.card-header{
+  background:#f8fafc;
+  font-weight:600;
+  color:#0f172a;
+  border-bottom:1px solid #e2e8f0;
+  border-top:4px solid #2563eb; /* acento visual */
+}
+
+/* =========================
+   LABELS
+========================= */
+label{
+  font-size:.85rem;
+  font-weight:600;
+  color:#475569;
+  margin-bottom:4px;
+}
+
+/* =========================
+   INPUTS (CLAROS)
+========================= */
+.form-control,
+.select2-container--default .select2-selection--single{
+  background:#ffffff;              /* BLANCO */
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  height:40px;
+  font-size:.9rem;
+  color:#0f172a;
+}
+
+/* Placeholder */
+.form-control::placeholder{
+  color:#94a3b8;
+}
+
+/* Focus */
+.form-control:focus,
+.select2-container--focus .select2-selection{
+  border-color:#2563eb;
+  box-shadow:0 0 0 3px rgba(37,99,235,.15);
+}
+
+/* Textarea */
+textarea.form-control{
+  height:auto;
+  min-height:110px;
+}
+
+/* =========================
+   SELECT2
+========================= */
+.select2-container{
+  width:100%!important;
+}
+
+.select2-container--default .select2-selection--single{
+  display:flex;
+  align-items:center;
+  padding-left:8px;
+}
+
+/* =========================
+   BOTONES
+========================= */
+.btn-primary{
+  background:#2563eb;
+  border:none;
+  border-radius:8px;
+  padding:8px 18px;
+  font-weight:600;
+  box-shadow:0 10px 22px rgba(37,99,235,.35);
+}
+.btn-primary:hover{
+  background:#1d4ed8;
+}
+
+.btn-outline-secondary{
+  border-radius:8px;
+  padding:8px 18px;
+}
+
+/* =========================
+   TOAST
+========================= */
+.toast{
+  border-radius:12px;
+  box-shadow:0 14px 35px rgba(15,23,42,.25);
+}
+</style>
+</head>
+
+<body>
+
+<div class="container-fluid mt-4">
+
+<!-- HEADER -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h3 class="mb-0">Nueva Incidencia (PQRS)</h3>
+  <a href="pqrs.php" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Regresar
+  </a>
+</div>
+
+<form id="formPQRS">
+
+<!-- DATOS BASE -->
+<div class="card mb-4">
+<div class="card-header">Datos base</div>
+<div class="card-body row g-3">
+
+<div class="col-md-4">
+<label>Almacén / CEDIS *</label>
+<select id="cve_almacen" name="cve_almacen" class="form-control" required></select>
+</div>
+
+<div class="col-md-4">
+<label>Tipo PQRS *</label>
+<select name="tipo" class="form-control" required>
+  <option value="">Seleccione</option>
+  <option value="P">Petición</option>
+  <option value="Q">Queja</option>
+  <option value="R">Reclamo</option>
+  <option value="S">Sugerencia</option>
+</select>
+</div>
+
+<div class="col-md-4">
+<label>Status *</label>
+<select id="status_clave" name="status_clave" class="form-control" required></select>
+</div>
+
+<div class="col-md-6">
+<label>Cliente *</label>
+<select id="cve_clte" name="cve_clte" class="form-control" required></select>
+</div>
+
+<div class="col-md-3">
+<label>Referencia tipo *</label>
+<select id="ref_tipo" name="ref_tipo" class="form-control" required>
+  <option value="">Seleccione</option>
+  <option value="PEDIDO">Pedido</option>
+  <option value="OC">OC</option>
+  <option value="EMBARQUE">Embarque</option>
+</select>
+</div>
+
+<div class="col-md-3">
+<label>Pedido / OC / Embarque *</label>
+<select id="ref_folio" name="ref_folio" class="form-control" required></select>
+</div>
+
+</div>
+</div>
+
+<!-- QUIÉN REPORTA -->
+<div class="card mb-4">
+<div class="card-header">Quién reporta y responsables</div>
+<div class="card-body row g-3">
+
+<div class="col-md-4">
+<label>Quién reporta *</label>
+<input type="text" name="reporta_nombre" class="form-control" required>
+</div>
+
+<div class="col-md-4">
+<label>Contacto</label>
+<input type="text" name="reporta_contacto" class="form-control">
+</div>
+
+<div class="col-md-4">
+<label>Cargo</label>
+<input type="text" name="reporta_cargo" class="form-control">
+</div>
+
+<div class="col-md-6">
+<label>Responsable interno (recibe) *</label>
+<input type="text" name="responsable_recibo" class="form-control" required>
+</div>
+
+<div class="col-md-6">
+<label>Responsable de la acción</label>
+<input type="text" name="responsable_accion" class="form-control">
+</div>
+
+</div>
+</div>
+
+<!-- CONTENIDO -->
+<div class="card mb-4">
+<div class="card-header">Contenido del caso</div>
+<div class="card-body row g-3">
+
+<div class="col-md-6">
+<label>Asunto</label>
+<input type="text" name="asunto" class="form-control">
+</div>
+
+<div class="col-md-6">
+<label>Susceptible a cobro</label>
+<select name="susceptible_cobro" class="form-control">
+  <option value="0">No</option>
+  <option value="1">Sí</option>
+</select>
+</div>
+
+<div class="col-md-12">
+<label>Descripción *</label>
+<textarea name="descripcion" class="form-control" rows="4" required></textarea>
+</div>
+
+</div>
+</div>
+
+<!-- BOTONES -->
+<div class="d-flex justify-content-end gap-2 mb-5">
+  <a href="pqrs.php" class="btn btn-light">Cancelar</a>
+  <button type="submit" class="btn btn-primary px-4">Guardar PQRS</button>
+</div>
+
+</form>
+</div>
+
+<!-- TOAST -->
+<div class="position-fixed top-0 end-0 p-4" style="z-index:1055">
+  <div id="toastMsg" class="toast text-bg-success border-0">
+    <div class="d-flex">
+      <div class="toast-body" id="toastText"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
 <script>
-(function(){
-  const API_PEDIDOS = <?= json_encode($API_PEDIDOS) ?>;
-  const API_PQRS = <?= json_encode($API_PQRS) ?>;
+$(function(){
 
-  // Cliente: trae de pedidos_api.php?action=clientes
-  $('#cve_clte').select2({
-    placeholder: 'Escribe para buscar cliente...',
-    allowClear: true,
-    width: '100%',
-    ajax: {
-      url: API_PEDIDOS,
-      dataType: 'json',
-      delay: 250,
-      data: function(params){
-        return { action:'clientes', q: (params.term || ''), limit: 20 };
-      },
-      processResults: function(data){
-        if(!data || !data.ok) return {results:[]};
-        const results = (data.rows||[]).map(r => ({
-          id: r.Cve_Clte,
-          text: (r.Cve_Clte + ' - ' + (r.RazonSocial||'')).trim()
-        }));
-        return {results};
+/* Almacenes */
+$('#cve_almacen').select2({
+  placeholder:'Seleccione almacén...',
+  ajax:{
+    url:'/assistpro_kardex_fc/public/api/almacenes_api.php',
+    dataType:'json',
+    data:()=>({ action:'list' }),
+    processResults:r=>({
+      results:r.rows.map(x=>({
+        id:x.id,
+        text:x.nombre
+      }))
+    })
+  }
+});
+
+/* Status */
+$('#status_clave').select2({
+  placeholder:'Seleccione status...',
+  ajax:{
+    url:'/assistpro_kardex_fc/public/api/pqrs/pqrs_api.php',
+    dataType:'json',
+    data:()=>({ action:'status' }),
+    processResults:r=>({ results:r.results })
+  }
+});
+
+/* Clientes */
+$('#cve_clte').select2({
+  placeholder:'Buscar cliente...',
+  minimumInputLength:2,
+  ajax:{
+    url:'/assistpro_kardex_fc/public/api/pedidos/pedidos_api.php',
+    dataType:'json',
+    data:p=>({ action:'clientes', q:p.term }),
+    processResults:r=>({
+      results:r.rows.map(x=>({
+        id:x.Cve_Clte,
+        text:x.Cve_Clte+' - '+x.RazonSocial
+      }))
+    })
+  }
+});
+
+/* Referencias */
+$('#ref_folio').select2({
+  placeholder:'Seleccione...',
+  minimumInputLength:1,
+  ajax:{
+    transport:function(params,success,failure){
+      if(!$('#ref_tipo').val()||!$('#cve_clte').val()){
+        success({results:[]});return;
       }
-    }
-  });
-
-  // Referencia: depende de ref_tipo
-  function initRefSelect(){
-    const refTipo = ($('#ref_tipo').val() || 'PEDIDO').toUpperCase();
-
-    // destruir si ya existía
-    if ($('#ref_folio').hasClass("select2-hidden-accessible")) {
-      $('#ref_folio').select2('destroy');
-    }
-    $('#ref_folio').empty();
-
-    if (refTipo === 'PEDIDO') {
-      $('#refHint').text('Selecciona cliente y elige un pedido del cliente.');
-      $('#ref_folio').select2({
-        placeholder: 'Seleccione pedido...',
-        allowClear: true,
-        width:'100%',
-        ajax:{
-          url: API_PQRS,
-          dataType:'json',
-          delay: 250,
-          data: function(params){
-            const cve = ($('#cve_clte').val() || '').trim();
-            return { action:'pedidos_by_cliente', cve_clte: cve, q: (params.term||''), limit: 30 };
-          },
-          processResults: function(data){
-            if(!data || !data.ok) return {results:[]};
-            const results = (data.rows||[]).map(r => ({
-              id: r.Fol_folio,
-              text: r.Fol_folio + (r.Fec_Pedido ? (' | ' + r.Fec_Pedido) : '') + (r.status ? (' | ' + r.status) : '')
-            }));
-            return {results};
-          }
-        }
-      });
-    } else {
-      $('#refHint').text('Captura el folio de referencia (OC/Embarque/Garantía/Otro).');
-      // Para no-PEDIDO usamos select2 como "tag" (captura libre)
-      $('#ref_folio').select2({
-        placeholder: 'Captura folio...',
-        tags: true,
-        width:'100',
-        allowClear: true
-      });
+      $.getJSON('/assistpro_kardex_fc/public/api/pqrs/pqrs_api.php',{
+        action:'referencias_by_cliente',
+        ref_tipo:$('#ref_tipo').val(),
+        cve_clte:$('#cve_clte').val(),
+        q:params.data.term
+      }).done(r=>success({results:r.results}))
+      .fail(failure);
     }
   }
+});
 
-  initRefSelect();
+$('#ref_tipo').on('change',()=>$('#ref_folio').val(null).trigger('change'));
 
-  // Cuando cambia cliente: refrescar pedidos si ref_tipo=PEDIDO
-  $('#cve_clte').on('change', function(){
-    if ((($('#ref_tipo').val()||'').toUpperCase()) === 'PEDIDO') {
-      $('#ref_folio').val(null).trigger('change');
-    }
-  });
+/* Guardar */
+$('#formPQRS').on('submit',function(e){
+  e.preventDefault();
+  $.post('/assistpro_kardex_fc/public/api/pqrs/pqrs_api.php?action=crear',
+    $(this).serialize(),
+    function(r){
+      $('#toastText').text('PQRS creada correctamente');
+      new bootstrap.Toast($('#toastMsg')[0]).show();
+      setTimeout(()=>location.href='pqrs.php',1200);
+    },'json');
+});
 
-  // Cuando cambia tipo de referencia
-  $('#ref_tipo').on('change', function(){
-    initRefSelect();
-  });
-
-  // Precarga si hubo error y se recargó con POST (opcional)
-  <?php if (!empty($_POST['cve_clte'])): ?>
-  (function(){
-    const cve = <?= json_encode((string)($_POST['cve_clte'] ?? '')) ?>;
-    const txt = <?= json_encode((string)($_POST['cve_clte_text'] ?? $_POST['cve_clte'] ?? '')) ?>;
-    if (cve) {
-      const opt = new Option(txt, cve, true, true);
-      $('#cve_clte').append(opt).trigger('change');
-    }
-  })();
-  <?php endif; ?>
-
-})();
+});
 </script>
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
+</body>
+</html>
