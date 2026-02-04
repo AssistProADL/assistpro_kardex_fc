@@ -1,4 +1,4 @@
-<?php
+<?php 
 require_once __DIR__ . '/../bi/_menu_global.php';
 require_once __DIR__ . '/../../app/db.php';
 ?>
@@ -15,128 +15,109 @@ require_once __DIR__ . '/../../app/db.php';
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
+<!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
 <!-- Bootstrap Icons -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
 
 <style>
-/* =========================
-   FONDO GENERAL
-========================= */
+/* ===============================
+   ASSISTPRO UI – CORPORATIVO
+================================ */
 body{
   font-family:'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;
-  background:#f1f5f9;
+  background:#f4f7fb;
   color:#334155;
 }
 
-/* =========================
-   TITULOS
-========================= */
-h3{
-  font-weight:600;
-  color:#0f172a;
-  margin-bottom:1rem;
+.assistpro-title{
+  font-weight:700;
+  color:#1e3a8a;
+  display:flex;
+  align-items:center;
+  gap:.5rem;
 }
 
-/* =========================
-   CARDS / SECCIONES
-========================= */
+.assistpro-title i{
+  font-size:1.6rem;
+  color:#2563eb;
+}
+
+/* Cards */
 .card{
   background:#ffffff;
-  border-radius:12px;
-  border:1px solid #e2e8f0;
-  box-shadow:0 8px 22px rgba(15,23,42,.06);
-  margin-bottom:1.5rem;
+  border-radius:14px;
+  border:1px solid #e5eaf3;
 }
 
-/* BARRA SUPERIOR DE CADA SECCIÓN */
 .card-header{
   background:#f8fafc;
   font-weight:600;
-  color:#0f172a;
-  border-bottom:1px solid #e2e8f0;
-  border-top:4px solid #2563eb; /* acento visual */
+  color:#1e293b;
+  border-bottom:1px solid #e5eaf3;
+  border-left:5px solid #2563eb;
+  padding:.75rem 1rem;
 }
 
-/* =========================
-   LABELS
-========================= */
+.card-body{
+  padding:1rem 1.25rem;
+}
+
+/* Labels */
 label{
-  font-size:.85rem;
+  font-size:.78rem;
   font-weight:600;
   color:#475569;
-  margin-bottom:4px;
 }
 
-/* =========================
-   INPUTS (CLAROS)
-========================= */
+/* Inputs */
 .form-control,
 .select2-container--default .select2-selection--single{
-  background:#ffffff;              /* BLANCO */
+  background:#ffffff;
   border:1px solid #cbd5e1;
   border-radius:8px;
   height:40px;
-  font-size:.9rem;
-  color:#0f172a;
+  font-size:.85rem;
 }
 
-/* Placeholder */
-.form-control::placeholder{
-  color:#94a3b8;
-}
-
-/* Focus */
 .form-control:focus,
 .select2-container--focus .select2-selection{
   border-color:#2563eb;
-  box-shadow:0 0 0 3px rgba(37,99,235,.15);
+  box-shadow:0 0 0 2px rgba(37,99,235,.15);
 }
 
-/* Textarea */
+/* Textarea como grilla (5 líneas máx) */
 textarea.form-control{
-  height:auto;
-  min-height:110px;
+  min-height:120px;
+  max-height:120px;
+  overflow:auto;
+  resize:none;
+  padding:10px;
+  white-space:nowrap;
 }
 
-/* =========================
-   SELECT2
-========================= */
-.select2-container{
-  width:100%!important;
-}
+.select2-container{width:100%!important;}
 
-.select2-container--default .select2-selection--single{
-  display:flex;
-  align-items:center;
-  padding-left:8px;
-}
-
-/* =========================
-   BOTONES
-========================= */
+/* Buttons */
 .btn-primary{
   background:#2563eb;
   border:none;
   border-radius:8px;
-  padding:8px 18px;
   font-weight:600;
-  box-shadow:0 10px 22px rgba(37,99,235,.35);
 }
+
 .btn-primary:hover{
   background:#1d4ed8;
 }
 
-.btn-outline-secondary{
+.btn-light{
   border-radius:8px;
-  padding:8px 18px;
 }
 
-/* =========================
-   TOAST
-========================= */
+/* Toast */
 .toast{
   border-radius:12px;
-  box-shadow:0 14px 35px rgba(15,23,42,.25);
 }
 </style>
 </head>
@@ -147,8 +128,11 @@ textarea.form-control{
 
 <!-- HEADER -->
 <div class="d-flex justify-content-between align-items-center mb-4">
-  <h3 class="mb-0">Nueva Incidencia (PQRS)</h3>
-  <a href="pqrs.php" class="btn btn-outline-secondary">
+  <h3 class="assistpro-title mb-0">
+    <i class="bi bi-chat-left-dots"></i>
+    Nueva Incidencia PQRS
+  </h3>
+  <a href="pqrs.php" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-arrow-left"></i> Regresar
   </a>
 </div>
@@ -257,7 +241,7 @@ textarea.form-control{
 
 <div class="col-md-12">
 <label>Descripción *</label>
-<textarea name="descripcion" class="form-control" rows="4" required></textarea>
+<textarea name="descripcion" class="form-control" required></textarea>
 </div>
 
 </div>
@@ -266,7 +250,9 @@ textarea.form-control{
 <!-- BOTONES -->
 <div class="d-flex justify-content-end gap-2 mb-5">
   <a href="pqrs.php" class="btn btn-light">Cancelar</a>
-  <button type="submit" class="btn btn-primary px-4">Guardar PQRS</button>
+  <button type="submit" class="btn btn-primary px-4">
+    <i class="bi bi-save me-1"></i> Guardar PQRS
+  </button>
 </div>
 
 </form>
@@ -282,10 +268,11 @@ textarea.form-control{
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
 $(function(){
 
-/* Almacenes */
 $('#cve_almacen').select2({
   placeholder:'Seleccione almacén...',
   ajax:{
@@ -293,15 +280,11 @@ $('#cve_almacen').select2({
     dataType:'json',
     data:()=>({ action:'list' }),
     processResults:r=>({
-      results:r.rows.map(x=>({
-        id:x.id,
-        text:x.nombre
-      }))
+      results:r.rows.map(x=>({ id:x.id, text:x.nombre }))
     })
   }
 });
 
-/* Status */
 $('#status_clave').select2({
   placeholder:'Seleccione status...',
   ajax:{
@@ -312,7 +295,6 @@ $('#status_clave').select2({
   }
 });
 
-/* Clientes */
 $('#cve_clte').select2({
   placeholder:'Buscar cliente...',
   minimumInputLength:2,
@@ -329,7 +311,6 @@ $('#cve_clte').select2({
   }
 });
 
-/* Referencias */
 $('#ref_folio').select2({
   placeholder:'Seleccione...',
   minimumInputLength:1,
@@ -351,12 +332,11 @@ $('#ref_folio').select2({
 
 $('#ref_tipo').on('change',()=>$('#ref_folio').val(null).trigger('change'));
 
-/* Guardar */
 $('#formPQRS').on('submit',function(e){
   e.preventDefault();
   $.post('/assistpro_kardex_fc/public/api/pqrs/pqrs_api.php?action=crear',
     $(this).serialize(),
-    function(r){
+    function(){
       $('#toastText').text('PQRS creada correctamente');
       new bootstrap.Toast($('#toastMsg')[0]).show();
       setTimeout(()=>location.href='pqrs.php',1200);
