@@ -226,9 +226,13 @@ textarea.form-control{
 <div class="card-header">Contenido del caso</div>
 <div class="card-body row g-3">
 
+<!-- 🔁 ASUNTO NORMALIZADO (ÚNICO CAMBIO) -->
 <div class="col-md-6">
-<label>Asunto</label>
-<input type="text" name="asunto" class="form-control">
+<label>Asunto / Motivo de la incidencia *</label>
+<select id="motivo_apertura"
+        name="motivo_registro_id"
+        class="form-control"
+        required></select>
 </div>
 
 <div class="col-md-6">
@@ -272,6 +276,22 @@ textarea.form-control{
 
 <script>
 $(function(){
+
+/* === ASUNTO / MOTIVO DE APERTURA === */
+$('#motivo_apertura').select2({
+  placeholder:'Seleccione motivo...',
+  ajax:{
+    url:'/assistpro_kardex_fc/public/api/pqrs/pqrs_api.php',
+    dataType:'json',
+    data:()=>({
+      action:'motivos',
+      tipo:'APERTURA'
+    }),
+    processResults:r=>r
+  }
+});
+
+/* === TODO LO DEMÁS QUEDA IGUAL === */
 
 $('#cve_almacen').select2({
   placeholder:'Seleccione almacén...',
