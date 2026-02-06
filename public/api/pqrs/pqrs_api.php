@@ -61,9 +61,9 @@ try {
     $term = q('q');
     $limit = min(max((int)q('limit',20),1),50);
 
-    if ($cve==='' || $tipo==='') jexit(['results'=>[]]);
-
-    if ($tipo !== 'PEDIDO') jexit(['results'=>[]]);
+    if ($cve==='' || $tipo!=='PEDIDO') {
+      jexit(['results'=>[]]);
+    }
 
     $sql = "
       SELECT Fol_folio AS id,
@@ -90,64 +90,115 @@ try {
     foreach ([
       'cve_almacen','tipo','status_clave','cve_clte',
       'ref_tipo','ref_folio','reporta_nombre',
-      'responsable_recibo','descripcion'
+      'responsable_recibo','descripcion',
+      'motivo_registro_id'
     ] as $k) {
-      if (empty($data[$k])) jexit(['error'=>"Campo faltante: $k"],400);
+      if (empty($data[$k])) {
+        jexit(['error'=>"Campo faltante: $k"],400);
+      }
     }
 
-    $folio = 'PQ-'.date('Ymd-His');
+    /* === Obtener texto del motivo (APERTURA) === */
+    $stMot = $pdo->prepare("
+      SELECT nombre
+      FROM pqrs_cat_motivo
+      WHERE id_motivo = ?
+        AND tipo = 'APERTURA'
+        AND activo = 1
+    ");
+    $stMot->execute([(int)$data['motivo_registro_id']]);
+    $motivoTxt = $stMot->fetchColumn();
+
+    if (!$motivoTxt) {
+      jexit(['error'=>'Motivo de apertura inválido'],400);
+    }
+
+    $folio   = 'PQ-'.date('Ymd-His');
     $usuario = $_SESSION['usuario'] ?? null;
 
     $pdo->beginTransaction();
 
     $st = $pdo->prepare("
       INSERT INTO pqrs_case (
-        fol_pqrs,cve_clte,cve_almacen,tipo,
-        ref_tipo,ref_folio,
-        reporta_nombre,reporta_contacto,reporta_cargo,
-        responsable_recibo,responsable_accion,
-        asunto,descripcion,status_clave,
-        susceptible_cobro,creado_por
+        fol_pqrs,
+        cve_clte,
+        cve_almacen,
+        tipo,
+        ref_tipo,
+        ref_folio,
+        reporta_nombre,
+        reporta_contacto,
+        reporta_cargo,
+        responsable_recibo,
+        responsable_accion,
+        asunto,
+        descripcion,
+        status_clave,
+        motivo_registro_id,
+        motivo_registro_txt,
+        susceptible_cobro,
+        creado_por
       ) VALUES (
-        :folio,:clte,:alm,:tipo,
-        :rt,:rf,:rn,:rc,:rcr,
-        :rr,:ra,:asunto,:desc,:status,
-        :cobro,:user
+        :folio,
+        :clte,
+        :alm,
+        :tipo,
+        :rt,
+        :rf,
+        :rn,
+        :rc,
+        :rcr,
+        :rr,
+        :ra,
+        :asunto,
+        :desc,
+        :status,
+        :motivo_id,
+        :motivo_txt,
+        :cobro,
+        :user
       )
     ");
 
     $st->execute([
-      ':folio'=>$folio,
-      ':clte'=>$data['cve_clte'],
-      ':alm'=>$data['cve_almacen'],
-      ':tipo'=>$data['tipo'],
-      ':rt'=>$data['ref_tipo'],
-      ':rf'=>$data['ref_folio'],
-      ':rn'=>$data['reporta_nombre'],
-      ':rc'=>$data['reporta_contacto'] ?? null,
-      ':rcr'=>$data['reporta_cargo'] ?? null,
-      ':rr'=>$data['responsable_recibo'],
-      ':ra'=>$data['responsable_accion'] ?? null,
-      ':asunto'=>$data['asunto'] ?? null,
-      ':desc'=>$data['descripcion'],
-      ':status'=>$data['status_clave'],
-      ':cobro'=>!empty($data['susceptible_cobro']) ? 1 : 0,
-      ':user'=>$usuario
+      ':folio'      => $folio,
+      ':clte'       => $data['cve_clte'],
+      ':alm'        => $data['cve_almacen'],
+      ':tipo'       => $data['tipo'],
+      ':rt'         => $data['ref_tipo'],
+      ':rf'         => $data['ref_folio'],
+      ':rn'         => $data['reporta_nombre'],
+      ':rc'         => $data['reporta_contacto'] ?? null,
+      ':rcr'        => $data['reporta_cargo'] ?? null,
+      ':rr'         => $data['responsable_recibo'],
+      ':ra'         => $data['responsable_accion'] ?? null,
+
+      // 🔑 Asunto = motivo de apertura
+      ':asunto'     => $motivoTxt,
+      ':desc'       => $data['descripcion'],
+      ':status'     => $data['status_clave'],
+      ':motivo_id'  => (int)$data['motivo_registro_id'],
+      ':motivo_txt' => $motivoTxt,
+
+      ':cobro'      => !empty($data['susceptible_cobro']) ? 1 : 0,
+      ':user'       => $usuario
     ]);
 
     $id = (int)$pdo->lastInsertId();
 
     $pdo->prepare("
-      INSERT INTO pqrs_event(id_case,evento,detalle,usuario)
-      VALUES (?,?,?,?)
-    ")->execute([$id,'ALTA','Alta de PQRS',$usuario]);
+      INSERT INTO pqrs_event (id_case, evento, detalle, usuario)
+      VALUES (?, 'ALTA', 'Alta de PQRS', ?)
+    ")->execute([$id, $usuario]);
 
     $pdo->commit();
+
     jexit(['ok'=>1,'id_case'=>$id,'folio'=>$folio]);
   }
 
   jexit(['error'=>'Acción no soportada'],400);
 
 } catch(Throwable $e){
+  if ($pdo->inTransaction()) $pdo->rollBack();
   jexit(['error'=>$e->getMessage()],500);
 }

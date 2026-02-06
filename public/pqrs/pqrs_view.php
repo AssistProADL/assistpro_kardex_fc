@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
       exit;
     }
 
-    /* -------- STATUS (solo si NO está cerrado) -------- */
+    /* -------- STATUS -------- */
     if ($accion === 'status') {
 
       if ($case['status_clave'] === 'CERRADA') {
@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
       exit;
     }
 
-    /* -------- CIERRE ÚNICO -------- */
+    /* -------- CIERRE -------- */
     if ($accion === 'cerrar') {
 
       if ($case['status_clave'] === 'CERRADA') {
@@ -125,7 +125,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
         throw new RuntimeException("Motivo inválido.");
       }
 
-      // NO PROCEDE si la clave inicia con NP_
       $procede = (strpos($mot['clave'],'NP_') === 0) ? 0 : 1;
 
       $pdo->prepare("
@@ -210,6 +209,16 @@ if (isset($_GET['ok'])) {
 
           <hr>
 
+          <!-- 🔹 MOTIVO DE APERTURA -->
+          <div class="row">
+            <div class="col-md-6">
+              <div class="text-muted">Motivo de apertura</div>
+              <b><?= h($case['motivo_registro_txt'] ?? '—') ?></b>
+            </div>
+          </div>
+
+          <hr>
+
           <div class="text-muted">Descripción</div>
           <div style="white-space:pre-wrap;"><b><?= h($case['descripcion']) ?></b></div>
 
@@ -223,7 +232,6 @@ if (isset($_GET['ok'])) {
 
           <div class="row">
 
-            <!-- CAMBIAR STATUS -->
             <div class="col-md-6">
               <?php if ($case['status_clave'] !== 'CERRADA'): ?>
                 <form method="post">
@@ -247,7 +255,6 @@ if (isset($_GET['ok'])) {
               <?php endif; ?>
             </div>
 
-            <!-- NOTA -->
             <div class="col-md-6">
               <form method="post">
                 <input type="hidden" name="accion" value="nota">
@@ -265,7 +272,6 @@ if (isset($_GET['ok'])) {
 
           <hr>
 
-          <!-- CIERRE -->
           <?php if ($case['status_clave'] !== 'CERRADA'): ?>
             <form method="post" class="border rounded p-3">
               <input type="hidden" name="accion" value="cerrar">
@@ -282,15 +288,7 @@ if (isset($_GET['ok'])) {
                 placeholder="Detalle / evidencia"></textarea>
 
               <button class="btn btn-success">Cerrar caso</button>
-
-              <small class="text-muted d-block mt-2">
-                * Motivos “No procede” se marcan automáticamente.
-              </small>
             </form>
-          <?php else: ?>
-            <div class="alert alert-light">
-              El caso ya fue cerrado. Consulta el timeline para ver el detalle del cierre.
-            </div>
           <?php endif; ?>
 
         </div>

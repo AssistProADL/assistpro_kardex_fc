@@ -1,4 +1,4 @@
-<?php
+<?php 
 // =====================================================
 // PQRS - Listado AssistPro (UI unificada)
 // =====================================================
@@ -27,8 +27,20 @@ $statusRows = $pdo->query("
 
 /* ================= KPIs ================= */
 $kpi = [];
-foreach($pdo->query("SELECT status_clave, COUNT(*) total FROM pqrs_case GROUP BY status_clave") as $r){
-  $kpi[$r['status_clave']] = (int)$r['total'];
+
+foreach(
+  $pdo->query("
+    SELECT status_clave, COUNT(*) total 
+    FROM pqrs_case 
+    GROUP BY status_clave
+  ") as $r
+){
+  if ($r['status_clave'] === 'NO_PROCEDE') {
+    // 👉 NO_PROCEDE cuenta como CERRADA
+    $kpi['CERRADA'] = ($kpi['CERRADA'] ?? 0) + (int)$r['total'];
+  } else {
+    $kpi[$r['status_clave']] = (int)$r['total'];
+  }
 }
 
 /* ================= listado ================= */
@@ -55,8 +67,6 @@ $rows=$st->fetchAll(PDO::FETCH_ASSOC);
 /* ===============================
    ASSISTPRO UI – CORPORATIVO
 ================================ */
-
-/* ===== TÍTULO (REFERENCIA VISUAL) ===== */
 .assistpro-title{
   font-weight:700;
   color:#1e3a8a;
@@ -69,7 +79,6 @@ $rows=$st->fetchAll(PDO::FETCH_ASSOC);
   color:#2563eb;
 }
 
-/* ===== BOTÓN NUEVA INCIDENCIA ===== */
 .btn-assistpro{
   background:#1e3a8a;
   border:none;
@@ -81,24 +90,18 @@ $rows=$st->fetchAll(PDO::FETCH_ASSOC);
   color:#fff;
 }
 
-/* ===== ICONO FILTRAR ===== */
-.btn-filter i{
-  color:#1e3a8a;
-}
+.btn-filter i{color:#1e3a8a;}
 
-/* ===== KPI CARDS ===== */
 .ap-kpi-grid{
   display:grid;
-  grid-template-columns:repeat(5,1fr);
+  grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
   gap:14px;
   margin-bottom:16px;
+  justify-content:center;
 }
-@media(max-width:1200px){
-  .ap-kpi-grid{grid-template-columns:repeat(3,1fr);}
-}
-@media(max-width:768px){
-  .ap-kpi-grid{grid-template-columns:repeat(2,1fr);}
-}
+
+@media(max-width:1200px){.ap-kpi-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:768px){.ap-kpi-grid{grid-template-columns:repeat(2,1fr);}}
 
 .ap-kpi-card{
   background:#fff;
@@ -120,16 +123,13 @@ $rows=$st->fetchAll(PDO::FETCH_ASSOC);
 .ap-kpi-proceso::before{background:#0ea5e9;}
 .ap-kpi-espera::before{background:#f59e0b;}
 .ap-kpi-cerrada::before{background:#16a34a;}
-.ap-kpi-noprocede::before{background:#dc2626;}
 
 .ap-kpi-title{font-size:.72rem;color:#475569;font-weight:600;}
 .ap-kpi-value{font-size:30px;font-weight:800;color:#0f172a;}
 
-/* ===== Filters ===== */
 .ap-filters label{font-size:.7rem;color:#6c757d;}
 .ap-filters .form-control{height:34px;}
 
-/* ===== Table ===== */
 .ap-table-wrapper{max-height:260px;overflow:auto;}
 .ap-table th{
   position:sticky;
@@ -138,33 +138,43 @@ $rows=$st->fetchAll(PDO::FETCH_ASSOC);
   font-size:.75rem;
 }
 .ap-table td{font-size:.8rem;padding:6px 8px;}
+
+/* ===== ACCIONES ===== */
+.ap-action-btn{
+  padding:4px 6px;
+  font-size:1rem;
+}
 </style>
 
 <div class="container-fluid mt-4">
 
-<!-- ===== HEADER ===== -->
+<!-- HEADER -->
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h3 class="assistpro-title mb-0">
     <i class="bi bi-chat-left-dots"></i>
     Control de Incidencias PQRS
   </h3>
 
-  <!-- ⭐ BOTÓN UNIFICADO EN COLOR ⭐ -->
   <a href="pqrs_new.php" class="btn btn-assistpro btn-sm">
     <i class="bi bi-plus-lg"></i> Nueva Incidencia
   </a>
 </div>
 
-<!-- ===== KPIs ===== -->
+<!-- KPIs -->
 <div class="ap-kpi-grid">
 <?php foreach($statusRows as $s):
+
+  // ❌ NO mostrar KPI NO_PROCEDE
+  if ($s['clave'] === 'NO_PROCEDE') {
+    continue;
+  }
+
   $total=$kpi[$s['clave']]??0;
   $class = match($s['clave']){
     'NUEVA'=>'ap-kpi-nueva',
     'EN_PROCESO'=>'ap-kpi-proceso',
     'EN_ESPERA'=>'ap-kpi-espera',
     'CERRADA'=>'ap-kpi-cerrada',
-    'NO_PROCEDE'=>'ap-kpi-noprocede',
     default=>''
   };
 ?>
@@ -175,7 +185,7 @@ $rows=$st->fetchAll(PDO::FETCH_ASSOC);
 <?php endforeach;?>
 </div>
 
-<!-- ===== Filters ===== -->
+<!-- FILTERS -->
 <div class="card ap-filters mb-2">
   <div class="card-body p-2">
     <form class="row g-2" method="get">
@@ -208,7 +218,6 @@ $rows=$st->fetchAll(PDO::FETCH_ASSOC);
       </div>
 
       <div class="col-md-2 d-flex align-items-end gap-1">
-        <!-- ⭐ ICONO FILTRAR UNIFICADO ⭐ -->
         <button class="btn btn-light btn-sm w-100 btn-filter">
           <i class="fas fa-filter"></i>
         </button>
@@ -218,20 +227,20 @@ $rows=$st->fetchAll(PDO::FETCH_ASSOC);
   </div>
 </div>
 
-<!-- ===== Table ===== -->
+<!-- TABLE -->
 <div class="card">
   <div class="card-body p-2">
     <div class="ap-table-wrapper">
       <table class="table table-hover table-sm ap-table">
         <thead>
           <tr>
+            <th style="width:90px;">Acciones</th>
             <th>Folio</th>
             <th>Cliente</th>
             <th>Referencia</th>
             <th>Tipo</th>
             <th>Status</th>
             <th>Fecha</th>
-            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -239,17 +248,22 @@ $rows=$st->fetchAll(PDO::FETCH_ASSOC);
           <tr><td colspan="7" class="text-muted">Sin registros</td></tr>
         <?php else: foreach($rows as $r):?>
           <tr>
+            <td class="text-nowrap">
+              <a href="pqrs_view.php?id_case=<?=(int)$r['id_case']?>"
+                 class="btn btn-outline-primary btn-sm ap-action-btn">
+                <i class="fas fa-eye"></i>
+              </a>
+              <a href="pqrs_pdf.php?id_case=<?=(int)$r['id_case']?>"
+                 class="btn btn-outline-danger btn-sm ap-action-btn">
+                <i class="fas fa-file-pdf"></i>
+              </a>
+            </td>
             <td><b><?=h($r['fol_pqrs'])?></b></td>
             <td><?=h($r['cve_clte'])?></td>
             <td><?=h($r['ref_folio'])?></td>
             <td><?=h($r['tipo'])?></td>
             <td><?=h($r['status_clave'])?></td>
             <td><?=h($r['creado_en'])?></td>
-            <td>
-              <a href="pqrs_view.php?id_case=<?=(int)$r['id_case']?>" class="btn btn-outline-primary btn-sm">
-                Ver
-              </a>
-            </td>
           </tr>
         <?php endforeach; endif;?>
         </tbody>

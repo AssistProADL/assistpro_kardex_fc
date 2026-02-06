@@ -30,7 +30,6 @@ body{
   background:#f4f7fb;
   color:#334155;
 }
-
 .assistpro-title{
   font-weight:700;
   color:#1e3a8a;
@@ -38,19 +37,15 @@ body{
   align-items:center;
   gap:.5rem;
 }
-
 .assistpro-title i{
   font-size:1.6rem;
   color:#2563eb;
 }
-
-/* Cards */
 .card{
   background:#ffffff;
   border-radius:14px;
   border:1px solid #e5eaf3;
 }
-
 .card-header{
   background:#f8fafc;
   font-weight:600;
@@ -59,19 +54,12 @@ body{
   border-left:5px solid #2563eb;
   padding:.75rem 1rem;
 }
-
-.card-body{
-  padding:1rem 1.25rem;
-}
-
-/* Labels */
+.card-body{padding:1rem 1.25rem;}
 label{
   font-size:.78rem;
   font-weight:600;
   color:#475569;
 }
-
-/* Inputs */
 .form-control,
 .select2-container--default .select2-selection--single{
   background:#ffffff;
@@ -80,45 +68,23 @@ label{
   height:40px;
   font-size:.85rem;
 }
-
-.form-control:focus,
-.select2-container--focus .select2-selection{
-  border-color:#2563eb;
-  box-shadow:0 0 0 2px rgba(37,99,235,.15);
-}
-
-/* Textarea como grilla (5 líneas máx) */
 textarea.form-control{
   min-height:120px;
   max-height:120px;
   overflow:auto;
   resize:none;
   padding:10px;
-  white-space:nowrap;
 }
-
 .select2-container{width:100%!important;}
-
-/* Buttons */
 .btn-primary{
   background:#2563eb;
   border:none;
   border-radius:8px;
   font-weight:600;
 }
-
-.btn-primary:hover{
-  background:#1d4ed8;
-}
-
-.btn-light{
-  border-radius:8px;
-}
-
-/* Toast */
-.toast{
-  border-radius:12px;
-}
+.btn-primary:hover{background:#1d4ed8;}
+.btn-light{border-radius:8px;}
+.toast{border-radius:12px;}
 </style>
 </head>
 
@@ -139,7 +105,7 @@ textarea.form-control{
 
 <form id="formPQRS">
 
-<!-- DATOS BASE -->
+<!-- ================= DATOS BASE ================= -->
 <div class="card mb-4">
 <div class="card-header">Datos base</div>
 <div class="card-body row g-3">
@@ -188,7 +154,7 @@ textarea.form-control{
 </div>
 </div>
 
-<!-- QUIÉN REPORTA -->
+<!-- ================= QUIÉN REPORTA ================= -->
 <div class="card mb-4">
 <div class="card-header">Quién reporta y responsables</div>
 <div class="card-body row g-3">
@@ -221,12 +187,11 @@ textarea.form-control{
 </div>
 </div>
 
-<!-- CONTENIDO -->
+<!-- ================= CONTENIDO ================= -->
 <div class="card mb-4">
 <div class="card-header">Contenido del caso</div>
 <div class="card-body row g-3">
 
-<!-- 🔁 ASUNTO NORMALIZADO (ÚNICO CAMBIO) -->
 <div class="col-md-6">
 <label>Asunto / Motivo de la incidencia *</label>
 <select id="motivo_apertura"
@@ -277,22 +242,18 @@ textarea.form-control{
 <script>
 $(function(){
 
-/* === ASUNTO / MOTIVO DE APERTURA === */
+/* === MOTIVO DE APERTURA === */
 $('#motivo_apertura').select2({
   placeholder:'Seleccione motivo...',
   ajax:{
     url:'/assistpro_kardex_fc/public/api/pqrs/pqrs_api.php',
     dataType:'json',
-    data:()=>({
-      action:'motivos',
-      tipo:'APERTURA'
-    }),
-    processResults:r=>r
+    data:()=>({ action:'motivos', tipo:'APERTURA' }),
+    processResults:r=>({ results:r.results })
   }
 });
 
-/* === TODO LO DEMÁS QUEDA IGUAL === */
-
+/* === ALMACÉN === */
 $('#cve_almacen').select2({
   placeholder:'Seleccione almacén...',
   ajax:{
@@ -305,6 +266,7 @@ $('#cve_almacen').select2({
   }
 });
 
+/* === STATUS === */
 $('#status_clave').select2({
   placeholder:'Seleccione status...',
   ajax:{
@@ -315,6 +277,7 @@ $('#status_clave').select2({
   }
 });
 
+/* === CLIENTE === */
 $('#cve_clte').select2({
   placeholder:'Buscar cliente...',
   minimumInputLength:2,
@@ -331,6 +294,7 @@ $('#cve_clte').select2({
   }
 });
 
+/* === REFERENCIA === */
 $('#ref_folio').select2({
   placeholder:'Seleccione...',
   minimumInputLength:1,
@@ -349,18 +313,27 @@ $('#ref_folio').select2({
     }
   }
 });
-
 $('#ref_tipo').on('change',()=>$('#ref_folio').val(null).trigger('change'));
 
+/* === SUBMIT CON TOAST === */
 $('#formPQRS').on('submit',function(e){
   e.preventDefault();
-  $.post('/assistpro_kardex_fc/public/api/pqrs/pqrs_api.php?action=crear',
+
+  $.post(
+    '/assistpro_kardex_fc/public/api/pqrs/pqrs_api.php?action=crear',
     $(this).serialize(),
     function(){
       $('#toastText').text('PQRS creada correctamente');
       new bootstrap.Toast($('#toastMsg')[0]).show();
-      setTimeout(()=>location.href='pqrs.php',1200);
-    },'json');
+
+      setTimeout(function(){
+        window.location.href='pqrs.php';
+      },1200);
+    },
+    'json'
+  ).fail(function(xhr){
+    alert(xhr.responseJSON?.error || 'Error al guardar la incidencia');
+  });
 });
 
 });
