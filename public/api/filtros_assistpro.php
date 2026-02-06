@@ -118,8 +118,11 @@ function init_filtros(PDO $pdo): void
                 $paramsAlm['empresa_id'] = $empresa;
             }
 
+            // importante: para relacionar zonas de recepcion (tubicacionesretencion.cve_almacp)
+            // necesitamos exponer el id numerico del almacen (c_almacenp.id) ademas de la clave (wh8)
             $sqlAlm = "
                 SELECT 
+                    a.id    AS idp,
                     a.clave AS cve_almac,
                     a.clave AS clave_almacen,
                     a.clave AS des_almac,

@@ -333,11 +333,20 @@ function renderRecibidos(){
   if(!tb) return;
   tb.innerHTML = '';
 
-  RECIBIDOS.forEach((L, idx) => {
+  // Evita pintar (o acumular) renglones incompletos/"fantasma"
+  const safe = (RECIBIDOS||[]).map((x,i)=>({x,i})).filter(({x}) => {
+    if(!x) return false;
+    const art = (x.articulo || x.cve_articulo || '').trim();
+    const cr  = Number(x.cant_rec ?? x.cantidad ?? 0);
+    return art !== '' && cr > 0;
+  });
+
+  safe.forEach(({x:L,i}, _k) => {
+    const art = esc((L.articulo || L.cve_articulo || '').trim());
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${esc(L.usuario)}</td>
-      <td>${esc(L.articulo)}</td>
+      <td>${art}</td>
       <td>${esc(L.descripcion)}</td>
       <td>${esc(L.um)}</td>
       <td>${esc(L.um_primaria)}</td>
@@ -348,7 +357,7 @@ function renderRecibidos(){
       <td>${esc(L.bl_destino || '')}</td>
       <td>${esc(L.fec)}</td>
       <td class="text-center">
-        <button class="btn btn-sm btn-danger" type="button" data-act="del" data-idx="${idx}">
+        <button class="btn btn-sm btn-danger" type="button" data-act="del" data-idx="${i}">
           <i class="bi bi-trash"></i>
         </button>
       </td>
@@ -875,17 +884,36 @@ async function loadBLDestino(){
 // Operación: Recibir / Guardar
 // ============================
 function addLineaFromInputs(){
+  // Normalización (evita "registros fantasma" en el bloque inferior)
+  const articulo = (val('articulo')||'').trim();
+  const cantidad = num(val('cant_rec'));
+  const cantSol = num(val('cant_sol'));
+
+  // regla básica: no aceptar líneas sin artículo o sin cantidad
+  if(!articulo){
+    console.warn('[RECIBIR] omitido: artículo vacío');
+    alert('Captura un artículo');
+    return;
+  }
+  if(!(cantidad>0)){
+    console.warn('[RECIBIR] omitido: cantidad inválida', {cantidad});
+    alert('Cantidad a recibir debe ser mayor a 0');
+    return;
+  }
+
   const L = {
     usuario: (val('usuario')||'').trim(),
-    cve_articulo: (val('articulo')||'').trim(),
+    // compatibilidad: el renderer usa "articulo"; el backend usa "cve_articulo"
+    articulo: articulo,
+    cve_articulo: articulo,
     descripcion: (val('descripcion')||'').trim(),
     // El input real en la UI es #uom (columna UM)
     um: (val('uom')||'').trim(),
     um_primaria: (val('um_primaria')||'').trim(),
     pzas_caja: num(val('pzas_caja')),
-    cant_sol: num(val('cant_sol')),
-    cant_rec: num(val('cant_rec')),
-    cantidad: num(val('cant_rec')),
+    cant_sol: cantSol,
+    cant_rec: cantidad,
+    cantidad: cantidad,
     cve_lote: (val('lote')||'').trim(),
     caducidad: (val('caducidad')||'').trim(),
     contenedor: (val('contenedor')||'').trim(),
@@ -893,10 +921,6 @@ function addLineaFromInputs(){
     pallet: (val('pallet')||'').trim(),
     lp_pallet: (val('lp_pallet')||'').trim(),
   };
-
-  // regla básica: no aceptar líneas sin artículo o sin cantidad
-  if(!L.cve_articulo){ alert('Captura un artículo'); return; }
-  if(L.cantidad<=0){ alert('Cantidad a recibir debe ser mayor a 0'); return; }
 
   RECIBIDOS.push(L);
     // Actualiza cache de OC detalle (solo UI) para reflejar Ingresado/Pendiente

@@ -1,263 +1,185 @@
 <?php
-// =====================================================
-// PQRS - Listado AssistPro (UI unificada)
-// =====================================================
 require_once __DIR__ . '/../bi/_menu_global.php';
 require_once __DIR__ . '/../../app/db.php';
 db_pdo();
 global $pdo;
 
-function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+$kpis = [
+  'NUEVA'      => 0,
+  'EN_PROCESO' => 0,
+  'EN_ESPERA'  => 0,
+  'CERRADA'    => 0,
+  'NO_PROCEDE' => 0
+];
 
-/* ================= filtros ================= */
-$f_status = trim($_GET['status'] ?? '');
-$f_clte   = trim($_GET['cve_clte'] ?? '');
-$f_ref    = trim($_GET['ref_folio'] ?? '');
-$f_desde  = trim($_GET['desde'] ?? '');
-$f_hasta  = trim($_GET['hasta'] ?? '');
-$f_q      = trim($_GET['q'] ?? '');
-
-/* ================= status ================= */
-$statusRows = $pdo->query("
-  SELECT clave,nombre,orden 
-  FROM pqrs_cat_status 
-  WHERE activo=1 
-  ORDER BY orden
+$rows_kpi = $pdo->query("
+  SELECT status_clave, COUNT(*) total
+  FROM pqrs_case
+  GROUP BY status_clave
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-/* ================= KPIs ================= */
-$kpi = [];
-foreach($pdo->query("SELECT status_clave, COUNT(*) total FROM pqrs_case GROUP BY status_clave") as $r){
-  $kpi[$r['status_clave']] = (int)$r['total'];
+foreach ($rows_kpi as $r) {
+  if (isset($kpis[$r['status_clave']])) {
+    $kpis[$r['status_clave']] = (int)$r['total'];
+  }
 }
-
-/* ================= listado ================= */
-$sql = "SELECT * FROM pqrs_case WHERE 1=1 ";
-$p=[];
-
-if($f_status){$sql.=" AND status_clave=?";$p[]=$f_status;}
-if($f_clte){$sql.=" AND cve_clte=?";$p[]=$f_clte;}
-if($f_ref){$sql.=" AND ref_folio LIKE ?";$p[]="%$f_ref%";}
-if($f_desde){$sql.=" AND DATE(creado_en)>=?";$p[]=$f_desde;}
-if($f_hasta){$sql.=" AND DATE(creado_en)<=?";$p[]=$f_hasta;}
-if($f_q){
-  $sql.=" AND (fol_pqrs LIKE ? OR ref_folio LIKE ? OR cve_clte LIKE ?)";
-  $p[]="%$f_q%";$p[]="%$f_q%";$p[]="%$f_q%";
-}
-
-$sql.=" ORDER BY id_case DESC LIMIT 500";
-$st=$pdo->prepare($sql);
-$st->execute($p);
-$rows=$st->fetchAll(PDO::FETCH_ASSOC);
 ?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>PQRS | AssistPro</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-<style>
-/* ===============================
-   ASSISTPRO UI – CORPORATIVO
-================================ */
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      background-color: #f5f7fa;
+      color: #333;
+    }
 
-/* ===== TÍTULO (REFERENCIA VISUAL) ===== */
-.assistpro-title{
-  font-weight:700;
-  color:#1e3a8a;
-  display:flex;
-  align-items:center;
-  gap:.5rem;
-}
-.assistpro-title i{
-  font-size:1.6rem;
-  color:#2563eb;
-}
+    .header {
+      background-color: #005baa;
+      color: white;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
 
-/* ===== BOTÓN NUEVA INCIDENCIA ===== */
-.btn-assistpro{
-  background:#1e3a8a;
-  border:none;
-  color:#fff;
-  font-weight:600;
-}
-.btn-assistpro:hover{
-  background:#1e40af;
-  color:#fff;
-}
+    .header i {
+      font-size: 28px;
+    }
 
-/* ===== ICONO FILTRAR ===== */
-.btn-filter i{
-  color:#1e3a8a;
-}
+    .header h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 600;
+    }
 
-/* ===== KPI CARDS ===== */
-.ap-kpi-grid{
-  display:grid;
-  grid-template-columns:repeat(5,1fr);
-  gap:14px;
-  margin-bottom:16px;
-}
-@media(max-width:1200px){
-  .ap-kpi-grid{grid-template-columns:repeat(3,1fr);}
-}
-@media(max-width:768px){
-  .ap-kpi-grid{grid-template-columns:repeat(2,1fr);}
-}
+    .content {
+      padding: 20px;
+    }
 
-.ap-kpi-card{
-  background:#fff;
-  border-radius:14px;
-  border:1px solid #e5eaf3;
-  padding:16px 10px;
-  text-align:center;
-  position:relative;
-}
-.ap-kpi-card::before{
-  content:'';
-  position:absolute;
-  top:0;left:0;
-  width:100%;
-  height:4px;
-  border-radius:14px 14px 0 0;
-}
-.ap-kpi-nueva::before{background:#2563eb;}
-.ap-kpi-proceso::before{background:#0ea5e9;}
-.ap-kpi-espera::before{background:#f59e0b;}
-.ap-kpi-cerrada::before{background:#16a34a;}
-.ap-kpi-noprocede::before{background:#dc2626;}
+    .card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
 
-.ap-kpi-title{font-size:.72rem;color:#475569;font-weight:600;}
-.ap-kpi-value{font-size:30px;font-weight:800;color:#0f172a;}
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 15px;
+    }
 
-/* ===== Filters ===== */
-.ap-filters label{font-size:.7rem;color:#6c757d;}
-.ap-filters .form-control{height:34px;}
+    .kpi-item {
+      background-color: #f0f4f8;
+      border-radius: 6px;
+      padding: 15px;
+      text-align: center;
+    }
 
-/* ===== Table ===== */
-.ap-table-wrapper{max-height:260px;overflow:auto;}
-.ap-table th{
-  position:sticky;
-  top:0;
-  background:#fff;
-  font-size:.75rem;
-}
-.ap-table td{font-size:.8rem;padding:6px 8px;}
-</style>
+    .kpi-item h3 {
+      margin: 0;
+      font-size: 16px;
+      color: #555;
+    }
 
-<div class="container-fluid mt-4">
+    .kpi-item p {
+      margin: 5px 0 0;
+      font-size: 20px;
+      font-weight: bold;
+      color: #005baa;
+    }
 
-<!-- ===== HEADER ===== -->
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h3 class="assistpro-title mb-0">
-    <i class="bi bi-chat-left-dots"></i>
-    Control de Incidencias PQRS
-  </h3>
+    .table-container {
+      max-height: 220px; /* Aproximadamente 5 filas */
+      overflow-y: auto;
+      overflow-x: auto;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+    }
 
-  <!-- ⭐ BOTÓN UNIFICADO EN COLOR ⭐ -->
-  <a href="pqrs_new.php" class="btn btn-assistpro btn-sm">
-    <i class="bi bi-plus-lg"></i> Nueva Incidencia
-  </a>
-</div>
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 600px;
+    }
 
-<!-- ===== KPIs ===== -->
-<div class="ap-kpi-grid">
-<?php foreach($statusRows as $s):
-  $total=$kpi[$s['clave']]??0;
-  $class = match($s['clave']){
-    'NUEVA'=>'ap-kpi-nueva',
-    'EN_PROCESO'=>'ap-kpi-proceso',
-    'EN_ESPERA'=>'ap-kpi-espera',
-    'CERRADA'=>'ap-kpi-cerrada',
-    'NO_PROCEDE'=>'ap-kpi-noprocede',
-    default=>''
-  };
-?>
-  <div class="ap-kpi-card <?= $class ?>">
-    <div class="ap-kpi-title"><?=h(strtoupper($s['nombre']))?></div>
-    <div class="ap-kpi-value"><?=$total?></div>
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #e0e0e0;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f1f1f1;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tr:hover {
+      background-color: #f9f9f9;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <i class="fas fa-inbox"></i>
+    <h1>Gestión de PQRS</h1>
   </div>
-<?php endforeach;?>
-</div>
 
-<!-- ===== Filters ===== -->
-<div class="card ap-filters mb-2">
-  <div class="card-body p-2">
-    <form class="row g-2" method="get">
-      <div class="col-md-2">
-        <label>Status</label>
-        <select class="form-control" name="status">
-          <option value="">Todos</option>
-          <?php foreach($statusRows as $s):?>
-            <option value="<?=h($s['clave'])?>" <?=$f_status===$s['clave']?'selected':''?>>
-              <?=h($s['nombre'])?>
-            </option>
-          <?php endforeach;?>
-        </select>
+  <div class="content">
+
+    <div class="card">
+      <h2>Resumen de Estados</h2>
+      <div class="kpi-grid">
+        <?php foreach ($kpis as $estado => $total): ?>
+          <div class="kpi-item">
+            <h3><?php echo htmlspecialchars($estado); ?></h3>
+            <p><?php echo $total; ?></p>
+          </div>
+        <?php endforeach; ?>
       </div>
-
-      <div class="col-md-2"><label>Cliente</label>
-        <input class="form-control" name="cve_clte" value="<?=h($f_clte)?>">
-      </div>
-
-      <div class="col-md-2"><label>Referencia</label>
-        <input class="form-control" name="ref_folio" value="<?=h($f_ref)?>">
-      </div>
-
-      <div class="col-md-2"><label>Búsqueda</label>
-        <input class="form-control" name="q" value="<?=h($f_q)?>">
-      </div>
-
-      <div class="col-md-2"><label>Desde</label>
-        <input type="date" class="form-control" name="desde" value="<?=h($f_desde)?>">
-      </div>
-
-      <div class="col-md-2 d-flex align-items-end gap-1">
-        <!-- ⭐ ICONO FILTRAR UNIFICADO ⭐ -->
-        <button class="btn btn-light btn-sm w-100 btn-filter">
-          <i class="fas fa-filter"></i>
-        </button>
-        <a href="pqrs.php" class="btn btn-light btn-sm w-100">Limpiar</a>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- ===== Table ===== -->
-<div class="card">
-  <div class="card-body p-2">
-    <div class="ap-table-wrapper">
-      <table class="table table-hover table-sm ap-table">
-        <thead>
-          <tr>
-            <th>Folio</th>
-            <th>Cliente</th>
-            <th>Referencia</th>
-            <th>Tipo</th>
-            <th>Status</th>
-            <th>Fecha</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-        <?php if(!$rows):?>
-          <tr><td colspan="7" class="text-muted">Sin registros</td></tr>
-        <?php else: foreach($rows as $r):?>
-          <tr>
-            <td><b><?=h($r['fol_pqrs'])?></b></td>
-            <td><?=h($r['cve_clte'])?></td>
-            <td><?=h($r['ref_folio'])?></td>
-            <td><?=h($r['tipo'])?></td>
-            <td><?=h($r['status_clave'])?></td>
-            <td><?=h($r['creado_en'])?></td>
-            <td>
-              <a href="pqrs_view.php?id_case=<?=(int)$r['id_case']?>" class="btn btn-outline-primary btn-sm">
-                Ver
-              </a>
-            </td>
-          </tr>
-        <?php endforeach; endif;?>
-        </tbody>
-      </table>
     </div>
+
+    <div class="card">
+      <h2>Listado de Casos PQRS</h2>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Cliente</th>
+              <th>Estado</th>
+              <th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php
+            $cases = $pdo->query("SELECT id, cliente_nombre, status_clave, fecha FROM pqrs_case ORDER BY fecha DESC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($cases as $case): ?>
+              <tr>
+                <td><?php echo htmlspecialchars($case['id']); ?></td>
+                <td><?php echo htmlspecialchars($case['cliente_nombre']); ?></td>
+                <td><?php echo htmlspecialchars($case['status_clave']); ?></td>
+                <td><?php echo htmlspecialchars($case['fecha']); ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
-</div>
 
-</div>
-
-<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
+</body>
+</html>
