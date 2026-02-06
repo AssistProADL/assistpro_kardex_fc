@@ -445,7 +445,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Contactos', 'url' => 'catalogos/contactos.php', 'icono' => 'fa-layer-group'],
 
 
-                ['titulo' => 'Protocolos de Entrada', 'url' => 'catalogos/protocolos_entrada.php', 'icono' => 'fa-clipboard-check'],
+                ['titulo' => 'Tipos de Movimientos', 'url' => 'catalogos/tipos_movimiento_doc.php', 'icono' => 'fa-clipboard-check'],
                 ['titulo' => 'Proyectos | CC', 'url' => 'catalogos/proyecto.php', 'icono' => 'fa-diagram-project'],
                 ['titulo' => 'Ajustes | Incidencias', 'url' => 'catalogos/ajustes_incidencias.php', 'icono' => 'fa-triangle-exclamation'],
                 ['titulo' => 'QA | Cuarentena', 'url' => 'catalogos/qa_cuarentena.php', 'icono' => 'fa-triangle-exclamation'],

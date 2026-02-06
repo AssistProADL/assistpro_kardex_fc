@@ -31,7 +31,68 @@ function norm01($v, $def = 1)
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
+// ---------------------------
+// FALLBACK INTELIGENTE
+// - si UI no manda action, no tronamos
+// ---------------------------
+if ($action === '') {
+  if (isset($_GET['cve_articulo']) || isset($_POST['cve_articulo'])) {
+    $action = 'lookup';
+  } elseif (isset($_GET['q']) || isset($_POST['q'])) {
+    $action = 'list';
+  }
+}
+
 try {
+
+  // ===================== LOOKUP (por clave) =====================
+  // Uso:
+  //   /public/api/articulos_api.php?cve_articulo=D70035100
+  //   /public/api/articulos_api.php?action=lookup&cve_articulo=D70035100&cve_almac=38
+  if ($action === 'lookup') {
+    $cve_articulo = clean($_GET['cve_articulo'] ?? $_POST['cve_articulo'] ?? '');
+    if ($cve_articulo === '')
+      jerr('cve_articulo es obligatorio');
+
+    // opcional: limitar por almacen (si aplica en tu c_articulo)
+    $cve_almac = clean($_GET['cve_almac'] ?? $_POST['cve_almac'] ?? '');
+
+    $sql = "SELECT
+              a.id,
+              a.cve_articulo,
+              a.des_articulo,
+              a.des_detallada,
+              a.unidadMedida,
+              um.des_umed as unidadMedida_nombre,
+              a.cve_umed,
+              a.num_multiplo,
+              a.imp_costo,
+              a.PrecioVenta,
+              a.cve_almac,
+              alm.clave as almacen_clave,
+              alm.nombre as almacen_nombre,
+              a.Activo
+            FROM c_articulo a
+            LEFT JOIN c_unimed um ON um.id_umed = a.unidadMedida
+            LEFT JOIN c_almacenp alm ON alm.id = a.cve_almac
+            WHERE a.cve_articulo = :cve ";
+
+    $p = [':cve' => $cve_articulo];
+
+    if ($cve_almac !== '') {
+      $sql .= " AND a.cve_almac = :alm ";
+      $p[':alm'] = (int)$cve_almac;
+    }
+
+    $sql .= " LIMIT 1";
+
+    $row = db_one($sql, $p);
+    if (!$row)
+      jerr('articulo no encontrado');
+
+    echo json_encode(['ok' => true, 'data' => $row], JSON_UNESCAPED_UNICODE);
+    exit;
+  }
 
   // ===================== LIST =====================
   if ($action === 'list') {
@@ -327,7 +388,6 @@ try {
     $rows = db_all($sql, $p);
     $out = fopen('php://output', 'w');
 
-    // Mapping DB -> Friendly
     $map = [
       'cve_almac' => 'Almacén',
       'id' => 'ID',
@@ -358,7 +418,7 @@ try {
       'Activo' => 'Estatus'
     ];
 
-    fputcsv($out, array_values($map)); // Headers
+    fputcsv($out, array_values($map));
 
     foreach ($rows as $r) {
       $line = [];
@@ -370,7 +430,7 @@ try {
     exit;
   }
 
-  // ===================== AUTOCOMPLETE (CATALOGOS CON JERARQUÍA) =====================
+  // ===================== AUTOCOMPLETE =====================
   if ($action == 'autocomplete') {
     $field = clean($_GET['field'] ?? '');
     $cve_almac = clean($_GET['cve_almac'] ?? '');
@@ -436,9 +496,7 @@ try {
         exit;
     }
 
-    // Use positional parameters (?) instead of named parameters to avoid HY093
     $rows = db_all($sql, $params);
-
     echo json_encode(['values' => $rows], JSON_UNESCAPED_UNICODE);
     exit;
   }
@@ -483,35 +541,10 @@ try {
 
     fputcsv($out, array_values($map));
 
-    // Example Row
     $ex = [
-      '1',
-      '1001',
-      'ART-001',
-      'ARTICULO DEMO',
-      '1',
-      '1',
-      '12.50',
-      '18.90',
-      'PT',
-      'GPO1',
-      'CLAS1',
-      'N',
-      'N',
-      'N',
-      'N',
-      'N',
-      'MESES',
-      '0',
-      'SAP-001',
-      'ALT-001',
-      '7500000000001',
-      '7500000000002',
-      '0',
-      'CAT',
-      'SUB',
-      '0',
-      '1'
+      '1','1001','ART-001','ARTICULO DEMO','1','1','12.50','18.90','PT','GPO1','CLAS1',
+      'N','N','N','N','N','MESES','0','SAP-001','ALT-001','7500000000001','7500000000002',
+      '0','CAT','SUB','0','1'
     ];
     fputcsv($out, $ex);
 
