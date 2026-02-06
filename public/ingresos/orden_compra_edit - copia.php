@@ -508,17 +508,31 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
           <div class="col-md-2">
             <label class="ap-label">Almacén *</label>
-            <?php $almSel = (string)($encabezado['Cve_Almac'] ?? ''); ?>
-            <select name="Cve_Almac" class="form-select" <?php echo $esEdicion ? 'disabled' : ''; ?>>
-              <option value="">Seleccione...</option>
-              <?php foreach ($almacenes as $a):
-                $cve=(string)$a['clave']; $nom=(string)$a['nombre']; ?>
-                <option value="<?php echo e($cve); ?>" <?php echo ($almSel===$cve)?'selected':''; ?>>
-                  <?php echo e($cve.' - '.$nom); ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <?php if ($esEdicion): ?><input type="hidden" name="Cve_Almac" value="<?php echo e($almSel); ?>"><?php endif; ?>
+            
+<?php
+// ================= Almacén =================
+// Valor seleccionado SOLO si es edición
+$almSel = '';
+if ($esEdicion && !empty($encabezado['Cve_Almac'])) {
+    $almSel = (string)$encabezado['Cve_Almac'];
+}
+?>
+
+<select name="Cve_Almac" class="form-select" <?php echo $esEdicion ? 'disabled' : ''; ?>>
+    <option value="" selected>Seleccione...</option>
+
+    <?php foreach ($almacenes as $a):
+        $cve = (string)$a['clave'];
+        $nom = (string)$a['nombre'];
+        $sel = ($almSel !== '' && $almSel === $cve) ? 'selected' : '';
+    ?>
+        <option value="<?php echo e($cve); ?>" <?php echo $sel; ?>>
+            <?php echo e($cve . ' - ' . $nom); ?>
+        </option>
+    <?php endforeach; ?>
+</select>
+
+            <?php if ($esEdicion): ?>"><?php endif; ?>
           </div>
 
           <div class="col-md-2">
