@@ -13,75 +13,62 @@ function upper($v): string { return strtoupper(trim((string)$v)); }
  * - Se basa en th_aduana.Pedimento
  * - Concurrencia: dentro de transacción, toma el último folio del día y suma +1
  */
-function generarFolioOC(PDO $pdo, string $tipoOc, string $fechaISO): string {
+function generarFolioOC(PDO $pdo, string $tipoOc, ?string $fechaISO = null): string {
+    // Fuente única: SP + tabla c_folios
     $tipoOc = upper($tipoOc);
     if ($tipoOc === '') $tipoOc = 'OCN';
 
     $fechaISO = $fechaISO ?: date('Y-m-d');
-    $ymd = date('Ymd', strtotime($fechaISO));
-    $pref = $tipoOc . $ymd; // OCN20260202
-    $serie = '01';
 
-    // 1) Preferente: c_folios (normalización corporativa de folios)
-    //    Convención: modulo='OC', serie=$serie, prefijo=$tipoOc
+    $startedTx = false;
     try {
-        $pdo->beginTransaction();
+        if (!$pdo->inTransaction()) {
+            $pdo->beginTransaction();
+            $startedTx = true;
+        }
 
-        // Si existe registro, bloquea para update
-        $sel = $pdo->prepare("SELECT id, prefijo, folio_actual, longitud_num, rellenar_ceros, fecha_mod
-                              FROM c_folios
-                              WHERE modulo='OC' AND serie=? AND (prefijo=? OR prefijo IS NULL OR prefijo='') AND activo=1
-                              ORDER BY id ASC
-                              LIMIT 1
-                              FOR UPDATE");
-        $sel->execute([$serie, $tipoOc]);
-        $r = $sel->fetch(PDO::FETCH_ASSOC);
+        $stmt = $pdo->prepare("
+            CALL sp_next_folio_diario(
+                :empresa_id,
+                :modulo,
+                :serie,
+                :prefijo,
+                :fecha_doc,
+                :usuario,
+                @p_folio,
+                @p_consecutivo
+            )
+        ");
 
-        if ($r) {
-            // Reset diario usando fecha_mod (si cambió el día, reinicia secuencia)
-            $ultimoDia = $r['fecha_mod'] ? date('Y-m-d', strtotime($r['fecha_mod'])) : null;
-            $folio_actual = (int)($r['folio_actual'] ?? 0);
-            if ($ultimoDia !== date('Y-m-d')) $folio_actual = 0;
+        $stmt->execute([
+            ':empresa_id' => 1,
+            ':modulo'     => 'OC',
+            ':serie'      => '01',
+            ':prefijo'    => $tipoOc,
+            ':fecha_doc'  => $fechaISO,
+            ':usuario'    => 'system',
+        ]);
 
-            $folio_actual++;
-            $upd = $pdo->prepare("UPDATE c_folios SET folio_actual=?, fecha_mod=NOW() WHERE id=?");
-            $upd->execute([$folio_actual, $r['id']]);
+        // Importante: cerrar cursor para permitir siguientes queries en algunos drivers
+        $stmt->closeCursor();
 
+        $row = $pdo->query("SELECT @p_folio AS folio")->fetch(PDO::FETCH_ASSOC);
+        $folio = (string)($row['folio'] ?? '');
+
+        if ($folio === '') {
+            throw new Exception('SP no devolvió folio');
+        }
+
+        if ($startedTx) {
             $pdo->commit();
-
-            $len  = max(1, (int)($r['longitud_num'] ?? 4));
-            $pad  = ((int)($r['rellenar_ceros'] ?? 1) === 1) ? str_pad((string)$folio_actual, $len, '0', STR_PAD_LEFT) : (string)$folio_actual;
-
-            return $pref . '-' . $pad;
         }
 
-        $pdo->rollBack();
+        return $folio;
+
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-    }
-
-    // 2) Fallback: th_folio_seq (compatibilidad)
-    $pdo->beginTransaction();
-    try {
-        $stmt = $pdo->prepare("SELECT last_seq FROM th_folio_seq WHERE prefijo = ? AND fecha = ? FOR UPDATE");
-        $stmt->execute([$tipoOc, $fechaISO]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        $seq = 1;
-        if ($row) {
-            $seq = intval($row['last_seq']) + 1;
-            $upd = $pdo->prepare("UPDATE th_folio_seq SET last_seq = ?, updated_at = NOW() WHERE prefijo = ? AND fecha = ?");
-            $upd->execute([$seq, $tipoOc, $fechaISO]);
-        } else {
-            $ins = $pdo->prepare("INSERT INTO th_folio_seq(prefijo, fecha, last_seq, updated_at) VALUES(?,?,?,NOW())");
-            $ins->execute([$tipoOc, $fechaISO, $seq]);
+        if ($startedTx && $pdo->inTransaction()) {
+            $pdo->rollBack();
         }
-        $pdo->commit();
-
-        $seq_str = str_pad((string)$seq, 3, '0', STR_PAD_LEFT);
-        return $pref . '-' . $seq_str;
-    } catch (Throwable $e) {
-        $pdo->rollBack();
         throw $e;
     }
 }
@@ -218,6 +205,14 @@ if ($esEdicion) {
 
 /** =================== POST Guardar =================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // === Generación de folio SOLO al guardar (POST) ===
+    if (empty($_POST['folio_oc'])) {
+        $folioOC = generarFolioOC($pdo, $_POST['tipo_oc'], ($_POST['fech_pedimento'] ?? date('Y-m-d')));
+    } else {
+        $folioOC = $_POST['folio_oc'];
+    }
+
+
 
     // Rehidrata encabezado desde POST SIEMPRE
     $encabezado['ID_Proveedor']   = (int)($_POST['ID_Proveedor'] ?? 0);
@@ -302,7 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Si el usuario NO puso folio, lo generamos.
                 if ($encabezado['Pedimento'] === '') {
-                    $encabezado['Pedimento'] = generarFolioOC($pdo, $encabezado['tipo_oc'], $encabezado['fech_pedimento']);
+                    $encabezado['Pedimento'] = generarFolioOC($pdo, $encabezado['tipo_oc'], ($encabezado['fech_pedimento'] ?? date('Y-m-d')));
                 } else {
                     // Normaliza y valida formato mínimo (opcional)
                     $encabezado['Pedimento'] = upper($encabezado['Pedimento']);
@@ -508,17 +503,31 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
           <div class="col-md-2">
             <label class="ap-label">Almacén *</label>
-            <?php $almSel = (string)($encabezado['Cve_Almac'] ?? ''); ?>
-            <select name="Cve_Almac" class="form-select" <?php echo $esEdicion ? 'disabled' : ''; ?>>
-              <option value="">Seleccione...</option>
-              <?php foreach ($almacenes as $a):
-                $cve=(string)$a['clave']; $nom=(string)$a['nombre']; ?>
-                <option value="<?php echo e($cve); ?>" <?php echo ($almSel===$cve)?'selected':''; ?>>
-                  <?php echo e($cve.' - '.$nom); ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <?php if ($esEdicion): ?><input type="hidden" name="Cve_Almac" value="<?php echo e($almSel); ?>"><?php endif; ?>
+            
+<?php
+// ================= Almacén =================
+// Valor seleccionado SOLO si es edición
+$almSel = '';
+if ($esEdicion && !empty($encabezado['Cve_Almac'])) {
+    $almSel = (string)$encabezado['Cve_Almac'];
+}
+?>
+
+<select name="Cve_Almac" class="form-select" <?php echo $esEdicion ? 'disabled' : ''; ?>>
+    <option value="" selected>Seleccione...</option>
+
+    <?php foreach ($almacenes as $a):
+        $cve = (string)$a['clave'];
+        $nom = (string)$a['nombre'];
+        $sel = ($almSel !== '' && $almSel === $cve) ? 'selected' : '';
+    ?>
+        <option value="<?php echo e($cve); ?>" <?php echo $sel; ?>>
+            <?php echo e($cve . ' - ' . $nom); ?>
+        </option>
+    <?php endforeach; ?>
+</select>
+
+            <?php if ($esEdicion): ?>"><?php endif; ?>
           </div>
 
           <div class="col-md-2">
