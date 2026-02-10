@@ -9,19 +9,19 @@ $almacen_id = $_GET['almacen_id'] ?? null;
 $id_rule    = $_GET['id_rule']    ?? null; // opcional (deep-link)
 
 if (!$promo_id) {
-    echo '<div class="alert alert-danger">Error: Promoción no especificada. <a href="promociones.php">Volver</a></div>';
-    include '../../bi/_menu_global_end.php';
-    exit;
+  echo '<div class="alert alert-danger">Error: Promoción no especificada. <a href="promociones.php">Volver</a></div>';
+  include '../../bi/_menu_global_end.php';
+  exit;
 }
 ?>
 <div class="container-fluid py-3">
   <div class="d-flex align-items-center justify-content-between mb-2">
     <div>
       <h3 class="mb-0">Beneficios / Rewards</h3>
-      <div class="text-muted small">Promoción #<?= htmlspecialchars($promo_id) ?><?= $almacen_id ? ' · Almacén #'.htmlspecialchars($almacen_id) : '' ?></div>
+      <div class="text-muted small">Promoción #<?= htmlspecialchars($promo_id) ?><?= $almacen_id ? ' · Almacén #' . htmlspecialchars($almacen_id) : '' ?></div>
     </div>
     <div class="d-flex gap-2">
-      <a class="btn btn-outline-secondary" href="promociones.php<?= $almacen_id ? '?almacen_id='.urlencode($almacen_id) : '' ?>">Volver</a>
+      <a class="btn btn-outline-secondary" href="promociones.php<?= $almacen_id ? '?almacen_id=' . urlencode($almacen_id) : '' ?>">Volver</a>
     </div>
   </div>
 
@@ -118,108 +118,138 @@ if (!$promo_id) {
 </div>
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
 
 <script>
   // Desde /public/sfa/promociones/ => /public/api/promociones/
-  const API_RULES   = '../../api/promociones/reglas.php';
-  const API_REWARDS = '../../api/promociones/rewards.php';
+  const API = '../../api/promociones/promociones_api.php';
 
-  const promoId   = <?= json_encode($promo_id) ?>;
+  const promoId = <?= json_encode($promo_id) ?>;
   const almacenId = <?= json_encode($almacen_id) ?>;
   const presetRuleId = <?= json_encode($id_rule) ?>;
 
   let tabla = null;
 
-  async function apiGet(url){
-    const r = await fetch(url, {credentials:'same-origin'});
-    const j = await r.json().catch(()=>null);
+  async function apiGet(url) {
+    const r = await fetch(url, {
+      credentials: 'same-origin'
+    });
+    const j = await r.json().catch(() => null);
     if (!j) throw new Error('Respuesta inválida del servidor');
     if (j.ok === false) throw new Error(j.detalle || j.error || 'Error servidor');
     return j;
   }
 
-  async function loadRules(){
-    // Espera endpoint: reglas.php?action=rules_list&promo_id=#
-    const url = `${API_RULES}?action=rules_list&promo_id=${encodeURIComponent(promoId)}`;
-    const j = await apiGet(url);
+  let allRules = [];
+  let allRewards = [];
 
-    const rules = (j.data || []);
+  async function loadPromoData() {
+    const j = await apiGet(`${API}?action=get&id=${promoId}`);
+
+    allRules = j.rules || [];
+    allRewards = j.rewards || [];
+
     const sel = document.getElementById('ruleSelect');
-
     sel.innerHTML = '';
-    if (!rules.length){
+
+    if (!allRules.length) {
       sel.innerHTML = '<option value="">(Sin reglas)</option>';
       return;
     }
 
-    for (const r of rules){
+    allRules.forEach(r => {
       const opt = document.createElement('option');
-      opt.value = r.id_rule ?? r.id ?? '';
-      const lvl = (r.nivel ?? '');
-      const trg = (r.trigger_tipo ?? '');
-      opt.textContent = `#${opt.value} · Nivel ${lvl} · ${trg}`;
+      opt.value = r.id_rule;
+      opt.textContent = `Nivel ${r.nivel} · ${r.trigger_tipo}`;
       sel.appendChild(opt);
-    }
+    });
 
-    // Selección preferente: id_rule en querystring, si existe
-    if (presetRuleId){
-      sel.value = presetRuleId;
-    }
+    if (presetRuleId) sel.value = presetRuleId;
   }
 
-  function getCurrentRuleId(){
+
+  function getCurrentRuleId() {
     const v = document.getElementById('ruleSelect').value;
     return v ? v : null;
   }
 
-  function initTable(){
+  function initTable() {
     const ruleId = getCurrentRuleId();
-    if (!ruleId){
-      if (tabla){ tabla.clear().draw(); }
+
+    if (!ruleId) {
+      if (tabla) tabla.clear().draw();
       return;
     }
 
-    if (tabla){
-      tabla.ajax.url(`${API_REWARDS}?action=rewards_list&id_rule=${encodeURIComponent(ruleId)}`).load();
-      return;
-    }
+    const rows = allRewards.filter(r => String(r.id_rule) === String(ruleId));
 
-    tabla = $('#tablaRewards').DataTable({
-      ajax: {
-        url: `${API_REWARDS}?action=rewards_list&id_rule=${encodeURIComponent(ruleId)}`,
-        dataSrc: function(json){ return (json && json.data) ? json.data : []; }
-      },
-      columns: [
-        { data: null, orderable:false, render: function(row){
-            const id = row.id_reward ?? row.id ?? '';
-            return `<button class="btn btn-sm btn-outline-danger" onclick="delReward(${id})">Eliminar</button>`;
-        }},
-        { data: 'id_reward' },
-        { data: 'reward_tipo' },
-        { data: 'valor' },
-        { data: 'tope_valor' },
-        { data: 'cve_articulo' },
-        { data: 'qty' },
-        { data: 'unimed' },
-        { data: 'aplica_sobre' },
-        { data: 'observaciones' },
-        { data: 'activo' }
-      ],
-      order: [[1,'desc']]
-    });
+    if (!tabla) {
+      tabla = $('#tablaRewards').DataTable({
+        data: rows,
+        columns: [{
+            data: null,
+            orderable: false,
+            render: function(r) {
+              return `
+              <button class="btn btn-sm btn-outline-danger"
+                onclick="delReward(${r.id_reward})">
+                Eliminar
+              </button>`;
+            }
+          },
+          {
+            data: 'id_reward'
+          },
+          {
+            data: 'reward_tipo'
+          },
+          {
+            data: 'valor'
+          },
+          {
+            data: 'tope_valor'
+          },
+          {
+            data: 'cve_articulo'
+          },
+          {
+            data: 'qty'
+          },
+          {
+            data: 'unimed'
+          },
+          {
+            data: 'aplica_sobre'
+          },
+          {
+            data: 'observaciones'
+          },
+          {
+            data: 'activo'
+          }
+        ],
+        order: [
+          [1, 'desc']
+        ]
+      });
+    } else {
+      tabla.clear().rows.add(rows).draw();
+    }
   }
 
-  async function addReward(){
+
+  async function addReward() {
     const ruleId = getCurrentRuleId();
-    if (!ruleId){
+    if (!ruleId) {
       alert('Selecciona una regla.');
       return;
     }
 
     const payload = new URLSearchParams();
-    payload.set('action', 'rewards_add');
+    payload.set('action', 'reward_save');
     payload.set('id_rule', ruleId);
     payload.set('reward_tipo', document.getElementById('reward_tipo').value);
     payload.set('valor', document.getElementById('valor').value || '0');
@@ -230,10 +260,14 @@ if (!$promo_id) {
     payload.set('aplica_sobre', document.getElementById('aplica_sobre').value || 'TOTAL');
     payload.set('observaciones', document.getElementById('observaciones').value || '');
 
-    const r = await fetch(API_REWARDS, { method:'POST', body: payload, credentials:'same-origin' });
-    const j = await r.json().catch(()=>null);
+    const r = await fetch(API, {
+      method: 'POST',
+      body: payload,
+      credentials: 'same-origin'
+    });
+    const j = await r.json().catch(() => null);
 
-    if (!j || j.ok === false){
+    if (!j || j.ok === false) {
       alert((j && (j.detalle || j.error)) ? (j.detalle || j.error) : 'Error al guardar beneficio');
       return;
     }
@@ -246,22 +280,26 @@ if (!$promo_id) {
     document.getElementById('unimed').value = '';
     document.getElementById('observaciones').value = '';
 
-    if (tabla) tabla.ajax.reload();
+    await loadPromoData();
+    initTable();
+
   }
 
-  async function delReward(id){
+  async function delReward(id) {
     if (!id) return;
     if (!confirm('¿Eliminar beneficio?')) return;
-    await fetch(`${API_REWARDS}?action=rewards_delete&id=${encodeURIComponent(id)}`);
-    if (tabla) tabla.ajax.reload();
+    await fetch(`${API}?action=reward_del&id_reward=${encodeURIComponent(id)}`);
+    await loadPromoData();
+    initTable();
+
   }
   window.delReward = delReward;
 
-  (async function(){
-    await loadRules();
+  (async function() {
+    await loadPromoData();
     initTable();
 
-    document.getElementById('ruleSelect').addEventListener('change', function(){
+    document.getElementById('ruleSelect').addEventListener('change', function() {
       initTable();
     });
     document.getElementById('btnAdd').addEventListener('click', addReward);

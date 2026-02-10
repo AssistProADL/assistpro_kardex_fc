@@ -8,17 +8,80 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
 ?>
 
 <style>
-  .ap-title{font-weight:700;letter-spacing:.2px}
-  .ap-card{border:1px solid rgba(0,0,0,.08);border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.05);background:#fff}
-  .ap-help{font-size:12px;color:#6c757d}
-  .ap-pill{font-size:12px;border-radius:999px;padding:.15rem .55rem;background:#f1f3f5;border:1px solid rgba(0,0,0,.06)}
-  .ap-result{max-height:240px;overflow:auto;border:1px solid rgba(0,0,0,.08);border-radius:10px}
-  .ap-result .list-group-item{cursor:pointer}
-  .ap-result .list-group-item:hover{background:#f8f9fa}
-  .ap-chip{display:inline-flex;align-items:center;gap:.4rem;border:1px solid rgba(0,0,0,.12);border-radius:999px;padding:.25rem .6rem;margin:.15rem .15rem 0 0;font-size:12px;background:#fff}
-  .ap-chip button{border:none;background:transparent;padding:0;line-height:1;font-size:14px;cursor:pointer;color:#dc3545}
-  .ap-divider{border-top:1px solid rgba(0,0,0,.08)}
-  .kbd{font-size:11px;border:1px solid rgba(0,0,0,.15);border-bottom-width:2px;border-radius:6px;padding:0 6px;background:#fff}
+  .ap-title {
+    font-weight: 700;
+    letter-spacing: .2px
+  }
+
+  .ap-card {
+    border: 1px solid rgba(0, 0, 0, .08);
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .05);
+    background: #fff
+  }
+
+  .ap-help {
+    font-size: 12px;
+    color: #6c757d
+  }
+
+  .ap-pill {
+    font-size: 12px;
+    border-radius: 999px;
+    padding: .15rem .55rem;
+    background: #f1f3f5;
+    border: 1px solid rgba(0, 0, 0, .06)
+  }
+
+  .ap-result {
+    max-height: 240px;
+    overflow: auto;
+    border: 1px solid rgba(0, 0, 0, .08);
+    border-radius: 10px
+  }
+
+  .ap-result .list-group-item {
+    cursor: pointer
+  }
+
+  .ap-result .list-group-item:hover {
+    background: #f8f9fa
+  }
+
+  .ap-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    border: 1px solid rgba(0, 0, 0, .12);
+    border-radius: 999px;
+    padding: .25rem .6rem;
+    margin: .15rem .15rem 0 0;
+    font-size: 12px;
+    background: #fff
+  }
+
+  .ap-chip button {
+    border: none;
+    background: transparent;
+    padding: 0;
+    line-height: 1;
+    font-size: 14px;
+    cursor: pointer;
+    color: #dc3545
+  }
+
+  .ap-divider {
+    border-top: 1px solid rgba(0, 0, 0, .08)
+  }
+
+  .kbd {
+    font-size: 11px;
+    border: 1px solid rgba(0, 0, 0, .15);
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    padding: 0 6px;
+    background: #fff
+  }
 </style>
 
 <div class="container-fluid mt-3">
@@ -45,7 +108,12 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
           <div class="fw-bold">Configuración general</div>
           <span class="ap-pill">Fase: UI</span>
         </div>
-
+        <div class="mb-2">
+          <label class="form-label">Almacén <span class="text-danger">*</span></label>
+          <select id="id_almacen" class="form-select form-select-sm">
+            <option value="">Seleccione un almacén</option>
+          </select>
+        </div>
         <div class="mb-2">
           <label class="form-label">Tipo de promoción</label>
           <select id="tipo_promo" class="form-select form-select-sm">
@@ -96,14 +164,37 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
 
         <div id="bloque_acumulada" class="ap-divider pt-3 mt-3" style="display:none;">
           <div class="fw-bold mb-2">Venta Acumulada</div>
+
           <label class="form-label mt-2">Monto acumulado objetivo</label>
-          <input type="number" class="form-control form-control-sm" placeholder="Ej. 100000">
-          <label class="form-label mt-2">Periodo</label>
-          <select class="form-select form-select-sm">
-            <option>Últimos 30 días</option>
-            <option>Mes calendario</option>
+          <input id="acc_monto" type="number" class="form-control form-control-sm" placeholder="Ej. 100000">
+
+          <label class="form-label mt-2">Tipo de periodo</label>
+          <select id="acc_periodo_tipo" class="form-select form-select-sm">
+            <option value="RELATIVO">Periodo relativo</option>
+            <option value="FIJO">Periodo fijo (fechas)</option>
           </select>
+
+          <!-- Periodo relativo -->
+          <div id="acc_relativo" class="mt-2">
+            <select id="acc_periodo_rel" class="form-select form-select-sm">
+              <option value="30D">Últimos 30 días</option>
+              <option value="MES">Mes calendario</option>
+            </select>
+          </div>
+
+          <!-- Periodo fijo -->
+          <div id="acc_fijo" class="row g-2 mt-2" style="display:none;">
+            <div class="col-6">
+              <label class="form-label">Desde</label>
+              <input id="acc_ini" type="date" class="form-control form-control-sm">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Hasta</label>
+              <input id="acc_fin" type="date" class="form-control form-control-sm">
+            </div>
+          </div>
         </div>
+
 
       </div>
     </div>
@@ -244,10 +335,10 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
     </div>
   </div>
 
-  <div class="mt-3 ap-help">
+  <!-- <div class="mt-3 ap-help">
     API detectada: <code id="api_info"></code>
   </div>
-
+-->
 </div>
 
 <script>
@@ -258,72 +349,143 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
   //  => basePublic = /assistpro_kardex_fc/public
   // =========================================================
   const PATH = window.location.pathname;
-  const basePublic = PATH.includes('/public/')
-    ? PATH.split('/public/')[0] + '/public'
-    : '/public';
+  const basePublic = PATH.includes('/public/') ?
+    PATH.split('/public/')[0] + '/public' :
+    '/public';
 
   const API_ARTICULOS = basePublic + '/api/articulos_api.php';
-  const API_GRUPOS    = basePublic + '/api/api_grupos.php';
+  const API_GRUPOS = basePublic + '/api/api_grupos.php';
 
-  document.getElementById('api_info').textContent = `${API_ARTICULOS} | ${API_GRUPOS}`;
+  async function loadAlmacenes() {
+    const r = await fetch(
+      basePublic + '/api/promociones/promociones_api.php?action=almacenes', {
+        credentials: 'same-origin'
+      }
+    );
+    const j = await r.json();
+
+    const sel = $('id_almacen');
+    sel.innerHTML = '<option value="">Seleccione un almacén</option>';
+
+    j.rows.forEach(a => {
+      sel.add(new Option(`(${a.id}) ${a.nombre}`, a.id));
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadAlmacenes();
+  });
+
+
+
+  // document.getElementById('api_info').textContent = `${API_ARTICULOS} | ${API_GRUPOS}`;
 
   // Config UX
   const LIVE_MIN_CHARS = 2;
-  const LIVE_DEBOUNCE  = 220;
-  const MAX_ROWS       = 25;
+  const LIVE_DEBOUNCE = 220;
+  const MAX_ROWS = 25;
 
   const alt = [];
   const timers = {};
-  const lastRows = { base: [], rw: [], alt: [] };
+  const lastRows = {
+    base: [],
+    rw: [],
+    alt: []
+  };
 
-  function $(id){ return document.getElementById(id); }
-
- function setBloquePorTipo(){
-  const t = $('tipo_promo').value;
-
-  // Condiciones
-  $('bloque_unidades').style.display  = (t==='UNIDADES') ? 'block' : 'none';
-  $('bloque_ticket').style.display    = (t==='TICKET') ? 'block' : 'none';
-  $('bloque_acumulada').style.display = (t==='ACUMULADA') ? 'block' : 'none';
-
-  // Vigencia SIEMPRE visible
-  const vigencia = document.querySelector('#bloque_unidades .ap-divider');
-  if (vigencia) {
-    vigencia.style.display = 'block';
+  function $(id) {
+    return document.getElementById(id);
   }
-}
+
+  function setBloquePorTipo() {
+    const t = $('tipo_promo').value;
+
+    const isUnidades = (t === 'UNIDADES');
+    const isTicket = (t === 'TICKET');
+    const isAcumulada = (t === 'ACUMULADA');
+
+    // Mostrar / ocultar bloques
+    $('bloque_unidades').style.display = isUnidades ? 'block' : 'none';
+    $('bloque_ticket').style.display = isTicket ? 'block' : 'none';
+    $('bloque_acumulada').style.display = isAcumulada ? 'block' : 'none';
+
+    // 🔹 Vigencia SOLO para UNIDADES
+    const vigIni = $('vig_ini');
+    const vigFin = $('vig_fin');
+
+    if (isUnidades) {
+      vigIni.disabled = false;
+      vigFin.disabled = false;
+    } else {
+      // oculto + limpio + deshabilito
+      vigIni.value = '';
+      vigFin.value = '';
+      vigIni.disabled = true;
+      vigFin.disabled = true;
+    }
+    if (isAcumulada) {
+      setPeriodoAcumulada();
+    }
+
+
+  }
+
+  function setPeriodoAcumulada() {
+    const tipo = $('acc_periodo_tipo').value;
+    $('acc_relativo').style.display = (tipo === 'RELATIVO') ? 'block' : 'none';
+    $('acc_fijo').style.display = (tipo === 'FIJO') ? 'flex' : 'none';
+  }
+
+  document.addEventListener('change', e => {
+    if (e.target?.id === 'acc_periodo_tipo') {
+      setPeriodoAcumulada();
+    }
+  });
+
+
 
 
   $('tipo_promo').addEventListener('change', setBloquePorTipo);
   setBloquePorTipo();
 
-  function escapeHtml(s){
-    return (s||'').toString().replace(/[&<>"']/g, m => ({
-      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
-    }[m]));
+  function escapeHtml(s) {
+    return (s || '').toString().replace(/[&<>"']/g, m => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    } [m]));
   }
 
-  async function fetchJson(url){
-    const r = await fetch(url, {credentials:'same-origin', cache:'no-store'});
+  async function fetchJson(url) {
+    const r = await fetch(url, {
+      credentials: 'same-origin',
+      cache: 'no-store'
+    });
     const txt = await r.text();
 
-    if(!r.ok){
+    if (!r.ok) {
       throw new Error(`HTTP ${r.status} ${r.statusText}: ${txt.slice(0,200)}`);
     }
-    try { return JSON.parse(txt); }
-    catch(e){ throw new Error('Respuesta no JSON: ' + txt.slice(0,200)); }
+    try {
+      return JSON.parse(txt);
+    } catch (e) {
+      throw new Error('Respuesta no JSON: ' + txt.slice(0, 200));
+    }
   }
 
-  function normalizeRows(j){
+  function normalizeRows(j) {
     if (j && Array.isArray(j.rows)) return j.rows;
     if (j && Array.isArray(j.data)) return j.data;
     if (j && j.data && Array.isArray(j.data.rows)) return j.data.rows;
     return [];
   }
 
-  function rowToPick(r, tipo){
-    let val = '', label = '';
-    if(tipo === 'PRODUCTO'){
+  function rowToPick(r, tipo) {
+    let val = '',
+      label = '';
+    if (tipo === 'PRODUCTO') {
       val = (r.cve_articulo ?? r.Clave ?? r.clave ?? r.id ?? '').toString();
       const des = (r.des_articulo ?? r.Descripcion ?? r.descripcion ?? '').toString();
       label = des ? `${val} - ${des}` : `${val}`;
@@ -332,31 +494,34 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
       const des = (r.des_gpoart ?? r.Descripcion ?? r.descripcion ?? '').toString();
       label = des ? `${val} - ${des}` : `${val}`;
     }
-    return { val, label };
+    return {
+      val,
+      label
+    };
   }
 
-  function renderList(scope, rows, tipo, onPick){
+  function renderList(scope, rows, tipo, onPick) {
     const box = $(scope + '_res');
     box.innerHTML = '';
 
-    if(!rows.length){
+    if (!rows.length) {
       box.innerHTML = '<div class="list-group-item small text-muted">Sin resultados</div>';
       return;
     }
 
-    rows.slice(0, MAX_ROWS).forEach(r=>{
+    rows.slice(0, MAX_ROWS).forEach(r => {
       const pick = rowToPick(r, tipo);
       const a = document.createElement('a');
       a.className = 'list-group-item list-group-item-action';
       a.innerHTML = `<div class="small"><b>${escapeHtml(pick.val)}</b> <span class="text-muted">${escapeHtml(pick.label.replace(pick.val+' - ',''))}</span></div>`;
-      a.addEventListener('click', ()=>onPick(pick));
+      a.addEventListener('click', () => onPick(pick));
       box.appendChild(a);
     });
   }
 
-  function setSelected(scope, tipo, val, label){
-    $(scope + '_tipo_sel').value  = tipo;
-    $(scope + '_val_sel').value   = val;
+  function setSelected(scope, tipo, val, label) {
+    $(scope + '_tipo_sel').value = tipo;
+    $(scope + '_val_sel').value = val;
     $(scope + '_label_sel').value = label;
 
     $(scope + '_sel').innerHTML = `
@@ -367,42 +532,55 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
       </span>
     `;
     $(scope + '_res').innerHTML = '';
+    // limpiar input de búsqueda
+    if ($(scope + '_q')) {
+      $(scope + '_q').value = '';
+    }
+
   }
 
-  function clearSelected(scope){
+  function clearSelected(scope) {
     $(scope + '_tipo_sel').value = '';
     $(scope + '_val_sel').value = '';
     $(scope + '_label_sel').value = '';
     $(scope + '_sel').innerHTML = '<span class="small text-muted">Sin selección</span>';
+    if ($(scope + '_q')) {
+      $(scope + '_q').value = '';
+    }
+
   }
   clearSelected('base');
   clearSelected('rw');
 
-  function toggleAlt(){
+  function toggleAlt() {
     const b = $('alt_box');
     b.style.display = (b.style.display === 'none') ? 'block' : 'none';
   }
 
-  function addAlt(tipo, val, label){
-    if(alt.some(x => x.tipo===tipo && x.val===val)) return;
-    alt.push({tipo, val, label});
+  function addAlt(tipo, val, label) {
+    if (alt.some(x => x.tipo === tipo && x.val === val)) return;
+    alt.push({
+      tipo,
+      val,
+      label
+    });
     renderAlt();
     $('alt_res').innerHTML = '';
     $('alt_q').value = '';
   }
 
-  function delAlt(idx){
-    alt.splice(idx,1);
+  function delAlt(idx) {
+    alt.splice(idx, 1);
     renderAlt();
   }
 
-  function renderAlt(){
+  function renderAlt() {
     const box = $('alt_list');
-    if(!alt.length){
+    if (!alt.length) {
       box.innerHTML = '<span class="small text-muted">Sin equivalentes</span>';
       return;
     }
-    box.innerHTML = alt.map((x,i)=>`
+    box.innerHTML = alt.map((x, i) => `
       <span class="ap-chip">
         <span class="text-muted">${x.tipo}</span>
         <b>${escapeHtml(x.label)}</b>
@@ -411,27 +589,27 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
     `).join('');
   }
 
-  async function buscar(scope, allowAutoPick=false){
+  async function buscar(scope, allowAutoPick = false) {
     const modo = $(scope + '_modo') ? $(scope + '_modo').value : 'PRODUCTO';
     const q = ($(scope + '_q') ? $(scope + '_q').value : '').trim();
 
-    if(!q){
+    if (!q) {
       $(scope + '_res').innerHTML = '';
       lastRows[scope] = [];
       return;
     }
 
     let url = '';
-    if(modo === 'PRODUCTO'){
+    if (modo === 'PRODUCTO') {
       url = API_ARTICULOS + '?action=list&limit=' + MAX_ROWS + '&page=1&q=' + encodeURIComponent(q);
     } else {
       url = API_GRUPOS + '?action=list&limit=' + MAX_ROWS + '&page=1&q=' + encodeURIComponent(q);
     }
 
     let j;
-    try{
+    try {
       j = await fetchJson(url);
-    }catch(e){
+    } catch (e) {
       console.error(e);
       $(scope + '_res').innerHTML =
         `<div class="list-group-item small text-danger">${escapeHtml(e.message)}</div>`;
@@ -453,22 +631,22 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
     lastRows[scope] = rows;
 
     const qUpper = q.toUpperCase();
-    const exact = rows.find(r=>{
+    const exact = rows.find(r => {
       const pick = rowToPick(r, modo);
       return (pick.val || '').toUpperCase() === qUpper;
     });
 
-    const onPick = (pick)=>{
-      if(scope === 'alt') addAlt(modo, pick.val, pick.label);
+    const onPick = (pick) => {
+      if (scope === 'alt') addAlt(modo, pick.val, pick.label);
       else setSelected(scope, modo, pick.val, pick.label);
     };
 
-    if(exact){
+    if (exact) {
       onPick(rowToPick(exact, modo));
       return;
     }
 
-    if(allowAutoPick && rows.length === 1){
+    if (allowAutoPick && rows.length === 1) {
       onPick(rowToPick(rows[0], modo));
       return;
     }
@@ -476,27 +654,27 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
     renderList(scope, rows, modo, onPick);
   }
 
-  function bindLive(scope){
+  function bindLive(scope) {
     const input = $(scope + '_q');
-    if(!input) return;
+    if (!input) return;
 
-    input.addEventListener('input', ()=>{
+    input.addEventListener('input', () => {
       const v = input.value.trim();
-      if(v.length < LIVE_MIN_CHARS){
+      if (v.length < LIVE_MIN_CHARS) {
         $(scope + '_res').innerHTML = '';
         lastRows[scope] = [];
         return;
       }
       clearTimeout(timers[scope]);
-      timers[scope] = setTimeout(()=> buscar(scope, false), LIVE_DEBOUNCE);
+      timers[scope] = setTimeout(() => buscar(scope, false), LIVE_DEBOUNCE);
     });
 
-    input.addEventListener('keydown', (ev)=>{
-      if(ev.key === 'Enter'){
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
         ev.preventDefault();
         buscar(scope, true);
       }
-      if(ev.key === 'Escape'){
+      if (ev.key === 'Escape') {
         $(scope + '_res').innerHTML = '';
       }
     });
@@ -510,187 +688,228 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
   window.toggleAlt = toggleAlt;
   window.delAlt = delAlt;
 
-function showSuccessToast(redirectUrl = null) {
-  const toastEl = document.getElementById('toastSuccess');
-  const toast = new bootstrap.Toast(toastEl, { delay: 1800 });
-  toast.show();
+  function showSuccessToast(redirectUrl = null) {
+    const toastEl = document.getElementById('toastSuccess');
+    const toast = new bootstrap.Toast(toastEl, {
+      delay: 1800
+    });
+    toast.show();
 
-  if (redirectUrl) {
-    toastEl.addEventListener('hidden.bs.toast', () => {
-      window.location.href = redirectUrl;
-    }, { once: true });
+    if (redirectUrl) {
+      toastEl.addEventListener('hidden.bs.toast', () => {
+        window.location.href = redirectUrl;
+      }, {
+        once: true
+      });
+    }
   }
-}
 
-function showErrorToast(msg = 'Error al guardar la promoción') {
-  document.getElementById('toastErrorMsg').textContent = msg;
-  const toastEl = document.getElementById('toastError');
-  const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
-  toast.show();
-}
-
-
-/* =========================================================
-   CONEXIÓN A API PROMOCIONES (SIN TOCAR UI EXISTENTE)
-   ========================================================= */
-
-const ID_ALMACEN_DEFAULT = 1; // AJUSTA o toma de sesión
-
-async function postAPI(action, data){
-  const form = new FormData();
-  form.append('action', action);
-
-  Object.entries(data).forEach(([k,v])=>{
-    if (v !== undefined && v !== null && v !== '') {
-      form.append(k, v);
-    }
-  });
-
-  const r = await fetch(basePublic + '/api/promociones/promociones_api.php', {
-    method: 'POST',
-    body: form,
-    credentials: 'same-origin'
-  });
-
-  const j = await r.json();
-  if (!j.ok) throw j;
-  return j;
-}
-
-async function guardarPromo(){
-  try {
-
-    const tipoPromo = $('tipo_promo').value;
-
-    /* =========================
-       Validaciones comunes
-    ========================= */
-    if (!$('vig_ini').value || !$('vig_fin').value) {
-      showErrorToast('Falta definir vigencia');
-      return;
-    }
-
-    if (!$('base_val_sel').value) {
-      showErrorToast('Falta producto base');
-      return;
-    }
-
-    if (!$('rw_val_sel').value || !$('rw_qty').value) {
-      showErrorToast('Falta producto obsequio');
-      return;
-    }
-
-    /* =========================
-       Regla base (dinámica)
-    ========================= */
-    let rulePayload = {
-      nivel: 1,
-      acumula: 'N'
-    };
-
-    /* =========================
-       UNIDADES
-    ========================= */
-    if (tipoPromo === 'UNIDADES') {
-      if (!$('th_qty').value) {
-        showErrorToast('Falta cantidad objetivo');
-        return;
-      }
-
-      rulePayload.trigger_tipo  = 'UNIDADES';
-      rulePayload.threshold_qty = $('th_qty').value;
-      rulePayload.acumula       = 'S';
-      rulePayload.acumula_por   = 'PERIODO';
-    }
-
-    /* =========================
-       TICKET DE VENTA
-    ========================= */
-    if (tipoPromo === 'TICKET') {
-      const monto = document.querySelector('#bloque_ticket input')?.value;
-
-      if (!monto) {
-        showErrorToast('Falta monto mínimo del ticket');
-        return;
-      }
-
-      rulePayload.trigger_tipo    = 'MONTO';
-      rulePayload.threshold_monto = monto;
-      rulePayload.acumula         = 'N';
-      rulePayload.acumula_por     = 'TICKET';
-    }
-
-    /* =========================
-       VENTA ACUMULADA
-    ========================= */
-    if (tipoPromo === 'ACUMULADA') {
-      const monto   = document.querySelector('#bloque_acumulada input')?.value;
-      const periodo = document.querySelector('#bloque_acumulada select')?.value;
-
-      if (!monto) {
-        showErrorToast('Falta monto acumulado objetivo');
-        return;
-      }
-
-      rulePayload.trigger_tipo    = 'MONTO';
-      rulePayload.threshold_monto = monto;
-      rulePayload.acumula         = 'S';
-      rulePayload.acumula_por     = (periodo === 'Mes calendario') ? 'MES' : 'PERIODO';
-    }
-
-    /* =========================
-       1. Guardar promoción
-    ========================= */
-    const promo = await postAPI('save', {
-      id_almacen : ID_ALMACEN_DEFAULT,
-      cve_gpoart : 'PROMO-' + Date.now(),
-      des_gpoart : $('base_label_sel').value,
-      FechaI     : $('vig_ini').value,
-      FechaF     : $('vig_fin').value,
-      Tipo       : tipoPromo,
-      Activo     : 1
+  function showErrorToast(msg = 'Error al guardar la promoción') {
+    document.getElementById('toastErrorMsg').textContent = msg;
+    const toastEl = document.getElementById('toastError');
+    const toast = new bootstrap.Toast(toastEl, {
+      delay: 3000
     });
-
-    const promo_id = promo.id;
-
-    /* =========================
-       2. Guardar regla
-    ========================= */
-    const rule = await postAPI('rule_save', {
-      promo_id : promo_id,
-      ...rulePayload
-    });
-
-    const id_rule = rule.id_rule;
-
-    /* =========================
-       3. Reward
-    ========================= */
-    await postAPI('reward_save', {
-      id_rule      : id_rule,
-      reward_tipo  : 'BONIF_PRODUCTO',
-      cve_articulo : $('rw_val_sel').value,
-      qty          : $('rw_qty').value,
-      unimed       : $('rw_um').value,
-      aplica_sobre : 'TOTAL'
-    });
-
-    /* =========================
-       OK
-    ========================= */
-    showSuccessToast(
-      basePublic + '/sfa/promociones/promociones.php'
-    );
-
-  } catch (e) {
-    console.error(e);
-    showErrorToast(
-      e?.error || e?.message || 'Error inesperado al guardar'
-    );
+    toast.show();
   }
-}
 
 
+  /* =========================================================
+     CONEXIÓN A API PROMOCIONES (SIN TOCAR UI EXISTENTE)
+     ========================================================= */
+
+  // const ID_ALMACEN_DEFAULT = 1; AJUSTA o toma de sesión
+
+  async function postAPI(action, data) {
+    const form = new FormData();
+    form.append('action', action);
+
+    Object.entries(data).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        form.append(k, v);
+      }
+    });
+
+    const r = await fetch(basePublic + '/api/promociones/promociones_api.php', {
+      method: 'POST',
+      body: form,
+      credentials: 'same-origin'
+    });
+
+    const j = await r.json();
+    if (!j.ok) throw j;
+    return j;
+  }
+
+  async function guardarPromo() {
+    try {
+      const almacenId = $('id_almacen').value;
+      if (!almacenId) {
+        showErrorToast('Debe seleccionar un almacén');
+        return;
+      }
+
+      const tipoPromo = $('tipo_promo').value;
+
+      // Validaciones comunes
+      if (!$('base_val_sel').value) {
+        showErrorToast('Falta producto base');
+        return;
+      }
+      if (!$('rw_val_sel').value || !$('rw_qty').value) {
+        showErrorToast('Falta producto obsequio');
+        return;
+      }
+
+      // Validaciones por tipo
+      if (tipoPromo === 'UNIDADES') {
+        if (!$('th_qty').value) {
+          showErrorToast('Falta cantidad objetivo');
+          return;
+        }
+        if (!$('vig_ini').value || !$('vig_fin').value) {
+          showErrorToast('Falta vigencia');
+          return;
+        }
+      }
+
+      if (tipoPromo === 'TICKET') {
+        const monto = document.querySelector('#bloque_ticket input')?.value;
+        if (!monto) {
+          showErrorToast('Falta monto mínimo del ticket');
+          return;
+        }
+      }
+
+      if (tipoPromo === 'ACUMULADA') {
+        const monto = $('acc_monto').value;
+        if (!monto) {
+          showErrorToast('Falta monto acumulado');
+          return;
+        }
+
+        const tipoPeriodo = $('acc_periodo_tipo').value;
+
+        if (tipoPeriodo === 'FIJO') {
+          if (!$('acc_ini').value || !$('acc_fin').value) {
+            showErrorToast('Falta rango de fechas');
+            return;
+          }
+        }
+      }
+
+
+      if (!$('base_val_sel').value) {
+        alert('Falta producto base');
+        return;
+      }
+      if (!$('rw_val_sel').value || !$('rw_qty').value) {
+        alert('Falta producto obsequio');
+        return;
+      }
+
+      // =========================
+      // 1. Guardar encabezado
+      // =========================
+      const promoPayload = {
+        id_almacen: almacenId,
+        cve_gpoart: 'PROMO-' + Date.now(),
+        des_gpoart: $('base_label_sel').value,
+        Tipo: tipoPromo,
+        Activo: 1
+      };
+
+      // Solo UNIDADES lleva vigencia
+      if (tipoPromo === 'UNIDADES') {
+        promoPayload.FechaI = $('vig_ini').value;
+        promoPayload.FechaF = $('vig_fin').value;
+      }
+
+      const promo = await postAPI('save', promoPayload);
+      const promo_id = promo.id;
+
+
+      // =========================
+      // 2. Regla (1 en N)
+      // =========================
+      let rulePayload = {
+        promo_id: promo_id,
+        nivel: 1
+      };
+
+      if (tipoPromo === 'UNIDADES') {
+        rulePayload.trigger_tipo = 'UNIDADES';
+        rulePayload.threshold_qty = $('th_qty').value;
+        rulePayload.acumula = 'S';
+        rulePayload.acumula_por = 'PERIODO';
+      }
+
+      if (tipoPromo === 'TICKET') {
+        rulePayload.trigger_tipo = 'MONTO';
+        rulePayload.threshold_monto =
+          document.querySelector('#bloque_ticket input').value;
+        rulePayload.acumula = 'N';
+        rulePayload.acumula_por = 'TICKET';
+      }
+
+      if (tipoPromo === 'ACUMULADA') {
+        const tipoPeriodo = $('acc_periodo_tipo').value;
+
+        rulePayload.trigger_tipo = 'MONTO';
+        rulePayload.threshold_monto = $('acc_monto').value;
+        rulePayload.acumula = 'S';
+
+        // 🔹 Periodo relativo
+        if (tipoPeriodo === 'RELATIVO') {
+          const rel = $('acc_periodo_rel').value;
+          rulePayload.acumula_por = (rel === 'MES') ? 'MES' : 'PERIODO';
+        }
+
+        // 🔹 Periodo fijo (fechas)
+        if (tipoPeriodo === 'FIJO') {
+          rulePayload.acumula_por = 'RANGO_FECHAS';
+          rulePayload.fecha_ini = $('acc_ini').value;
+          rulePayload.fecha_fin = $('acc_fin').value;
+        }
+      }
+
+
+      const rule = await postAPI('rule_save', rulePayload);
+      const id_rule = rule.id_rule;
+
+
+      // =========================
+      // 3. Reward (producto regalo)
+      // =========================
+      await postAPI('reward_save', {
+        id_rule: id_rule,
+        reward_tipo: 'BONIF_PRODUCTO',
+        cve_articulo: $('rw_val_sel').value,
+        qty: $('rw_qty').value,
+        unimed: $('rw_um').value,
+        aplica_sobre: 'TOTAL'
+      });
+
+      showSuccessToast(
+        basePublic + '/sfa/promociones/promociones.php'
+      );
+
+      console.log('PROMO OK', {
+        promo_id,
+        id_rule
+      });
+
+
+
+
+    } catch (e) {
+      console.error(e);
+      showErrorToast(
+        e?.error || e?.message || 'Error inesperado al guardar'
+      );
+
+    }
+  }
 </script>
 
 <!-- Toasts Bootstrap -->
@@ -703,7 +922,7 @@ async function guardarPromo(){
         ✅ Promoción guardada correctamente
       </div>
       <button type="button" class="btn-close btn-close-white me-2 m-auto"
-              data-bs-dismiss="toast" aria-label="Close"></button>
+        data-bs-dismiss="toast" aria-label="Close"></button>
     </div>
   </div>
 
@@ -714,7 +933,7 @@ async function guardarPromo(){
         ❌ Error al guardar la promoción
       </div>
       <button type="button" class="btn-close btn-close-white me-2 m-auto"
-              data-bs-dismiss="toast" aria-label="Close"></button>
+        data-bs-dismiss="toast" aria-label="Close"></button>
     </div>
   </div>
 

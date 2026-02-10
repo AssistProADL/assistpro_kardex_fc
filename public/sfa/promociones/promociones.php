@@ -8,12 +8,35 @@ if (file_exists($menuStart)) require_once $menuStart;
 ?>
 
 <style>
-  .ap-wrap{font-size:10px}
-  .ap-title{font-weight:700;font-size:14px;color:#0F5AAD}
-  .ap-btn{font-size:10px;padding:6px 10px}
-  .badge-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
-  .ap-muted{color:#6c757d}
-  .ap-kpi .badge{font-size:10px}
+  .ap-wrap {
+    font-size: 10px
+  }
+
+  .ap-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #0F5AAD
+  }
+
+  .ap-btn {
+    font-size: 10px;
+    padding: 6px 10px
+  }
+
+  .badge-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block
+  }
+
+  .ap-muted {
+    color: #6c757d
+  }
+
+  .ap-kpi .badge {
+    font-size: 10px
+  }
 </style>
 
 <div class="container-fluid px-3 ap-wrap">
@@ -25,7 +48,8 @@ if (file_exists($menuStart)) require_once $menuStart;
       <small class="text-muted">Motor: Rules / Scope / Rewards</small>
     </div>
     <div class="col-6 text-end">
-      <button class="btn btn-success btn-sm ap-btn" onclick="openPromo()">+ Nueva promoción</button>
+      <button class="btn btn-success btn-sm ap-btn" onclick="gotoNewPromo()">+ Nueva promoción</button>
+
     </div>
   </div>
 
@@ -48,12 +72,23 @@ if (file_exists($menuStart)) require_once $menuStart;
             <div class="col-md-3">
               <label class="form-label mb-0">Vigencia</label>
               <select id="f_vigencia" class="form-select form-select-sm">
-                <option value="VIGENTES">Vigentes</option>
-                <option value="FUTURAS">Futuras</option>
-                <option value="VENCIDAS">Vencidas</option>
+                <option value="VIGENTE">Vigentes</option>
+                <option value="FUTURA">Futuras</option>
+                <option value="VENCIDA">Vencidas</option>
                 <option value="TODAS">Todas</option>
               </select>
             </div>
+
+            <div class="col-md-3">
+              <label class="form-label mb-0">Tipo</label>
+              <select id="f_tipo" class="form-select form-select-sm">
+                <option value="TODOS">Todos</option>
+                <option value="UNIDADES">Unidades</option>
+                <option value="TICKET">Ticket</option>
+                <option value="ACUMULADA">Acumulada</option>
+              </select>
+            </div>
+
 
             <div class="col-md-5">
               <label class="form-label mb-0">Buscar</label>
@@ -167,70 +202,143 @@ if (file_exists($menuStart)) require_once $menuStart;
 </div>
 
 <script>
-const API = '../../api/promociones/promociones_api.php';
-let mdlPromo;
-let promosCache = [];
+  const API = '../../api/promociones/promociones_api.php';
+  let mdlPromo;
+  let promosCache = [];
 
-document.addEventListener('DOMContentLoaded', async ()=>{
-  mdlPromo = new bootstrap.Modal(document.getElementById('mdlPromo'));
-  await loadAlmacenes();
-});
+  document.addEventListener('DOMContentLoaded', async () => {
+    mdlPromo = new bootstrap.Modal(document.getElementById('mdlPromo'));
+    await loadAlmacenes();
+    $('almacen_id').addEventListener('change', loadPromos);
+    $('f_vigencia').addEventListener('change', renderPromos);
+    $('f_tipo').addEventListener('change', renderPromos);
 
-async function apiGet(p){
-  const r = await fetch(API+'?'+new URLSearchParams(p));
-  return r.json();
-}
-async function apiPost(p){
-  const fd=new FormData();
-  Object.entries(p).forEach(([k,v])=>fd.append(k,v));
-  const r=await fetch(API,{method:'POST',body:fd});
-  return r.json();
-}
 
-async function loadAlmacenes(){
-  const j = await apiGet({action:'almacenes'});
-  const a1=$('almacen_id'), a2=$('p_id_almacen');
-  a1.innerHTML=''; a2.innerHTML='';
-  j.rows.forEach(a=>{
-    a1.add(new Option(`(${a.id}) ${a.nombre}`,a.id));
-    a2.add(new Option(`(${a.id}) ${a.nombre}`,a.id));
+
   });
-  loadPromos();
-}
 
-function clearFilters(){
-  $('f_buscar').value='';
-  $('f_vigencia').value='VIGENTES';
-  loadPromos();
-}
+  async function apiGet(p) {
+    const r = await fetch(API + '?' + new URLSearchParams(p));
+    return r.json();
+  }
+  async function apiPost(p) {
+    const fd = new FormData();
+    Object.entries(p).forEach(([k, v]) => fd.append(k, v));
+    const r = await fetch(API, {
+      method: 'POST',
+      body: fd
+    });
+    return r.json();
+  }
 
-async function loadPromos(){
-  const almacen_id=$('almacen_id').value;
-  const j=await apiGet({action:'list',almacen_id});
-  promosCache=j.rows||[];
-  renderPromos();
-}
+  async function loadAlmacenes() {
+    const j = await apiGet({
+      action: 'almacenes'
+    });
 
-function renderPromos(){
-  const tb=$('tb'); tb.innerHTML='';
-  const vig=$('f_vigencia').value;
-  const q=$('f_buscar').value.toLowerCase();
-  let k={t:0,v:0,f:0,e:0};
+    const a1 = $('almacen_id');
+    const a2 = $('p_id_almacen'); // puede NO existir
 
-  promosCache.forEach(r=>{
-    const fi=new Date(r.fecha_inicio), ff=new Date(r.fecha_fin), hoy=new Date();
-    let st='VIGENTE';
-    if(fi>hoy) st='FUTURA';
-    if(ff<hoy) st='VENCIDA';
+    if (a1) a1.innerHTML = '';
+    if (a2) a2.innerHTML = '';
 
-    k.t++; if(st==='VIGENTE')k.v++; if(st==='FUTURA')k.f++; if(st==='VENCIDA')k.e++;
+    j.rows.forEach((a, idx) => {
+      const opt1 = new Option(`(${a.id}) ${a.nombre}`, a.id);
+      if (a1) a1.add(opt1);
 
-    if(vig!=='TODAS' && vig!==st) return;
-    if(q && !(r.clave||'').toLowerCase().includes(q) && !(r.descripcion||'').toLowerCase().includes(q)) return;
+      if (a2) {
+        const opt2 = new Option(`(${a.id}) ${a.nombre}`, a.id);
+        a2.add(opt2);
+      }
 
-    const dot=st==='VIGENTE'?'#28a745':st==='FUTURA'?'#0dcaf0':'#dc3545';
+      if (idx === 0 && a1) opt1.selected = true;
+    });
 
-    tb.insertAdjacentHTML('beforeend',`
+    loadPromos();
+  }
+
+
+  function clearFilters() {
+    $('f_buscar').value = '';
+    $('f_vigencia').value = 'TODAS';
+    $('f_tipo').value = 'TODOS';
+    renderPromos();
+  }
+
+
+  async function loadPromos() {
+    const almacen_id = $('almacen_id').value;
+    const j = await apiGet({
+      action: 'list',
+      almacen_id
+    });
+    promosCache = j.rows || [];
+    renderPromos();
+  }
+
+  function normalizeTipo(r) {
+    return (
+      r.tipo ||
+      r.Tipo ||
+      r.tipo_promo ||
+      r.TipoPromo ||
+      ''
+    ).toString().toUpperCase();
+  }
+
+  function renderPromos() {
+    const tb = $('tb');
+    tb.innerHTML = '';
+
+    // 🔹 Normalizar filtros
+    const vig = $('f_vigencia').value;
+    const tipo = $('f_tipo').value;
+    const q = $('f_buscar').value.toLowerCase();
+
+    let k = {
+      t: 0,
+      v: 0,
+      f: 0,
+      e: 0
+    };
+
+    promosCache.forEach(r => {
+
+      const fi = r.fecha_inicio ? new Date(r.fecha_inicio) : null;
+      const ff = r.fecha_fin ? new Date(r.fecha_fin) : null;
+      const hoy = new Date();
+
+      let st = 'VIGENTE';
+      if (fi && fi > hoy) st = 'FUTURA';
+      if (ff && ff < hoy) st = 'VENCIDA';
+
+      // KPIs (siempre se cuentan)
+      k.t++;
+      if (st === 'VIGENTE') k.v++;
+      if (st === 'FUTURA') k.f++;
+      if (st === 'VENCIDA') k.e++;
+
+      // 🔹 Filtro por vigencia
+      if (vig !== 'TODAS' && vig !== st) return;
+
+      // Filtro por tipo
+      const tipoRow = normalizeTipo(r);
+      if (tipo !== 'TODOS' && tipoRow !== tipo) return;
+
+
+      // 🔹 Filtro texto
+      if (
+        q &&
+        !(r.clave || '').toLowerCase().includes(q) &&
+        !(r.descripcion || '').toLowerCase().includes(q)
+      ) return;
+
+      const dot =
+        st === 'VIGENTE' ? '#28a745' :
+        st === 'FUTURA' ? '#0dcaf0' :
+        '#dc3545';
+
+      tb.insertAdjacentHTML('beforeend', `
       <tr>
         <td>
           <div class="btn-group btn-group-sm">
@@ -240,31 +348,59 @@ function renderPromos(){
             <button class="btn btn-outline-warning ap-btn" onclick="gotoScope(${r.id})">Scope</button>
           </div>
         </td>
-        <td class="text-center"><span class="badge-dot" style="background:${dot}"></span></td>
+        <td class="text-center">
+          <span class="badge-dot" style="background:${dot}"></span>
+        </td>
         <td>${r.id}</td>
-        <td>${r.clave||''}</td>
-        <td>${r.descripcion||''}</td>
-        <td>${r.fecha_inicio||''}</td>
-        <td>${r.fecha_fin||''}</td>
-        <td>${r.total_rules||0}</td>
-        <td>${r.total_scope||0}</td>
+        <td>${r.clave || ''}</td>
+        <td>${r.descripcion || ''}</td>
+        <td>${r.fecha_inicio || ''}</td>
+        <td>${r.fecha_fin || ''}</td>
+        <td>${r.total_rules || 0}</td>
+        <td>${r.total_scope || 0}</td>
       </tr>
     `);
-  });
+    });
 
-  $('k_total').textContent=k.t;
-  $('k_vig').textContent=k.v;
-  $('k_fut').textContent=k.f;
-  $('k_ven').textContent=k.e;
-}
+    $('k_total').textContent = k.t;
+    $('k_vig').textContent = k.v;
+    $('k_fut').textContent = k.f;
+    $('k_ven').textContent = k.e;
+  }
 
-function $(id){return document.getElementById(id);}
-function gotoRules(id){location.href='promocion_reglas.php?promo_id='+id;}
-function gotoRewards(id){location.href='promocion_beneficios.php?promo_id='+id;}
-function gotoScope(id){location.href='promocion_scope.php?promo_id='+id;}
 
-function openPromo(){mdlPromo.show();}
-function savePromo(){alert('Guardar (ya lo tienes conectado)');}
+  function $(id) {
+    return document.getElementById(id);
+  }
+
+  function gotoRules(id) {
+    location.href = 'promocion_reglas.php?promo_id=' + id;
+  }
+
+  function gotoRewards(id) {
+    location.href = 'promocion_beneficios.php?promo_id=' + id;
+  }
+
+  function gotoScope(id) {
+    location.href = 'promocion_scope.php?promo_id=' + id;
+  }
+
+  function openPromo() {
+    mdlPromo.show();
+  }
+
+  function savePromo() {
+    alert('Guardar (ya lo tienes conectado)');
+  }
+
+  function gotoNewPromo() {
+    const almacenId = $('almacen_id')?.value || '';
+    let url = 'promo_design.php';
+    if (almacenId) {
+      url += '?almacen_id=' + encodeURIComponent(almacenId);
+    }
+    location.href = url;
+  }
 </script>
 
 <?php if (file_exists($menuEnd)) require_once $menuEnd; ?>
