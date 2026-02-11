@@ -67,6 +67,11 @@ if ($almacen_id !== null && $almacen_id !== '') {
         .table th {
             vertical-align: middle;
         }
+
+        .trigger-monto,
+        .trigger-qty {
+            display: none;
+        }
     </style>
 </head>
 
@@ -124,12 +129,16 @@ if ($almacen_id !== null && $almacen_id !== '') {
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Regla</h5>
+                    <h5 class="modal-title"> Regla de activación · Promoción #<?= htmlspecialchars($promo_id) ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
 
                 <div class="modal-body">
                     <input type="hidden" id="id_rule" value="">
+                    <div class="small text-muted mb-2">
+                        Define cuándo se activa esta promoción.
+                    </div>
+
                     <div class="row g-3">
                         <div class="col-md-2">
                             <label class="form-label">Nivel</label>
@@ -145,13 +154,13 @@ if ($almacen_id !== null && $almacen_id !== '') {
                             </select>
                         </div>
 
-                        <div class="col-md-3">
-                            <label class="form-label">Threshold Monto</label>
+                        <div class="col-md-3 trigger-monto">
+                            <label class="form-label">Monto de compra</label>
                             <input type="number" step="0.01" class="form-control" id="threshold_monto" placeholder="0.00">
                         </div>
 
-                        <div class="col-md-3">
-                            <label class="form-label">Threshold Qty</label>
+                        <div class="col-md-3 trigger-qty">
+                            <label class="form-label">Cantidad de unidades</label>
                             <input type="number" step="0.01" class="form-control" id="threshold_qty" placeholder="0.00">
                         </div>
 
@@ -192,8 +201,13 @@ if ($almacen_id !== null && $almacen_id !== '') {
                     </div>
 
                     <div class="alert alert-warning mt-3 mb-0">
-                        <strong>Tip operativo:</strong> si el Trigger es <b>MONTO</b> deja <b>threshold_qty</b> en blanco/0.
-                        Si es <b>UNIDADES</b> deja <b>threshold_monto</b> en blanco/0. Para <b>MIXTO</b> usa ambos.
+                        <strong>Tip operativo:</strong>
+                        <ul class="mb-0">
+                            <li><b>MONTO</b> → usa solo Threshold Monto</li>
+                            <li><b>UNIDADES</b> → usa solo Threshold Qty</li>
+                            <li><b>MIXTO</b> → usa ambos</li>
+                        </ul>
+
                     </div>
                 </div>
 
@@ -251,8 +265,7 @@ if ($almacen_id !== null && $almacen_id !== '') {
                         id: promoId
                     }).then(res => {
                         const rows = (res && res.ok && Array.isArray(res.rules)) ?
-                            res.rules :
-                            [];
+                            res.rules : [];
                         cb({
                             data: rows
                         });
@@ -269,25 +282,48 @@ if ($almacen_id !== null && $almacen_id !== '') {
                         data: null,
                         orderable: false,
                         render: function(r) {
+
                             const q = new URLSearchParams();
                             q.set('promo_id', promoId);
                             if (almacenId) q.set('almacen_id', almacenId);
                             q.set('id_rule', r.id_rule);
 
                             return `
-                        <div class="d-flex flex-wrap gap-1">
-                            <button class="btn btn-outline-primary btn-xxs"
-                                onclick='editar(${JSON.stringify(r)})'>Editar</button>
-                            <a class="btn btn-outline-secondary btn-xxs"
-                                href="promocion_beneficios.php?${q.toString()}">Rewards</a>
-                            <a class="btn btn-outline-secondary btn-xxs"
-                                href="promocion_scope.php?promo_id=${encodeURIComponent(promoId)}${almacenId ? `&almacen_id=${encodeURIComponent(almacenId)}` : ''}">Scope</a>
-                            <button class="btn btn-outline-danger btn-xxs"
-                                onclick="eliminar(${r.id_rule})">Eliminar</button>
-                        </div>
-                    `;
+        <div class="d-flex flex-wrap gap-1">
+
+            <!-- Regla -->
+            <button class="btn btn-outline-primary btn-xxs"
+                title="Editar condición de activación"
+                onclick='editar(${JSON.stringify(r)})'>
+                <i class="fa fa-gear me-1"></i> Regla
+            </button>
+
+            <!-- Beneficios -->
+            <a class="btn btn-outline-success btn-xxs"
+                title="Administrar beneficios de esta regla"
+                href="promocion_beneficios.php?${q.toString()}">
+                <i class="fa fa-gift me-1"></i> Beneficios
+            </a>
+
+            <!-- Scope -->
+            <a class="btn btn-outline-secondary btn-xxs"
+                title="Definir alcance de la promoción"
+                href="promocion_scope.php?promo_id=${encodeURIComponent(promoId)}${almacenId ? `&almacen_id=${encodeURIComponent(almacenId)}` : ''}">
+                <i class="fa fa-layer-group me-1"></i> Scope
+            </a>
+
+            <!-- Eliminar -->
+            <button class="btn btn-outline-danger btn-xxs"
+                title="Desactivar regla"
+                onclick="eliminar(${r.id_rule})">
+                <i class="fa fa-trash"></i>
+            </button>
+
+        </div>
+        `;
                         }
                     },
+
 
                     // 🔹 RESTO DE COLUMNAS
                     {
@@ -341,6 +377,37 @@ if ($almacen_id !== null && $almacen_id !== '') {
             $('#activo').val('1');
         }
 
+        function aplicarTriggerUI() {
+            const trigger = document.getElementById('trigger_tipo').value;
+
+            const montoBox = document.querySelector('.trigger-monto');
+            const qtyBox = document.querySelector('.trigger-qty');
+
+            const montoInp = document.getElementById('threshold_monto');
+            const qtyInp = document.getElementById('threshold_qty');
+
+            montoBox.style.display = 'none';
+            qtyBox.style.display = 'none';
+
+            montoInp.disabled = true;
+            qtyInp.disabled = true;
+
+            if (trigger === 'MONTO') {
+                montoBox.style.display = 'block';
+                montoInp.disabled = false;
+            } else if (trigger === 'UNIDADES') {
+                qtyBox.style.display = 'block';
+                qtyInp.disabled = false;
+            } else if (trigger === 'MIXTO') {
+                montoBox.style.display = 'block';
+                qtyBox.style.display = 'block';
+                montoInp.disabled = false;
+                qtyInp.disabled = false;
+            }
+        }
+
+
+
         window.editar = function(r) {
             limpiarModal();
             $('#id_rule').val(r.id_rule || '');
@@ -353,11 +420,13 @@ if ($almacen_id !== null && $almacen_id !== '') {
             $('#min_items_distintos').val(r.min_items_distintos ?? '');
             $('#observaciones').val(r.observaciones ?? '');
             $('#activo').val((r.activo ?? 1).toString());
+            aplicarTriggerUI();
             new bootstrap.Modal(document.getElementById('mdlRegla')).show();
         }
 
         window.eliminar = function(id_rule) {
-            if (!confirm('¿Eliminar regla?')) return;
+            if (!confirm('Esta acción desactivará la regla y sus beneficios asociados.\n\n¿Deseas continuar?')) return;
+
             apiPost('rule_del', {
                 id_rule: id_rule
             }).then(res => {
@@ -371,6 +440,7 @@ if ($almacen_id !== null && $almacen_id !== '') {
 
         $('#btnNuevaRegla').on('click', function() {
             limpiarModal();
+            aplicarTriggerUI();
             new bootstrap.Modal(document.getElementById('mdlRegla')).show();
         });
 
@@ -405,6 +475,8 @@ if ($almacen_id !== null && $almacen_id !== '') {
         });
 
         loadTabla();
+        document.getElementById('trigger_tipo')
+            .addEventListener('change', aplicarTriggerUI);
     </script>
 
 </body>

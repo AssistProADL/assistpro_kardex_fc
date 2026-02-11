@@ -112,7 +112,8 @@ if (file_exists($menuStart)) require_once $menuStart;
               <thead class="table-light">
                 <tr>
                   <th style="width:200px">Acciones</th>
-                  <th>Status</th>
+                  <th>Vigencia</th>
+                  <th>Activa</th>
                   <th>ID</th>
                   <th>Clave</th>
                   <th>Descripción</th>
@@ -151,7 +152,10 @@ if (file_exists($menuStart)) require_once $menuStart;
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <div class="modal-title fw-bold">Promoción</div>
+        <div class="modal-title fw-bold">
+          Promoción <span class="badge bg-secondary ms-2">Solo lectura</span>
+        </div>
+
         <button class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body" style="font-size:10px">
@@ -276,6 +280,49 @@ if (file_exists($menuStart)) require_once $menuStart;
     renderPromos();
   }
 
+  async function loadPromo(id) {
+    document.querySelector('#mdlPromo .btn-primary')?.classList.add('d-none');
+
+    const j = await apiGet({
+      action: 'get',
+      id: id
+    });
+
+    if (!j || !j.promo) {
+      alert('No se pudo cargar la promoción');
+      console.error(j);
+      return;
+    }
+
+    const r = j.promo;
+
+    // ID
+    $('p_id').value = r.id;
+
+    // Llenar campos (ojo con los nombres reales)
+    $('p_id_almacen').value = r.id_almacen;
+    $('p_cve').value = r.cve_gpoart || '';
+    $('p_activo').value = r.Activo ?? 1;
+    $('p_desc').value = r.des_gpoart || '';
+    $('p_fi').value = r.FechaI || '';
+    $('p_ff').value = r.FechaF || '';
+    $('p_tipo').value = r.Tipo || '';
+
+    // 🔒 Modo VER – todo solo lectura
+    $('p_id_almacen').disabled = true;
+    $('p_activo').disabled = true;
+
+    $('p_cve').readOnly = true;
+    $('p_desc').readOnly = true;
+    $('p_fi').readOnly = true;
+    $('p_ff').readOnly = true;
+    $('p_tipo').readOnly = true;
+
+
+    mdlPromo.show();
+  }
+
+
   function normalizeTipo(r) {
     return (
       r.tipo ||
@@ -348,10 +395,20 @@ if (file_exists($menuStart)) require_once $menuStart;
             <button class="btn btn-outline-warning ap-btn" onclick="gotoScope(${r.id})">Scope</button>
           </div>
         </td>
-        <td class="text-center">
-          <span class="badge-dot" style="background:${dot}"></span>
-        </td>
-        <td>${r.id}</td>
+      <td class="text-center">
+  <span class="badge-dot" style="background:${dot}" title="${st}"></span>
+</td>
+
+<td class="text-center">
+  <input type="checkbox"
+    ${r.Activo == 1 ? 'checked' : ''}
+    ${st === 'VENCIDA' ? 'disabled' : ''}
+    onchange="togglePromo(${r.id}, this.checked)"
+  >
+</td>
+
+<td>${r.id}</td>
+
         <td>${r.clave || ''}</td>
         <td>${r.descripcion || ''}</td>
         <td>${r.fecha_inicio || ''}</td>
@@ -385,8 +442,8 @@ if (file_exists($menuStart)) require_once $menuStart;
     location.href = 'promocion_scope.php?promo_id=' + id;
   }
 
-  function openPromo() {
-    mdlPromo.show();
+  function openPromo(id) {
+    loadPromo(id)
   }
 
   function savePromo() {
@@ -400,6 +457,23 @@ if (file_exists($menuStart)) require_once $menuStart;
       url += '?almacen_id=' + encodeURIComponent(almacenId);
     }
     location.href = url;
+  }
+
+  async function togglePromo(id, checked) {
+    const activo = checked ? 1 : 0;
+
+    const j = await apiPost({
+      action: 'toggle',
+      id: id,
+      Activo: activo
+    });
+
+    if (!j || j.ok !== 1) {
+      alert('No se pudo actualizar el estatus');
+      // rollback visual
+      loadPromos();
+      return;
+    }
   }
 </script>
 

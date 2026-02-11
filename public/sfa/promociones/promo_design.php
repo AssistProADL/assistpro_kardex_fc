@@ -432,21 +432,19 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
 
   function setPeriodoAcumulada() {
     const tipo = $('acc_periodo_tipo').value;
+
+    // mostrar solo uno
     $('acc_relativo').style.display = (tipo === 'RELATIVO') ? 'block' : 'none';
-    $('acc_fijo').style.display = (tipo === 'FIJO') ? 'flex' : 'none';
+    $('acc_fijo').style.display = (tipo === 'FIJO') ? 'block' : 'none';
   }
 
-  document.addEventListener('change', e => {
-    if (e.target?.id === 'acc_periodo_tipo') {
-      setPeriodoAcumulada();
-    }
-  });
 
-
-
-
+  $('acc_periodo_tipo').addEventListener('change', setPeriodoAcumulada);
   $('tipo_promo').addEventListener('change', setBloquePorTipo);
+
+  // inicialización correcta
   setBloquePorTipo();
+
 
   function escapeHtml(s) {
     return (s || '').toString().replace(/[&<>"']/g, m => ({
@@ -867,7 +865,7 @@ require_once __DIR__ . '/../../bi/_menu_global.php';
 
         // 🔹 Periodo fijo (fechas)
         if (tipoPeriodo === 'FIJO') {
-          rulePayload.acumula_por = 'RANGO_FECHAS';
+          rulePayload.acumula_por = 'PERIODO';
           rulePayload.fecha_ini = $('acc_ini').value;
           rulePayload.fecha_fin = $('acc_fin').value;
         }

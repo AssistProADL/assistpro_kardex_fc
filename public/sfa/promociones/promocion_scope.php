@@ -1,6 +1,6 @@
 <?php include '../../bi/_menu_global.php'; ?>
 <?php
-$promo_id = $_GET['id'] ?? null;
+$promo_id = $_GET['promo_id'] ?? null;
 if (!$promo_id) {
     echo '<div class="alert alert-danger">Error: Promoción no especificada. <a href="promociones.php">Volver</a></div>';
     include '../../bi/_menu_global_end.php';
@@ -35,10 +35,17 @@ if (!$promo_id) {
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Selecciona la promoción a asignar:</p>
-                    <select id="selPromo" class="form-select mb-3"></select>
-                    <p>Se asignará a <span id="lblCount" class="fw-bold"></span> clientes seleccionados.</p>
+                    <p>
+                        Se asignará la promoción actual a
+                        <span id="lblCount" class="fw-bold"></span>
+                        clientes seleccionados.
+                    </p>
+
+                    <div class="alert alert-info py-2 mt-2">
+                        Esta acción asigna la promoción únicamente a los clientes seleccionados.
+                    </div>
                 </div>
+
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="button" class="btn btn-primary" id="btnConfirmar">Aplicar</button>
@@ -58,63 +65,46 @@ if (!$promo_id) {
 <script>
     let tabla = $('#tblClientes').DataTable({
         ajax: {
-            url: '../api/clientes.php?action=list',
+            url: '../../api/clientes.php?action=list',
             dataSrc: ''
         },
-        columns: [
-            {
+        columns: [{
                 data: null,
-                render: function (data, type, row) {
+                render: function(data, type, row) {
                     return `<input type="checkbox" value="${row.id_cliente}">`;
                 }
             },
-            { data: 'Cve_Clte' },
-            { data: 'RazonSocial' }
+            {
+                data: 'Cve_Clte'
+            },
+            {
+                data: 'RazonSocial'
+            }
         ]
     });
 
     const currentPromoId = '<?= $promo_id ?>';
-    let promosCargadas = false;
 
     // Cargar nombre en titulo init
     if (currentPromoId) {
-        fetch(`../api/promociones/promociones.php?action=get&id=${currentPromoId}`)
+        fetch(`../../api/promociones/promociones_api.php?action=get&id=${currentPromoId}`)
             .then(r => r.json())
             .then(r => {
-                if (r.ok && r.data) {
+                if (r.ok && r.promo) {
                     document.getElementById('tituloPage').innerHTML =
-                        `Asignar Clientes a: <span class="text-primary">${r.data.Lista}</span>`;
+                        `Asignar Clientes a: <span class="text-primary">${r.promo.cve_gpoart}</span>`;
                 }
             });
+
     }
 
-    // Cargar lista de promociones para el modal
-    function cargarPromociones() {
-        if (promosCargadas) return;
 
-        fetch('../api/promociones/promociones.php?action=list')
-            .then(r => r.json())
-            .then(r => {
-                if (r.ok) {
-                    const sel = document.getElementById('selPromo');
-                    sel.innerHTML = '';
-                    r.data.forEach(p => {
-                        const opt = document.createElement('option');
-                        opt.value = p.id;
-                        opt.text = p.Lista;
-                        if (p.id == currentPromoId) opt.selected = true;
-                        sel.appendChild(opt);
-                    });
-                    promosCargadas = true;
-                }
-            });
-    }
 
     let selectedIds = [];
 
-    $('#btnAsignar').click(function () {
+    $('#btnAsignar').click(function() {
         selectedIds = [];
-        $('#tblClientes input:checked').each(function () {
+        $('#tblClientes input:checked').each(function() {
             selectedIds.push(this.value);
         });
 
@@ -123,8 +113,6 @@ if (!$promo_id) {
             return;
         }
 
-        // Cargar promos antes de mostrar
-        cargarPromociones();
 
         $('#lblCount').text(selectedIds.length);
 
@@ -132,29 +120,43 @@ if (!$promo_id) {
         modal.show();
     });
 
-    $('#btnConfirmar').click(function () {
-        const promoDestino = $('#selPromo').val();
-        if (!promoDestino) {
-            alert('Selecciona una promoción');
+    $('#btnConfirmar').click(function() {
+
+        if (!currentPromoId) {
+            alert('Promoción no válida');
             return;
         }
 
-        fetch('../api/promociones/index.php?action=scope_add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                promo_id: promoDestino,
-                scope_tipo: 'CLIENTE',
-                scope_ids: selectedIds
-            })
-        }).then(r => r.json()).then(r => {
+        if (!selectedIds || selectedIds.length === 0) {
+            alert('No hay clientes seleccionados');
+            return;
+        }
+
+        Promise.all(
+            selectedIds.map(clienteId =>
+                fetch('../../api/promociones/promociones_api.php', {
+                    method: 'POST',
+                    body: new URLSearchParams({
+                        action: 'scope_save',
+                        promo_id: currentPromoId,
+                        scope_tipo: 'CLIENTE',
+                        scope_id: clienteId,
+                        exclusion: 'N'
+                    })
+                })
+            )
+        ).then(() => {
             // Cerrar modal
             const modalEl = document.getElementById('modalConfirm');
             const modal = bootstrap.Modal.getInstance(modalEl);
             modal.hide();
 
             alert('Asignación completa');
+        }).catch(err => {
+            console.error(err);
+            alert('Ocurrió un error al asignar la promoción');
         });
+
     });
 </script>
 
