@@ -9,6 +9,16 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../../app/db.php';
 
+// Detecta columna vigente para folio (migración num_pedimento -> folio_mov)
+function first_col($table, $cands) {
+    foreach ($cands as $c) {
+        $x = db_val("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?", [$table, $c]);
+        if ((int)$x > 0) return $c;
+    }
+    return null;
+}
+
 function out($arr, $code = 200){
     http_response_code($code);
     echo json_encode($arr, JSON_UNESCAPED_UNICODE);
@@ -37,6 +47,9 @@ try {
     $where[] = "h.Activo = 1";
     $where[] = "h.ID_Protocolo = 'OCN'";
 
+    // Columna folio vigente en th_aduana
+    $colFolio = first_col('th_aduana', ['folio_mov','num_pedimento']) ?: 'num_pedimento';
+
     // Almacén (tu data usa WH8 alfanumérico; respetamos tal cual)
     if ($almacen !== '') {
         $where[] = "h.Cve_Almac = :alm";
@@ -53,7 +66,7 @@ try {
     // FIX: placeholders únicos (q1..q5) para evitar HY093 en PDO
     if ($q !== '') {
         $where[] = "("
-            . "CAST(h.num_pedimento AS CHAR) LIKE :q1 "
+            . "CAST(h.$colFolio AS CHAR) LIKE :q1 "
             . "OR h.Factura LIKE :q2 "
             . "OR CAST(h.ID_Aduana AS CHAR) LIKE :q3 "
             . "OR CAST(h.Consec_protocolo AS CHAR) LIKE :q4 "
@@ -68,8 +81,15 @@ try {
         $params['q5'] = $like;
     }
 
+    // Importante: la UI legacy espera num_pedimento para pintar el combo.
+    // Con el cambio a folio_mov, devolvemos alias compatibles SIN tocar diseño.
     $sql = "
-        SELECT * FROM th_aduana h
+        SELECT
+          h.*,
+          CAST(h.$colFolio AS CHAR) AS num_pedimento,
+          CAST(h.$colFolio AS CHAR) AS folio_oc,
+          CAST(h.$colFolio AS CHAR) AS folio_mov
+        FROM th_aduana h
         LEFT JOIN c_proveedores p ON p.ID_Proveedor = h.ID_Proveedor
         WHERE " . implode(" AND ", $where) . "
         ORDER BY h.ID_Aduana DESC

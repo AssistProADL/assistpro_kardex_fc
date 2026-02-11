@@ -236,7 +236,6 @@ include __DIR__ . '/../bi/_menu_global.php';
 <datalist id="dl_articulos"></datalist>
 
 <script>
-(function(){
 // ============================
 // ENDPOINTS
 // ============================
@@ -707,10 +706,15 @@ async function loadOCsPorAlmacen(){
   CACHE_OCS = j.data || [];
 
   const rows = CACHE_OCS.map(x=>({
-    id_oc: String(x.id_oc),
-    label: `${x.num_oc ?? x.id_oc} · ${x.proveedor ?? ''}${x.factura ? (' · ' + x.factura) : ''}`.trim(),
-    id_proveedor: String(x.id_proveedor ?? ''),
-    proveedor: String(x.proveedor ?? '')
+    // ID técnico real del movimiento / OC
+    id_oc: String(x.ID_Aduana),
+
+    // Folio visible (estándar nuevo)
+    label: `${x.folio_mov ?? x.Pedimento ?? x.ID_Aduana}`,
+
+    // Proveedor
+    id_proveedor: String(x.ID_Provedor ?? ''),
+    proveedor: String(x.Nombre ?? '')
   }));
 
   fillSelect(qs('oc_folio'), rows, {
@@ -932,9 +936,9 @@ async function onGuardar(){
 
   const payload = {
     tipo,
-	  // Evita colisiones en backend cuando el campo tiene UNIQUE y la app no lo usa.
-	  // Si el backend convierte "" a 0, esto fuerza NULL (si el API respeta null).
-	  num_pedimento: null,
+	  // Migración: num_pedimento/folio_oc -> folio_mov. Mantener contrato sin tocar UI.
+	  // Mandamos NULL por default para que el backend genere el folio de movimiento.
+	  folio_mov: null,
     empresa: val('empresa'),
     almacen: getClaveAlmacenSeleccionado(),
     zona_recepcion: val('zona_recepcion'),
@@ -1057,7 +1061,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     removeLinea(idx);
   });
 });
-})();
 </script>
 
 <?php include __DIR__ . '/../bi/_menu_global_end.php'; ?>

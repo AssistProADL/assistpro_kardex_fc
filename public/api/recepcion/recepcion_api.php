@@ -47,6 +47,10 @@ if ($action === 'guardar_recepcion') {
   $usuario = $payload['usuario'] ?? 'WMS';
   $lineas = $payload['lineas'] ?? [];
 
+  // Compatibilidad: vistas legacy envían num_pedimento. Nuevo estándar: folio_mov.
+  // Si llega alguno, lo tratamos como "folio solicitado" (normalmente null en UI).
+  $folioIn = $payload['folio_mov'] ?? ($payload['num_pedimento'] ?? null);
+
   if (!$almacen) json_err("Almacén requerido");
   if (!$zona_recepcion) json_err("Zona de recepción requerida");
   if (!is_array($lineas) || !count($lineas)) json_err("Sin líneas para guardar");
@@ -70,22 +74,27 @@ if ($action === 'guardar_recepcion') {
     if (db_val("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='th_aduana'") > 0) {
       $folioRec = "RC".date('YmdHis').substr((string)mt_rand(1000,9999),0,4);
 
-      // ⚠️ num_pedimento en algunos ambientes es INT. No podemos meter folios tipo "RC2026...".
-      // Generamos $folioRec para referencia interna y llenamos num_pedimento de forma segura.
-      $pedVal = $folioRec;
+      // Columna folio vigente en th_aduana (migración num_pedimento -> folio_mov)
+      $colFolio = first_col('th_aduana', ['folio_mov','num_pedimento']) ?: 'num_pedimento';
 
-      // Si num_pedimento es numérico, manda 0 y guarda folioRec en un campo texto si existe.
+      // Folio a guardar: si el front envía uno (folio_mov/num_pedimento) lo respetamos;
+      // si no, usamos el generado para la recepción.
+      $folioToSave = ($folioIn !== null && $folioIn !== '') ? (string)$folioIn : (string)$folioRec;
+
+      // Si la columna es numérica (solo en ambientes legacy con num_pedimento INT), no podemos meter folios tipo "RC2026...".
+      // Usamos 0 y guardamos el folio real en un campo texto disponible.
+      $pedVal = $folioToSave;
       $dtPed = db_val("SELECT DATA_TYPE
                        FROM INFORMATION_SCHEMA.COLUMNS
                        WHERE TABLE_SCHEMA=DATABASE()
                          AND TABLE_NAME='th_aduana'
-                         AND COLUMN_NAME='num_pedimento'") ?: '';
+                         AND COLUMN_NAME=?", [$colFolio]) ?: '';
       $dtPed = strtolower((string)$dtPed);
       $isNum = in_array($dtPed, ['int','integer','bigint','smallint','mediumint','tinyint','decimal','numeric','float','double'], true);
       if ($isNum) { $pedVal = 0; }
 
       $map = [
-        'num_pedimento' => $pedVal,
+        $colFolio       => $pedVal,
         'fech_pedimento'=> date('Y-m-d H:i:s'),
         'Factura'       => $factura,
         'status'        => 'A',
@@ -108,7 +117,7 @@ if ($action === 'guardar_recepcion') {
           if ($dt) {
             $dt = strtolower((string)$dt);
             $isTxt = in_array($dt, ['varchar','char','text','tinytext','mediumtext','longtext'], true);
-            if ($isTxt) { $map[$c] = $folioRec; break; }
+            if ($isTxt) { $map[$c] = $folioToSave; break; }
           }
         }
       }

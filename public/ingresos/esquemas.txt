@@ -1,0 +1,182 @@
+ 
+
+
+th_aduana	CREATE TABLE `th_aduana` (
+  `ID_Aduana` int(11) NOT NULL AUTO_INCREMENT,
+  `folio_mov` varchar(30) DEFAULT NULL,
+  `modulo` varchar(20) DEFAULT NULL,
+  `status` char(2) DEFAULT NULL,
+  `Activo` int(11) DEFAULT NULL,
+  `fecha_mov` date DEFAULT NULL,
+  `fecha_eta` date DEFAULT NULL,
+  `fech_pedimento` datetime DEFAULT NULL,
+  `fech_llegPed` datetime DEFAULT NULL,
+  `fechaContrato` datetime DEFAULT NULL,
+  `fechaSuficiencia` datetime DEFAULT NULL,
+  `fechaDeFallo` datetime DEFAULT NULL,
+  `cve_cia` int(11) DEFAULT NULL,
+  `Cve_Almac` varchar(11) DEFAULT NULL,
+  `cve_usuario` varchar(20) DEFAULT NULL,
+  `areaSolicitante` varchar(50) DEFAULT NULL,
+  `Proyecto` varchar(100) DEFAULT NULL,
+  `Id_moneda` int(11) DEFAULT NULL,
+  `Tipo_Cambio` decimal(18,5) DEFAULT NULL,
+  `importeAlmacenado` double(10,2) DEFAULT NULL,
+  `montoSuficiencia` double(10,2) DEFAULT NULL,
+  `presupuesto` varchar(50) DEFAULT NULL,
+  `ID_Proveedor` int(11) DEFAULT NULL,
+  `oc_erp` varchar(50) DEFAULT NULL,
+  `Factura` varchar(50) DEFAULT NULL,
+  `condicionesDePago` varchar(50) DEFAULT NULL,
+  `lugarDeEntrega` varchar(200) DEFAULT NULL,
+  `num_pedimento` int(11) DEFAULT NULL,
+  `aduana` varchar(25) DEFAULT NULL,
+  `ID_Protocolo` varchar(10) DEFAULT NULL,
+  `Pedimento` varchar(100) DEFAULT NULL,
+  `Consec_protocolo` int(11) DEFAULT NULL,
+  `recurso` varchar(50) DEFAULT NULL,
+  `procedimiento` varchar(120) DEFAULT NULL,
+  `AduanaDespacho` int(11) DEFAULT NULL,
+  `dictamen` varchar(50) DEFAULT NULL,
+  `plazoDeEntrega` varchar(30) DEFAULT NULL,
+  `numSuficiencia` varchar(30) DEFAULT NULL,
+  `numeroContrato` varchar(30) DEFAULT NULL,
+  `pedimento_ref` varchar(50) DEFAULT NULL,
+  `BlMaster` varchar(120) DEFAULT NULL,
+  `BlHouse` varchar(120) DEFAULT NULL,
+  `costo_total` decimal(18,2) DEFAULT NULL,
+  PRIMARY KEY (`ID_Aduana`),
+  UNIQUE KEY `num_pedimento` (`num_pedimento`),
+  KEY `ID_Proveedor` (`ID_Proveedor`),
+  KEY `idx_status` (`status`),
+  KEY `factura` (`Factura`) USING BTREE,
+  KEY `PK_th_aduana_c_moneda` (`Id_moneda`),
+  KEY `idx_th_aduana_status_fecha` (`status`,`fech_pedimento`),
+  KEY `ix_th_aduana_oc_erp` (`oc_erp`),
+  KEY `ix_th_aduana_pedimento_ref` (`pedimento_ref`)
+) ENGINE=InnoDB AUTO_INCREMENT=10753 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci	
+
+
+
+ 
+
+ 
+
+td_aduana	CREATE TABLE `td_aduana` (
+  `Id_DetAduana` int(11) NOT NULL AUTO_INCREMENT,
+  `ID_Aduana` int(11) DEFAULT NULL,
+  `cve_articulo` varchar(50) DEFAULT NULL,
+  `Item` varchar(20) DEFAULT NULL,
+  `cantidad` double DEFAULT NULL,
+  `Id_UniMed` int(11) DEFAULT NULL,
+  `Ingresado` int(11) DEFAULT NULL,
+  `Activo` int(11) DEFAULT NULL,
+  `cve_lote` varchar(50) DEFAULT NULL,
+  `caducidad` datetime DEFAULT NULL,
+  `temperatura` varchar(20) DEFAULT NULL,
+  `Fec_Entrega` date DEFAULT NULL,
+  `Ref_Docto` varchar(120) DEFAULT NULL,
+  `num_orden` int(11) DEFAULT NULL,
+  `costo` float(100,2) DEFAULT NULL COMMENT 'LEGACY_NO_USAR: costos globales viven en th_aduana',
+  `IVA` decimal(10,0) DEFAULT NULL COMMENT 'LEGACY_NO_USAR: IVA no aplica por partida',
+  `Peso` decimal(18,3) DEFAULT NULL,
+  `MarcaNumTotBultos` varchar(70) DEFAULT NULL COMMENT 'MOVER_A_EMPAQUES: ver ts_existenciapiezas/cajas/tarima',
+  `Factura` varchar(120) DEFAULT NULL COMMENT 'LEGACY_NO_USAR: la factura corresponde al encabezado',
+  `Fec_Factura` date DEFAULT NULL COMMENT 'LEGACY_NO_USAR: fecha de factura vive en th_aduana',
+  `Contenedores` varchar(200) DEFAULT NULL COMMENT 'MOVER_A_EMPAQUES: informacion de empaque no pertenece a la partida',
+  PRIMARY KEY (`Id_DetAduana`),
+  UNIQUE KEY `Idx_td_aduana` (`cve_articulo`,`cve_lote`,`num_orden`),
+  KEY `FK_td_aduana_th_aduana` (`num_orden`),
+  KEY `idx_td_aduana_id_aduana` (`ID_Aduana`)
+) ENGINE=InnoDB AUTO_INCREMENT=201766 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Detalle de partidas por movimiento (th_aduana). Contiene información por articulo/línea. No usar para costos globales, facturas ni empaques.'	
+
+
+
+
+  
+
+
+
+t_cardex	CREATE TABLE `t_cardex` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `cve_articulo` varchar(50) DEFAULT NULL,
+  `cve_lote` varchar(50) DEFAULT NULL,
+  `fecha` datetime DEFAULT NULL,
+  `origen` varchar(50) DEFAULT NULL,
+  `destino` varchar(50) DEFAULT NULL,
+  `cantidad` decimal(18,4) DEFAULT NULL,
+  `ajuste` decimal(18,4) DEFAULT NULL,
+  `stockinicial` decimal(18,4) DEFAULT NULL,
+  `id_TipoMovimiento` int(11) DEFAULT NULL,
+  `cve_usuario` varchar(50) DEFAULT NULL,
+  `Cve_Almac` varchar(20) DEFAULT NULL,
+  `Cve_Almac_Origen` varchar(20) DEFAULT NULL,
+  `Cve_Almac_Destino` varchar(20) DEFAULT NULL,
+  `Activo` int(11) DEFAULT NULL,
+  `Fec_Ingreso` date DEFAULT NULL,
+  `Id_Motivo` int(11) DEFAULT NULL,
+  `ID_Proveedor_Dueno` int(11) DEFAULT NULL,
+  `Referencia` varchar(50) DEFAULT NULL,
+  `task_id` bigint(20) DEFAULT NULL,
+  `contenedor_clave` varchar(50) DEFAULT NULL,
+  `contenedor_lp` varchar(50) DEFAULT NULL,
+  `pallet_clave` varchar(50) DEFAULT NULL,
+  `pallet_lp` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_cardex_fecha` (`fecha`),
+  KEY `idx_cardex_articulo` (`cve_articulo`),
+  KEY `idx_cardex_lote` (`cve_lote`),
+  KEY `idx_cardex_usuario` (`cve_usuario`),
+  KEY `idx_cardex_almac` (`Cve_Almac`),
+  KEY `idx_cardex_palletlp` (`pallet_lp`),
+  KEY `idx_cardex_palletclave` (`pallet_clave`),
+  KEY `idx_task_id` (`task_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5515663 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci	
+
+
+ts_existenciapiezas	CREATE TABLE `ts_existenciapiezas` (
+  `cve_almac` int(11) NOT NULL,
+  `idy_ubica` int(11) NOT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `cve_articulo` varchar(50) NOT NULL,
+  `cve_lote` varchar(50) NOT NULL,
+  `Existencia` decimal(18,4) DEFAULT NULL,
+  `ClaveEtiqueta` varchar(50) DEFAULT NULL,
+  `ID_Proveedor` int(11) NOT NULL,
+  `Cuarentena` tinyint(1) DEFAULT NULL,
+  `epc` varchar(96) DEFAULT NULL COMMENT 'Tag EPC asignado a la pieza',
+  `code` varchar(64) DEFAULT NULL COMMENT 'Código de barras / código visual de la pieza',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ux_ts_existenciapiezas_epc` (`epc`),
+  UNIQUE KEY `ux_pieza_biz` (`cve_almac`,`idy_ubica`,`cve_articulo`,`cve_lote`,`epc`,`code`),
+  KEY `ix_pz_key` (`cve_almac`,`idy_ubica`,`cve_articulo`,`cve_lote`)
+) ENGINE=InnoDB AUTO_INCREMENT=170006 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci	
+ts_existenciacajas	CREATE TABLE `ts_existenciacajas` (
+  `idy_ubica` ...	
+ts_existenciatarima	CREATE TABLE `ts_existenciatarima` (
+  `cve_almac`...	
+c_folios	CREATE TABLE `c_folios` (
+  `id` int(11) NOT NULL ...	
+
+
+
+c_folios	CREATE TABLE `c_folios` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `modulo` varchar(20) NOT NULL,
+  `serie` varchar(10) NOT NULL DEFAULT '01',
+  `descripcion` varchar(100) DEFAULT NULL,
+  `prefijo` varchar(20) NOT NULL,
+  `sufijo` varchar(10) DEFAULT NULL,
+  `folio_inicial` int(11) NOT NULL DEFAULT 1,
+  `folio_actual` int(11) NOT NULL DEFAULT 0,
+  `folio_final` int(11) DEFAULT NULL,
+  `longitud_num` int(11) NOT NULL DEFAULT 3,
+  `rellenar_ceros` tinyint(1) NOT NULL DEFAULT 1,
+  `vigente_desde` date NOT NULL,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_folio_modulo` (`empresa_id`,`modulo`,`serie`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci	

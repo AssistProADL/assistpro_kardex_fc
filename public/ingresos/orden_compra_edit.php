@@ -1,445 +1,247 @@
 <?php
+
+// ===================== FIX OCI: normalización de entradas =====================
+$ID_Proveedor   = $_POST['ID_Proveedor']   ?? null;
+$Cve_Almac      = $_POST['Cve_Almac']      ?? null;
+$Tipo_Cambio    = $_POST['Tipo_Cambio']    ?? 1;
+$Id_moneda      = $_POST['Id_moneda']      ?? 1;
+$Proyecto       = ($_POST['Proyecto'] ?? '') !== '' ? $_POST['Proyecto'] : null;
+$oc_erp         = ($_POST['oc_erp'] ?? '') !== '' ? $_POST['oc_erp'] : null;
+$pedimento_ref  = ($_POST['pedimento_ref'] ?? '') !== '' ? $_POST['pedimento_ref'] : null;
+$fecha_eta      = ($_POST['fecha_eta'] ?? '') !== '' ? $_POST['fecha_eta'] : null;
+// ============================================================================
+
 // public/ingresos/orden_compra_edit.php
 require_once __DIR__ . '/../../app/db.php';
 
 $pdo = db_pdo();
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-function e(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
-function upper($v): string { return strtoupper(trim((string)$v)); }
+/* ================= UTILIDADES ================= */
+function e(string $v): string {
+    return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+}
+function upper($v): string {
+    return strtoupper(trim((string)$v));
+}
 
-/**
- * Genera folio tipo OCNYYYYMMDD-001 / OCIYYYYMMDD-001
- * - Se basa en th_aduana.Pedimento
- * - Concurrencia: dentro de transacción, toma el último folio del día y suma +1
- */
+/* ================= FOLIO OC (ÚNICA FUENTE) =================
+   SP: sp_next_folio_diario(empresa_id, modulo, fecha, OUT folio)
+   Ej: OCN20260206-001
+*/
 function generarFolioOC(PDO $pdo, string $tipoOc, ?string $fechaISO = null): string {
-    // Fuente única: SP + tabla c_folios
-    $tipoOc = upper($tipoOc);
-    if ($tipoOc === '') $tipoOc = 'OCN';
-
+    $tipoOc = upper($tipoOc ?: 'OCN');
     $fechaISO = $fechaISO ?: date('Y-m-d');
 
-    $startedTx = false;
-    try {
-        if (!$pdo->inTransaction()) {
-            $pdo->beginTransaction();
-            $startedTx = true;
-        }
-
-        $stmt = $pdo->prepare("
-            CALL sp_next_folio_diario(
-                :empresa_id,
-                :modulo,
-                :serie,
-                :prefijo,
-                :fecha_doc,
-                :usuario,
-                @p_folio,
-                @p_consecutivo
-            )
-        ");
-
-        $stmt->execute([
-            ':empresa_id' => 1,
-            ':modulo'     => 'OC',
-            ':serie'      => '01',
-            ':prefijo'    => $tipoOc,
-            ':fecha_doc'  => $fechaISO,
-            ':usuario'    => 'system',
-        ]);
-
-        // Importante: cerrar cursor para permitir siguientes queries en algunos drivers
-        $stmt->closeCursor();
-
-        $row = $pdo->query("SELECT @p_folio AS folio")->fetch(PDO::FETCH_ASSOC);
-        $folio = (string)($row['folio'] ?? '');
-
-        if ($folio === '') {
-            throw new Exception('SP no devolvió folio');
-        }
-
-        if ($startedTx) {
-            $pdo->commit();
-        }
-
-        return $folio;
-
-    } catch (Throwable $e) {
-        if ($startedTx && $pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        throw $e;
-    }
-}
-
-/**
- * num_pedimento interno (legacy) - secuencia global numérica
- * - Evita MAX() FOR UPDATE (que en MySQL suele fallar).
- * - Toma el último num_pedimento existente y suma.
- */
-function generarNumPedimentoGlobal(PDO $pdo): int {
-    $st = $pdo->query("
-        SELECT num_pedimento
-        FROM th_aduana
-        ORDER BY num_pedimento DESC
-        LIMIT 1
-        FOR UPDATE
+    $stmt = $pdo->prepare("
+        CALL sp_next_folio_diario(:empresa_id, :modulo, :fecha_doc, @p_folio)
     ");
-    $max = (int)$st->fetchColumn();
-    return $max + 1;
+    $stmt->execute([
+        ':empresa_id' => 1,
+        ':modulo'     => $tipoOc,   // OCN / OCI
+        ':fecha_doc'  => $fechaISO,
+    ]);
+    $stmt->closeCursor();
+
+    $row = $pdo->query("SELECT @p_folio AS folio")->fetch(PDO::FETCH_ASSOC);
+    if (empty($row['folio'])) {
+        throw new Exception('No se pudo generar el folio OC');
+    }
+    return $row['folio'];
 }
 
+/* ================= CONTEXTO ================= */
 $idAduana   = isset($_GET['id_aduana']) ? (int)$_GET['id_aduana'] : 0;
 $esEdicion  = $idAduana > 0;
 $mensajeError = '';
-$ok = isset($_GET['ok']) ? (int)$_GET['ok'] : 0;
+$ok = isset($_GET['ok']) ? 1 : 0;
 
-/** =================== Catálogos =================== */
-$proveedores = [];
-$almacenes   = [];
-$productos   = [];
-$mapProd     = [];
+/* ================= CATÁLOGOS ================= */
+$proveedores = $pdo->query("
+    SELECT ID_Proveedor, Nombre
+    FROM c_proveedores
+    WHERE (Activo=1 OR Activo IS NULL)
+    ORDER BY Nombre
+")->fetchAll(PDO::FETCH_ASSOC);
 
-try {
-    $proveedores = $pdo->query("
-        SELECT ID_Proveedor, Nombre
-        FROM c_proveedores
-        WHERE (Activo=1 OR Activo='1' OR Activo='S' OR Activo IS NULL)
-        ORDER BY Nombre
-    ")->fetchAll(PDO::FETCH_ASSOC);
+$almacenes = $pdo->query("
+    SELECT clave, nombre FROM c_almacenp ORDER BY clave
+")->fetchAll(PDO::FETCH_ASSOC);
 
-// Helper: validar si existe una columna (para despliegue/guardado evolutivo sin romper)
-function column_exists(PDO $pdo, string $table, string $column): bool {
-    try {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
-        $stmt->execute([$table, $column]);
-        return (int)$stmt->fetchColumn() > 0;
-    } catch (Throwable $e) { return false; }
+$productos = $pdo->query("
+    SELECT cve_articulo, des_articulo, unidadMedida
+    FROM c_articulo
+    WHERE (Activo=1 OR Activo IS NULL)
+")->fetchAll(PDO::FETCH_ASSOC);
+
+$mapProd = [];
+foreach ($productos as $p) {
+    $mapProd[$p['cve_articulo']] = [
+        'des' => $p['des_articulo'],
+        'um'  => $p['unidadMedida'],
+    ];
 }
 
-$has_folio_oc   = column_exists($pdo, 'th_aduana', 'folio_oc');
-$has_oc_erp     = column_exists($pdo, 'th_aduana', 'oc_erp');
-$has_ped_ref    = column_exists($pdo, 'th_aduana', 'pedimento_ref');
-$has_fecha_eta  = column_exists($pdo, 'th_aduana', 'fecha_eta'); // NUEVO: ETA (planeación)
-$has_fecha_lleg = column_exists($pdo, 'th_aduana', 'fech_llegPed'); // fecha estimada/real recepción (si aplica)
-
-// Proyectos (catálogo)
 $proyectos = [];
 try {
-    $proyectos = $pdo->query("SELECT Cve_Proyecto, Des_Proyecto FROM c_proyecto ORDER BY Des_Proyecto")->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) { $proyectos = []; }
-
-} catch(Throwable $e){ $proveedores = []; }
-
-try {
-    $almacenes = $pdo->query("SELECT clave, nombre FROM c_almacenp ORDER BY clave")->fetchAll(PDO::FETCH_ASSOC);
-} catch(Throwable $e){ $almacenes = []; }
-
-try {
-    // IMPORTANTE: antes estaba LIMIT 8000 y eso “ocultaba” productos.
-    // Si c_articulo es enorme, lo correcto es migrarlo a un autocomplete por API.
-    // Para el “OC referente” lo dejamos completo (puede tardar si hay muchísimos).
-    $productos = $pdo->query("
-        SELECT a.cve_articulo, a.des_articulo, a.unidadMedida
-        FROM c_articulo a
-        WHERE (a.Activo=1 OR a.Activo='1' OR a.Activo='S' OR a.Activo IS NULL)
-        ORDER BY a.cve_articulo
+    $proyectos = $pdo->query("
+        SELECT Cve_Proyecto, Des_Proyecto FROM c_proyecto ORDER BY Des_Proyecto
     ")->fetchAll(PDO::FETCH_ASSOC);
+} catch(Throwable $e){}
 
-    foreach ($productos as $p) {
-        $cve = trim((string)$p['cve_articulo']);
-        if ($cve === '') continue;
-        $mapProd[$cve] = [
-            'des' => (string)($p['des_articulo'] ?? ''),
-            'um'  => (string)($p['unidadMedida'] ?? ''),
-        ];
-    }
-} catch(Throwable $e){
-    $productos = [];
-    $mapProd = [];
-}
-
-/** =================== Load Encabezado/Detalle =================== */
+/* ================= ENCABEZADO DEFAULT ================= */
 $encabezado = [
     'ID_Aduana'      => $idAduana,
     'ID_Proveedor'   => 0,
     'Cve_Almac'      => '',
-    'Pedimento'      => '',   // folio negocio (folio_oc)
-    'Id_moneda'      => 1,    // 1 MXN, 2 USD
+    'Pedimento'      => '',
+    'Id_moneda'      => 1,
     'Tipo_Cambio'    => 1,
     'fech_pedimento' => date('Y-m-d'),
-    'fecha_eta'      => null, // planeación compras
+    'fecha_eta'      => '',
     'Proyecto'       => '',
     'oc_erp'         => '',
     'pedimento_ref'  => '',
-    'tipo_oc'        => 'OCN', // OCN / OCI
-    'ID_Protocolo'   => 'OCN', // compatibilidad legacy
-    'num_pedimento'  => null,
-    'Consec_protocolo'=> null,
+    'tipo_oc'        => 'OCN',
 ];
 
 $detalle = [];
 
+/* ================= CARGA EDICIÓN ================= */
 if ($esEdicion) {
     $h = $pdo->prepare("SELECT * FROM th_aduana WHERE ID_Aduana=?");
     $h->execute([$idAduana]);
-    $rowH = $h->fetch(PDO::FETCH_ASSOC);
-    if ($rowH) {
-        $encabezado = array_merge($encabezado, $rowH);
-        if (empty($encabezado['tipo_oc']) && !empty($encabezado['ID_Protocolo'])) {
-            $encabezado['tipo_oc'] = $encabezado['ID_Protocolo'];
-        }
+    if ($row = $h->fetch(PDO::FETCH_ASSOC)) {
+        $encabezado = array_merge($encabezado, $row);
     }
 
     $d = $pdo->prepare("
         SELECT d.*, a.des_articulo, a.unidadMedida AS des_umed
         FROM td_aduana d
-        LEFT JOIN c_articulo a ON a.cve_articulo = d.cve_articulo
+        LEFT JOIN c_articulo a ON a.cve_articulo=d.cve_articulo
         WHERE d.ID_Aduana=?
-        ORDER BY d.Id_DetAduana
     ");
     $d->execute([$idAduana]);
     $detalle = $d->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/** =================== POST Guardar =================== */
+/* ================= POST GUARDAR ================= */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // === Generación de folio SOLO al guardar (POST) ===
-    if (empty($_POST['folio_oc'])) {
-        $folioOC = generarFolioOC($pdo, $_POST['tipo_oc'], ($_POST['fech_pedimento'] ?? date('Y-m-d')));
-    } else {
-        $folioOC = $_POST['folio_oc'];
-    }
+    try {
+        $pdo->beginTransaction();
 
+        /* ---- Encabezado ---- */
+        $encabezado['ID_Proveedor']   = (int)($_POST['ID_Proveedor'] ?? 0);
+        $encabezado['Cve_Almac']      = upper($_POST['Cve_Almac'] ?? '');
+        $encabezado['tipo_oc']        = upper($_POST['tipo_oc'] ?? 'OCN');
+        $encabezado['Pedimento']      = upper($_POST['Pedimento'] ?? '');
+        $encabezado['fech_pedimento'] = $_POST['fech_pedimento'] ?? date('Y-m-d');
+        $encabezado['fecha_eta']      = $_POST['fecha_eta'] ?? null;
+        $encabezado['Proyecto']       = upper($_POST['Proyecto'] ?? '');
+        $encabezado['oc_erp']         = upper($_POST['oc_erp'] ?? '');
+        $encabezado['pedimento_ref']  = upper($_POST['pedimento_ref'] ?? '');
+        $encabezado['Id_moneda']      = (int)($_POST['Id_moneda'] ?? 1);
+        $encabezado['Tipo_Cambio']    = (float)($_POST['Tipo_Cambio'] ?? 1);
 
-
-    // Rehidrata encabezado desde POST SIEMPRE
-    $encabezado['ID_Proveedor']   = (int)($_POST['ID_Proveedor'] ?? 0);
-    $encabezado['ProveedorNombre']= trim((string)($_POST['ProveedorNombre'] ?? '')); // blindaje
-    $encabezado['Cve_Almac']      = upper($_POST['Cve_Almac'] ?? '');
-        $encabezado['Pedimento']      = upper($_POST['Pedimento'] ?? '');    // puede ir vacío (autofolio)
-    $encabezado['Id_moneda']      = (int)($_POST['Id_moneda'] ?? 1);
-    $encabezado['Tipo_Cambio']    = (float)($_POST['Tipo_Cambio'] ?? 1);
-    $encabezado['fech_pedimento'] = trim((string)($_POST['fech_pedimento'] ?? date('Y-m-d')));
-    $encabezado['Proyecto']       = upper($_POST['Proyecto'] ?? '');
-    $encabezado['fecha_eta']     = trim((string)($_POST['fecha_eta'] ?? ''));
-    $encabezado['oc_erp']         = upper($_POST['oc_erp'] ?? '');
-    $encabezado['pedimento_ref']  = upper($_POST['pedimento_ref'] ?? '');
-    $encabezado['tipo_oc']        = upper($_POST['tipo_oc'] ?? 'OCN');
-
-    // ===== Regla: OCN siempre MXN y TC=1 =====
-    if ($encabezado['tipo_oc'] === 'OCN') {
-        $encabezado['Id_moneda'] = 1;
-        $encabezado['Tipo_Cambio'] = 1;
-        $encabezado['pedimento_ref'] = '';
-    }
-
-    // Rehidrata detalle
-    $postCve  = $_POST['cve_articulo'] ?? [];
-    $postCant = $_POST['cantidad'] ?? [];
-    $postCost = $_POST['costo'] ?? [];
-    $postIVA  = $_POST['iva'] ?? [];
-    $postLote = $_POST['Cve_Lote'] ?? [];
-    $postCad  = $_POST['caducidad'] ?? [];
-
-    $detalle = [];
-    $n = max(count($postCve), count($postCant));
-    for ($i=0; $i<$n; $i++) {
-        $cve   = upper($postCve[$i] ?? '');
-        $cant  = (float)($postCant[$i] ?? 0);
-        $costo = (float)($postCost[$i] ?? 0);
-        $iva   = (float)($postIVA[$i] ?? 16);
-        $lote  = upper($postLote[$i] ?? '');
-        $cad   = trim((string)($postCad[$i] ?? ''));
-
-        if ($cve === '' && $cant == 0 && $costo == 0) continue;
-
-        $detalle[] = [
-            'cve_articulo' => $cve,
-            'cantidad'     => $cant,
-            'costo'        => $costo,
-            'IVA'          => $iva,
-            'Cve_Lote'     => $lote,
-            'caducidad'    => $cad,
-            'des_articulo' => $mapProd[$cve]['des'] ?? '',
-            'des_umed'     => $mapProd[$cve]['um'] ?? '',
-        ];
-    }
-
-    // Blindaje proveedor por nombre (si llega 0)
-    if ($encabezado['ID_Proveedor'] <= 0 && $encabezado['ProveedorNombre'] !== '') {
-        $stp = $pdo->prepare("SELECT ID_Proveedor FROM c_proveedores WHERE Nombre = ? LIMIT 1");
-        $stp->execute([$encabezado['ProveedorNombre']]);
-        $idProv = (int)$stp->fetchColumn();
-        if ($idProv > 0) $encabezado['ID_Proveedor'] = $idProv;
-    }
-
-    // ===== Validación (protocolo ahora es OPCIONAL) =====
-    if ($encabezado['ID_Proveedor'] <= 0) {
-        $mensajeError = 'Proveedor es obligatorio.';
-    } elseif ($encabezado['Cve_Almac'] === '') {
-        $mensajeError = 'Almacén es obligatorio.';
-    } elseif ($encabezado['tipo_oc'] === '') {
-        $mensajeError = 'Tipo OC es obligatorio.';
-    } elseif ($encabezado['tipo_oc'] === 'OCN' && ((int)$encabezado['Id_moneda'] !== 1 || (float)$encabezado['Tipo_Cambio'] != 1.0)) {
-        $mensajeError = 'OCN debe ser MXN y Tipo de Cambio = 1.';
-    } elseif (!$detalle) {
-        $mensajeError = 'Debe capturar al menos 1 partida.';
-    } else {
-        try {
-            $pdo->beginTransaction();
-
-            // ===================== FOLIO OC AUTOMÁTICO (NUEVA REGLA) =====================
-            // Formato: OCNYYYYMMDD-001 / OCIYYYYMMDD-001
-            // Normalizado a MAYÚSCULAS.
-            if (!$esEdicion) {
-
-                // Si el usuario NO puso folio, lo generamos.
-                if ($encabezado['Pedimento'] === '') {
-                    $encabezado['Pedimento'] = generarFolioOC($pdo, $encabezado['tipo_oc'], ($encabezado['fech_pedimento'] ?? date('Y-m-d')));
-                } else {
-                    // Normaliza y valida formato mínimo (opcional)
-                    $encabezado['Pedimento'] = upper($encabezado['Pedimento']);
-                }
-
-                // num_pedimento se captura en Recepción de Mercancía, aquí se deja NULL
-                $encabezado['num_pedimento'] = null;
-// folio_oc y consecutivo por protocolo (dependiente de tipo_oc)
-                $encabezado['folio_oc'] = $encabezado['Pedimento'];
-                $encabezado['Consec_protocolo'] = null;
-                if (preg_match('/-(\d{1,6})$/', $encabezado['Pedimento'], $mm)) {
-                    $encabezado['Consec_protocolo'] = (int)$mm[1];
-                }
-
-            }
-
-            // ===================== INSERT / UPDATE =====================
-            if (!$esEdicion) {
-
-                // Status abierto por diseño (tu decisión): 'A'
-                $insH = (
-                function() use ($pdo, $has_fecha_eta){
-                    $cols = "num_pedimento, fech_pedimento, Pedimento, status, ID_Proveedor, ID_Protocolo, folio_oc, Consec_protocolo, Cve_Almac, Activo, Proyecto, Tipo_Cambio, Id_moneda, oc_erp, pedimento_ref";
-                    $vals = ":num_ped, :fech, :ped, 'A', :prov, :prot, :folio_oc, :consec, :alm, 1, :proy, :tc, :mon, :oc_erp, :ped_ref";
-                    if($has_fecha_eta){
-                        $cols .= ", fecha_eta";
-                        $vals .= ", :fecha_eta";
-                    }
-                    $sql = "INSERT INTO th_aduana ($cols) VALUES ($vals)";
-                    return $pdo->prepare($sql);
-                }
-            )();
-
-                $paramsH = [
-                    ':num_ped'  => $encabezado['num_pedimento'] === null ? null : (int)$encabezado['num_pedimento'],
-                    ':fech'     => $encabezado['fech_pedimento'],
-                    ':ped'      => $encabezado['Pedimento'],
-                    ':prov'     => $encabezado['ID_Proveedor'],
-                    ':prot'     => $encabezado['ID_Protocolo'],
-                    ':folio_oc' => $encabezado['folio_oc'],
-                    ':consec'   => $encabezado['Consec_protocolo'],
-                    ':alm'      => $encabezado['Cve_Almac'],
-                    ':proy'     => $encabezado['Proyecto'] ?: null,
-                    ':tc'       => $encabezado['Tipo_Cambio'],
-                    ':mon'      => $encabezado['Id_moneda'],
-                    ':oc_erp'   => $encabezado['oc_erp'] ?: null,
-                    ':ped_ref'  => $encabezado['pedimento_ref'] ?: null,
-                ];
-                if($has_fecha_eta){
-                    $paramsH[':fecha_eta'] = ($encabezado['fecha_eta'] ?? '') ?: null;
-                }
-                $insH->execute($paramsH);
-$idAduana  = (int)$pdo->lastInsertId();
-                $esEdicion = true;
-                $encabezado['ID_Aduana'] = $idAduana;
-
-            } else {
-                // En edición NO permitimos cambiar moneda/TC en este flujo (por consistencia).
-                $updH = $pdo->prepare("
-    UPDATE th_aduana
-    SET
-        fech_pedimento=:fech,
-        Pedimento=:ped,
-        status='A',
-        ID_Proveedor=:prov,
-        Cve_Almac=:alm,
-        Activo=1,
-        Proyecto=:proy,
-        Tipo_Cambio=:tc,
-        Id_moneda=:mon,
-        ID_Protocolo=:prot,
-        folio_oc=:folio_oc,
-        Consec_protocolo=:consec,
-        oc_erp=:oc_erp,
-        pedimento_ref=:ped_ref
-    WHERE ID_Aduana=:id
-");
-$updH->execute([
-    ':fech'   => $encabezado['fech_pedimento'],
-    ':ped'    => $encabezado['Pedimento'],
-    ':prov'   => $encabezado['ID_Proveedor'],
-    ':alm'    => $encabezado['Cve_Almac'],
-    ':proy'   => $encabezado['Proyecto'],
-    ':tc'     => $encabezado['Tipo_Cambio'],
-    ':mon'    => $encabezado['Id_moneda'],
-    ':prot'   => $encabezado['tipo_oc'],
-    ':folio_oc'=> ($encabezado['Pedimento'] ?? null),
-    ':consec' => (preg_match('/-(\d{1,6})$/', (string)$encabezado['Pedimento'], $mm2) ? (int)$mm2[1] : null),
-    ':oc_erp' => ($encabezado['oc_erp']===''? null : $encabezado['oc_erp']),
-    ':ped_ref'=> ($encabezado['pedimento_ref']===''? null : $encabezado['pedimento_ref']),
-    ':id'     => $idAduana
-]);
-$pdo->prepare("DELETE FROM td_aduana WHERE ID_Aduana=?")->execute([$idAduana]);
-            }
-
-            $insD = $pdo->prepare("
-                INSERT INTO td_aduana
-                (ID_Aduana, cve_articulo, cantidad, Cve_Lote, caducidad, costo, IVA, Id_UniMed, Ref_Docto, Ingresado, num_orden)
-                VALUES
-                (:id, :art, :cant, :lote, :cad, :costo, :iva, :idum, :ref, 0, :orden)
-            ");
-
-            $ordenRow = 1;
-
-            foreach ($detalle as $r) {
-                $cve = upper($r['cve_articulo'] ?? '');
-                if ($cve === '') continue;
-
-                $insD->execute([
-                    ':id'    => (int)$encabezado['ID_Aduana'],
-                    ':art'   => $cve,
-                    ':cant'  => (float)($r['cantidad'] ?? 0),
-                    ':lote'  => upper($r['Cve_Lote'] ?? ''),
-                    ':cad'   => (!empty($r['caducidad']) ? ($r['caducidad'].' 00:00:00') : null),
-                    ':costo' => (float)(($r['costo'] ?? 0) * (1 + (((float)($r['IVA'] ?? 0))/100))),
-                    ':iva'   => (float)($r['IVA'] ?? 16),
-                    ':idum'  => null,
-                    ':ref'   => (string)($encabezado['Pedimento'] ?? ''),
-                    ':orden' => $ordenRow, // partida secuencial
-                ]);
-
-                $ordenRow++;
-            }
-
-            $pdo->commit();
-            header("Location: orden_compra_edit.php?id_aduana=".(int)$encabezado['ID_Aduana']."&ok=1");
-            exit;
-
-        } catch(Throwable $ex) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-
-            $msg = $ex->getMessage();
-            if (strpos($msg, 'SQLSTATE[23000]') !== false && strpos($msg, '1062') !== false) {
-                $mensajeError = "Conflicto de folio: el consecutivo ya fue tomado por otra OC. Intenta guardar de nuevo (se recalcula automático).";
-            } else {
-                $mensajeError = $msg;
-            }
+        if ($encabezado['ID_Proveedor'] <= 0) {
+            throw new Exception('Proveedor obligatorio');
         }
+        if ($encabezado['Cve_Almac'] === '') {
+            throw new Exception('Almacén obligatorio');
+        }
+
+        /* ---- Generar folio SOLO AQUÍ ---- */
+        if (!$esEdicion && $encabezado['Pedimento'] === '') {
+            $encabezado['Pedimento'] = generarFolioOC(
+                $pdo,
+                $encabezado['tipo_oc'],
+                $encabezado['fech_pedimento']
+            );
+        }
+
+        /* ---- Insert encabezado ---- */
+        if (!$esEdicion) {
+            $ins = $pdo->prepare("
+              INSERT INTO th_aduana
+(
+    fech_pedimento, Pedimento, ID_Proveedor, Cve_Almac,
+    Tipo_Cambio, Id_moneda, Proyecto, oc_erp, pedimento_ref,
+    folio_mov, status, Activo, fecha_eta, ID_Protocolo
+)
+VALUES
+(
+    :fech, :ped, :prov, :alm,
+    :tc, :mon, :proy, :ocerp, :pref,
+    :folio, 'A', 1, :eta, :protocolo
+)
+");
+            $ins->execute([
+                ':fech'  => $encabezado['fech_pedimento'],
+                ':ped'   => $encabezado['Pedimento'],
+                ':prov'  => $encabezado['ID_Proveedor'],
+                ':alm'   => $encabezado['Cve_Almac'],
+                ':tc'    => $encabezado['Tipo_Cambio'],
+                ':mon'   => $encabezado['Id_moneda'],
+                ':proy'  => $encabezado['Proyecto'] ?: null,
+                ':ocerp' => $encabezado['oc_erp'] ?: null,
+                ':pref'  => $encabezado['pedimento_ref'] ?: null,
+                ':folio' => $encabezado['Pedimento'],
+                ':eta'   => $encabezado['fecha_eta'] ?: null,
+ 		':protocolo'  => $encabezado['tipo_oc'],
+            ]);
+            $idAduana = (int)$pdo->lastInsertId();
+        } else {
+            $pdo->prepare("DELETE FROM td_aduana WHERE ID_Aduana=?")
+                ->execute([$idAduana]);
+        }
+
+        /* ---- Detalle ---- */
+        $insD = $pdo->prepare("
+            INSERT INTO td_aduana
+            (ID_Aduana, cve_articulo, cantidad, costo, IVA, Cve_Lote, caducidad)
+            VALUES
+            (:id, :art, :cant, :costo, :iva, :lote, :cad)
+        ");
+
+   foreach ($_POST['cve_articulo'] as $i => $art) {
+    $art = upper($art);
+    $cantidad = (float)($_POST['cantidad'][$i] ?? 0);
+    $costo    = (float)($_POST['costo'][$i] ?? 0);
+
+    // ❌ no guardar filas inválidas
+    if ($art === '') continue;
+    if ($cantidad <= 0) continue;
+    if ($costo <= 0) continue;
+
+    $insD->execute([
+        ':id'    => $idAduana,
+        ':art'   => $art,
+        ':cant'  => $cantidad,
+        ':costo' => $costo,
+        ':iva'   => (float)($_POST['iva'][$i] ?? 16),
+        ':lote'  => upper($_POST['Cve_Lote'][$i] ?? ''),
+        ':cad'   => !empty($_POST['caducidad'][$i])
+                    ? $_POST['caducidad'][$i].' 00:00:00'
+                    : null,
+    ]);
+}
+
+
+        $pdo->commit();
+        header("Location: orden_compra_edit.php?id_aduana=$idAduana&ok=1");
+        exit;
+
+    } catch(Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        $mensajeError = $e->getMessage();
     }
 }
 
+ 
+
+
 require_once __DIR__ . '/../bi/_menu_global.php';
+
 ?>
 
 <style>
@@ -514,6 +316,10 @@ if ($esEdicion && !empty($encabezado['Cve_Almac'])) {
 ?>
 
 <select name="Cve_Almac" class="form-select" <?php echo $esEdicion ? 'disabled' : ''; ?>>
+
+
+ 
+
     <option value="" selected>Seleccione...</option>
 
     <?php foreach ($almacenes as $a):
@@ -668,39 +474,34 @@ if ($esEdicion && !empty($encabezado['Cve_Almac'])) {
               </tr>
             </thead>
             
-            <tbody>
-              <?php if (!$detalle): ?>
-                <tr>
-                  <td class="text-center"><button type="button" class="btn btn-outline-danger btn-xs btn-row btn-del">&times;</button></td>
-                  <td><input list="dlProductos" type="text" name="cve_articulo[]" class="form-control inp-art" placeholder="Clave o descripción"></td>
-                  <td><input type="text" class="form-control inp-des" value="" disabled></td>
-                  <td><input type="text" class="form-control inp-um" value="" disabled></td>
-                  <td><input type="number" step="0.0001" name="cantidad[]" class="form-control cantidad text-end" value=""></td>
-                  <td><input type="number" step="0.0001" name="costo[]" class="form-control costo text-end" value=""></td>
-                  <td><input type="number" step="0.01" name="iva[]" class="form-control iva text-end" value="16"></td>
-                  <td><input type="text" class="form-control total text-end" value="0.00" readonly></td>
-                  <td><input type="text" name="Cve_Lote[]" class="form-control" value=""></td>
-                  <td><input type="date" name="caducidad[]" class="form-control" value=""></td>
-                </tr>
-              <?php else: ?>
-                <?php foreach ($detalle as $row):
-                  $cadIso = !empty($row['caducidad']) ? substr((string)$row['caducidad'],0,10) : '';
-                ?>
-                  <tr>
-                    <td class="text-center"><button type="button" class="btn btn-outline-danger btn-xs btn-row btn-del">&times;</button></td>
-                    <td><input list="dlProductos" type="text" name="cve_articulo[]" class="form-control inp-art" value="<?php echo e((string)$row['cve_articulo']); ?>"></td>
-                    <td><input type="text" class="form-control inp-des" value="<?php echo e((string)($row['des_articulo'] ?? '')); ?>" disabled></td>
-                    <td><input type="text" class="form-control inp-um" value="<?php echo e((string)($row['des_umed'] ?? '')); ?>" disabled></td>
-                    <td><input type="number" step="0.0001" name="cantidad[]" class="form-control cantidad text-end" value="<?php echo e((string)($row['cantidad'] ?? '')); ?>"></td>
-                    <td><input type="number" step="0.0001" name="costo[]" class="form-control costo text-end" value="<?php echo e((string)($row['costo'] ?? '')); ?>"></td>
-                    <td><input type="number" step="0.01" name="iva[]" class="form-control iva text-end" value="<?php echo e((string)($row['IVA'] ?? '16')); ?>"></td>
-                    <td><input type="text" class="form-control total text-end" value="0.00" readonly></td>
-                    <td><input type="text" name="Cve_Lote[]" class="form-control" value="<?php echo e((string)($row['Cve_Lote'] ?? '')); ?>"></td>
-                    <td><input type="date" name="caducidad[]" class="form-control" value="<?php echo e($cadIso); ?>"></td>
-                  </tr>
-                <?php endforeach; ?>
-              <?php endif; ?>
-            </tbody>
+      <tbody>
+  <?php foreach ($detalle as $row):
+    $cadIso = !empty($row['caducidad']) ? substr((string)$row['caducidad'],0,10) : '';
+  ?>
+    <tr>
+      <td class="text-center">
+        <button type="button" class="btn btn-outline-danger btn-xs btn-row btn-del">&times;</button>
+      </td>
+      <td>
+        <input list="dlProductos" type="text" name="cve_articulo[]" class="form-control inp-art"
+          value="<?php echo e((string)$row['cve_articulo']); ?>">
+      </td>
+      <td><input type="text" class="form-control inp-des" value="<?php echo e($row['des_articulo'] ?? ''); ?>" disabled></td>
+      <td><input type="text" class="form-control inp-um" value="<?php echo e($row['des_umed'] ?? ''); ?>" disabled></td>
+      <td><input type="number" step="0.0001" name="cantidad[]" class="form-control cantidad text-end"
+          value="<?php echo e($row['cantidad'] ?? ''); ?>"></td>
+      <td><input type="number" step="0.0001" name="costo[]" class="form-control costo text-end"
+          value="<?php echo e($row['costo'] ?? ''); ?>"></td>
+      <td><input type="number" step="0.01" name="iva[]" class="form-control iva text-end"
+          value="<?php echo e($row['IVA'] ?? '16'); ?>"></td>
+      <td><input type="text" class="form-control total text-end" value="0.00" readonly></td>
+      <td><input type="text" name="Cve_Lote[]" class="form-control"
+          value="<?php echo e($row['Cve_Lote'] ?? ''); ?>"></td>
+      <td><input type="date" name="caducidad[]" class="form-control" value="<?php echo e($cadIso); ?>"></td>
+    </tr>
+  <?php endforeach; ?>
+</tbody>
+
 
           </table>
         </div>
@@ -919,7 +720,19 @@ document.addEventListener('click', (ev)=>{
 });
 
 // Inicial
-window.addEventListener('load', ()=>{ enforceOCN(); runCosteo(); });
+window.addEventListener('load', ()=>{
+  // 1️⃣ Reglas de OC (moneda / tipo cambio / IVA)
+  enforceOCN();
+
+  // 2️⃣ Si no hay partidas (OC nueva), crea UNA fila visible
+  const tb = document.querySelector('#tablaPartidas tbody');
+  if (tb && tb.children.length === 0) {
+    document.getElementById('btnAddRow')?.click();
+  }
+
+  // 3️⃣ Calcula totales iniciales
+  runCosteo();
+});
 
 </script>
 

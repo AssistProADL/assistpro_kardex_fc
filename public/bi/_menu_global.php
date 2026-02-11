@@ -409,6 +409,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Análisis Global', 'url' => 'dashboard/index.php', 'icono' => 'fa-location-dot'],
                 ['titulo' => 'Georeferencia Rutas', 'url' => 'sfa/geo_distribucion_clientes.php', 'icono' => 'fa-location-dot'],
                 ['titulo' => 'Análisis Crédito', 'url' => 'dashboard/creditos.php', 'icono' => 'fa-location-dot'],
+                ['titulo' => 'Lead Time Analysis', 'url' => 'dashboard/dashboard_lta.php', 'icono' => 'fa-boxes-stacked'],
                 ['titulo' => 'Inventario', 'url' => 'dashboard/inventario.php', 'icono' => 'fa-boxes-stacked'],
                 ['titulo' => 'Resumen Básico', 'url' => 'dashboard/resumen_basico.php', 'icono' => 'fa-chart-pie'],
                 ['titulo' => 'Dashboard Inventarios', 'url' => 'dashboard/adm_inventarios.php', 'icono' => 'fa-warehouse'],

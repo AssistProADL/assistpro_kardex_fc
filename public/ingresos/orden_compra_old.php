@@ -10,131 +10,71 @@ try {
     die('Error de conexión a base de datos: ' . htmlspecialchars($e->getMessage()));
 }
 
-/* ===========================
-   AJAX: update status + registrar evento logístico (TR)
-   =========================== */
+/**
+ * ===========================
+ * AJAX: actualizar status + (opcional) registrar evento LTA
+ * ===========================
+ */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax']) && $_POST['ajax'] === 'oc_status_update') {
     header('Content-Type: application/json; charset=utf-8');
 
     try {
         $idAduana = (int)($_POST['id_aduana'] ?? 0);
         $nuevoStatus = strtoupper(trim((string)($_POST['status'] ?? '')));
-        $comentario = trim((string)($_POST['comment'] ?? ''));
-        $usuario = trim((string)($_POST['usuario'] ?? 'SYSTEM'));
+        $comentario = trim((string)($_POST['comentario'] ?? ''));
 
-        // Campos de Tracking (TR): opcionales (solo se usan si status=TR)
-        $evento = strtoupper(trim((string)($_POST['evento'] ?? 'EMBARQUE')));
-        $fecha_evento = trim((string)($_POST['fecha_evento'] ?? ''));
-        $tracking_no = trim((string)($_POST['tracking_number'] ?? ''));
-        $carrier = trim((string)($_POST['carrier'] ?? ''));
-        $metodo_transporte = strtoupper(trim((string)($_POST['metodo_transporte'] ?? '')));
+        // Campos logísticos (solo para TR)
+        $evento_lta = strtoupper(trim((string)($_POST['evento_lta'] ?? 'EMBARQUE'))); // EMBARQUE / INGRESO_ADUANA / SALIDA_ADUANA
+        $fecha_evento = trim((string)($_POST['fecha_evento'] ?? ''));                // YYYY-MM-DDTHH:MM o YYYY-MM-DD HH:MM:SS
+        $tracking_number = trim((string)($_POST['tracking_number'] ?? ''));
+        $metodo_transporte = trim((string)($_POST['metodo_transporte'] ?? ''));
 
-        if ($idAduana <= 0) throw new Exception('ID_Aduana inválido.');
-        if (!in_array($nuevoStatus, ['A','C','TR'], true)) throw new Exception('Status inválido.');
+        if ($idAduana <= 0) {
+            throw new Exception('ID_Aduana inválido.');
+        }
 
-        if ($usuario === '') $usuario = 'SYSTEM';
-
-        // Normaliza fecha_evento
-        if ($fecha_evento === '') {
-            $fecha_evento = date('Y-m-d H:i:s');
-        } else {
-            // acepta yyyy-mm-dd hh:mm:ss o yyyy-mm-ddThh:mm
-            $fecha_evento = str_replace('T', ' ', $fecha_evento);
-            if (strlen($fecha_evento) === 16) $fecha_evento .= ':00';
+        $allowed = ['A','C','TR'];
+        if (!in_array($nuevoStatus, $allowed, true)) {
+            throw new Exception('Status inválido.');
         }
 
         $pdo->beginTransaction();
 
-        // 1) Actualizar status en th_aduana
-        $upd = $pdo->prepare("UPDATE th_aduana SET status = :st WHERE ID_Aduana = :id LIMIT 1");
-        $upd->execute([':st' => $nuevoStatus, ':id' => $idAduana]);
+        // 1) Update status en th_aduana
+        $upd = $pdo->prepare("UPDATE th_aduana SET status = :st WHERE ID_Aduana = :id");
+        $upd->execute([
+            ':st' => $nuevoStatus,
+            ':id' => $idAduana,
+        ]);
 
-        $id_lta = 0;
-
-        // 2) Si es TR, registrar/append evento(s) y tracking
+        // 2) Si es TR => registrar evento en LTA (Opción A)
         if ($nuevoStatus === 'TR') {
+            // Validaciones mínimas
+            $allowedEvt = ['EMBARQUE','INGRESO_ADUANA','SALIDA_ADUANA'];
+            if (!in_array($evento_lta, $allowedEvt, true)) $evento_lta = 'EMBARQUE';
 
-            // 2.1) Obtener datos OC para lta_case
-            $qOc = $pdo->prepare("
-                SELECT
-                    ID_Proveedor,
-                    COALESCE(NULLIF(folio_mov,''), NULLIF(Pedimento,'')) AS num_oc
-                FROM th_aduana
-                WHERE ID_Aduana = :id
-                LIMIT 1
-            ");
-            $qOc->execute([':id' => $idAduana]);
-            $ocRow = $qOc->fetch(PDO::FETCH_ASSOC) ?: [];
-            $idProveedor = (int)($ocRow['ID_Proveedor'] ?? 0);
-            $numOC = (string)($ocRow['num_oc'] ?? '');
-
-            // 2.2) Transporte -> enum de lta_case (AEREO/MARITIMO/TERRESTRE/MIXTO)
-            $transporte = $metodo_transporte;
-            if (!in_array($transporte, ['AEREO','MARITIMO','TERRESTRE','MIXTO'], true)) {
-                $transporte = 'MIXTO';
-            }
-
-            // 2.3) Buscar o crear lta_case para esta OC (tipo OC + id_aduana)
-            $qCase = $pdo->prepare("
-                SELECT id_lta
-                FROM lta_case
-                WHERE tipo = 'OC'
-                  AND id_aduana = :id_aduana
-                ORDER BY id_lta DESC
-                LIMIT 1
-            ");
-            $qCase->execute([':id_aduana' => $idAduana]);
-            $id_lta = (int)($qCase->fetchColumn() ?: 0);
-
-            if ($id_lta <= 0) {
-                $insCase = $pdo->prepare("
-                    INSERT INTO lta_case
-                        (tipo, descripcion, id_proveedor, id_aduana, estado, transporte, fecha_inicio)
-                    VALUES
-                        ('OC', :desc, :id_prov, :id_aduana, 'TRANSITO', :transporte, CURDATE())
-                ");
-                $desc = trim('OC ' . $numOC);
-                if ($desc === '') $desc = 'OC';
-                $insCase->execute([
-                    ':desc'       => $desc,
-                    ':id_prov'    => ($idProveedor > 0 ? $idProveedor : null),
-                    ':id_aduana'  => $idAduana,
-                    ':transporte' => $transporte,
-                ]);
-                $id_lta = (int)$pdo->lastInsertId();
+            if ($fecha_evento === '') {
+                // si no manda fecha, usa ahora
+                $fecha_evento = date('Y-m-d H:i:s');
             } else {
-                // Actualiza transporte si viene válido (sin tocar otros datos)
-                $pdo->prepare("
-                    UPDATE lta_case
-                    SET transporte = :t, estado='TRANSITO'
-                    WHERE id_lta = :id_lta
-                    LIMIT 1
-                ")->execute([':t' => $transporte, ':id_lta' => $id_lta]);
+                // normaliza formato input datetime-local (2026-02-09T17:30)
+                $fecha_evento = str_replace('T', ' ', $fecha_evento);
+                if (strlen($fecha_evento) === 16) $fecha_evento .= ':00';
             }
 
-            // 2.4) Validar evento enum
-            if (!in_array($evento, ['EMBARQUE','INGRESO_ADUANA','SALIDA_ADUANA'], true)) {
-                $evento = 'EMBARQUE';
-            }
+            // IMPORTANTE:
+            // Aquí uso id_lta = ID_Aduana para avanzar (porque no me pasaste la relación real).
+            // Si tú ya tienes lta_case + lta_oc_rel, aquí debes resolver el id_lta real.
+            $id_lta = $idAduana;
 
-            // 2.5) Validación de secuencia: fecha_evento debe ser >= último evento (si existe)
-            $qMax = $pdo->prepare("SELECT MAX(fecha_evento) FROM lta_event WHERE id_lta = :id_lta");
-            $qMax->execute([':id_lta' => $id_lta]);
-            $maxFecha = $qMax->fetchColumn();
-            if (!empty($maxFecha)) {
-                $tsNew = strtotime($fecha_evento);
-                $tsMax = strtotime((string)$maxFecha);
-                if ($tsNew === false || $tsMax === false) {
-                    throw new Exception('Fecha de evento inválida.');
-                }
-                if ($tsNew < $tsMax) {
-                    throw new Exception('La fecha del evento debe ser igual o mayor al último evento registrado.');
-                }
+            $comentarioFull = $comentario;
+            $extras = [];
+            if ($tracking_number !== '') $extras[] = "TRACKING: {$tracking_number}";
+            if ($metodo_transporte !== '') $extras[] = "METODO: {$metodo_transporte}";
+            if ($extras) {
+                $comentarioFull = trim($comentarioFull . ' | ' . implode(' | ', $extras));
             }
-
-            // 2.6) Insertar (append) evento en lta_event
-            $comentarioFinal = $comentario;
-            $comentarioFinal = ($comentarioFinal !== '') ? ('['.$usuario.'] '.$comentarioFinal) : ('['.$usuario.']');
+            if ($comentarioFull === '') $comentarioFull = null;
 
             $insEvt = $pdo->prepare("
                 INSERT INTO lta_event (id_lta, evento, fecha_evento, fuente, comentario)
@@ -142,131 +82,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax']) && $_POST['aj
             ");
             $insEvt->execute([
                 ':id_lta'       => $id_lta,
-                ':evento'       => $evento,
+                ':evento'       => $evento_lta,
                 ':fecha_evento' => $fecha_evento,
-                ':comentario'   => $comentarioFinal,
+                ':comentario'   => $comentarioFull,
             ]);
-
-            // 2.7) Insertar / actualizar tracking (no reemplaza eventos; sólo agrega tracking si es nuevo)
-            if ($tracking_no !== '') {
-                $qTrk = $pdo->prepare("
-                    SELECT id_tracking
-                    FROM lta_tracking
-                    WHERE id_lta = :id_lta AND tracking_no = :trk
-                    LIMIT 1
-                ");
-                $qTrk->execute([':id_lta' => $id_lta, ':trk' => $tracking_no]);
-                $id_tracking = (int)($qTrk->fetchColumn() ?: 0);
-
-                if ($id_tracking > 0) {
-                    $pdo->prepare("
-                        UPDATE lta_tracking
-                        SET carrier = :carrier, activo = 1
-                        WHERE id_tracking = :id_tracking
-                        LIMIT 1
-                    ")->execute([
-                        ':carrier' => ($carrier !== '' ? $carrier : null),
-                        ':id_tracking' => $id_tracking
-                    ]);
-                } else {
-                    $insTrk = $pdo->prepare("
-                        INSERT INTO lta_tracking (id_lta, tracking_no, carrier, activo)
-                        VALUES (:id_lta, :trk, :carrier, 1)
-                    ");
-                    $insTrk->execute([
-                        ':id_lta'  => $id_lta,
-                        ':trk'     => $tracking_no,
-                        ':carrier' => ($carrier !== '' ? $carrier : null),
-                    ]);
-                }
-            }
         }
 
         $pdo->commit();
 
-        echo json_encode([
-            'ok' => true,
-            'msg' => 'Guardado',
-            'id_lta' => $id_lta
-        ]);
+        echo json_encode(['ok' => true]);
         exit;
 
     } catch (Throwable $e) {
-        if ($pdo && $pdo->inTransaction()) $pdo->rollBack();
-
-        $msg = $e->getMessage();
-
-        // Caso típico: UNIQUE (id_lta, evento) impide registrar el mismo evento más de una vez.
-        if (strpos($msg, 'Duplicate entry') !== false && strpos($msg, 'id_lta_evento') !== false) {
-            $msg = "Tu tabla lta_event tiene un índice UNIQUE que no permite repetir el mismo 'evento' por id_lta (key id_lta_evento). " .
-                   "Para permitir múltiples escalas/eventos, elimina ese UNIQUE y deja un índice normal por id_lta. " .
-                   "Ejemplo SQL: ALTER TABLE lta_event DROP INDEX id_lta_evento; (NO borres el índice id_lta).";
-        }
-
-        echo json_encode(['ok' => false, 'msg' => $msg]);
-        exit;
-    }
-}
-
-/* ===========================
-   AJAX: snapshot TR (eventos + tracking)
-   =========================== */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax']) && $_POST['ajax'] === 'oc_tracking_snapshot') {
-    header('Content-Type: application/json; charset=utf-8');
-
-    try {
-        $idAduana = (int)($_POST['id_aduana'] ?? 0);
-        if ($idAduana <= 0) throw new Exception('ID_Aduana inválido.');
-
-        // Localiza el caso LTA de la OC (si existe)
-        $qCase = $pdo->prepare("
-            SELECT id_lta
-            FROM lta_case
-            WHERE tipo='OC' AND id_aduana=:id
-            ORDER BY id_lta DESC
-            LIMIT 1
-        ");
-        $qCase->execute([':id' => $idAduana]);
-        $id_lta = (int)($qCase->fetchColumn() ?: 0);
-
-        if ($id_lta <= 0) {
-            echo json_encode([
-                'ok' => true,
-                'id_lta' => 0,
-                'events' => [],
-                'tracking' => [],
-            ]);
-            exit;
-        }
-
-        $events = $pdo->prepare("
-            SELECT id_event, evento, fecha_evento, fuente, comentario
-            FROM lta_event
-            WHERE id_lta = :id_lta
-            ORDER BY fecha_evento ASC, id_event ASC
-        ");
-        $events->execute([':id_lta' => $id_lta]);
-        $rowsE = $events->fetchAll(PDO::FETCH_ASSOC);
-
-        $trks = $pdo->prepare("
-            SELECT id_tracking, tracking_no, carrier, activo
-            FROM lta_tracking
-            WHERE id_lta = :id_lta
-            ORDER BY activo DESC, id_tracking DESC
-        ");
-        $trks->execute([':id_lta' => $id_lta]);
-        $rowsT = $trks->fetchAll(PDO::FETCH_ASSOC);
-
-        echo json_encode([
-            'ok' => true,
-            'id_lta' => $id_lta,
-            'events' => $rowsE,
-            'tracking' => $rowsT,
-        ]);
-        exit;
-
-    } catch (Throwable $e) {
-        echo json_encode(['ok' => false, 'msg' => $e->getMessage()]);
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
         exit;
     }
 }
@@ -526,6 +355,13 @@ if ($almacen !== '' || !$esPrimeraCarga) {
             border-radius: 999px;
             padding: 2px 8px;
             text-decoration: none;
+            cursor: pointer;
+        }
+        .lta-box {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 8px;
+            background: #f8fafc;
         }
     </style>
 </head>
@@ -611,8 +447,8 @@ if ($almacen !== '' || !$esPrimeraCarga) {
                 <select class="form-select" name="status">
                     <option value="">Todos</option>
                     <option value="A"<?php if ($status==='A') echo ' selected'; ?>>Abierta (A)</option>
-                    <option value="C"<?php if ($status==='C') echo ' selected'; ?>>Cerrada (C)</option>
                     <option value="TR"<?php if ($status==='TR') echo ' selected'; ?>>Tracking (TR)</option>
+                    <option value="C"<?php if ($status==='C') echo ' selected'; ?>>Cerrada (C)</option>
                 </select>
             </div>
             <div class="col-md-3 col-sm-6">
@@ -686,16 +522,16 @@ if ($almacen !== '' || !$esPrimeraCarga) {
                                 $monedaTxt = 'USD';
                             }
 
-                            // Badge por status (A/C/TR)
-                            if (($r['status'] ?? '') === 'A') {
+                            $st = (string)($r['status'] ?? '');
+                            if ($st === 'A') {
                                 $statusBadge = 'success';
                                 $statusText  = 'Abierta';
-                            } elseif (($r['status'] ?? '') === 'C') {
-                                $statusBadge = 'secondary';
-                                $statusText  = 'Cerrada';
-                            } else {
+                            } elseif ($st === 'TR') {
                                 $statusBadge = 'warning';
                                 $statusText  = 'Tracking';
+                            } else {
+                                $statusBadge = 'secondary';
+                                $statusText  = 'Cerrada';
                             }
                         ?>
                         <tr>
@@ -725,8 +561,8 @@ if ($almacen !== '' || !$esPrimeraCarga) {
                                 <a href="#"
                                    class="link-status badge badge-status bg-<?php echo $statusBadge; ?>"
                                    data-id="<?php echo (int)$r['ID_Aduana']; ?>"
-                                   data-status="<?php echo htmlspecialchars((string)($r['status'] ?? 'A'), ENT_QUOTES, 'UTF-8'); ?>">
-                                    <?php echo htmlspecialchars($statusText, ENT_QUOTES, 'UTF-8'); ?>
+                                   data-status="<?php echo htmlspecialchars($st, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?php echo $statusText; ?>
                                 </a>
                             </td>
                             <td class="col-pedimento">
@@ -780,9 +616,9 @@ if ($almacen !== '' || !$esPrimeraCarga) {
 
 </div>
 
-<!-- Modal Actualizar status OC -->
+<!-- Modal Cambio de Status OC + Puerta TR -->
 <div class="modal fade" id="modalStatusOC" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered" style="max-width:650px;">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
         <h6 class="modal-title">Actualizar status OC</h6>
@@ -796,12 +632,12 @@ if ($almacen !== '' || !$esPrimeraCarga) {
           <label class="form-label">Nuevo status</label>
           <select id="modal_status" class="form-select form-select-sm">
             <option value="A">Abierta (A)</option>
-            <option value="C">Cerrada (C)</option>
             <option value="TR">Tracking (TR)</option>
+            <option value="C">Cerrada (C)</option>
           </select>
         </div>
 
-        <div id="boxLTA" class="border rounded p-2 mb-2" style="display:none;">
+        <div id="boxLTA" class="lta-box mb-2" style="display:none;">
           <div class="mb-2">
             <label class="form-label">Evento logístico</label>
             <select id="modal_evento_lta" class="form-select form-select-sm">
@@ -814,311 +650,143 @@ if ($almacen !== '' || !$esPrimeraCarga) {
           <div class="mb-2">
             <label class="form-label">Fecha evento</label>
             <input type="datetime-local" id="modal_fecha_evento" class="form-control form-control-sm">
-            <div class="text-muted" style="font-size:10px;">(Debe ser igual o mayor al último evento registrado)</div>
           </div>
 
           <div class="mb-2">
             <label class="form-label">Tracking number</label>
-            <input type="text" id="modal_tracking_number" class="form-control form-control-sm" placeholder="Ej: TN123...">
+            <input type="text" id="modal_tracking_number" class="form-control form-control-sm" placeholder="Ej: 1Z..., AWB..., etc">
           </div>
 
           <div class="mb-2">
             <label class="form-label">Método de transporte</label>
-            <input type="text" id="modal_metodo_transporte" class="form-control form-control-sm" placeholder="AEREO / MARITIMO / TERRESTRE / MIXTO">
-          </div>
-
-          <div class="mb-2">
-            <label class="form-label">Carrier</label>
-            <input type="text" id="modal_carrier" class="form-control form-control-sm" placeholder="DHL / FedEx / Naviera / Aerolínea">
-          </div>
-        </div>
-
-        <div class="mb-3">
-          <div class="d-flex justify-content-between align-items-center">
-            <label class="form-label mb-1">Historial logístico (snapshot)</label>
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnRefrescarSnap" style="font-size:10px;padding:2px 8px;">Refrescar</button>
-          </div>
-
-          <div class="table-responsive border rounded" style="max-height:180px;overflow:auto;">
-            <table class="table table-sm mb-0" style="font-size:10px;">
-              <thead class="table-light" style="position:sticky;top:0;z-index:1;">
-                <tr>
-                  <th style="width:110px;">Evento</th>
-                  <th style="width:160px;">Fecha</th>
-                  <th style="width:80px;">Fuente</th>
-                  <th>Comentario</th>
-                </tr>
-              </thead>
-              <tbody id="snapEventsBody">
-                <tr><td colspan="4" class="text-muted">Sin eventos</td></tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="mt-2">
-            <label class="form-label mb-1">Tracking(s)</label>
-            <div class="table-responsive border rounded" style="max-height:110px;overflow:auto;">
-              <table class="table table-sm mb-0" style="font-size:10px;">
-                <thead class="table-light" style="position:sticky;top:0;z-index:1;">
-                  <tr>
-                    <th>Tracking</th>
-                    <th>Carrier</th>
-                    <th class="text-center" style="width:60px;">Activo</th>
-                  </tr>
-                </thead>
-                <tbody id="snapTrackingBody">
-                  <tr><td colspan="3" class="text-muted">Sin tracking</td></tr>
-                </tbody>
-              </table>
-            </div>
+            <input type="text" id="modal_metodo_transporte" class="form-control form-control-sm" placeholder="Aéreo / Marítimo / Terrestre / Paquetería">
           </div>
         </div>
 
         <div class="mb-2">
           <label class="form-label">Comentario</label>
-          <textarea id="modal_comment" class="form-control form-control-sm" rows="3" placeholder="Motivo / nota"></textarea>
+          <textarea id="modal_comentario"
+            class="form-control form-control-sm"
+            rows="3"
+            placeholder="Motivo / nota"></textarea>
         </div>
 
-        <div class="text-danger" id="modal_error" style="font-size:10px;display:none;"></div>
-        <div class="text-success" id="modal_ok" style="font-size:10px;display:none;"></div>
+        <div id="modalStatusMsg" class="text-danger" style="font-size:10px; display:none;"></div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-        <button class="btn btn-ap-primary btn-sm" id="btnGuardarStatus">Guardar</button>
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <button class="btn btn-ap-primary btn-sm" id="btnGuardarStatus">
+          Guardar
+        </button>
       </div>
     </div>
   </div>
 </div>
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
 // Toggle columnas
 document.querySelectorAll('.col-toggle').forEach(cb => {
-  cb.addEventListener('change', () => {
-    const col = cb.dataset.col;
-    document.querySelectorAll('.col-' + col).forEach(td => {
-      td.style.display = cb.checked ? '' : 'none';
+    cb.addEventListener('change', () => {
+        const col = cb.dataset.col;
+        document.querySelectorAll('.col-' + col).forEach(td => {
+            td.style.display = cb.checked ? '' : 'none';
+        });
     });
-  });
 });
+</script>
 
+<script>
 (function(){
   const modalEl = document.getElementById('modalStatusOC');
-  if (!modalEl) return;
-
   const modal = new bootstrap.Modal(modalEl);
 
   const inpId = document.getElementById('modal_id_aduana');
   const selSt = document.getElementById('modal_status');
-  const txtCom = document.getElementById('modal_comment');
+  const txtCom = document.getElementById('modal_comentario');
 
   const boxLTA = document.getElementById('boxLTA');
-  const selEvento = document.getElementById('modal_evento_lta');
-  const inpFecha  = document.getElementById('modal_fecha_evento');
-  const inpTrk    = document.getElementById('modal_tracking_number');
-  const inpMetodo = document.getElementById('modal_metodo_transporte');
-  const inpCarrier= document.getElementById('modal_carrier');
+  const selEvt = document.getElementById('modal_evento_lta');
+  const dtEvt  = document.getElementById('modal_fecha_evento');
+  const trk    = document.getElementById('modal_tracking_number');
+  const met    = document.getElementById('modal_metodo_transporte');
 
-  const outErr = document.getElementById('modal_error');
-  const outOk  = document.getElementById('modal_ok');
-
+  const msg = document.getElementById('modalStatusMsg');
   const btnSave = document.getElementById('btnGuardarStatus');
-  const btnRef = document.getElementById('btnRefrescarSnap');
-  const tbEvents = document.getElementById('snapEventsBody');
-  const tbTrk = document.getElementById('snapTrackingBody');
 
-  function setMsg(el, msg){
-    if (!el) return;
-    el.textContent = msg || '';
-    el.style.display = msg ? '' : 'none';
+  function toggleLTA(){
+    const v = (selSt.value || '').toUpperCase();
+    boxLTA.style.display = (v === 'TR') ? '' : 'none';
   }
+  selSt.addEventListener('change', toggleLTA);
 
-  function showLTABox(){
-    if (!boxLTA) return;
-    boxLTA.style.display = (selSt.value === 'TR') ? '' : 'none';
-  }
-
-  function nowDatetimeLocal(){
-    const d = new Date();
-    const pad = (n)=> String(n).padStart(2,'0');
-    return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
-  }
-
-  async function fetchSnapshot(id){
-    if (!tbEvents || !tbTrk) return;
-
-    tbEvents.innerHTML = '<tr><td colspan="4" class="text-muted">Cargando...</td></tr>';
-    tbTrk.innerHTML = '<tr><td colspan="3" class="text-muted">Cargando...</td></tr>';
-
-    try{
-      const fd = new URLSearchParams();
-      fd.set('ajax', 'oc_tracking_snapshot');
-      fd.set('id_aduana', id);
-
-      const resp = await fetch(window.location.href, {
-        method: 'POST',
-        headers: {'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},
-        body: fd.toString()
-      });
-      const data = await resp.json();
-
-      if (!data || !data.ok) {
-        tbEvents.innerHTML = '<tr><td colspan="4" class="text-danger">Error: '+ (data && data.msg ? data.msg : 'snapshot') +'</td></tr>';
-        tbTrk.innerHTML = '<tr><td colspan="3" class="text-danger">Error</td></tr>';
-        return;
-      }
-
-      const events = Array.isArray(data.events) ? data.events : [];
-      const trks = Array.isArray(data.tracking) ? data.tracking : [];
-
-      if (!events.length){
-        tbEvents.innerHTML = '<tr><td colspan="4" class="text-muted">Sin eventos</td></tr>';
-      } else {
-        tbEvents.innerHTML = events.map(e => {
-          const f = (e.fecha_evento || '');
-          const ev = (e.evento || '');
-          const fu = (e.fuente || '');
-          const co = (e.comentario || '');
-          return '<tr>'
-            + '<td>'+ ev +'</td>'
-            + '<td>'+ f +'</td>'
-            + '<td>'+ fu +'</td>'
-            + '<td style="white-space:normal;">'+ co +'</td>'
-            + '</tr>';
-        }).join('');
-      }
-
-      if (!trks.length){
-        tbTrk.innerHTML = '<tr><td colspan="3" class="text-muted">Sin tracking</td></tr>';
-      } else {
-        tbTrk.innerHTML = trks.map(t => {
-          const tr = (t.tracking_no || '');
-          const ca = (t.carrier || '');
-          const ac = (String(t.activo) === '1') ? 'Sí' : 'No';
-          return '<tr>'
-            + '<td>'+ tr +'</td>'
-            + '<td>'+ ca +'</td>'
-            + '<td class="text-center">'+ ac +'</td>'
-            + '</tr>';
-        }).join('');
-      }
-    } catch(err){
-      tbEvents.innerHTML = '<tr><td colspan="4" class="text-danger">Error JS: '+ (err && err.message ? err.message : err) +'</td></tr>';
-      tbTrk.innerHTML = '<tr><td colspan="3" class="text-danger">Error</td></tr>';
-    }
-  }
-
-  selSt?.addEventListener('change', ()=>{
-    showLTABox();
-    if (selSt.value === 'TR' && inpFecha && !inpFecha.value) inpFecha.value = nowDatetimeLocal();
-  });
-
-  btnRef?.addEventListener('click', ()=>{
-    const id = inpId?.value || '';
-    if (id) fetchSnapshot(id);
-  });
-
+  // Click en badge Status
   document.addEventListener('click', function(e){
     const el = e.target.closest('.link-status');
     if (!el) return;
     e.preventDefault();
 
-    setMsg(outErr, '');
-    setMsg(outOk, '');
-
-    const id = el.dataset.id || '';
-    const st = (el.dataset.status || 'A').toUpperCase();
-
-    inpId.value = id;
-    selSt.value = ['A','C','TR'].includes(st) ? st : 'A';
-
-    // defaults
+    inpId.value = el.dataset.id || '';
+    selSt.value = (el.dataset.status || 'A').toUpperCase();
     txtCom.value = '';
-    if (selEvento) selEvento.value = 'EMBARQUE';
-    if (inpFecha) inpFecha.value = nowDatetimeLocal();
-    if (inpTrk) inpTrk.value = '';
-    if (inpMetodo) inpMetodo.value = '';
-    if (inpCarrier) inpCarrier.value = '';
 
-    showLTABox();
+    // defaults LTA
+    selEvt.value = 'EMBARQUE';
+    dtEvt.value = '';
+    trk.value = '';
+    met.value = '';
+
+    msg.style.display = 'none';
+    msg.textContent = '';
+
+    toggleLTA();
     modal.show();
-
-    if (id) fetchSnapshot(id);
   });
 
-  btnSave?.addEventListener('click', async function(){
-    setMsg(outErr, '');
-    setMsg(outOk, '');
+  btnSave.addEventListener('click', async function(){
+    msg.style.display = 'none';
+    msg.textContent = '';
 
-    const id = inpId.value || '';
-    const st = selSt.value || 'A';
+    const id_aduana = inpId.value;
+    const status = selSt.value;
+    const comentario = txtCom.value;
 
-    if (!id) {
-      setMsg(outErr, 'Falta ID.');
-      return;
-    }
+    const payload = new URLSearchParams();
+    payload.set('ajax', 'oc_status_update');
+    payload.set('id_aduana', id_aduana);
+    payload.set('status', status);
+    payload.set('comentario', comentario);
 
-    const fd = new URLSearchParams();
-    fd.set('ajax', 'oc_status_update');
-    fd.set('id_aduana', id);
-    fd.set('status', st);
-    fd.set('comment', txtCom.value || '');
-
-    if (st === 'TR') {
-      fd.set('evento', selEvento ? (selEvento.value || 'EMBARQUE') : 'EMBARQUE');
-      // datetime-local -> yyyy-mm-dd hh:mm:ss
-      if (inpFecha && inpFecha.value) fd.set('fecha_evento', inpFecha.value.replace('T',' ') + ':00');
-      if (inpTrk && inpTrk.value) fd.set('tracking_number', inpTrk.value);
-      if (inpMetodo && inpMetodo.value) fd.set('metodo_transporte', inpMetodo.value);
-      if (inpCarrier && inpCarrier.value) fd.set('carrier', inpCarrier.value);
+    // Si TR, manda datos logísticos
+    if ((status || '').toUpperCase() === 'TR') {
+      payload.set('evento_lta', selEvt.value || 'EMBARQUE');
+      payload.set('fecha_evento', dtEvt.value || '');
+      payload.set('tracking_number', trk.value || '');
+      payload.set('metodo_transporte', met.value || '');
     }
 
     btnSave.disabled = true;
-
-    try{
+    try {
       const resp = await fetch(window.location.href, {
         method: 'POST',
         headers: {'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},
-        body: fd.toString()
+        body: payload.toString()
       });
       const data = await resp.json();
-
       if (!data || !data.ok) {
-        setMsg(outErr, (data && data.msg) ? data.msg : 'Error al guardar');
-        return;
+        throw new Error(data?.error || 'No se pudo guardar.');
       }
-
-      setMsg(outOk, 'Guardado correctamente');
-
-      // Actualiza badge sin recargar
-      const badge = document.querySelector('.link-status[data-id="'+id+'"]');
-      if (badge) {
-        badge.dataset.status = st;
-        badge.classList.remove('bg-success','bg-secondary','bg-warning');
-
-        if (st === 'A') { badge.classList.add('bg-success'); badge.textContent = 'Abierta'; }
-        else if (st === 'C') { badge.classList.add('bg-secondary'); badge.textContent = 'Cerrada'; }
-        else { badge.classList.add('bg-warning'); badge.textContent = 'Tracking'; }
-      }
-
-      // Refrescar snapshot (para ir sumando eventos)
-      await fetchSnapshot(id);
-
-      // Si NO es TR, cerramos el modal; si es TR lo dejamos abierto para capturar más eventos
-      if (st !== 'TR') {
-        setTimeout(()=> modal.hide(), 400);
-      } else {
-        // limpia campos de captura para siguiente evento
-        txtCom.value = '';
-        if (inpTrk) inpTrk.value = '';
-        if (inpCarrier) inpCarrier.value = '';
-      }
-
-    } catch(err){
-      setMsg(outErr, 'Error JS/red: ' + (err && err.message ? err.message : err));
+      // refresca para ver badges actualizados
+      window.location.reload();
+    } catch (err) {
+      msg.textContent = err.message || 'Error inesperado';
+      msg.style.display = '';
     } finally {
       btnSave.disabled = false;
     }
