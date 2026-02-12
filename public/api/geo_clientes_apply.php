@@ -1,80 +1,114 @@
 <?php
-require_once __DIR__ . '/../../app/db.php';
+declare(strict_types=1);
+
 header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/../../app/db.php';
 
 try {
-  $pdo = db_pdo();
 
-  $idEmpresa = trim($_POST['IdEmpresa'] ?? $_POST['idEmpresa'] ?? '');
-  $rutaNueva = (int)($_POST['ruta_nueva'] ?? 0);
-  $idsRaw    = trim($_POST['ids_destinatario'] ?? '');
+    $pdo = db_pdo();
+    $pdo->beginTransaction();
 
-  if ($idEmpresa === '' || $rutaNueva <= 0 || $idsRaw === '') {
-    echo json_encode(['error' => 'Parámetros requeridos: IdEmpresa, ruta_nueva, ids_destinatario']);
-    exit;
-  }
+    $raw = file_get_contents("php://input");
+    $in  = json_decode($raw, true);
 
-  $ids = array_values(array_filter(array_map('intval', explode(',', $idsRaw))));
-  if (!$ids) {
-    echo json_encode(['error' => 'Lista de IDs vacía']);
-    exit;
-  }
+    if (!is_array($in)) {
+        throw new Exception("Payload JSON inválido");
+    }
 
-  // Días (global) opcional: Lu,Ma,Mi,Ju,Vi,Sa,Do
-  $dias = [
-    'Lu' => (int)($_POST['Lu'] ?? 0),
-    'Ma' => (int)($_POST['Ma'] ?? 0),
-    'Mi' => (int)($_POST['Mi'] ?? 0),
-    'Ju' => (int)($_POST['Ju'] ?? 0),
-    'Vi' => (int)($_POST['Vi'] ?? 0),
-    'Sa' => (int)($_POST['Sa'] ?? 0),
-    'Do' => (int)($_POST['Do'] ?? 0),
-  ];
+    $almacen   = (int)($in['almacen'] ?? 0);
+    $rutaNueva = (int)($in['ruta_id'] ?? 0);
+    $destinatarios  = $in['destinatarios'] ?? [];
 
-  $pdo->beginTransaction();
+    if (!$almacen || !$rutaNueva || !is_array($destinatarios)) {
+        throw new Exception("Parámetros incompletos");
+    }
 
-  // 1) relclirutas: mover a rutaNueva
-  $in = implode(',', array_fill(0, count($ids), '?'));
-  $sqlRel = "UPDATE relclirutas
-             SET IdRuta = ?, Fecha = CURDATE()
-             WHERE IdEmpresa = ? AND IdCliente IN ($in)";
-  $paramsRel = array_merge([$rutaNueva, $idEmpresa], $ids);
-  $st = $pdo->prepare($sqlRel);
-  $st->execute($paramsRel);
-  $affRel = $st->rowCount();
+    $movidos = 0;
 
-  // 2) reldaycli: heredar nueva ruta + (opcional) días globales
-  // Si reldaycli tiene el destinatario en Id_Destinatario y almacén en Cve_Almac:
-  $setDias = "";
-  $paramsDay = [$rutaNueva];
+    foreach ($destinatarios as $idDest) {
 
-  if (array_sum($dias) > 0) {
-    $setDias = ", Lu=?, Ma=?, Mi=?, Ju=?, Vi=?, Sa=?, Do=?";
-    $paramsDay = array_merge($paramsDay, [$dias['Lu'],$dias['Ma'],$dias['Mi'],$dias['Ju'],$dias['Vi'],$dias['Sa'],$dias['Do']]);
-  }
+        $idDest = (int)$idDest;
+        if (!$idDest) continue;
 
-  $sqlDay = "UPDATE reldaycli
-             SET Cve_Ruta = ? $setDias
-             WHERE Cve_Almac = ? AND Id_Destinatario IN ($in)";
+        // Obtener datos actuales
+        $stmt = $pdo->prepare("
+            SELECT Cve_Ruta, Cve_Cliente, Cve_Vendedor
+            FROM reldaycli
+            WHERE Cve_Almac = ?
+              AND Id_Destinatario = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$almacen, $idDest]);
+        $actual = $stmt->fetch(PDO::FETCH_ASSOC);
 
-  $paramsDay = array_merge($paramsDay, [$idEmpresa], $ids);
+        if (!$actual) continue;
 
-  $st2 = $pdo->prepare($sqlDay);
-  $st2->execute($paramsDay);
-  $affDay = $st2->rowCount();
+        $rutaActual = (int)$actual['Cve_Ruta'];
+        $cveCliente = $actual['Cve_Cliente'];
+        $cveVendedor = $actual['Cve_Vendedor'];
 
-  $pdo->commit();
+        if ($rutaActual === $rutaNueva) continue;
 
-  echo json_encode([
-    'ok' => true,
-    'movidos_relclirutas' => $affRel,
-    'actualizados_reldaycli' => $affDay
-  ]);
+        // 1️⃣ Borrar días actuales
+        $pdo->prepare("
+            DELETE FROM reldaycli
+            WHERE Cve_Almac = ?
+              AND Id_Destinatario = ?
+        ")->execute([$almacen, $idDest]);
+
+        // 2️⃣ Insertar nueva relación SIN días
+        $pdo->prepare("
+            INSERT INTO reldaycli
+            (Cve_Almac, Cve_Ruta, Cve_Cliente, Id_Destinatario, Cve_Vendedor,
+             Lu, Ma, Mi, Ju, Vi, Sa, Do)
+            VALUES (?, ?, ?, ?, ?, 0,0,0,0,0,0,0)
+        ")->execute([
+            $almacen,
+            $rutaNueva,
+            $cveCliente,
+            $idDest,
+            $cveVendedor
+        ]);
+
+        // 3️⃣ Verificar si relclirutas ya tiene cliente en esa ruta
+        $chk = $pdo->prepare("
+            SELECT COUNT(*)
+            FROM relclirutas
+            WHERE IdEmpresa = ?
+              AND IdRuta = ?
+              AND IdCliente = ?
+        ");
+        $chk->execute([$almacen, $rutaNueva, $cveCliente]);
+        $existe = $chk->fetchColumn();
+
+        if (!$existe) {
+            $pdo->prepare("
+                INSERT INTO relclirutas
+                (IdCliente, IdRuta, IdEmpresa, Fecha)
+                VALUES (?, ?, ?, CURDATE())
+            ")->execute([$cveCliente, $rutaNueva, $almacen]);
+        }
+
+        $movidos++;
+    }
+
+    $pdo->commit();
+
+    echo json_encode([
+        'ok' => 1,
+        'movidos' => $movidos
+    ]);
 
 } catch (Throwable $e) {
-  if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-  echo json_encode([
-    'error' => 'Error aplicando reasignación',
-    'detalle' => $e->getMessage()
-  ]);
+
+    if (isset($pdo) && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+
+    http_response_code(500);
+    echo json_encode([
+        'ok' => 0,
+        'error' => $e->getMessage()
+    ]);
 }

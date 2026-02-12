@@ -510,6 +510,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Status Activos',                'url' => 'sfa/activo_estados.php',             'icono' => 'fa-gift'],
                 ['titulo' => 'Condicion Activos',             'url' => 'sfa/activo_condicion.php',           'icono' => 'fa-layer-group'],
                 ['titulo' => 'Encuestas',                     'url' => 'sfa/encuestas.php',                  'icono' => 'fa-layer-group'],
+                ['titulo' => 'AssistPro ER Mobile', 'url' => 'sfa/mobile/index.html', 'icono' => 'fa-file-lines'],
             ],
 
             // TMS
