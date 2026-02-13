@@ -17,6 +17,8 @@ function jexit(array $payload, int $code = 200): void {
 
 $action = $_GET['action'] ?? $_POST['action'] ?? 'options';
 
+// Helpers defensivos: si una tabla/columna no existe no queremos HTML ni fatal.
+// db_all/db_execute ya deberían lanzar Exception; la capturamos.
 try {
 
     // =========================
@@ -24,27 +26,16 @@ try {
     // =========================
     if ($action === 'options') {
 
-        // Empresas (legacy: c_compania.cve_cia / des_cia)
+        // Empresas (si no hay tabla, devolvemos vacío sin romper)
         $empresas = [];
         try {
-            // Intento 1: esquema AssistPro típico
             $empresas = db_all("
-                SELECT cve_cia AS id, des_cia AS nombre
+                SELECT id, nombre
                 FROM c_compania
-                WHERE (Activo = 1 OR Activo = '1' OR Activo IS NULL)
-                ORDER BY des_cia
+                ORDER BY nombre
             ");
         } catch (Throwable $e) {
-            // Fallback: si existiera una tabla/estructura alternativa
-            try {
-                $empresas = db_all("
-                    SELECT id AS id, nombre AS nombre
-                    FROM c_compania
-                    ORDER BY nombre
-                ");
-            } catch (Throwable $e2) {
-                $empresas = [];
-            }
+            $empresas = [];
         }
 
         // Default empresa = primera
@@ -53,7 +44,7 @@ try {
             $empresa = (string)$empresas[0]['id'];
         }
 
-        // Almacenes por empresa (tu lógica original: c_almacenp)
+        // Almacenes por empresa
         $almacenes = [];
         if ($empresa) {
             try {
@@ -64,17 +55,7 @@ try {
                     ORDER BY des_almac
                 ", [$empresa]);
             } catch (Throwable $e) {
-                // Fallback si en algún ambiente usan c_almacen
-                try {
-                    $almacenes = db_all("
-                        SELECT cve_almac AS id, des_almac AS nombre
-                        FROM c_almacen
-                        WHERE (Activo = 1 OR Activo = '1' OR Activo IS NULL)
-                        ORDER BY des_almac
-                    ");
-                } catch (Throwable $e2) {
-                    $almacenes = [];
-                }
+                $almacenes = [];
             }
         }
 
@@ -86,6 +67,7 @@ try {
         // Rutas (si hay t_ruta la usamos; si no, devolvemos [])
         $rutas = [];
         try {
+            // Intento con campos típicos: ID_Ruta/cve_ruta/descripcion
             $rutas = db_all("
                 SELECT ID_Ruta AS id, CONCAT(cve_ruta,' - ',descripcion) AS nombre
                 FROM t_ruta
@@ -93,6 +75,7 @@ try {
                 ORDER BY cve_ruta, descripcion
             ");
         } catch (Throwable $e) {
+            // fallback si la tabla existe pero campos distintos:
             try {
                 $rutas = db_all("SELECT id AS id, nombre AS nombre FROM rutas ORDER BY nombre");
             } catch (Throwable $e2) {
@@ -106,7 +89,7 @@ try {
         $listasPromo = [];
 
         if ($almacen) {
-            // Lista Precios (listap)
+            // Lista Precios (listap) – campos reales: Fechaini / FechaFin / Cve_Almac
             try {
                 $listasP = db_all("
                     SELECT id, Lista AS nombre, Fechaini AS fecha_ini, FechaFin AS fecha_fin
@@ -118,7 +101,7 @@ try {
                 $listasP = [];
             }
 
-            // Lista Descuentos (listad)
+            // Lista Descuentos (listad) – campos: Fechaini / FechaFin / Cve_Almac
             try {
                 $listasD = db_all("
                     SELECT id, Lista AS nombre, Fechaini AS fecha_ini, FechaFin AS fecha_fin
@@ -130,7 +113,7 @@ try {
                 $listasD = [];
             }
 
-            // Lista Promociones (listapromo)
+            // Lista Promociones (listapromo) – campos: Fechal / FechaF / Cve_Almac
             try {
                 $listasPromo = db_all("
                     SELECT id, Lista AS nombre, Fechal AS fecha_ini, FechaF AS fecha_fin
@@ -171,6 +154,8 @@ try {
         $ruta    = $_GET['ruta'] ?? null; // opcional
         $q       = trim((string)($_GET['q'] ?? ''));
 
+        // Rutas por cliente (si relclirutas existe) – usamos IdCliente = Cve_Clte
+        // y enlazamos t_ruta si existe.
         $joinRutas = "
             LEFT JOIN (
                 SELECT
@@ -189,6 +174,7 @@ try {
         $params = [];
         if ($empresa) $params[] = $empresa;
 
+        // Filtro por ruta (si se selecciona) – no rompe aunque no exista t_ruta
         $whereRuta = "";
         if ($ruta) {
             $whereRuta = " AND EXISTS (
@@ -204,6 +190,7 @@ try {
             if ($empresa) $params[] = $empresa;
         }
 
+        // Search server-side
         $whereQ = "";
         if ($q !== '') {
             $whereQ = " AND (
@@ -219,6 +206,7 @@ try {
             $params[] = $like;
         }
 
+        // Grid base
         $rows = db_all("
             SELECT
                 d.id_destinatario,
@@ -240,6 +228,7 @@ try {
             LIMIT 2000
         ", $params);
 
+        // Cards (sobre base filtrada)
         $cards = [
             'destinatarios' => count($rows),
             'con_listaP' => 0,
@@ -254,6 +243,7 @@ try {
             if (!empty($r['DiaVisita'])) $cards['con_dia']++;
         }
 
+        // Listas para dropdowns (según almacén)
         $listasP = [];
         $listasD = [];
         $listasPromo = [];
@@ -288,11 +278,12 @@ try {
         $id = (int)($_POST['id_destinatario'] ?? 0);
         if ($id <= 0) jexit(['ok' => false, 'msg' => 'id_destinatario inválido'], 400);
 
-        $listap     = ($_POST['listap'] ?? '') !== '' ? ($_POST['listap'] ?? null) : null;
-        $listad     = ($_POST['listad'] ?? '') !== '' ? ($_POST['listad'] ?? null) : null;
-        $listapromo = ($_POST['listapromo'] ?? '') !== '' ? ($_POST['listapromo'] ?? null) : null;
-        $diavisita  = ($_POST['diavisita'] ?? '') !== '' ? ($_POST['diavisita'] ?? null) : null;
+        $listap     = $_POST['listap'] !== '' ? ($_POST['listap'] ?? null) : null;
+        $listad     = $_POST['listad'] !== '' ? ($_POST['listad'] ?? null) : null;
+        $listapromo = $_POST['listapromo'] !== '' ? ($_POST['listapromo'] ?? null) : null;
+        $diavisita  = $_POST['diavisita'] !== '' ? ($_POST['diavisita'] ?? null) : null;
 
+        // Normaliza a int donde aplica
         $listap     = $listap     !== null ? (int)$listap : null;
         $listad     = $listad     !== null ? (int)$listad : null;
         $listapromo = $listapromo !== null ? (int)$listapromo : null;
@@ -302,6 +293,7 @@ try {
         $allNull = ($listap === null && $listad === null && $listapromo === null && $diavisita === null);
 
         if ($allNull) {
+            // Limpieza elegante: si queda todo null, borramos la relación
             db_execute("DELETE FROM relclilis WHERE Id_Destinatario = ?", [$id]);
             jexit(['ok' => true, 'msg' => 'Asignación eliminada (sin valores).']);
         }
@@ -327,7 +319,11 @@ try {
     // =========================
     if ($action === 'bulk_save') {
         $raw = $_POST['items'] ?? '[]';
-        $items = is_string($raw) ? json_decode($raw, true) : $raw;
+        if (is_string($raw)) {
+            $items = json_decode($raw, true);
+        } else {
+            $items = $raw;
+        }
         if (!is_array($items)) jexit(['ok' => false, 'msg' => 'items inválido'], 400);
 
         $ok = 0; $del = 0; $fail = 0;
@@ -357,13 +353,11 @@ try {
                 }
 
                 if ($exists) {
-                    db_execute(
-                        "UPDATE relclilis SET ListaP=?, ListaD=?, ListaPromo=?, DiaVisita=? WHERE Id_Destinatario=?",
+                    db_execute("UPDATE relclilis SET ListaP=?, ListaD=?, ListaPromo=?, DiaVisita=? WHERE Id_Destinatario=?",
                         [$listap, $listad, $listapromo, $diavisita, $id]
                     );
                 } else {
-                    db_execute(
-                        "INSERT INTO relclilis (Id_Destinatario, ListaP, ListaD, ListaPromo, DiaVisita) VALUES (?, ?, ?, ?, ?)",
+                    db_execute("INSERT INTO relclilis (Id_Destinatario, ListaP, ListaD, ListaPromo, DiaVisita) VALUES (?, ?, ?, ?, ?)",
                         [$id, $listap, $listad, $listapromo, $diavisita]
                     );
                 }

@@ -8,7 +8,7 @@ try {
     $action = $_REQUEST['action'] ?? '';
 
     // =====================================================
-    // META (para combos)
+    // META
     // =====================================================
     if ($action === 'meta') {
 
@@ -31,28 +31,46 @@ try {
         echo json_encode([
             'ok' => true,
             'companias' => $companias,
-            'almacenes' => $almacenes,
-            'proveedores' => []
+            'almacenes' => $almacenes
         ]);
         exit;
     }
 
     // =====================================================
-    // LIST (Dashboard + CRUD)
+    // LIST
     // =====================================================
     if ($action === 'list') {
 
-        $cve_cia = $_GET['cve_cia'] ?? null;
-        $solo = intval($_GET['solo_activos'] ?? 1);
-        $q = trim($_GET['q'] ?? '');
-        $limit = intval($_GET['pageSize'] ?? 500);
+        $cve_cia        = $_GET['cve_cia'] ?? null;
+        $solo_activos   = intval($_GET['solo_activos'] ?? 1);
+        $solo_asignados = intval($_GET['solo_asignados'] ?? 0);
+        $q              = trim($_GET['q'] ?? '');
+        $limit          = intval($_GET['pageSize'] ?? 500);
 
         $sql = "
-            SELECT a.*,
-                   al.clave_almacen AS almacen_clave,
-                   al.des_almac AS almacen_nombre
+            SELECT 
+                a.*,
+                al.clave_almacen,
+                al.des_almac AS almacen_nombre,
+
+                va.id_asignacion,
+                va.id_cliente,
+                va.id_destinatario,
+                va.fecha_desde,
+                va.fecha_hasta,
+                va.vigencia,
+                va.asig_latitud,
+                va.asig_longitud
+
             FROM c_activos a
-            LEFT JOIN c_almacen al ON al.cve_almac = a.id_almacen
+
+            LEFT JOIN c_almacen al 
+                ON al.cve_almac = a.id_almacen
+
+            LEFT JOIN v_activo_asignacion_actual va
+                ON va.id_activo = a.id_activo
+                AND va.cve_cia = a.id_compania
+
             WHERE 1=1
         ";
 
@@ -63,8 +81,12 @@ try {
             $params[':cve_cia'] = $cve_cia;
         }
 
-        if ($solo) {
+        if ($solo_activos) {
             $sql .= " AND a.activo = 1 ";
+        }
+
+        if ($solo_asignados) {
+            $sql .= " AND va.id_asignacion IS NOT NULL ";
         }
 
         if ($q !== '') {
@@ -84,11 +106,65 @@ try {
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // =====================================================
+        // POST PROCESAMIENTO
+        // =====================================================
+
+        foreach ($rows as &$r) {
+
+            // -----------------------------------------
+            // Asignación visible
+            // -----------------------------------------
+
+            if (!empty($r['id_asignacion'])) {
+
+                if (!empty($r['id_destinatario'])) {
+                    $r['asignado_a'] = "Destinatario #" . $r['id_destinatario'];
+                } elseif (!empty($r['id_cliente'])) {
+                    $r['asignado_a'] = "Cliente #" . $r['id_cliente'];
+                } else {
+                    $r['asignado_a'] = "Asignado";
+                }
+
+            } else {
+                $r['asignado_a'] = null;
+            }
+
+            // -----------------------------------------
+            // Coordenadas (prioridad asignación)
+            // -----------------------------------------
+
+            if (!empty($r['asig_latitud']) && !empty($r['asig_longitud'])) {
+                $r['latitud']  = $r['asig_latitud'];
+                $r['longitud'] = $r['asig_longitud'];
+            }
+
+            // -----------------------------------------
+            // Semáforo estratégico
+            // -----------------------------------------
+
+            $semaforo = 'VERDE';
+
+            if ($r['estatus'] === 'EN_MANTTO') {
+                $semaforo = 'AMARILLO';
+            }
+
+            if (!empty($r['vigencia']) && $r['vigencia'] == 0) {
+                $semaforo = 'ROJO';
+            }
+
+            if (empty($r['id_asignacion'])) {
+                $semaforo = 'VERDE';
+            }
+
+            $r['semaforo'] = $semaforo;
+        }
+
         echo json_encode([
-            'ok' => true,
+            'ok'    => true,
             'total' => count($rows),
-            'rows' => $rows,   // CRUD usa esto
-            'data' => $rows    // Dashboard usa esto
+            'rows'  => $rows,
+            'data'  => $rows
         ]);
         exit;
     }
@@ -100,12 +176,16 @@ try {
 
         $id = intval($_GET['id_activo'] ?? 0);
 
-        $stmt = $pdo->prepare("SELECT * FROM c_activos WHERE id_activo=?");
+        $stmt = $pdo->prepare("
+            SELECT *
+            FROM c_activos
+            WHERE id_activo = ?
+        ");
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         echo json_encode([
-            'ok' => true,
+            'ok'  => true,
             'row' => $row
         ]);
         exit;
