@@ -410,7 +410,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Georeferencia Rutas', 'url' => 'sfa/geo_distribucion_clientes.php', 'icono' => 'fa-location-dot'],
                 ['titulo' => 'Análisis Crédito', 'url' => 'dashboard/creditos.php', 'icono' => 'fa-location-dot'],
                 ['titulo' => 'Lead Time Analysis', 'url' => 'dashboard/dashboard_lta.php', 'icono' => 'fa-boxes-stacked'],
-                ['titulo' => 'Inventario', 'url' => 'dashboard/inventario.php', 'icono' => 'fa-boxes-stacked'],
+               // ['titulo' => 'Inventario', 'url' => 'dashboard/inventario.php', 'icono' => 'fa-boxes-stacked'],
                 ['titulo' => 'Resumen Básico', 'url' => 'dashboard/resumen_basico.php', 'icono' => 'fa-chart-pie'],
                 ['titulo' => 'Dashboard Inventarios', 'url' => 'dashboard/adm_inventarios.php', 'icono' => 'fa-warehouse'],
                 ['titulo' => 'Ocupación Almacén', 'url' => 'dashboard/ocupacion_almacen.php', 'icono' => 'fa-chart-line'],
@@ -438,12 +438,14 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'BL Ubicaciones', 'url' => 'catalogos/ubicaciones.php', 'icono' => 'fa-box-open'],
 
 
+
                 ['titulo' => 'Rutas', 'url' => 'catalogos/rutas.php', 'icono' => 'fa-route'],
                 ['titulo' => 'Clientes', 'url' => 'catalogos/clientes.php', 'icono' => 'fa-road'],
                 ['titulo' => 'Grupo de clientes', 'url' => 'catalogos/clientes_grupo.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Destinatarios', 'url' => 'catalogos/destinatarios.php', 'icono' => 'fa-road'],
                 ['titulo' => 'Proveedores', 'url' => 'catalogos/proveedores.php', 'icono' => 'fa-truck-field'],
                 ['titulo' => 'Contactos', 'url' => 'catalogos/contactos.php', 'icono' => 'fa-layer-group'],
+                ['titulo' => 'Agentes de ventas', 'url' => 'catalogos/vendedores.php', 'icono' => 'fa-circle'],
 
 
                 ['titulo' => 'Tipos de Movimientos', 'url' => 'catalogos/tipos_movimiento_doc.php', 'icono' => 'fa-clipboard-check'],
@@ -493,10 +495,9 @@ require_once __DIR__ . '/../../app/auth_check.php';
             // SFA
             'SFA' => [
                 ['titulo' => 'Dashboard Activos',             'url' => 'sfa/dashboard_activos.php',          'icono' => 'fa-tags'],
-                ['titulo' => 'Geolocalización Activos',       'url' => 'sfa/activos_geocercas.php',          'icono' => 'fa-tags'],
                 ['titulo' => 'Resumen Ejecutivo',             'url' => 'sfa/resumen_rutas.php',              'icono' => 'fa-tags'],
-                ['titulo' => 'Planeación de Rutas',           'url' => 'sfa/planeacion_rutas_destinatarios.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Configuración Rutas',           'url' => 'sfa/rutas_planning.php',             'icono' => 'fa-tags'],
+                ['titulo' => 'Planeación de Rutas',           'url' => 'sfa/planeacion_rutas_destinatarios.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Administración Comercial',      'url' => 'sfa/destinatarios_config.php',       'icono' => 'fa-tags'],
                 ['titulo' => 'Lista de Precios',              'url' => 'sfa/lista_precios.php',              'icono' => 'fa-tags'],
                 ['titulo' => 'Lista de Descuentos',           'url' => 'sfa/lista_descuentos.php',           'icono' => 'fa-percent'],
