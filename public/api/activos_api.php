@@ -1,319 +1,225 @@
 <?php
-declare(strict_types=1);
-
 require_once __DIR__ . '/../../app/db.php';
 header('Content-Type: application/json; charset=utf-8');
 
-$pdo = db_pdo();
-$action = $_GET['action'] ?? $_POST['action'] ?? 'list';
+try {
 
-function out(bool $ok, array $extra = []): void {
-  echo json_encode(array_merge(['ok' => $ok ? 1 : 0], $extra), JSON_UNESCAPED_UNICODE);
-  exit;
-}
+    $pdo = db_pdo();
+    $action = $_REQUEST['action'] ?? '';
 
-function s($v): ?string {
-  $v = trim((string)$v);
-  return $v === '' ? null : $v;
-}
-function i0($v): int {
-  return ($v === '' || $v === null) ? 0 : (int)$v;
-}
-function tbool($v): int {
-  if ($v === null) return 0;
-  $v = strtoupper(trim((string)$v));
-  return ($v === '1' || $v === 'SI' || $v === 'S' || $v === 'TRUE' || $v === 'ON') ? 1 : 0;
-}
+    // =====================================================
+    // META (para combos)
+    // =====================================================
+    if ($action === 'meta') {
 
-function col_exists(PDO $pdo, string $table, string $col): bool {
-  $db = (string)$pdo->query("SELECT DATABASE()")->fetchColumn();
-  $st = $pdo->prepare("
-    SELECT COUNT(*)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = :db AND TABLE_NAME = :t AND COLUMN_NAME = :c
-  ");
-  $st->execute([':db'=>$db, ':t'=>$table, ':c'=>$col]);
-  return ((int)$st->fetchColumn()) > 0;
-}
+        $companias = $pdo->query("
+            SELECT cve_cia AS id, des_cia AS nombre
+            FROM c_compania
+            WHERE Activo = 1
+            ORDER BY des_cia
+        ")->fetchAll(PDO::FETCH_ASSOC);
 
-function table_exists(PDO $pdo, string $table): bool {
-  $db = (string)$pdo->query("SELECT DATABASE()")->fetchColumn();
-  $st = $pdo->prepare("
-    SELECT COUNT(*)
-    FROM INFORMATION_SCHEMA.TABLES
-    WHERE TABLE_SCHEMA = :db AND TABLE_NAME = :t
-  ");
-  $st->execute([':db'=>$db, ':t'=>$table]);
-  return ((int)$st->fetchColumn()) > 0;
-}
+        $almacenes = $pdo->query("
+            SELECT cve_almac AS id,
+                   clave_almacen AS clave,
+                   des_almac AS nombre
+            FROM c_almacen
+            WHERE Activo = 1
+            ORDER BY des_almac
+        ")->fetchAll(PDO::FETCH_ASSOC);
 
-/* =========================================================
-   META: combos para modal (compañías / almacenes / proveedores)
-   ========================================================= */
-if ($action === 'meta') {
-
-  // c_compania (legacy suele traer Nombre en mayúscula)
-  $comp = [];
-  if (table_exists($pdo, 'c_compania')) {
-    $compNameCol = col_exists($pdo, 'c_compania', 'Nombre') ? 'Nombre' : (col_exists($pdo, 'c_compania', 'nombre') ? 'nombre' : null);
-    $compIdCol   = col_exists($pdo, 'c_compania', 'id_compania') ? 'id_compania' : (col_exists($pdo, 'c_compania', 'ID_Compania') ? 'ID_Compania' : 'id');
-
-    if ($compNameCol) {
-      $sql = "SELECT {$compIdCol} AS id, {$compNameCol} AS nombre FROM c_compania ORDER BY {$compNameCol}";
-      $comp = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode([
+            'ok' => true,
+            'companias' => $companias,
+            'almacenes' => $almacenes,
+            'proveedores' => []
+        ]);
+        exit;
     }
-  }
 
-  // c_almacenp (ya vimos que tiene id/clave/nombre)
-  $alm = [];
-  if (table_exists($pdo, 'c_almacenp')) {
-    $alm = $pdo->query("SELECT id, clave, nombre FROM c_almacenp ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC);
-  }
+    // =====================================================
+    // LIST (Dashboard + CRUD)
+    // =====================================================
+    if ($action === 'list') {
 
-  // c_proveedores (legacy: ID_Proveedor, Nombre, cve_proveedor)
-  $prov = [];
-  if (table_exists($pdo, 'c_proveedores')) {
-    $provIdCol = col_exists($pdo, 'c_proveedores', 'ID_Proveedor') ? 'ID_Proveedor' : (col_exists($pdo, 'c_proveedores', 'id_proveedor') ? 'id_proveedor' : 'id');
-    $provNmCol = col_exists($pdo, 'c_proveedores', 'Nombre') ? 'Nombre' : (col_exists($pdo, 'c_proveedores', 'nombre') ? 'nombre' : null);
-    $provCvCol = col_exists($pdo, 'c_proveedores', 'cve_proveedor') ? 'cve_proveedor' : (col_exists($pdo, 'c_proveedores', 'clave') ? 'clave' : null);
+        $cve_cia = $_GET['cve_cia'] ?? null;
+        $solo = intval($_GET['solo_activos'] ?? 1);
+        $q = trim($_GET['q'] ?? '');
+        $limit = intval($_GET['pageSize'] ?? 500);
 
-    if ($provNmCol) {
-      $selClave = $provCvCol ? ", {$provCvCol} AS clave" : ", NULL AS clave";
-      $sql = "SELECT {$provIdCol} AS id, {$provNmCol} AS nombre {$selClave} FROM c_proveedores ORDER BY {$provNmCol}";
-      $prov = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        $sql = "
+            SELECT a.*,
+                   al.clave_almacen AS almacen_clave,
+                   al.des_almac AS almacen_nombre
+            FROM c_activos a
+            LEFT JOIN c_almacen al ON al.cve_almac = a.id_almacen
+            WHERE 1=1
+        ";
+
+        $params = [];
+
+        if ($cve_cia) {
+            $sql .= " AND a.id_compania = :cve_cia ";
+            $params[':cve_cia'] = $cve_cia;
+        }
+
+        if ($solo) {
+            $sql .= " AND a.activo = 1 ";
+        }
+
+        if ($q !== '') {
+            $sql .= " AND (
+                a.clave LIKE :q OR
+                a.num_serie LIKE :q OR
+                a.marca LIKE :q OR
+                a.modelo LIKE :q OR
+                a.descripcion LIKE :q
+            )";
+            $params[':q'] = "%$q%";
+        }
+
+        $sql .= " ORDER BY a.id_activo DESC LIMIT $limit";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'ok' => true,
+            'total' => count($rows),
+            'rows' => $rows,   // CRUD usa esto
+            'data' => $rows    // Dashboard usa esto
+        ]);
+        exit;
     }
-  }
 
-  out(true, [
-    'companias'  => $comp,
-    'almacenes'  => $alm,
-    'proveedores'=> $prov
-  ]);
-}
+    // =====================================================
+    // GET
+    // =====================================================
+    if ($action === 'get') {
 
-/* =========================================================
-   LISTADO
-   ========================================================= */
-if ($action === 'list') {
+        $id = intval($_GET['id_activo'] ?? 0);
 
-  $solo_activos = tbool($_GET['solo_activos'] ?? '1');
-  $q            = s($_GET['q'] ?? null);
-  $page         = max(1, i0($_GET['page'] ?? 1));
-  $pageSize     = min(200, max(1, i0($_GET['pageSize'] ?? 25)));
-  $offset       = ($page - 1) * $pageSize;
+        $stmt = $pdo->prepare("SELECT * FROM c_activos WHERE id_activo=?");
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-  $where = "a.deleted_at IS NULL";
-  $params = [];
+        echo json_encode([
+            'ok' => true,
+            'row' => $row
+        ]);
+        exit;
+    }
 
-  if ($solo_activos === 1) {
-    $where .= " AND a.activo = 1";
-  }
-
-  if ($q) {
-    $where .= " AND (
-      a.clave LIKE :q OR a.num_serie LIKE :q OR a.marca LIKE :q OR a.modelo LIKE :q OR a.descripcion LIKE :q
-    )";
-    $params[':q'] = "%{$q}%";
-  }
-
-  $sql = "
-    SELECT
-      a.id_activo,
-      a.clave,
-      a.id_compania,
-      a.id_almacen,
-      alm.clave  AS almacen_clave,
-      alm.nombre AS almacen_nombre,
-      a.tipo_activo,
-      a.num_serie,
-      a.marca,
-      a.modelo,
-      a.descripcion,
-      a.estatus,
-      a.latitud,
-      a.longitud,
-      a.activo,
-      a.proveedor
-    FROM c_activos a
-    LEFT JOIN c_almacenp alm ON alm.id = a.id_almacen
-    WHERE {$where}
-    ORDER BY a.id_activo DESC
-    LIMIT {$pageSize} OFFSET {$offset}
-  ";
-
-  try {
-    $st = $pdo->prepare($sql);
-    $st->execute($params);
-    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-
-    $stc = $pdo->prepare("SELECT COUNT(*) FROM c_activos a WHERE {$where}");
-    $stc->execute($params);
-    $total = (int)$stc->fetchColumn();
-
-    out(true, ['rows'=>$rows, 'total'=>$total, 'page'=>$page, 'pageSize'=>$pageSize]);
-  } catch (Throwable $e) {
-    out(false, ['error'=>'Error servidor', 'detalle'=>$e->getMessage()]);
-  }
-}
-
-/* =========================================================
-   GET
-   ========================================================= */
-if ($action === 'get') {
-  $id = i0($_GET['id_activo'] ?? 0);
-  if ($id <= 0) out(false, ['error'=>'id_activo requerido']);
-
-  $sql = "
-    SELECT
-      a.*,
-      alm.clave  AS almacen_clave,
-      alm.nombre AS almacen_nombre
-    FROM c_activos a
-    LEFT JOIN c_almacenp alm ON alm.id = a.id_almacen
-    WHERE a.id_activo = :id AND a.deleted_at IS NULL
-  ";
-  $st = $pdo->prepare($sql);
-  $st->execute([':id'=>$id]);
-  $row = $st->fetch(PDO::FETCH_ASSOC);
-  if (!$row) out(false, ['error'=>'Activo no encontrado']);
-  out(true, ['row'=>$row]);
-}
-
-/* =========================================================
-   CREATE / UPDATE
-   ========================================================= */
-if ($action === 'create' || $action === 'update') {
-
-  $id_activo    = i0($_POST['id_activo'] ?? 0);
-  $clave        = s($_POST['clave'] ?? '');
-  $id_compania  = i0($_POST['id_compania'] ?? 0);
-  $id_almacen   = i0($_POST['id_almacen'] ?? 0);
-  $tipo_activo  = s($_POST['tipo_activo'] ?? 'OTRO') ?? 'OTRO';
-  $marca        = s($_POST['marca'] ?? null);
-  $modelo       = s($_POST['modelo'] ?? null);
-  $num_serie    = s($_POST['num_serie'] ?? null);
-  $descripcion  = s($_POST['descripcion'] ?? null);
-  $fecha_compra = s($_POST['fecha_compra'] ?? null);
-  $proveedor    = s($_POST['proveedor'] ?? null);
-  $factura      = s($_POST['factura'] ?? null);
-  $latitud      = s($_POST['latitud'] ?? null);
-  $longitud     = s($_POST['longitud'] ?? null);
-  $ventas_obj   = s($_POST['ventas_objetivo_mensual'] ?? null);
-  $notas_cond   = s($_POST['notas_condicion'] ?? null);
-  $estatus      = s($_POST['estatus'] ?? 'ACTIVO') ?? 'ACTIVO';
-  $activo       = tbool($_POST['activo'] ?? '1');
-
-  if (!$clave) out(false, ['error'=>'clave requerida']);
-  if ($id_compania <= 0) out(false, ['error'=>'id_compania requerido']);
-  if ($id_almacen <= 0) out(false, ['error'=>'id_almacen requerido']);
-  if (!$num_serie) out(false, ['error'=>'num_serie requerido']);
-
-  try {
+    // =====================================================
+    // CREATE
+    // =====================================================
     if ($action === 'create') {
 
-      $sql = "
+        $sql = "
         INSERT INTO c_activos
-        (clave, id_compania, id_almacen, tipo_activo, marca, modelo, num_serie, descripcion,
-         fecha_compra, proveedor, factura, latitud, longitud, ventas_objetivo_mensual, notas_condicion,
-         estatus, activo, created_at)
+        (clave,id_compania,id_almacen,tipo_activo,num_serie,marca,modelo,descripcion,
+         fecha_compra,proveedor,factura,ventas_objetivo_mensual,estatus,
+         latitud,longitud,activo,notas_condicion)
         VALUES
-        (:clave, :id_compania, :id_almacen, :tipo_activo, :marca, :modelo, :num_serie, :descripcion,
-         :fecha_compra, :proveedor, :factura, :latitud, :longitud, :ventas_obj, :notas_cond,
-         :estatus, :activo, NOW())
-      ";
+        (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ";
 
-      $st = $pdo->prepare($sql);
-      $st->execute([
-        ':clave'=>$clave,
-        ':id_compania'=>$id_compania,
-        ':id_almacen'=>$id_almacen,
-        ':tipo_activo'=>$tipo_activo,
-        ':marca'=>$marca,
-        ':modelo'=>$modelo,
-        ':num_serie'=>$num_serie,
-        ':descripcion'=>$descripcion,
-        ':fecha_compra'=>$fecha_compra,
-        ':proveedor'=>$proveedor,
-        ':factura'=>$factura,
-        ':latitud'=>$latitud,
-        ':longitud'=>$longitud,
-        ':ventas_obj'=>$ventas_obj,
-        ':notas_cond'=>$notas_cond,
-        ':estatus'=>$estatus,
-        ':activo'=>$activo
-      ]);
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            $_POST['clave'],
+            $_POST['id_compania'],
+            $_POST['id_almacen'],
+            $_POST['tipo_activo'],
+            $_POST['num_serie'],
+            $_POST['marca'],
+            $_POST['modelo'],
+            $_POST['descripcion'],
+            $_POST['fecha_compra'] ?: null,
+            $_POST['proveedor'],
+            $_POST['factura'],
+            $_POST['ventas_objetivo_mensual'] ?: null,
+            $_POST['estatus'],
+            $_POST['latitud'] ?: null,
+            $_POST['longitud'] ?: null,
+            $_POST['activo'],
+            $_POST['notas_condicion']
+        ]);
 
-      out(true, ['id_activo'=>(int)$pdo->lastInsertId()]);
+        echo json_encode(['ok'=>true]);
+        exit;
     }
 
-    // update
-    if ($id_activo <= 0) out(false, ['error'=>'id_activo requerido']);
+    // =====================================================
+    // UPDATE
+    // =====================================================
+    if ($action === 'update') {
 
-    $sql = "
-      UPDATE c_activos SET
-        clave = :clave,
-        id_compania = :id_compania,
-        id_almacen = :id_almacen,
-        tipo_activo = :tipo_activo,
-        marca = :marca,
-        modelo = :modelo,
-        num_serie = :num_serie,
-        descripcion = :descripcion,
-        fecha_compra = :fecha_compra,
-        proveedor = :proveedor,
-        factura = :factura,
-        latitud = :latitud,
-        longitud = :longitud,
-        ventas_objetivo_mensual = :ventas_obj,
-        notas_condicion = :notas_cond,
-        estatus = :estatus,
-        activo = :activo,
-        updated_at = NOW()
-      WHERE id_activo = :id_activo AND deleted_at IS NULL
-    ";
-    $st = $pdo->prepare($sql);
-    $st->execute([
-      ':id_activo'=>$id_activo,
-      ':clave'=>$clave,
-      ':id_compania'=>$id_compania,
-      ':id_almacen'=>$id_almacen,
-      ':tipo_activo'=>$tipo_activo,
-      ':marca'=>$marca,
-      ':modelo'=>$modelo,
-      ':num_serie'=>$num_serie,
-      ':descripcion'=>$descripcion,
-      ':fecha_compra'=>$fecha_compra,
-      ':proveedor'=>$proveedor,
-      ':factura'=>$factura,
-      ':latitud'=>$latitud,
-      ':longitud'=>$longitud,
-      ':ventas_obj'=>$ventas_obj,
-      ':notas_cond'=>$notas_cond,
-      ':estatus'=>$estatus,
-      ':activo'=>$activo
+        $sql = "
+        UPDATE c_activos SET
+            clave=?,
+            id_compania=?,
+            id_almacen=?,
+            tipo_activo=?,
+            num_serie=?,
+            marca=?,
+            modelo=?,
+            descripcion=?,
+            fecha_compra=?,
+            proveedor=?,
+            factura=?,
+            ventas_objetivo_mensual=?,
+            estatus=?,
+            latitud=?,
+            longitud=?,
+            activo=?,
+            notas_condicion=?
+        WHERE id_activo=?
+        ";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            $_POST['clave'],
+            $_POST['id_compania'],
+            $_POST['id_almacen'],
+            $_POST['tipo_activo'],
+            $_POST['num_serie'],
+            $_POST['marca'],
+            $_POST['modelo'],
+            $_POST['descripcion'],
+            $_POST['fecha_compra'] ?: null,
+            $_POST['proveedor'],
+            $_POST['factura'],
+            $_POST['ventas_objetivo_mensual'] ?: null,
+            $_POST['estatus'],
+            $_POST['latitud'] ?: null,
+            $_POST['longitud'] ?: null,
+            $_POST['activo'],
+            $_POST['notas_condicion'],
+            $_POST['id_activo']
+        ]);
+
+        echo json_encode(['ok'=>true]);
+        exit;
+    }
+
+    // =====================================================
+    // DELETE
+    // =====================================================
+    if ($action === 'delete') {
+
+        $stmt = $pdo->prepare("DELETE FROM c_activos WHERE id_activo=?");
+        $stmt->execute([$_POST['id_activo']]);
+
+        echo json_encode(['ok'=>true]);
+        exit;
+    }
+
+    echo json_encode(['ok'=>false,'error'=>'Acción inválida']);
+
+} catch(Throwable $e){
+    echo json_encode([
+        'ok'=>false,
+        'error'=>$e->getMessage()
     ]);
-
-    out(true);
-
-  } catch (Throwable $e) {
-    out(false, ['error'=>'Error servidor', 'detalle'=>$e->getMessage()]);
-  }
 }
-
-/* =========================================================
-   DELETE (soft)
-   ========================================================= */
-if ($action === 'delete') {
-  $id = i0($_POST['id_activo'] ?? 0);
-  if ($id <= 0) out(false, ['error'=>'id_activo requerido']);
-
-  try {
-    $st = $pdo->prepare("UPDATE c_activos SET deleted_at = NOW() WHERE id_activo = :id");
-    $st->execute([':id'=>$id]);
-    out(true);
-  } catch (Throwable $e) {
-    out(false, ['error'=>'Error servidor', 'detalle'=>$e->getMessage()]);
-  }
-}
-
-out(false, ['error'=>'Acción no válida']);

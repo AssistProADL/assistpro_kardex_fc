@@ -596,25 +596,11 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 </div>
 
 <script>
-  /**
-   * ==========================================================
-   *  UI Modernizada a API nuevo (c_compania)
-   *  API contrato:
-   *   - GET  ?action=list              => { ok, msg, empresas:[...] }
-   *   - GET  ?action=get&id=...        => { ok, msg, empresa:{...} }
-   *   - POST action=create             => { ok, msg, id }
-   *   - POST action=update + id        => { ok, msg }
-   *   - POST action=delete + id        => { ok, msg }
-   * ==========================================================
-   */
-
-  // AJUSTA ESTA RUTA A DONDE REALMENTE VIVE TU API NUEVO:
-  // (yo la dejo coherente con tu estructura /public/... y /api/...)
-  const API = '../api/catalogos/api_empresas.php';
-
+  const API = '../api/empresas.php';
+  const KPI_API = '../api/empresas_kpi.php'; // Reuse existing KPI file if possible, else we use list count
+  let curPage = 1;
   let viewInactive = false;
-  let tiposMap = {};     // API nuevo no tiene tipos: lo dejamos vacío
-  let cacheRows = [];    // Cache del list para filtrar localmente
+  let tiposMap = {};
 
   function esc(s) {
     if (s == null) return '';
@@ -642,67 +628,44 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       btn.classList.remove('warn');
       btn.innerHTML = '<i class="fa fa-eye"></i> Ver Inactivos';
     }
-    aplicarFiltrosYRender();
+    refrescar();
   }
 
-  /**
-   * API nuevo NO trae "tipos". Para no romper la UI:
-   * - Deja el select con "No aplica"
-   * - Y deshabilítalo para que el operador no pierda tiempo.
-   */
   function cargarTipos() {
-    const sel = document.getElementById('cve_tipcia');
-    sel.innerHTML = '<option value="0">No aplica (API nuevo)</option>';
-    sel.value = 0;
-    sel.disabled = true;
+    fetch(API + '?action=tipos')
+      .then(r => r.json())
+      .then(j => {
+        if (j.rows) {
+          const sel = document.getElementById('cve_tipcia');
+          sel.innerHTML = '<option value="0">Seleccione...</option>';
+          j.rows.forEach(t => {
+            tiposMap[t.id] = t.descripcion;
+            sel.innerHTML += `<option value="${t.id}">${esc(t.descripcion)}</option>`;
+          });
+        }
+      });
   }
 
   function refrescar() {
-    fetch(API + '?action=list')
+    const q = document.getElementById('q').value;
+    const params = new URLSearchParams();
+    params.append('action', 'list');
+    params.append('q', q);
+    params.append('inactivos', viewInactive ? 1 : 0);
+
+    fetch(API + '?' + params.toString())
       .then(r => r.json())
       .then(d => {
-        if (!d.ok) {
-          showMsg(d.msg || 'Error al listar', 'warn');
-          cacheRows = [];
-          renderGrid([]);
-          renderKPIs([]);
-          return;
+        if (d.error) {
+          showMsg(d.error, 'warn');
+        } else {
+          renderGrid(d.rows || []);
+          // Calculate KPIs locally based on rows returned or fetch separate? 
+          // Existing code fetched all rows for grid.
+          renderKPIs(d.rows || []);
         }
-
-        // Cache de empresas del API
-        cacheRows = Array.isArray(d.empresas) ? d.empresas : [];
-        aplicarFiltrosYRender();
       })
-      .catch(e => {
-        console.error(e);
-        showMsg('Error de red / API', 'warn');
-      });
-  }
-
-  function aplicarFiltrosYRender() {
-    const q = (document.getElementById('q').value || '').trim().toLowerCase();
-
-    let rows = cacheRows.slice();
-
-    // 1) filtro por activos si no estamos viendo inactivos
-    if (!viewInactive) {
-      rows = rows.filter(r => parseInt(r.Activo ?? 1) === 1);
-    }
-
-    // 2) filtro por búsqueda local (clave, razón social, rfc)
-    if (q) {
-      rows = rows.filter(r => {
-        const clave = String(r.clave ?? '').toLowerCase();
-        const rs = String(r.razon_social ?? '').toLowerCase();
-        const rfc = String(r.tax_id ?? '').toLowerCase();
-        const ciudad = String(r.ciudad ?? '').toLowerCase();   // list ya expone ciudad_std como "ciudad"
-        const estado = String(r.estado ?? '').toLowerCase();   // list ya expone estado_std como "estado"
-        return (clave.includes(q) || rs.includes(q) || rfc.includes(q) || ciudad.includes(q) || estado.includes(q));
-      });
-    }
-
-    renderGrid(rows);
-    renderKPIs(rows);
+      .catch(e => console.error(e));
   }
 
   function renderGrid(rows) {
@@ -718,54 +681,55 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       const statusCls = isOk ? 'ok' : 'warn';
       const statusTxt = isOk ? 'Activo' : 'Inactivo';
       const rowStyle = !isOk ? 'background:#f8f9fa;color:#adb5bd' : '';
-
-      // API nuevo no trae tipo, teléfono, distrito (se usa ciudad como distrito visual)
-      const tipo = ''; // No disponible
-      const distrito = r.ciudad ?? ''; // Ciudad_std viene como "ciudad" en list()
-      const ciudad = r.ciudad ?? '';
-      const estado = r.estado ?? '';
-      const telefono = ''; // No disponible
+      const tipo = tiposMap[r.cve_tipcia] || r.cve_tipcia || '';
 
       return `<tr style="${rowStyle}">
         <td class="ap-actions">
-           <i class="fa fa-pen" title="Editar" onclick="editar(${r.id})"></i>
-           ${isOk ? `<i class="fa fa-ban" title="Baja" onclick="eliminar(${r.id})"></i>`
-          : `<i class="fa fa-rotate-left" title="Recuperar" onclick="recuperar(${r.id})"></i>`}
+           <i class="fa fa-pen" title="Editar" onclick="editar(${r.cve_cia})"></i>
+           ${isOk ? `<i class="fa fa-ban" title="Baja" onclick="eliminar(${r.cve_cia})"></i>`
+          : `<i class="fa fa-rotate-left" title="Recuperar" onclick="recuperar(${r.cve_cia})"></i>`}
         </td>
-        <td>${esc(r.id)}</td>
-        <td><b>${esc(r.clave)}</b></td>
-        <td>${esc(r.razon_social)}</td>
-        <td>${esc(r.tax_id || '')}</td>
+        <td>${esc(r.cve_cia)}</td>
+        <td><b>${esc(r.clave_empresa)}</b></td>
+        <td>${esc(r.des_cia)}</td>
+        <td>${esc(r.des_rfc)}</td>
         <td>${esc(tipo)}</td>
-        <td>${esc(distrito)}</td>
-        <td>${esc(ciudad)}</td>
-        <td>${esc(estado)}</td>
-        <td>${esc(telefono)}</td>
+        <td>${esc(r.distrito)}</td>
+        <td>${esc(r.municipio)}</td>
+        <td>${esc(r.estado)}</td>
+        <td>${esc(r.des_telef)}</td>
         <td><span class="ap-chip ${statusCls}" style="padding:2px 8px;font-size:10px">${statusTxt}</span></td>
       </tr>`;
     }).join('');
   }
 
   function renderKPIs(rows) {
-    // KPIs sobre lo filtrado actual (lo cual es consistente con la vista)
     const total = rows.length;
     const activos = rows.filter(r => (parseInt(r.Activo ?? 1) === 1)).length;
     const inactivos = rows.filter(r => (parseInt(r.Activo ?? 1) === 0)).length;
 
-    // Toggle siempre visible (siempre puede haber inactivos fuera del filtro)
-    document.getElementById('btnToggleInactive').style.display = 'inline-flex';
+    // Update toggle button visibility
+    const btn = document.getElementById('btnToggleInactive');
+    if (inactivos > 0 || viewInactive) { // Keep visible if viewing inactives even if count is 0 locally filtered
+      // Wait, if we filter by inactive in API, we don't know total inactives globally.
+      // But existing logic seemed to filter in API.
+      // Let's assume global search for now.
+      btn.style.display = 'inline-flex';
+    } else {
+      btn.style.display = 'none';
+    }
 
     document.getElementById('kpiCards').innerHTML = `
       <div class="ap-card" onclick="refrescar()">
-        <div class="h">Empresas (vista) <i class="fa fa-building"></i></div>
+        <div class="h">Total Empresas <i class="fa fa-building"></i></div>
         <div class="k">${total}</div>
       </div>
       <div class="ap-card">
-        <div class="h">Activas (vista) <i class="fa fa-check-circle" style="color:#198754"></i></div>
+        <div class="h">Activas <i class="fa fa-check-circle" style="color:#198754"></i></div>
         <div class="k">${activos}</div>
       </div>
        <div class="ap-card">
-        <div class="h">Inactivas (vista) <i class="fa fa-ban" style="color:#dc3545"></i></div>
+        <div class="h">Inactivas <i class="fa fa-ban" style="color:#dc3545"></i></div>
         <div class="k">${inactivos}</div>
       </div>
       `;
@@ -785,168 +749,101 @@ require_once __DIR__ . '/../bi/_menu_global.php';
   }
 
   function editar(id) {
-    fetch(API + '?action=get&id=' + encodeURIComponent(id))
+    fetch(API + '?action=get&cve_cia=' + id)
       .then(r => r.json())
       .then(d => {
-        if (!d.ok) { showMsg(d.msg || 'Error al obtener', 'warn'); return; }
+        if (d.error) { showMsg(d.error, 'warn'); return; }
 
-        const e = d.empresa;
+        document.getElementById('mdlTitle').innerText = 'Editar Empresa ' + d.clave_empresa;
+        document.getElementById('cve_cia').value = d.cve_cia;
 
-        document.getElementById('mdlTitle').innerText = 'Editar Empresa ' + (e.clave || '');
-        document.getElementById('cve_cia').value = e.id;
+        document.getElementById('clave_empresa').value = d.clave_empresa;
+        document.getElementById('des_cia').value = d.des_cia;
+        document.getElementById('des_rfc').value = d.des_rfc;
+        document.getElementById('cve_tipcia').value = d.cve_tipcia || 0;
 
-        // Map canónico -> UI legacy fields
-        document.getElementById('clave_empresa').value = e.clave || '';
-        document.getElementById('des_cia').value = e.razon_social || '';
-        document.getElementById('des_rfc').value = e.tax_id || '';
+        document.getElementById('distrito').value = d.distrito;
+        document.getElementById('municipio').value = d.municipio || '';
+        document.getElementById('estado').value = d.estado || '';
 
-        // Geo / address
-        document.getElementById('distrito').value = e.ciudad_std || '';        // UI "Distrito" lo usamos como ciudad
-        document.getElementById('municipio').value = e.municipio_std || '';
-        document.getElementById('estado').value = e.estado_std || '';
-
-        document.getElementById('des_direcc').value = e.direccion_linea1 || '';
-        document.getElementById('des_cp').value = e.codigo_postal_std || '';
-
-        // Campos no soportados por API nuevo (se quedan como UI)
-        document.getElementById('des_telef').value = '';
-        document.getElementById('des_contacto').value = '';
-        document.getElementById('des_email').value = '';
-        document.getElementById('es_transportista').value = '';
-        document.getElementById('des_observ').value = '';
-
-        document.getElementById('Activo').value = (e.Activo ?? 1);
+        document.getElementById('des_direcc').value = d.des_direcc;
+        document.getElementById('des_cp').value = d.des_cp;
+        document.getElementById('des_telef').value = d.des_telef;
+        document.getElementById('des_contacto').value = d.des_contacto;
+        document.getElementById('des_email').value = d.des_email;
+        document.getElementById('es_transportista').value = (d.es_transportista === null ? '' : d.es_transportista);
+        document.getElementById('des_observ').value = d.des_observ;
+        document.getElementById('Activo').value = d.Activo;
         document.getElementById('imagen').value = ''; // Cannot set file input
 
         abrirModal('mdl');
-      })
-      .catch(e => {
-        console.error(e);
-        showMsg('Error de red / API', 'warn');
       });
   }
 
   function guardar() {
-    const id = parseInt(document.getElementById('cve_cia').value || '0', 10);
+    const id = document.getElementById('cve_cia').value;
     const clave = document.getElementById('clave_empresa').value.trim();
-    const razon = document.getElementById('des_cia').value.trim();
+    const nombre = document.getElementById('des_cia').value.trim();
+    const tipo = document.getElementById('cve_tipcia').value;
 
-    if (!clave || !razon) { showMsg('Clave y Nombre son obligatorios', 'warn'); return; }
+    if (!clave || !nombre) { showMsg('Clave y Nombre son obligatorios', 'warn'); return; }
+    // if (tipo == 0) { showMsg('Seleccione Tipo de Empresa', 'warn'); return; }
 
     const fd = new FormData();
     fd.append('action', id > 0 ? 'update' : 'create');
-    if (id > 0) fd.append('id', String(id));
+    fd.append('cve_cia', id);
 
-    // API nuevo (canónico)
-    fd.append('clave', clave);
-    fd.append('razon_social', razon);
-    fd.append('nombre_comercial', razon); // opcional
-    fd.append('tax_id', document.getElementById('des_rfc').value.trim() || '');
+    // Inputs
+    ['clave_empresa', 'des_cia', 'des_rfc', 'cve_tipcia', 'distrito', 'municipio', 'estado', 'des_direcc', 'des_cp', 'des_telef', 'des_contacto', 'des_email', 'es_transportista', 'des_observ', 'Activo'].forEach(key => {
+      fd.append(key, document.getElementById(key).value);
+    });
 
-    // ciudad/estado/municipio según API (std)
-    fd.append('ciudad', document.getElementById('distrito').value.trim() || '');
-    fd.append('municipio', document.getElementById('municipio').value.trim() || '');
-    fd.append('estado', document.getElementById('estado').value.trim() || '');
-
-    fd.append('codigo_postal', document.getElementById('des_cp').value.trim() || '');
-    fd.append('direccion', document.getElementById('des_direcc').value.trim() || '');
-
-    // API guarda Activo en create como 1 fijo; en update no lo mete en el array.
-    // Aun así lo enviamos por consistencia (si decides soportarlo después).
-    fd.append('Activo', document.getElementById('Activo').value);
-
-    // Imagen: API nuevo no la procesa; no la mandamos para evitar confusión.
-    // (si decides implementarlo server-side, aquí se conecta)
-    // const f = document.getElementById('imagen').files[0];
-    // if (f) fd.append('imagen', f);
+    // File
+    const f = document.getElementById('imagen').files[0];
+    if (f) fd.append('imagen', f);
 
     fetch(API, { method: 'POST', body: fd })
       .then(r => r.json())
       .then(j => {
         if (j.ok) {
-          showMsg(j.msg || 'Guardado correctamente', 'ok');
+          showMsg('Guardado correctamente', 'ok');
           cerrarModal('mdl');
           refrescar();
         } else {
-          showMsg(j.msg || 'Error al guardar', 'warn');
+          showMsg(j.error || 'Error al guardar', 'warn');
         }
-      })
-      .catch(e => {
-        console.error(e);
-        showMsg('Error de red / API', 'warn');
       });
   }
 
   function eliminar(id) {
     if (!confirm('¿Inactivar empresa?')) return;
-
     const fd = new FormData();
     fd.append('action', 'delete');
-    fd.append('id', String(id));
-
+    fd.append('cve_cia', id);
     fetch(API, { method: 'POST', body: fd })
       .then(r => r.json())
       .then(j => {
-        if (j.ok) { showMsg(j.msg || 'Inactivado', 'ok'); refrescar(); }
-        else showMsg(j.msg || 'Error', 'warn');
-      })
-      .catch(e => {
-        console.error(e);
-        showMsg('Error de red / API', 'warn');
+        if (j.ok) { showMsg('Inactivado', 'ok'); refrescar(); }
+        else showMsg(j.error, 'warn');
       });
   }
 
-  /**
-   * API nuevo no trae restore.
-   * Implementación pro: get -> update Activo=1.
-   * OJO: update exige clave y razon_social (validarMinimo).
-   */
   function recuperar(id) {
     if (!confirm('¿Recuperar empresa?')) return;
-
-    fetch(API + '?action=get&id=' + encodeURIComponent(id))
+    const fd = new FormData();
+    fd.append('action', 'restore');
+    fd.append('cve_cia', id);
+    fetch(API, { method: 'POST', body: fd })
       .then(r => r.json())
-      .then(d => {
-        if (!d.ok) { showMsg(d.msg || 'No se pudo obtener para recuperar', 'warn'); return; }
-        const e = d.empresa;
-
-        const fd = new FormData();
-        fd.append('action', 'update');
-        fd.append('id', String(e.id));
-        fd.append('clave', e.clave || '');
-        fd.append('razon_social', e.razon_social || '');
-        fd.append('nombre_comercial', e.nombre_comercial || e.razon_social || '');
-        fd.append('tax_id', e.tax_id || '');
-
-        fd.append('ciudad', e.ciudad_std || '');
-        fd.append('municipio', e.municipio_std || '');
-        fd.append('estado', e.estado_std || '');
-        fd.append('codigo_postal', e.codigo_postal_std || '');
-        fd.append('direccion', e.direccion_linea1 || '');
-        fd.append('direccion2', e.direccion_linea2 || '');
-
-        fd.append('Activo', '1');
-
-        return fetch(API, { method: 'POST', body: fd });
-      })
-      .then(r => r ? r.json() : null)
       .then(j => {
-        if (!j) return;
         if (j.ok) { showMsg('Recuperado', 'ok'); refrescar(); }
-        else showMsg(j.msg || 'Error al recuperar', 'warn');
-      })
-      .catch(e => {
-        console.error(e);
-        showMsg('Error de red / API', 'warn');
+        else showMsg(j.error, 'warn');
       });
   }
 
-  function buscar() { aplicarFiltrosYRender(); }
-  function limpiar() { document.getElementById('q').value = ''; aplicarFiltrosYRender(); }
-
-  function exportarCSV() {
-    showMsg('Exportar no disponible en API nuevo (pendiente de implementar).', 'warn');
-  }
+  function buscar() { refrescar(); }
+  function limpiar() { document.getElementById('q').value = ''; refrescar(); }
+  function exportarCSV() { window.open(API + '?action=export', '_blank'); }
 
   function abrirImport() {
     document.getElementById('csvFile').value = '';
@@ -955,7 +852,24 @@ require_once __DIR__ . '/../bi/_menu_global.php';
   }
 
   function importarCSV() {
-    showMsg('Importar no disponible en API nuevo (pendiente de implementar).', 'warn');
+    const f = document.getElementById('csvFile').files[0];
+    if (!f) { alert('Selecciona archivo'); return; }
+    const fd = new FormData();
+    fd.append('action', 'import');
+    fd.append('csv', f); // API expects 'csv'
+
+    document.getElementById('importResult').innerHTML = 'Importando...';
+
+    fetch(API, { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(j => {
+        if (j.ok) {
+          document.getElementById('importResult').innerHTML = `<div class="ap-chip ok">Insertados: ${j.inserted} <br> Actualizados: ${j.updated}</div>`;
+          setTimeout(() => { cerrarModal('mdlImport'); refrescar(); }, 3000);
+        } else {
+          document.getElementById('importResult').innerHTML = `<div style="color:red">${j.error}</div>`;
+        }
+      });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
