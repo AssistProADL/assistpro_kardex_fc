@@ -25,6 +25,17 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     gap: 8px;
   }
 
+  .ap-grid i {
+    cursor: pointer;
+    color: #0d6efd;
+    transition: transform .15s ease;
+  }
+
+  .ap-grid i:hover {
+    transform: scale(1.1);
+  }
+
+
   /* Toolbar */
   .ap-toolbar {
     display: flex;
@@ -70,6 +81,11 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     width: 100%;
     border-collapse: collapse;
   }
+
+  .ap-grid table {
+    min-width: 1400px;
+  }
+
 
   .ap-grid th {
     background: #f8f9fa;
@@ -178,17 +194,21 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         <thead>
           <tr>
             <th>Acciones</th>
-            <th>ID</th>
+            <th>Activo</th>
             <th>Clave</th>
             <th>Nombre</th>
             <th>Tipo</th>
             <th>Supervisor</th>
+            <th>Calle</th>
+            <th>Colonia</th>
             <th>Ciudad</th>
             <th>Estado</th>
-            <th>Activo</th>
+            <th>País</th>
+            <th>CP</th>
+            <th>Password EDA</th>
           </tr>
-
         </thead>
+
         <tbody id="tb"></tbody>
       </table>
     </div>
@@ -207,14 +227,17 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       <div>
         <label>Nombre</label>
         <div class="ap-input">
-          <input id="Nombre">
+          <input id="Nombre" style="text-transform:uppercase">
         </div>
       </div>
 
       <div>
         <label>Supervisor (ID)</label>
         <div class="ap-input">
-          <input id="Id_Supervisor" type="number">
+          <select id="Id_Supervisor">
+            <option value="">Seleccione...</option>
+          </select>
+
         </div>
       </div>
 
@@ -239,35 +262,35 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       <div>
         <label>Calle y Número</label>
         <div class="ap-input">
-          <input id="CalleNumero">
+          <input id="CalleNumero" style="text-transform:uppercase">
         </div>
       </div>
 
       <div>
         <label>Colonia</label>
         <div class="ap-input">
-          <input id="Colonia">
+          <input id="Colonia" style="text-transform:uppercase">
         </div>
       </div>
 
       <div>
         <label>Ciudad</label>
         <div class="ap-input">
-          <input id="Ciudad">
+          <input id="Ciudad" style="text-transform:uppercase">
         </div>
       </div>
 
       <div>
         <label>Estado</label>
         <div class="ap-input">
-          <input id="Estado">
+          <input id="Estado" style="text-transform:uppercase">
         </div>
       </div>
 
       <div>
         <label>País</label>
         <div class="ap-input">
-          <input id="Pais">
+          <input id="Pais" style="text-transform:uppercase">
         </div>
       </div>
 
@@ -288,6 +311,14 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         </div>
       </div>
 
+      <div>
+        <label>Password EDA</label>
+        <div class="ap-input">
+          <input id="Psswd_EDA" maxlength="20">
+        </div>
+      </div>
+
+
     </div>
 
     <div style="text-align:right; margin-top:20px;">
@@ -299,6 +330,27 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
 <script>
   const API = '../api/vendedores_api.php';
+
+  function limpiar() {
+    document.getElementById('q').value = '';
+    buscar();
+  }
+
+
+  function cargarSupervisores() {
+    fetch(API + '?action=supervisores')
+      .then(r => r.json())
+      .then(j => {
+        if (j.success) {
+          const sel = document.getElementById('Id_Supervisor');
+          sel.innerHTML = '<option value="">Seleccione...</option>' +
+            j.data.map(s =>
+              `<option value="${s.Id_Supervisor}">${s.Nombre}</option>`
+            ).join('');
+        }
+      });
+  }
+
 
   function abrir() {
     document.getElementById('mdl').style.display = 'flex';
@@ -326,24 +378,36 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         if (j.success) {
           const tb = document.getElementById('tb');
           tb.innerHTML = j.data.map(r => `
-        <tr>
-          <td>
-            <i class="fa fa-pen" onclick="editar(${r.Id_Vendedor})"></i>
-          </td>
-          <td>${r.Id_Vendedor}</td>
-           <td>${r.Cve_Vendedor || ''}</td>
-          <td><b>${r.Nombre}</b></td>
-          <td>${r.Ban_Ayudante==1?'Ayudante':'Vendedor'}</td>
-          <td>${r.Id_Supervisor||''}</td>
-          <td>${r.Ciudad||''}</td>
-          <td>${r.Estado||''}</td>
-          <td>
-            <span class="ap-chip ${r.Activo==1?'ok':'warn'}">
-              ${r.Activo==1?'Activo':'Inactivo'}
-            </span>
-          </td>
-        </tr>
-      `).join('');
+<tr>
+  <td>
+    <i class="fa fa-pen"
+       title="Editar vendedor"
+       onclick="editar(${r.Id_Vendedor})"></i>
+  </td>
+
+  <td>
+    <span class="ap-chip ${r.Activo==1?'ok':'warn'}"
+          onclick="toggleActivo(${r.Id_Vendedor}, ${r.Activo})"
+          style="cursor:pointer">
+      ${r.Activo==1?'Activo':'Inactivo'}
+    </span>
+  </td>
+
+  <td>${r.Cve_Vendedor || ''}</td>
+  <td><b>${r.Nombre || ''}</b></td>
+  <td>${r.Ban_Ayudante==1 ? 'AYUDANTE' : 'VENDEDOR'}</td>
+  <td>${r.Id_Supervisor || ''}</td>
+  <td>${r.CalleNumero || ''}</td>
+  <td>${r.Colonia || ''}</td>
+  <td>${r.Ciudad || ''}</td>
+  <td>${r.Estado || ''}</td>
+  <td>${r.Pais || ''}</td>
+  <td>${r.CodigoPostal || ''}</td>
+  <td>${r.Psswd_EDA || ''}</td>
+</tr>
+`).join('');
+
+
         }
       });
   }
@@ -369,6 +433,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       Cve_Vendedor: document.getElementById('Cve_Vendedor').value,
       Ban_Ayudante: document.getElementById('Ban_Ayudante').value,
       Nombre: document.getElementById('Nombre').value,
+      Psswd_EDA: document.getElementById('Psswd_EDA').value,
       Id_Supervisor: document.getElementById('Id_Supervisor').value,
       CalleNumero: document.getElementById('CalleNumero').value,
       Colonia: document.getElementById('Colonia').value,
@@ -378,6 +443,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       CodigoPostal: document.getElementById('CodigoPostal').value,
       Activo: document.getElementById('Activo').value
     };
+
 
 
     fetch(API + '?action=save', {
@@ -400,7 +466,35 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
   }
 
-  document.addEventListener('DOMContentLoaded', buscar);
+  function toggleActivo(id, estadoActual) {
+
+    const nuevoEstado = estadoActual == 1 ? 0 : 1;
+
+    fetch(API + '?action=toggle_activo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          Id_Vendedor: id,
+          Activo: nuevoEstado
+        })
+      })
+      .then(r => r.json())
+      .then(j => {
+        if (j.success) {
+          buscar(); // refresca grid
+        } else {
+          alert("Error al cambiar estado");
+        }
+      });
+  }
+
+
+  document.addEventListener('DOMContentLoaded', () => {
+    cargarSupervisores();
+    buscar();
+  });
 </script>
 
 <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>

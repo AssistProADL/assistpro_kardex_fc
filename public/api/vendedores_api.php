@@ -85,46 +85,52 @@ if ($action === 'get') {
 /* =====================================================
    SAVE (INSERT / UPDATE)
 ===================================================== */
+/* =====================================================
+   SAVE (INSERT / UPDATE)
+===================================================== */
 if ($action === 'save') {
 
   $data = json_decode(file_get_contents("php://input"), true);
 
   $id = intval($data['Id_Vendedor'] ?? 0);
-  $Nombre = trim($data['Nombre'] ?? '');
+  $Nombre = strtoupper(trim($data['Nombre'] ?? ''));
 
-  if ($Nombre === '') err('Nombre requerido');
+  // ✅ SOLO exigir nombre cuando es INSERT
+  if ($id == 0 && $Nombre === '') {
+    err('Nombre requerido');
+  }
 
   $fields = [
-    trim($data['Cve_Vendedor'] ?? ''),
+    strtoupper(trim($data['Cve_Vendedor'] ?? '')),
     intval($data['Ban_Ayudante'] ?? 0),
     $Nombre,
     !empty($data['Id_Supervisor']) ? intval($data['Id_Supervisor']) : null,
-    $data['CalleNumero'] ?? null,
-    $data['Colonia'] ?? null,
-    $data['Ciudad'] ?? null,
-    $data['Estado'] ?? null,
-    $data['Pais'] ?? null,
-    $data['CodigoPostal'] ?? null,
+    strtoupper(trim($data['CalleNumero'] ?? '')),
+    strtoupper(trim($data['Colonia'] ?? '')),
+    strtoupper(trim($data['Ciudad'] ?? '')),
+    strtoupper(trim($data['Estado'] ?? '')),
+    strtoupper(trim($data['Pais'] ?? '')),
+    strtoupper(trim($data['CodigoPostal'] ?? '')),
+    strtoupper(trim($data['Psswd_EDA'] ?? '')),
     intval($data['Activo'] ?? 1)
   ];
-
 
   if ($id > 0) {
 
     $sql = "UPDATE t_vendedores SET
-  Cve_Vendedor=?,
-  Ban_Ayudante=?,
-  Nombre=?,
-  Id_Supervisor=?,
-  CalleNumero=?,
-  Colonia=?,
-  Ciudad=?,
-  Estado=?,
-  Pais=?,
-  CodigoPostal=?,
-  Activo=?
-  WHERE Id_Vendedor=?";
-
+      Cve_Vendedor=?,
+      Ban_Ayudante=?,
+      Nombre=?,
+      Id_Supervisor=?,
+      CalleNumero=?,
+      Colonia=?,
+      Ciudad=?,
+      Estado=?,
+      Pais=?,
+      CodigoPostal=?,
+      Psswd_EDA=?,
+      Activo=?
+      WHERE Id_Vendedor=?";
 
     $fields[] = $id;
 
@@ -137,10 +143,10 @@ if ($action === 'save') {
   } else {
 
     $sql = "INSERT INTO t_vendedores
-  (Cve_Vendedor,Ban_Ayudante,Nombre,Id_Supervisor,
-   CalleNumero,Colonia,Ciudad,Estado,Pais,CodigoPostal,Activo)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?)";
-
+      (Cve_Vendedor,Ban_Ayudante,Nombre,Id_Supervisor,
+       CalleNumero,Colonia,Ciudad,Estado,Pais,CodigoPostal,
+       Psswd_EDA,Activo)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
 
     try {
       $st = $pdo->prepare($sql);
@@ -153,6 +159,7 @@ if ($action === 'save') {
 
   ok(['Id_Vendedor' => $id]);
 }
+
 
 /* =====================================================
    DELETE LOGICO
@@ -182,8 +189,6 @@ if ($action === 'recover') {
   ok();
 }
 
-err('Acción inválida');
-
 /* =====================================================
    LISTA SUPERVISORES
 ===================================================== */
@@ -200,3 +205,32 @@ if ($action === 'supervisores') {
 
   ok(['data' => $rows]);
 }
+
+
+/* =====================================================
+   TOGGLE ACTIVO
+===================================================== */
+if ($action === 'toggle_activo') {
+
+  $data = json_decode(file_get_contents("php://input"), true);
+
+  $id = intval($data['Id_Vendedor'] ?? 0);
+  $activo = intval($data['Activo'] ?? 1);
+
+  if (!$id) err('ID inválido');
+
+  try {
+    $st = $pdo->prepare("
+      UPDATE t_vendedores 
+      SET Activo = ?
+      WHERE Id_Vendedor = ?
+    ");
+    $st->execute([$activo, $id]);
+  } catch (Exception $e) {
+    err("Error toggle: " . $e->getMessage());
+  }
+
+  ok();
+}
+
+err('Acción inválida');
