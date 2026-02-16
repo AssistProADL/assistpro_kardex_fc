@@ -118,18 +118,35 @@ if ($useRamPath) {
 
             // 5. Query Detalle
             $from = "
-            FROM c_charolas ch
-            LEFT JOIN ts_existenciatarima et ON et.ntarima = ch.IDContenedor
-            LEFT JOIN c_ubicacion u ON u.idy_ubica = et.idy_ubica
-            LEFT JOIN c_almacen ca  ON ca.cve_almac = u.cve_almac
-            LEFT JOIN c_almacenp ap ON CAST(ap.id AS CHAR(32)) COLLATE utf8mb4_unicode_ci = CAST(et.cve_almac AS CHAR(32)) COLLATE utf8mb4_unicode_ci
-            ";
+FROM c_charolas ch
+LEFT JOIN ts_existenciatarima et ON et.ntarima = ch.IDContenedor
+LEFT JOIN c_ubicacion u ON u.idy_ubica = et.idy_ubica
+LEFT JOIN c_almacen ca  ON ca.cve_almac = u.cve_almac
+LEFT JOIN c_almacenp ap ON ap.id = ca.cve_almacenp
+
+LEFT JOIN c_almacen ca_home ON ca_home.cve_almac = ch.cve_almac
+LEFT JOIN c_almacenp ap_home ON ap_home.id = ca_home.cve_almacenp
+";
+
+
 
             $sqlData = "
                 SELECT
-                    MAX(CASE WHEN et.existencia > 0 THEN ap.clave ELSE ap.clave END)         AS clave_almacenp,
-                    MAX(CASE WHEN et.existencia > 0 THEN ap.nombre ELSE ap.nombre END)        AS nombre_almacen,
-                    MAX(CASE WHEN et.existencia > 0 THEN ca.des_almac ELSE ca.des_almac END)     AS zona_almacenaje,
+                    COALESCE(
+    MAX(ap.clave),
+    MAX(ap_home.clave)
+) AS clave_almacenp,
+
+COALESCE(
+    MAX(ap.nombre),
+    MAX(ap_home.nombre)
+) AS nombre_almacen,
+
+COALESCE(
+    MAX(ca.des_almac),
+    MAX(ca_home.des_almac)
+) AS zona_almacenaje,
+
                     MAX(CASE WHEN et.existencia > 0 THEN u.CodigoCSD ELSE u.CodigoCSD END)      AS CodigoCSD,
                     ch.descripcion,
                     ch.Clave_Contenedor,
@@ -152,7 +169,6 @@ if ($useRamPath) {
     } catch (Exception $e) {
         $rows = []; // Fallback seguro
     }
-
 } else {
     // FALLBACK STANDARD (Si hay búsqueda global)
     // Reconstruir WHERE standard
@@ -220,7 +236,8 @@ if ($useRamPath) {
     LEFT JOIN ts_existenciatarima et ON et.ntarima = ch.IDContenedor
     LEFT JOIN c_ubicacion u ON u.idy_ubica = et.idy_ubica
     LEFT JOIN c_almacen ca  ON ca.cve_almac = u.cve_almac
-    LEFT JOIN c_almacenp ap ON CAST(ap.id AS CHAR(32)) COLLATE utf8mb4_unicode_ci = CAST(et.cve_almac AS CHAR(32)) COLLATE utf8mb4_unicode_ci
+    LEFT JOIN c_almacenp ap ON ap.id = ca.cve_almacenp
+
     LEFT JOIN c_almacen ca_home ON ca_home.cve_almac = ch.cve_almac
     LEFT JOIN c_almacenp ap_home ON CAST(ap_home.id AS UNSIGNED) = ca_home.cve_almacenp
     ";
@@ -231,9 +248,21 @@ if ($useRamPath) {
 
     $sqlData = "
         SELECT
-            MAX(CASE WHEN et.existencia > 0 THEN ap.clave ELSE ap.clave END)         AS clave_almacenp,
-            MAX(CASE WHEN et.existencia > 0 THEN ap.nombre ELSE ap.nombre END)        AS nombre_almacen,
-            MAX(CASE WHEN et.existencia > 0 THEN ca.des_almac ELSE ca.des_almac END)     AS zona_almacenaje,
+            COALESCE(
+    MAX(ap.clave),
+    MAX(ap_home.clave)
+) AS clave_almacenp,
+
+COALESCE(
+    MAX(ap.nombre),
+    MAX(ap_home.nombre)
+) AS nombre_almacen,
+
+COALESCE(
+    MAX(ca.des_almac),
+    MAX(ca_home.des_almac)
+) AS zona_almacenaje,
+
             MAX(CASE WHEN et.existencia > 0 THEN u.CodigoCSD ELSE u.CodigoCSD END)      AS CodigoCSD,
             ch.descripcion,
             ch.Clave_Contenedor,

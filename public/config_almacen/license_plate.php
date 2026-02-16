@@ -203,7 +203,7 @@ $tipos_list = db_all($sql_tipos);
                 $id = trim((string) $a['id_almacen']);
                 $lab = trim($a['clave'] . ' - ' . $a['nombre']);
                 $sel = ($almacen_sel !== '' && $almacen_sel === $id) ? 'selected' : '';
-                ?>
+              ?>
                 <option value="<?= htmlspecialchars($id) ?>" <?= $sel ?>><?= htmlspecialchars($lab) ?></option>
               <?php endforeach; ?>
             </select>
@@ -297,6 +297,7 @@ $tipos_list = db_all($sql_tipos);
                 <th>Tipo</th>
                 <th>Contenedor</th>
                 <th>Permanente</th>
+                <th>Utilizado</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -313,12 +314,12 @@ $tipos_list = db_all($sql_tipos);
   <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
 
   <script>
-    $(function () {
+    $(function() {
 
       function filtros() {
         return {
           lp: $('#f_lp').val(),
-          almacen: $('#f_almacen').val(),     // ya viene seleccionado por default
+          almacen: $('#f_almacen').val(), // ya viene seleccionado por default
           zona: $('#f_zona').val(),
           tipogen: $('#f_tipogen').val(),
           tipo: $('#f_tipo').val(),
@@ -328,11 +329,18 @@ $tipos_list = db_all($sql_tipos);
       }
 
       function warn(msg) {
-        if (!msg) { $('#msgWarn').addClass('d-none').text(''); return; }
+        if (!msg) {
+          $('#msgWarn').addClass('d-none').text('');
+          return;
+        }
         $('#msgWarn').removeClass('d-none').text(msg);
       }
+
       function err(msg) {
-        if (!msg) { $('#msgErr').addClass('d-none').text(''); return; }
+        if (!msg) {
+          $('#msgErr').addClass('d-none').text('');
+          return;
+        }
         $('#msgErr').removeClass('d-none').text(msg);
       }
 
@@ -340,61 +348,108 @@ $tipos_list = db_all($sql_tipos);
         processing: true,
         serverSide: true,
         pageLength: 25,
-        lengthMenu: [[25, 50, 100], [25, 50, 100]],
+        lengthMenu: [
+          [25, 50, 100],
+          [25, 50, 100]
+        ],
         scrollX: true,
         scrollY: '420px',
         scrollCollapse: true,
-        order: [[5, 'asc']],
-        language: { url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/es-ES.json' },
+        order: [
+          [5, 'asc']
+        ],
+        language: {
+          url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/es-ES.json'
+        },
         ajax: {
           url: 'license_plate_api.php',
-          data: function (d) { return $.extend(d, filtros()); },
-          dataSrc: function (json) {
+          data: function(d) {
+            return $.extend(d, filtros());
+          },
+          dataSrc: function(json) {
             err('');
             warn(json.warning || '');
-            if (json.error) { err('API error: ' + json.error); return []; }
+            if (json.error) {
+              err('API error: ' + json.error);
+              return [];
+            }
             $('#kpi_total').text((json.recordsFiltered ?? 0).toLocaleString());
             return json.data || [];
           },
-          error: function (xhr) {
+          error: function(xhr) {
             err('No se pudo consumir el API. HTTP ' + xhr.status + ' :: ' + (xhr.responseText || '').substring(0, 200));
           }
         },
-        columns: [
-          {
-            data: null, orderable: false, searchable: false, render: function () {
+        columns: [{
+            data: null,
+            orderable: false,
+            searchable: false,
+            render: function() {
               return `<span class="text-muted">—</span>`;
             }
           },
-          { data: 'almacen' },
-          { data: 'zona' },
-          { data: 'bl' },
-          { data: 'descripcion' },
-          { data: 'lp' },
-          { data: 'tipo' },
-          { data: 'contenedor' },
           {
-            data: 'permanente', render: function (v) {
-              return (parseInt(v, 10) === 1)
-                ? '<span class="badge badge-perm">Permanente</span>'
-                : '<span class="badge badge-temp">Temporal</span>';
-            }
+            data: 'almacen'
           },
           {
-            data: null, render: function (v, type, row) {
-              const activo = parseInt(row.activo_flag || 1, 10);
+            data: 'zona'
+          },
+          {
+            data: 'bl'
+          },
+          {
+            data: 'descripcion'
+          },
+          {
+            data: 'lp'
+          },
+          {
+            data: 'tipo'
+          },
+          {
+            data: 'contenedor'
+          },
+          {
+            data: 'permanente',
+            render: function(v) {
+              return (parseInt(v, 10) === 1) ?
+                '<span class="badge badge-perm">Permanente</span>' :
+                '<span class="badge badge-temp">Temporal</span>';
+            }
+          },
+
+          // 🔵 NUEVA COLUMNA UTILIZADO
+          {
+            data: null,
+            render: function(v, type, row) {
               const exist = parseFloat(row.existencia_total || 0);
-              // Activo solo si: activo_flag=1 Y existencia>0
-              return (activo === 1 && exist > 0)
-                ? '<span class="badge badge-activo">Activo</span>'
-                : '<span class="badge badge-inactivo">Inactivo</span>';
+              return (exist > 0) ?
+                '<span class="badge bg-success">Sí</span>' :
+                '<span class="badge bg-secondary">No</span>';
+            }
+          },
+
+          // 🔴 STATUS (ajustado)
+          {
+            data: null,
+            render: function(v, type, row) {
+
+              const activo_db = parseInt(row.activo_flag || 0, 10); // nuevo campo del API
+              const exist = parseFloat(row.existencia_total || 0);
+
+              return (activo_db === 1 && exist > 0) ?
+                '<span class="badge badge-activo">Activo</span>' :
+                '<span class="badge badge-inactivo">Inactivo</span>';
             }
           }
         ]
+
       });
 
-      $('#btnBuscar').on('click', function () { table.ajax.reload(); });
-      $('#btnLimpiar').on('click', function () {
+      $('#btnBuscar').on('click', function() {
+        table.ajax.reload();
+      });
+      $('#btnLimpiar').on('click', function() {
         $('#frmFiltros')[0].reset();
         // re-selecciona el primer almacén (default)
         const first = $('#f_almacen option:first').val();
