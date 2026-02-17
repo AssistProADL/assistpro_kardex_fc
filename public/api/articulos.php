@@ -1,4 +1,5 @@
 <?php
+
 /****************************************************
  * API Tipo de Artículos
  * Tabla: c_ssgpoarticulo
@@ -167,13 +168,43 @@ try {
             fclose($out);
             exit;
 
+        case 'autocomplete':
+
+            header('Content-Type: application/json; charset=utf-8');
+
+            $q = trim($_GET['q'] ?? '');
+
+            if ($q === '' || strlen($q) < 3) {
+                echo json_encode([]);
+                exit;
+            }
+
+            $sql = "
+        SELECT cve_articulo, des_articulo
+        FROM c_articulo
+        WHERE IFNULL(Activo,1)=1
+          AND (
+                cve_articulo LIKE ?
+             OR des_articulo LIKE ?
+          )
+        ORDER BY des_articulo
+        LIMIT 25
+    ";
+
+            $st = $pdo->prepare($sql);
+            $like = "%$q%";
+            $st->execute([$like, $like]);
+
+            echo json_encode($st->fetchAll(), JSON_UNESCAPED_UNICODE);
+            exit;
+
+
         default:
             echo json_encode([
                 'success' => false,
                 'error' => 'Acción no válida'
             ]);
     }
-
 } catch (Exception $e) {
     echo json_encode([
         'success' => false,

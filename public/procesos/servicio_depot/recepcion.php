@@ -201,7 +201,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
             $mensajeOk = "Caso creado correctamente con folio <strong>{$folio}</strong>. "
                 . "Puedes imprimir el ingreso en PDF "
                 . "<a href=\"{$linkPdfIngreso}\" target=\"_blank\">aquí</a>.";
-
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -262,16 +261,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
 
                         <div class="mb-2">
                             <label class="form-label mb-1">Cliente</label>
-                            <select id="selCliente" name="cliente_id" class="form-select form-select-sm" required>
-                                <option value="">Cargando clientes...</option>
-                            </select>
+                            <div class="position-relative">
+                                <input type="hidden" name="cliente_id" id="cliente_id">
+
+                                <input type="text"
+                                    id="cliente_autocomplete"
+                                    class="form-control form-control-sm"
+                                    placeholder="Buscar cliente..."
+                                    autocomplete="off"
+                                    required>
+
+                                <div id="cliente_results"
+                                    class="list-group position-absolute w-100"
+                                    style="z-index:1000;"></div>
+                            </div>
+
                         </div>
 
                         <div class="mb-2">
                             <label class="form-label mb-1">Artículo</label>
-                            <select id="selArticulo" name="articulo" class="form-select form-select-sm" required>
-                                <option value="">Cargando productos...</option>
-                            </select>
+                            <div class="position-relative">
+                                <input type="hidden" name="articulo" id="articulo_id">
+
+                                <input type="text"
+                                    id="articulo_autocomplete"
+                                    class="form-control form-control-sm"
+                                    placeholder="Buscar artículo..."
+                                    autocomplete="off"
+                                    required>
+
+                                <div id="articulo_results"
+                                    class="list-group position-absolute w-100"
+                                    style="z-index:1000;"></div>
+                            </div>
+
                             <small class="text-muted">
                                 Catálogo de artículos desde c_articulo (API filtros_assistpro).
                             </small>
@@ -363,10 +386,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
 
 <script>
     // Cargar almacenes, clientes y productos desde public/api/filtros_assistpro.php
-    document.addEventListener('DOMContentLoaded', function () {
-        const apiUrl = '../../api/filtros_assistpro.php?action=init';
+    document.addEventListener('DOMContentLoaded', function() {
+        const apiUrl = '../../api/filtros_assistpro.php?action=init&secciones=almacenes';
 
-        fetch(apiUrl, { method: 'GET' })
+
+        fetch(apiUrl, {
+                method: 'GET'
+            })
             .then(resp => resp.json())
             .then(data => {
                 if (!data || data.ok === false) {
@@ -380,27 +406,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
                     selAlm.innerHTML = '<option value="">-- Seleccione --</option>';
                     if (Array.isArray(data.almacenes)) {
                         data.almacenes.forEach(a => {
+
                             const opt = document.createElement('option');
-                            opt.value = a.cve_almac;
-                            opt.textContent = a.des_almac || a.clave_almacen || a.cve_almac;
+
+                            // Valor que se guarda en BD
+                            opt.value = a.idp;
+
+                            // Texto visible → CLAVE - NOMBRE
+                            const clave = a.cve_almac || '';
+                            const nombre = a.nombre || '';
+
+                            opt.textContent = nombre ?
+                                clave + ' - ' + nombre :
+                                clave;
+
                             selAlm.appendChild(opt);
                         });
                     }
+
                 }
 
                 // Clientes
-                const selCli = document.getElementById('selCliente');
-                if (selCli) {
-                    selCli.innerHTML = '<option value="">-- Seleccione --</option>';
-                    if (Array.isArray(data.clientes)) {
-                        data.clientes.forEach(c => {
-                            const opt = document.createElement('option');
-                            opt.value = c.id_cliente;
-                            opt.textContent = '[' + c.Cve_Clte + '] ' + c.RazonSocial;
-                            selCli.appendChild(opt);
-                        });
-                    }
-                }
+
 
                 // Productos
                 const selArt = document.getElementById('selArticulo');
@@ -419,6 +446,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
             .catch(err => {
                 console.error('Error cargando filtros_assistpro:', err);
             });
+
+        const inputCliente = document.getElementById('cliente_autocomplete');
+        const resultsBox = document.getElementById('cliente_results');
+        const hiddenCliente = document.getElementById('cliente_id');
+
+        let timeout = null;
+
+        inputCliente.addEventListener('keyup', function() {
+
+            const q = this.value.trim();
+
+            hiddenCliente.value = '';
+
+            if (q.length < 3) {
+                resultsBox.innerHTML = '';
+                return;
+            }
+
+            clearTimeout(timeout);
+
+            timeout = setTimeout(() => {
+
+                fetch('../../api/clientes.php?action=autocomplete&q=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(data => {
+
+                        resultsBox.innerHTML = '';
+
+                        if (!Array.isArray(data)) return;
+
+                        data.forEach(c => {
+
+                            const item = document.createElement('a');
+                            item.className = 'list-group-item list-group-item-action';
+                            item.href = '#';
+                            item.textContent = '[' + c.Cve_Clte + '] ' + c.RazonSocial;
+
+                            item.onclick = function(e) {
+                                e.preventDefault();
+                                inputCliente.value = item.textContent;
+                                hiddenCliente.value = c.id_cliente;
+                                resultsBox.innerHTML = '';
+                            };
+
+                            resultsBox.appendChild(item);
+                        });
+                    });
+
+            }, 300);
+
+        });
+
+        const inputArticulo = document.getElementById('articulo_autocomplete');
+        const resultsArticulo = document.getElementById('articulo_results');
+        const hiddenArticulo = document.getElementById('articulo_id');
+
+        let timeoutArt = null;
+
+        inputArticulo.addEventListener('keyup', function() {
+
+            const q = this.value.trim();
+            hiddenArticulo.value = '';
+
+            if (q.length < 3) {
+                resultsArticulo.innerHTML = '';
+                return;
+            }
+
+            clearTimeout(timeoutArt);
+
+            timeoutArt = setTimeout(() => {
+
+                fetch('../../api/articulos.php?action=autocomplete&q=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(data => {
+
+                        resultsArticulo.innerHTML = '';
+
+                        if (!Array.isArray(data)) return;
+
+                        data.forEach(a => {
+
+                            const item = document.createElement('a');
+                            item.className = 'list-group-item list-group-item-action';
+                            item.href = '#';
+                            item.textContent = '[' + a.cve_articulo + '] ' + a.des_articulo;
+
+                            item.onclick = function(e) {
+                                e.preventDefault();
+                                inputArticulo.value = item.textContent;
+                                hiddenArticulo.value = a.cve_articulo;
+                                resultsArticulo.innerHTML = '';
+                            };
+
+                            resultsArticulo.appendChild(item);
+                        });
+                    });
+
+            }, 300);
+
+        });
+
+
     });
 </script>
 
