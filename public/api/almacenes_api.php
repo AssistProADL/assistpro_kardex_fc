@@ -1,62 +1,93 @@
 <?php
 require_once __DIR__ . '/../../app/db.php';
-
 header('Content-Type: application/json; charset=utf-8');
 
-function jerr($msg, $det = null)
-{
-  echo json_encode(['error' => $msg, 'detalles' => $det], JSON_UNESCAPED_UNICODE);
-  exit;
-}
-function clean($v)
-{
-  return trim((string) $v);
-}
-function norm01($v, $def = '1')
-{
-  $v = clean($v);
-  if ($v === '')
-    return $def;
-  return ($v === '1') ? '1' : '0';
+function jexit($arr){
+    echo json_encode($arr, JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
-// --- Detecta si existe empresa_id en c_almacenp ---
-$hasEmpresaId = (int) db_val("
-  SELECT COUNT(*)
-  FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE()
-    AND TABLE_NAME = 'c_almacenp'
-    AND COLUMN_NAME = 'empresa_id'
-") > 0;
-
-$empresaCol = $hasEmpresaId ? "empresa_id" : "cve_cia";
-
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
+$pdo = db_pdo();
+$action = $_REQUEST['action'] ?? '';
 
 try {
-  // ===================== LIST =====================
-  if ($action === 'list') {
-    $q = clean($_GET['q'] ?? '');
-    $inactivos = (int) ($_GET['inactivos'] ?? 0);
-    $cve_cia = (int) ($_GET['cve_cia'] ?? 0);
 
-    $where = [];
-    $p = [];
+    /* =========================================================
+       LIST
+       ========================================================= */
+    if ($action === 'list') {
 
-    if (!$inactivos)
-      $where[] = "IFNULL(Activo,'1')='1'";
+        $q = trim($_GET['q'] ?? '');
+        $inactivos = (int)($_GET['inactivos'] ?? 0);
+        $cve_cia = (int)($_GET['cve_cia'] ?? 0);
 
-    // Filtro Experto: Empresa
-    if ($cve_cia > 0) {
-      $where[] = "($empresaCol) = :cia";
-      $p[':cia'] = $cve_cia;
+        $sql = "
+            SELECT 
+                ap.id,
+                ap.clave,
+                ap.nombre,
+                ap.cve_cia,
+                ap.direccion,
+                ap.contacto,
+                ap.telefono,
+                ap.correo,
+                ap.Activo,
+                ap.interno,
+                ap.cve_talmacen,
+                c.clave_empresa
+            FROM c_almacenp ap
+            INNER JOIN c_compania c ON c.cve_cia = ap.cve_cia
+            WHERE 1=1
+        ";
+
+        $params = [];
+
+        if (!$inactivos) {
+            $sql .= " AND ap.Activo = 1 ";
+        }
+
+        if ($cve_cia > 0) {
+            $sql .= " AND ap.cve_cia = :cia ";
+            $params['cia'] = $cve_cia;
+        }
+
+        if ($q !== '') {
+            $sql .= " AND (
+                ap.clave LIKE :q OR
+                ap.nombre LIKE :q OR
+                ap.direccion LIKE :q
+            ) ";
+            $params['q'] = "%$q%";
+        }
+
+        $sql .= " ORDER BY ap.nombre ASC ";
+
+        $rows = db_all($sql, $params);
+
+        jexit(['rows' => $rows]);
     }
 
-    if ($q !== '') {
-      $where[] = "(($empresaCol) LIKE :q OR nombre LIKE :q OR direccion LIKE :q OR contacto LIKE :q OR correo LIKE :q)";
-      $p[':q'] = "%$q%";
+    /* =========================================================
+       GET
+       ========================================================= */
+    if ($action === 'get') {
+
+        $id = $_GET['id'] ?? '';
+
+        $row = db_one("
+            SELECT *
+            FROM c_almacenp
+            WHERE id = :id
+        ", ['id' => $id]);
+
+        if (!$row) {
+            jexit(['error' => 'Registro no encontrado']);
+        }
+
+        jexit($row);
     }
 
+<<<<<<< Updated upstream
     $sql = "SELECT
             ($empresaCol) AS clave_empresa,
             id,
@@ -177,13 +208,18 @@ try {
       'codigopostal' => clean($_POST['codigopostal'] ?? ''),
       'BL'           => clean($_POST['BL'] ?? ''),
     ];
+=======
+    /* =========================================================
+       CREATE
+       ========================================================= */
+    if ($action === 'create') {
+>>>>>>> Stashed changes
 
-    if ($hasEmpresaId) {
-      $data['empresa_id'] = $clave_empresa;
-    } else {
-      $data['cve_cia'] = $clave_empresa;
-    }
+        $clave = trim($_POST['id'] ?? '');
+        $nombre = trim($_POST['nombre'] ?? '');
+        $cve_cia = (int)($_POST['clave_empresa'] ?? 0);
 
+<<<<<<< Updated upstream
     db_tx(function () use ($action, $hasEmpresaId, $k_emp, $k_id, $clave_empresa, $clave, $data) {
 
       if ($action === 'create') {
@@ -239,11 +275,33 @@ try {
         dbq("UPDATE c_almacenp SET " . implode(',', $set) . " $where", $p);
       }
     });
+=======
+        if (!$clave || !$nombre || !$cve_cia) {
+            jexit(['error' => 'Clave, Nombre y Empresa son obligatorios']);
+        }
 
-    echo json_encode(['ok' => 1], JSON_UNESCAPED_UNICODE);
-    exit;
-  }
+        $sql = "
+            INSERT INTO c_almacenp
+            (clave, nombre, cve_cia, direccion, contacto, telefono, correo, Activo, interno, cve_talmacen)
+            VALUES
+            (:clave, :nombre, :cve_cia, :direccion, :contacto, :telefono, :correo, :Activo, :interno, :tipo)
+        ";
+>>>>>>> Stashed changes
 
+        dbq($sql, [
+            'clave' => $clave,
+            'nombre' => $nombre,
+            'cve_cia' => $cve_cia,
+            'direccion' => $_POST['direccion'] ?? null,
+            'contacto' => $_POST['responsable'] ?? null,
+            'telefono' => $_POST['telefono'] ?? null,
+            'correo' => $_POST['email'] ?? null,
+            'Activo' => (int)($_POST['Activo'] ?? 1),
+            'interno' => ($_POST['es_3pl'] === 'Si') ? 0 : 1,
+            'tipo' => $_POST['tipo'] ?? null
+        ]);
+
+<<<<<<< Updated upstream
 
   // ===================== DELETE / RESTORE =====================
   if ($action === 'delete' || $action === 'restore') {
@@ -257,75 +315,78 @@ try {
       dbq("UPDATE c_almacenp SET Activo=:v WHERE empresa_id=:e AND id=:i", [':v' => $val, ':e' => $emp, ':i' => $id]);
     } else {
       dbq("UPDATE c_almacenp SET Activo=:v WHERE cve_cia=:e AND id=:i", [':v' => $val, ':e' => $emp, ':i' => $id]);
+=======
+        jexit(['ok' => true]);
+>>>>>>> Stashed changes
     }
 
-    echo json_encode(['ok' => 1], JSON_UNESCAPED_UNICODE);
-    exit;
-  }
+    /* =========================================================
+       UPDATE
+       ========================================================= */
+    if ($action === 'update') {
 
-  // ===================== EXPORT =====================
-  if ($action === 'export') {
-    header_remove('Content-Type');
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename=almacenes_export.csv');
+        $id = $_POST['k_id'] ?? '';
 
-    $q = clean($_GET['q'] ?? '');
-    $inactivos = (int) ($_GET['inactivos'] ?? 0);
-    $cve_cia = (int) ($_GET['cve_cia'] ?? 0);
+        $sql = "
+            UPDATE c_almacenp SET
+                nombre = :nombre,
+                direccion = :direccion,
+                contacto = :contacto,
+                telefono = :telefono,
+                correo = :correo,
+                Activo = :Activo,
+                interno = :interno,
+                cve_talmacen = :tipo
+            WHERE id = :id
+        ";
 
-    $where = [];
-    $p = [];
-    if (!$inactivos)
-      $where[] = "IFNULL(Activo,'1')='1'";
+        dbq($sql, [
+            'nombre' => $_POST['nombre'],
+            'direccion' => $_POST['direccion'],
+            'contacto' => $_POST['responsable'],
+            'telefono' => $_POST['telefono'],
+            'correo' => $_POST['email'],
+            'Activo' => (int)$_POST['Activo'],
+            'interno' => ($_POST['es_3pl'] === 'Si') ? 0 : 1,
+            'tipo' => $_POST['tipo'],
+            'id' => $id
+        ]);
 
-    if ($cve_cia > 0) {
-      $where[] = "($empresaCol) = :cia";
-      $p[':cia'] = $cve_cia;
+        jexit(['ok' => true]);
     }
 
-    if ($q !== '') {
-      $where[] = "(($empresaCol) LIKE :q OR nombre LIKE :q)";
-      $p[':q'] = "%$q%";
+    /* =========================================================
+       DELETE (INACTIVAR)
+       ========================================================= */
+    if ($action === 'delete') {
+
+        dbq("UPDATE c_almacenp SET Activo = 0 WHERE id = :id", [
+            'id' => $_POST['id']
+        ]);
+
+        jexit(['ok' => true]);
     }
 
-    $sql = "SELECT
-            ($empresaCol) AS clave_empresa,
-            nombre,
-            cve_talmacen AS tipo,
-            direccion,
-            contacto AS responsable,
-            telefono,
-            correo AS email,
-            interno,
-            Activo
-          FROM c_almacenp";
-    if ($where)
-      $sql .= " WHERE " . implode(" AND ", $where);
-    $sql .= " ORDER BY nombre ASC";
+    /* =========================================================
+       RESTORE
+       ========================================================= */
+    if ($action === 'restore') {
 
-    $rows = db_all($sql, $p);
+        dbq("UPDATE c_almacenp SET Activo = 1 WHERE id = :id", [
+            'id' => $_POST['id']
+        ]);
 
-    $out = fopen('php://output', 'w');
-    fputcsv($out, ['Clave de Empresa', 'Nombre', 'Tipo', 'Dirección', 'Responsable', 'Teléfono', 'Email', 'Es 3PL']);
-
-    foreach ($rows as $r) {
-      $es3pl = ((int) $r['interno'] === 0) ? 'Si' : 'No';
-      fputcsv($out, [
-        $r['clave_empresa'],
-        $r['nombre'],
-        $r['tipo'],
-        $r['direccion'],
-        $r['responsable'],
-        $r['telefono'],
-        $r['email'],
-        $es3pl
-      ]);
+        jexit(['ok' => true]);
     }
-    fclose($out);
-    exit;
-  }
 
+<<<<<<< Updated upstream
   jerr('Acción no soportada: ' . $action);
 } catch (Throwable $e) {
   jerr('Error: ' . $e->getMessage());
+=======
+    jexit(['error' => 'Acción no válida']);
+
+} catch (Exception $e) {
+    jexit(['error' => $e->getMessage()]);
+>>>>>>> Stashed changes
 }

@@ -7,276 +7,303 @@ $errores   = [];
 $exito     = '';
 $generados = [];
 
-/* ===========================================================
-   Catálogo de almacenes (c_almacenp)
-   =========================================================== */
-/* Catálogo de almacenes físicos (c_almacen) */
-$sql_alm = "
-    SELECT 
-        ca.cve_almac      AS id_almacen,
-        ap.clave          AS clave_padre,
-        ap.nombre         AS nombre_padre,
-        ca.des_almac      AS zona
-    FROM c_almacen ca
-    INNER JOIN c_almacenp ap 
-        ON ap.id = ca.cve_almacenp
-    ORDER BY ap.clave, ca.des_almac
-";
+/* =========================
+   Defaults para mantener estado UI
+========================= */
+$empresa_id  = 0;
+$almacen_id  = null; // idp (c_almacenp.id) o NULL
+$cantidad    = 1;
+$prefijo     = 'LP';
+$tipo        = 'Pallet';
+$tipogen     = 0;
+$permanente  = 0;
 
-$almacenes = function_exists('db_all') ? db_all($sql_alm) : [];
-
-/* ===========================================================
-   Procesar envío
-   =========================================================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $almacen_id = isset($_POST['almacen'])   ? trim($_POST['almacen']) : '';
-    $cantidad   = isset($_POST['cantidad'])  ? (int)$_POST['cantidad'] : 0;
-    $prefijo    = isset($_POST['prefijo'])   ? strtoupper(trim($_POST['prefijo'])) : 'LP';
-    $tipo       = isset($_POST['tipo'])      ? trim($_POST['tipo']) : 'Pallet';
-    $tipogen    = isset($_POST['tipogen'])   ? (int)$_POST['tipogen'] : 0; // 0 = No genérico, 1 = Genérico
+    $empresa_id = isset($_POST['empresa']) ? (int)$_POST['empresa'] : 0;
+
+    // Almacén opcional: guardamos idp (numérico) o NULL
+    $almacen_id = (isset($_POST['almacen']) && $_POST['almacen'] !== '')
+        ? (int)$_POST['almacen']
+        : null;
+
+    $cantidad   = isset($_POST['cantidad']) ? (int)$_POST['cantidad'] : 0;
+    $prefijo    = isset($_POST['prefijo']) ? strtoupper(trim($_POST['prefijo'])) : 'LP';
+    $tipo       = $_POST['tipo'] ?? 'Pallet';
+    $tipogen    = isset($_POST['tipogen']) ? (int)$_POST['tipogen'] : 0;
     $permanente = isset($_POST['permanente']) ? 1 : 0;
 
-    if ($almacen_id === '') {
-        $errores[] = 'Debe seleccionar un almacén.';
-    }
-    if ($cantidad <= 0) {
-        $errores[] = 'La cantidad debe ser mayor a cero.';
-    }
-    if ($prefijo === '') {
-        $errores[] = 'El prefijo no puede estar vacío.';
-    }
+    if (!$empresa_id)     $errores[] = "Debe seleccionar empresa.";
+    if ($cantidad <= 0)   $errores[] = "Cantidad inválida.";
+    if ($prefijo === '')  $errores[] = "Prefijo requerido.";
 
     if (!$errores) {
 
-        // Código de fecha en formato aammdd (25-12-01 => 251201)
-        $codigo_fecha = date('ymd');    // aammdd
-        $base_lp      = $prefijo . $codigo_fecha . '-';  // Ej: LPAO251201-
+        // Formato requerido: PREFIJO + AAAAMMDD + '-' + 01..N
+        $fecha = date('Ymd'); // AAAAMMDD
+        $base  = $prefijo . $fecha . '-';
 
-        // Buscamos la secuencia máxima YA usada hoy para ese prefijo + almacén
+        // Último sufijo por empresa + día + prefijo (NO depende de almacén)
         $sql_max = "
             SELECT MAX(COALESCE(sufijo,0)) AS max_sufijo
             FROM c_charolas
-            WHERE cve_almac = :almacen
+            WHERE empresa_id = :empresa_id
               AND CveLP LIKE :patron
         ";
-        $params_max = [
-            'almacen' => $almacen_id,
-            'patron'  => $base_lp . '%',   // LPAO251201-%
-        ];
-        $row_max    = function_exists('db_one') ? db_one($sql_max, $params_max) : null;
-        $sufijo_base = (int)($row_max['max_sufijo'] ?? 0);
+
+        $row = db_one($sql_max, [
+            'empresa_id' => $empresa_id,
+            'patron'     => $base . '%'
+        ]);
+
+        $inicio = (int)($row['max_sufijo'] ?? 0);
+
+        // Pad dinámico: mínimo 2, y si crece a 3/4 dígitos, lo respeta
+        $maxSeq = $inicio + max(0, $cantidad);
+        $padLen = max(2, strlen((string)$maxSeq));
 
         try {
             for ($i = 1; $i <= $cantidad; $i++) {
 
-                // Siguiente secuencia para HOY (día+prefijo+almacén)
-                $seq = $sufijo_base + $i;           // 1..N, o continúa donde se quedó
+                $seq = $inicio + $i;
+                $seq_form = str_pad((string)$seq, $padLen, '0', STR_PAD_LEFT);
 
-                // CveLP con formato PREFIJO + aammdd + '-' + secuencia
-                $lp = $base_lp . $seq;              // p.ej. LPAO251201-1
-
-                // Clave_Contenedor “virtual” inicial = CveLP
-                $claveCont   = $lp;
+                $lp = $base . $seq_form; // Ej: LP20260217-01
 
                 $descripcion = ($tipo === 'Contenedor')
-                    ? 'Contenedor genérico'
-                    : 'Pallet genérico';
+                    ? 'Contenedor generado'
+                    : 'Pallet generado';
 
-                $params_ins = [
-                    'cve_almac'   => $almacen_id,
-                    'clave'       => $claveCont,
-                    'descripcion' => $descripcion,
-                    'permanente'  => $permanente,
-                    'sufijo'      => $seq,     // guardamos sólo el número (1..n)
-                    'tipo'        => $tipo,
-                    'cvelp'       => $lp,
-                    'tipogen'     => $tipogen,
-                ];
-
-                $sql_ins = "
+                dbq("
                     INSERT INTO c_charolas
-                        (cve_almac, Clave_Contenedor, descripcion,
-                         Permanente, Pedido, sufijo, tipo,
-                         Activo, alto, ancho, fondo, peso, pesomax, capavol, Costo,
-                         CveLP, TipoGen)
+                    (
+                        empresa_id,
+                        cve_almac,
+                        Clave_Contenedor,
+                        descripcion,
+                        Permanente,
+                        Pedido,
+                        sufijo,
+                        tipo,
+                        Activo,
+                        CveLP,
+                        TipoGen
+                    )
                     VALUES
-                        (:cve_almac, :clave, :descripcion,
-                         :permanente, NULL, :sufijo, :tipo,
-                         1, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                         :cvelp, :tipogen)
-                ";
-
-                if (function_exists('dbq')) {
-                    dbq($sql_ins, $params_ins);
-                } else {
-                    $pdo  = db();
-                    $stmt = $pdo->prepare($sql_ins);
-                    $stmt->execute($params_ins);
-                }
+                    (
+                        :empresa_id,
+                        :cve_almac,
+                        :clave,
+                        :descripcion,
+                        :permanente,
+                        NULL,
+                        :sufijo,
+                        :tipo,
+                        1,
+                        :cvelp,
+                        :tipogen
+                    )
+                ", [
+                    'empresa_id' => $empresa_id,
+                    'cve_almac'  => $almacen_id, // NULL o idp
+                    'clave'      => $lp,
+                    'descripcion'=> $descripcion,
+                    'permanente' => $permanente,
+                    'sufijo'     => $seq,        // numérico, para MAX()
+                    'tipo'       => $tipo,
+                    'cvelp'      => $lp,
+                    'tipogen'    => $tipogen
+                ]);
 
                 $generados[] = $lp;
             }
 
-            $exito = 'Se generaron ' . count($generados) . ' License Plates correctamente.';
-        } catch (Exception $e) {
-            $errores[] = 'Error al generar los License Plates: ' . $e->getMessage();
+            $exito = "Se generaron " . count($generados) . " License Plates correctamente.";
+
+        } catch (Throwable $e) {
+            $errores[] = $e->getMessage();
         }
     }
 }
+
+function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 ?>
+
 <!doctype html>
 <html lang="es">
-
 <head>
-    <meta charset="utf-8" />
-    <title>Nuevo License Plate</title>
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-
-    <style>
-        body {
-            font-size: 10px;
-        }
-
-        .card-header {
-            background: #0F5AAD;
-            color: #fff;
-            font-weight: 600;
-        }
-
-        .form-label {
-            font-size: 10px;
-        }
-    </style>
+<meta charset="utf-8">
+<title>Nuevo License Plate</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+body{font-size:11px}
+.card-header{background:#0F5AAD;color:#fff;font-weight:600}
+</style>
 </head>
 
 <body>
-    <div class="container-fluid mt-3">
+<div class="container-fluid mt-3">
 
-        <div class="card shadow-sm">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Agregar License Plates</span>
-                <a href="license_plate.php" class="btn btn-outline-light btn-sm">
-                    <i class="fa fa-arrow-left"></i> Regresar
-                </a>
-            </div>
-            <div class="card-body">
+<div class="card shadow-sm">
+<div class="card-header d-flex justify-content-between">
+  <span>Agregar License Plates</span>
+  <a href="license_plate.php" class="btn btn-light btn-sm">Regresar</a>
+</div>
 
-                <?php if ($errores): ?>
-                    <div class="alert alert-danger">
-                        <ul class="mb-0">
-                            <?php foreach ($errores as $err): ?>
-                                <li><?php echo htmlspecialchars($err); ?></li>
-                            <?php endforeach; ?>
-                        </ul>
-                    </div>
-                <?php endif; ?>
+<div class="card-body">
 
-                <?php if ($exito): ?>
-                    <div class="alert alert-success">
-                        <?php echo htmlspecialchars($exito); ?>
-                        <?php if ($generados): ?>
-                            <br><small>
-                                Primer LP: <strong><?php echo htmlspecialchars($generados[0]); ?></strong>
-                                <?php if (count($generados) > 1): ?>
-                                    &nbsp;|&nbsp; Último LP:
-                                    <strong><?php echo htmlspecialchars(end($generados)); ?></strong>
-                                <?php endif; ?>
-                            </small>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
+<?php if($errores): ?>
+  <div class="alert alert-danger">
+    <?php foreach($errores as $e) echo "<div>".h($e)."</div>"; ?>
+  </div>
+<?php endif; ?>
 
-                <form method="post" class="row g-3">
+<?php if($exito): ?>
+  <div class="alert alert-success">
+    <?= h($exito) ?><br>
+    <?php if(!empty($generados)): ?>
+      Primer LP: <strong><?= h($generados[0]) ?></strong>
+      <?php if(count($generados)>1): ?>
+        | Último LP: <strong><?= h(end($generados)) ?></strong>
+      <?php endif; ?>
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
 
-                    <!-- Almacén -->
-                    <div class="col-12 col-md-4">
-                        <label class="form-label">Almacén *</label>
-                        <select name="almacen" class="form-select form-select-sm" required>
-                            <option value="">Seleccione almacén...</option>
-                            <?php foreach ($almacenes as $a): ?>
-                                <?php
-                                $val = $a['id_almacen'];
-                                $label = $a['clave_padre'] . ' - ' . $a['nombre_padre']
-                                    . ' / ' . $a['zona'];
+<form method="post" class="row g-3">
 
-                                ?>
-                                <option value="<?php echo htmlspecialchars($val); ?>"
-                                    <?php echo (isset($almacen_id) && $almacen_id == $val) ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($label); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+  <div class="col-md-4">
+    <label>Empresa *</label>
+    <select name="empresa" id="empresa" class="form-select form-select-sm" required>
+      <option value="">Seleccione empresa...</option>
+    </select>
+  </div>
 
-                    <!-- Cantidad -->
-                    <div class="col-6 col-md-2">
-                        <label class="form-label">Cantidad *</label>
-                        <input type="number" min="1" name="cantidad"
-                            class="form-control form-control-sm"
-                            value="<?php echo isset($cantidad) ? (int)$cantidad : 1; ?>"
-                            required>
-                    </div>
+  <div class="col-md-4">
+    <label>Almacén (Opcional)</label>
+    <select name="almacen" id="almacen" class="form-select form-select-sm" disabled>
+      <option value="">Todos / No específico</option>
+    </select>
+  </div>
 
-                    <!-- Prefijo -->
-                    <div class="col-6 col-md-2">
-                        <label class="form-label">Prefijo *</label>
-                        <input type="text" name="prefijo"
-                            class="form-control form-control-sm"
-                            maxlength="10"
-                            value="<?php echo htmlspecialchars($prefijo ?? 'LP'); ?>"
-                            required>
-                        <small class="text-muted">
-                            Ejemplo resultado hoy: PREF<?php echo date('ymd'); ?>-1, PREF<?php echo date('ymd'); ?>-2, ...
-                        </small>
-                    </div>
+  <div class="col-md-2">
+    <label>Cantidad *</label>
+    <input type="number" name="cantidad" min="1" value="<?= h($cantidad ?: 1) ?>" class="form-control form-control-sm" required>
+  </div>
 
-                    <!-- Tipo Pallet/Contenedor -->
-                    <div class="col-6 col-md-2">
-                        <label class="form-label">Crear Pallet o Contenedor</label>
-                        <select name="tipo" class="form-select form-select-sm">
-                            <option value="Pallet" <?php echo (isset($tipo) && $tipo === 'Pallet') ? 'selected' : ''; ?>>Pallet</option>
-                            <option value="Contenedor" <?php echo (isset($tipo) && $tipo === 'Contenedor') ? 'selected' : ''; ?>>Contenedor</option>
-                        </select>
-                    </div>
+  <div class="col-md-2">
+    <label>Prefijo *</label>
+    <input type="text" name="prefijo" value="<?= h($prefijo ?: 'LP') ?>" class="form-control form-control-sm" required>
+  </div>
 
-                    <!-- Tipo Genérico / No Genérico -->
-                    <div class="col-6 col-md-2">
-                        <label class="form-label">Tipo (Genérico/No)</label>
-                        <select name="tipogen" class="form-select form-select-sm">
-                            <option value="0" <?php echo (isset($tipogen) && $tipogen == 0) ? 'selected' : ''; ?>>No genérico</option>
-                            <option value="1" <?php echo (isset($tipogen) && $tipogen == 1) ? 'selected' : ''; ?>>Genérico</option>
-                        </select>
-                    </div>
+  <div class="col-md-2">
+    <label>Tipo</label>
+    <select name="tipo" class="form-select form-select-sm">
+      <option value="Pallet" <?= ($tipo==='Pallet'?'selected':'') ?>>Pallet</option>
+      <option value="Contenedor" <?= ($tipo==='Contenedor'?'selected':'') ?>>Contenedor</option>
+    </select>
+  </div>
 
-                    <!-- Flags -->
-                    <div class="col-12 col-md-4">
-                        <div class="form-check mt-3">
-                            <input class="form-check-input" type="checkbox" name="permanente"
-                                id="chkPermanente" <?php echo !empty($permanente) ? 'checked' : ''; ?>>
-                            <label class="form-check-label" for="chkPermanente">
-                                License Plate permanente
-                            </label>
-                        </div>
-                    </div>
+  <div class="col-md-2">
+    <label>Genérico</label>
+    <select name="tipogen" class="form-select form-select-sm">
+      <option value="0" <?= ($tipogen==0?'selected':'') ?>>No genérico</option>
+      <option value="1" <?= ($tipogen==1?'selected':'') ?>>Genérico</option>
+    </select>
+  </div>
 
-                    <div class="col-12 mt-3">
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="fa fa-save"></i> Generar LPs
-                        </button>
-                        <a href="license_plate.php" class="btn btn-outline-secondary btn-sm">
-                            Cancelar
-                        </a>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+  <div class="col-md-4 mt-4">
+    <label class="d-flex align-items-center gap-2" style="user-select:none">
+      <input type="checkbox" name="permanente" <?= ($permanente ? 'checked' : '') ?>>
+      <span>License Plate permanente</span>
+    </label>
+  </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
+  <div class="col-12">
+    <button class="btn btn-primary btn-sm">Generar LPs</button>
+  </div>
+
+</form>
+
+</div>
+</div>
+</div>
+
+<script>
+(() => {
+  const CURRENT_EMPRESA = <?= json_encode((string)$empresa_id, JSON_UNESCAPED_UNICODE) ?>;
+  const CURRENT_ALMACEN = <?= json_encode($almacen_id === null ? '' : (string)$almacen_id, JSON_UNESCAPED_UNICODE) ?>;
+
+  fetch('../api/api_empresas_almacenes.php')
+    .then(res => res.json())
+    .then(data => {
+
+      if (!data || !data.ok) {
+        console.error((data && data.error) ? data.error : 'API sin respuesta ok');
+        return;
+      }
+
+      const empresaSelect = document.getElementById('empresa');
+      const almacenSelect = document.getElementById('almacen');
+
+      if (!empresaSelect || !almacenSelect) {
+        console.error('No existe #empresa o #almacen en el DOM');
+        return;
+      }
+
+      // ===== EMPRESAS =====
+      empresaSelect.innerHTML = '<option value="">Seleccione empresa...</option>';
+      (data.empresas || []).forEach(emp => {
+        const opt = document.createElement('option');
+        opt.value = emp.cve_cia;
+        opt.textContent = (emp.clave_empresa ? (emp.clave_empresa + ' - ') : '') + (emp.des_cia || '');
+        empresaSelect.appendChild(opt);
+      });
+
+      // ===== Render almacenes dependientes por empresa (cve_cia) =====
+      const renderAlmacenes = (cveCia) => {
+        const cve = String(cveCia || '').trim();
+
+        almacenSelect.innerHTML = '<option value="">Todos / No específico</option>';
+
+        if (!cve) {
+          almacenSelect.disabled = true;
+          return;
+        }
+
+        const lista = (data.almacenes || []).filter(a => String(a.cve_cia) === cve);
+
+        lista.forEach(al => {
+          const opt = document.createElement('option');
+          opt.value = al.idp; // Guardamos idp
+          opt.textContent = (al.cve_almac ? (al.cve_almac + ' - ') : '') + (al.nombre || '');
+          almacenSelect.appendChild(opt);
+        });
+
+        almacenSelect.disabled = false;
+      };
+
+      empresaSelect.addEventListener('change', function () {
+        renderAlmacenes(this.value);
+      });
+
+      // ===== Restaurar selección si venimos de POST =====
+      if (CURRENT_EMPRESA && CURRENT_EMPRESA !== '0') {
+        empresaSelect.value = CURRENT_EMPRESA;
+        renderAlmacenes(CURRENT_EMPRESA);
+
+        if (CURRENT_ALMACEN) {
+          almacenSelect.value = CURRENT_ALMACEN;
+        }
+      } else {
+        almacenSelect.disabled = true;
+      }
+
+    })
+    .catch(err => console.error('Error fetch empresas/almacenes:', err));
+})();
+</script>
+
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>
 </body>
-
 </html>
