@@ -118,54 +118,65 @@ try {
 
   // ===================== CREATE / UPDATE =====================
   if ($action === 'create' || $action === 'update') {
+
     $k_emp = clean($_POST['k_clave_empresa'] ?? '');
-    $k_id = clean($_POST['k_id'] ?? '');
+    $k_id  = clean($_POST['k_id'] ?? '');
 
     $clave_empresa = clean($_POST['clave_empresa'] ?? '');
+
+    // 🔹 ID es técnico, NO obligatorio en create
     $id = clean($_POST['id'] ?? '');
 
-    $nombre = clean($_POST['nombre'] ?? '');
-    $cve_talmacen = clean($_POST['tipo'] ?? '');
-    $direccion = clean($_POST['direccion'] ?? '');
-    $contacto = clean($_POST['responsable'] ?? '');
-    $telefono = clean($_POST['telefono'] ?? '');
-    $correo = clean($_POST['email'] ?? '');
+    // 🔹 CLAVE funcional (alfanumérica)
+    $clave = clean($_POST['clave'] ?? '');
+
+    $nombre        = clean($_POST['nombre'] ?? '');
+    $cve_talmacen  = clean($_POST['tipo'] ?? '');
+    $direccion     = clean($_POST['direccion'] ?? '');
+    $contacto      = clean($_POST['responsable'] ?? '');
+    $telefono      = clean($_POST['telefono'] ?? '');
+    $correo        = clean($_POST['email'] ?? '');
 
     $es_3pl_val = clean($_POST['es_3pl'] ?? '');
     $interno = ($es_3pl_val === 'Si' || $es_3pl_val === '1') ? 0 : 1;
 
+    // ================= VALIDACIONES =================
     $det = [];
+
     if ($clave_empresa === '')
-      $det[] = 'Clave Empresa es obligatorio.';
-    if ($action === 'create' && $id === '')
-      $det[] = 'ID (ERP) es obligatorio para crear.';
+      $det[] = 'Clave Empresa es obligatoria.';
+
+    if ($clave === '')
+      $det[] = 'Clave del almacén es obligatoria.';
+
     if ($nombre === '')
       $det[] = 'Nombre es obligatorio.';
 
     if ($correo !== '' && !preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $correo))
       $det[] = 'Correo no tiene formato válido.';
+
     if ($det)
       jerr('Validación', $det);
 
-    $data = [
-      'nombre' => $nombre,
-      'cve_talmacen' => $cve_talmacen,
-      'direccion' => $direccion,
-      'contacto' => $contacto,
-      'telefono' => $telefono,
-      'correo' => $correo,
-      'interno' => $interno,
-      'Activo' => norm01($_POST['Activo'] ?? '1', '1'),
-      'comentarios' => clean($_POST['comentarios'] ?? ''),
-      'rut' => clean($_POST['rut'] ?? ''),
-      'codigopostal' => clean($_POST['codigopostal'] ?? ''),
-      'BL' => clean($_POST['BL'] ?? ''),
-    ];
+    // ================= NORMALIZACIÓN CLAVE =================
+    $clave = strtoupper($clave);
+    $clave = preg_replace('/[^A-Z0-9_-]/', '', $clave);
 
-    if ($action === 'create') {
-      $data['id'] = $id;
-      $data['clave'] = clean($_POST['clave'] ?? $id);
-    }
+    $data = [
+      'clave'        => $clave,
+      'nombre'       => $nombre,
+      'cve_talmacen' => $cve_talmacen,
+      'direccion'    => $direccion,
+      'contacto'     => $contacto,
+      'telefono'     => $telefono,
+      'correo'       => $correo,
+      'interno'      => $interno,
+      'Activo'       => norm01($_POST['Activo'] ?? '1', '1'),
+      'comentarios'  => clean($_POST['comentarios'] ?? ''),
+      'rut'          => clean($_POST['rut'] ?? ''),
+      'codigopostal' => clean($_POST['codigopostal'] ?? ''),
+      'BL'           => clean($_POST['BL'] ?? ''),
+    ];
 
     if ($hasEmpresaId) {
       $data['empresa_id'] = $clave_empresa;
@@ -173,23 +184,39 @@ try {
       $data['cve_cia'] = $clave_empresa;
     }
 
-    db_tx(function () use ($action, $hasEmpresaId, $k_emp, $k_id, $clave_empresa, $id, $data) {
-      if ($action === 'create') {
-        if ($hasEmpresaId) {
-          $ex = db_val("SELECT 1 FROM c_almacenp WHERE empresa_id=:e AND id=:i LIMIT 1", [':e' => $clave_empresa, ':i' => $id]);
-        } else {
-          $ex = db_val("SELECT 1 FROM c_almacenp WHERE cve_cia=:e AND id=:i LIMIT 1", [':e' => $clave_empresa, ':i' => $id]);
-        }
-        if ($ex)
-          throw new Exception("Ya existe el almacén con esa llave (Empresa + ID).");
+    db_tx(function () use ($action, $hasEmpresaId, $k_emp, $k_id, $clave_empresa, $clave, $data) {
 
+      if ($action === 'create') {
+
+        // 🔹 Validar duplicado por Empresa + CLAVE
+        if ($hasEmpresaId) {
+          $ex = db_val(
+            "SELECT 1 FROM c_almacenp 
+                      WHERE empresa_id=:e AND clave=:c LIMIT 1",
+            [':e' => $clave_empresa, ':c' => $clave]
+          );
+        } else {
+          $ex = db_val(
+            "SELECT 1 FROM c_almacenp 
+                      WHERE cve_cia=:e AND clave=:c LIMIT 1",
+            [':e' => $clave_empresa, ':c' => $clave]
+          );
+        }
+
+        if ($ex)
+          throw new Exception("Ya existe un almacén con esa clave en esta empresa.");
+
+        // 🔹 Insert SIN forzar id (autonumérico)
         $cols = array_keys($data);
-        $ins = "INSERT INTO c_almacenp (" . implode(',', $cols) . ") VALUES (:" . implode(',:', $cols) . ")";
+        $ins  = "INSERT INTO c_almacenp (" . implode(',', $cols) . ")
+               VALUES (:" . implode(',:', $cols) . ")";
         $p = [];
         foreach ($data as $k => $v)
           $p[":$k"] = $v;
+
         dbq($ins, $p);
       } else {
+
         if ($k_id === '')
           throw new Exception("Llave original inválida.");
 
@@ -203,11 +230,12 @@ try {
 
         $set = [];
         foreach ($data as $k => $v) {
-          if ($k === 'id' || $k === 'empresa_id' || $k === 'cve_cia')
+          if ($k === 'empresa_id' || $k === 'cve_cia')
             continue;
           $set[] = "$k=:$k";
           $p[":$k"] = $v;
         }
+
         dbq("UPDATE c_almacenp SET " . implode(',', $set) . " $where", $p);
       }
     });
@@ -215,6 +243,7 @@ try {
     echo json_encode(['ok' => 1], JSON_UNESCAPED_UNICODE);
     exit;
   }
+
 
   // ===================== DELETE / RESTORE =====================
   if ($action === 'delete' || $action === 'restore') {
@@ -297,7 +326,6 @@ try {
   }
 
   jerr('Acción no soportada: ' . $action);
-
 } catch (Throwable $e) {
   jerr('Error: ' . $e->getMessage());
 }

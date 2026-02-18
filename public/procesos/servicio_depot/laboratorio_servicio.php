@@ -359,7 +359,7 @@ if ($servicioIdSel > 0) {
                             <?php
                             // botón de cotización solo para SERVICIO (no garantía)
                             if (isset($servicioSel['motivo']) && strtoupper($servicioSel['motivo']) === 'SERVICIO'):
-                                ?>
+                            ?>
                                 <a href="servicio_generar_cotizacion.php?id=<?= (int) $servicioSel['id'] ?>"
                                     class="btn btn-warning btn-sm" style="font-size:0.75rem;">
                                     Generar Cotización CRM
@@ -433,7 +433,7 @@ if ($servicioIdSel > 0) {
                                             'LISTO_ENTREGA' => 'Listo para entrega / envío',
                                         ];
                                         foreach ($statusOpc as $val => $txt):
-                                            ?>
+                                        ?>
                                             <option value="<?= $val ?>" <?= ($servicioSel['status'] === $val ? 'selected' : '') ?>>
                                                 <?= $txt ?>
                                             </option>
@@ -564,10 +564,12 @@ if ($servicioIdSel > 0) {
 
 <script>
     // Cargar almacenes y productos desde public/api/filtros_assistpro.php
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', function() {
         const apiUrl = '../../api/filtros_assistpro.php?action=init';
 
-        fetch(apiUrl, { method: 'GET' })
+        fetch(apiUrl, {
+                method: 'GET'
+            })
             .then(resp => resp.json())
             .then(data => {
                 if (!data || data.ok === false) {
@@ -576,20 +578,33 @@ if ($servicioIdSel > 0) {
                 }
 
                 // Almacenes para laboratorio
+                // Almacenes para laboratorio
                 const selAlm = document.getElementById('selAlmacenLab');
                 if (selAlm) {
-                    if (!selAlm.options.length) {
-                        selAlm.innerHTML = '<option value="">[Selecciona almacén]</option>';
-                    }
+
+                    selAlm.innerHTML = '<option value="">[Selecciona almacén]</option>';
+
                     if (Array.isArray(data.almacenes)) {
                         data.almacenes.forEach(a => {
+
                             const opt = document.createElement('option');
-                            opt.value = a.cve_almac;
-                            opt.textContent = a.des_almac || a.clave_almacen || a.cve_almac;
+
+                            // MISMO VALUE QUE RECEPCIÓN
+                            opt.value = a.idp;
+
+                            // CLAVE - NOMBRE
+                            const clave = a.cve_almac || '';
+                            const nombre = a.nombre || '';
+
+                            opt.textContent = nombre ?
+                                clave + ' - ' + nombre :
+                                clave;
+
                             selAlm.appendChild(opt);
                         });
                     }
                 }
+
 
                 // Productos para partes
                 const selArt = document.getElementById('selArticuloLab');

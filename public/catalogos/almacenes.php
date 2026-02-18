@@ -473,7 +473,8 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       <!-- Row 2 -->
       <div class="ap-field">
         <div class="ap-label">ID / Clave *</div>
-        <div class="ap-input"><i class="fa fa-key"></i><input id="id" placeholder="ID (ERP)"></div>
+        <div class="ap-input"><i class="fa fa-key"></i><input id="clave" placeholder="Clave Alfanumérica">
+        </div>
       </div>
       <div class="ap-field">
         <div class="ap-label">Tipo</div>
@@ -567,7 +568,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         const sel = document.getElementById('filtro_empresa');
         const selMdl = document.getElementById('clave_empresa');
 
-        console.log('🎯 Elementos DOM encontrados:', { filtro: !!sel, modal: !!selMdl });
+        console.log('🎯 Elementos DOM encontrados:', {
+          filtro: !!sel,
+          modal: !!selMdl
+        });
 
         sel.innerHTML = '<option value="0">Todas las Empresas</option>';
         selMdl.innerHTML = '<option value="">Seleccione...</option>';
@@ -628,7 +632,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     fetch(url)
       .then(r => r.json())
       .then(resp => {
-        if (resp.error) { showMsg(resp.error, 'warn'); return; }
+        if (resp.error) {
+          showMsg(resp.error, 'warn');
+          return;
+        }
 
         const rows = resp.rows || [];
         const tb = document.getElementById('tb');
@@ -640,9 +647,9 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
         tb.innerHTML = rows.map(r => {
           const isOk = (r.Activo == '1');
-          const statusBadge = isOk
-            ? '<span class="ap-chip ok" style="padding:2px 8px;font-size:10px">Activo</span>'
-            : '<span class="ap-chip warn" style="padding:2px 8px;font-size:10px">Inactivo</span>';
+          const statusBadge = isOk ?
+            '<span class="ap-chip ok" style="padding:2px 8px;font-size:10px">Activo</span>' :
+            '<span class="ap-chip warn" style="padding:2px 8px;font-size:10px">Inactivo</span>';
           const rowStyle = !isOk ? 'background:#f8f9fa;color:#adb5bd' : '';
 
           const actions = `
@@ -697,14 +704,29 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     m.style.display = 'inline-flex';
     m.className = 'ap-chip ' + cls;
     m.innerHTML = txt;
-    setTimeout(() => { m.style.display = 'none'; }, 3500);
+    setTimeout(() => {
+      m.style.display = 'none';
+    }, 3500);
   }
+
   function esc(s) {
     if (s == null) return '';
-    return String(s).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
+    return String(s).replace(/[&<>"']/g, m => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    } [m]));
   }
-  function abrirModal() { document.getElementById('mdl').style.display = 'flex'; }
-  function cerrarModal() { document.getElementById('mdl').style.display = 'none'; }
+
+  function abrirModal() {
+    document.getElementById('mdl').style.display = 'flex';
+  }
+
+  function cerrarModal() {
+    document.getElementById('mdl').style.display = 'none';
+  }
 
   // CRUD
   function nuevo() {
@@ -716,7 +738,9 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
     // Reset inputs
     document.getElementById('clave_empresa').value = '';
-    document.getElementById('id').value = ''; document.getElementById('id').disabled = false;
+    document.getElementById('clave').value = '';
+    document.getElementById('clave').disabled = false;
+
     document.getElementById('nombre').value = '';
     document.getElementById('tipo').value = '';
     document.getElementById('es_3pl').value = 'No';
@@ -736,7 +760,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     fetch(API + '?action=get&clave_empresa=' + encodeURIComponent(emp) + '&id=' + encodeURIComponent(id))
       .then(r => r.json())
       .then(d => {
-        if (d.error) { showMsg(d.error, 'warn'); return; }
+        if (d.error) {
+          showMsg(d.error, 'warn');
+          return;
+        }
 
         document.getElementById('mdlTitle').innerText = 'Editar Almacén';
         document.getElementById('k_clave_empresa').value = d.clave_empresa;
@@ -744,7 +771,9 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
         // CORREGIDO: usar cve_cia (int) en lugar de clave_empresa (string) para el select
         document.getElementById('clave_empresa').value = d.cve_cia;
-        document.getElementById('id').value = d.id; document.getElementById('id').disabled = true;
+        document.getElementById('clave').value = d.clave;
+        document.getElementById('clave').disabled = true;
+
         document.getElementById('nombre').value = d.nombre;
         document.getElementById('tipo').value = d.cve_talmacen;
         document.getElementById('es_3pl').value = (d.interno == '0' ? 'Si' : 'No');
@@ -770,13 +799,16 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     // CORREGIDO: enviar cve_cia (el value del select) como clave_empresa
     const cveCompaniaSeleccionada = document.getElementById('clave_empresa').value;
     fd.append('clave_empresa', cveCompaniaSeleccionada);
-    
+
     // Inputs restantes
-    ['id', 'nombre', 'tipo', 'es_3pl', 'direccion', 'responsable', 'telefono', 'email', 'Activo', 'comentarios'].forEach(k => {
+    ['clave', 'nombre', 'tipo', 'es_3pl', 'direccion', 'responsable', 'telefono', 'email', 'Activo', 'comentarios'].forEach(k => {
       fd.append(k, document.getElementById(k).value);
     });
 
-    fetch(API, { method: 'POST', body: fd })
+    fetch(API, {
+        method: 'POST',
+        body: fd
+      })
       .then(r => r.json())
       .then(resp => {
         if (resp.error) {
@@ -802,7 +834,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     fd.append('clave_empresa', emp);
     fd.append('id', id);
 
-    fetch(API, { method: 'POST', body: fd })
+    fetch(API, {
+        method: 'POST',
+        body: fd
+      })
       .then(r => r.json())
       .then(resp => {
         if (resp.error) showMsg(resp.error, 'warn');
