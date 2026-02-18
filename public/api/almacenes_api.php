@@ -89,6 +89,7 @@ try {
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     $sql = "SELECT
             ($empresaCol) AS clave_empresa,
             id,
@@ -212,11 +213,16 @@ try {
 =======
 =======
 >>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
     /* =========================================================
        CREATE
        ========================================================= */
     if ($action === 'create') {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
@@ -224,6 +230,7 @@ try {
         $clave = trim($_POST['id'] ?? '');
         $nombre = trim($_POST['nombre'] ?? '');
         $cve_cia = (int)($_POST['clave_empresa'] ?? 0);
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 
 <<<<<<< Updated upstream
@@ -309,6 +316,20 @@ try {
         ";
 
 >>>>>>> Stashed changes
+=======
+
+        if (!$clave || !$nombre || !$cve_cia) {
+            jexit(['error' => 'Clave, Nombre y Empresa son obligatorios']);
+        }
+
+        $sql = "
+            INSERT INTO c_almacenp
+            (clave, nombre, cve_cia, direccion, contacto, telefono, correo, Activo, interno, cve_talmacen)
+            VALUES
+            (:clave, :nombre, :cve_cia, :direccion, :contacto, :telefono, :correo, :Activo, :interno, :tipo)
+        ";
+
+>>>>>>> Stashed changes
         dbq($sql, [
             'clave' => $clave,
             'nombre' => $nombre,
@@ -321,6 +342,7 @@ try {
             'interno' => ($_POST['es_3pl'] === 'Si') ? 0 : 1,
             'tipo' => $_POST['tipo'] ?? null
         ]);
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 
 <<<<<<< Updated upstream
@@ -338,6 +360,10 @@ try {
     } else {
       dbq("UPDATE c_almacenp SET Activo=:v WHERE cve_cia=:e AND id=:i", [':v' => $val, ':e' => $emp, ':i' => $id]);
 =======
+        jexit(['ok' => true]);
+>>>>>>> Stashed changes
+=======
+
         jexit(['ok' => true]);
 >>>>>>> Stashed changes
 =======
@@ -407,10 +433,13 @@ try {
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   jerr('Acción no soportada: ' . $action);
 } catch (Throwable $e) {
   jerr('Error: ' . $e->getMessage());
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
     jexit(['error' => 'Acción no válida']);
@@ -418,6 +447,9 @@ try {
 } catch (Exception $e) {
     jexit(['error' => $e->getMessage()]);
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes

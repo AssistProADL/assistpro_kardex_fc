@@ -1,5 +1,6 @@
 <?php
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 require_once(__DIR__ . "/../../app/db.php");
 require_once(__DIR__ . "/../bi/_menu_global.php");
 
@@ -19,6 +20,8 @@ $sql = "
 $stmt = $pdo->query($sql);
 $instalaciones = $stmt->fetchAll(PDO::FETCH_ASSOC);
 =======
+=======
+>>>>>>> Stashed changes
 // Conexión BD (está en /app)
 require_once(__DIR__ . "/../../app/db.php");
 
@@ -34,6 +37,9 @@ $sql = "SELECT i.*,
         ORDER BY i.id_instalacion DESC";
 
 $result = mysqli_query($conn, $sql);
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 ?>
 
@@ -52,6 +58,7 @@ $result = mysqli_query($conn, $sql);
                 <thead class="table-dark">
                     <tr>
                         <th>Folio</th>
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
                         <th>Activo</th>
                         <th>Técnico</th>
@@ -96,6 +103,8 @@ $result = mysqli_query($conn, $sql);
                 <?php endforeach; ?>
 
 =======
+=======
+>>>>>>> Stashed changes
                         <th>Unidad</th>
                         <th>Técnico</th>
                         <th>Fecha</th>
@@ -134,6 +143,9 @@ $result = mysqli_query($conn, $sql);
                             </td>
                         </tr>
                     <?php endif; ?>
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
                 </tbody>
             </table>

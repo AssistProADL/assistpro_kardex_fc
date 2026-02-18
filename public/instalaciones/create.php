@@ -1,5 +1,6 @@
 <?php
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 require_once(__DIR__ . "/../../app/db.php");
 
 $pdo = db();
@@ -52,6 +53,8 @@ $tecnicos = $pdo->query("
 
 require_once(__DIR__ . "/../bi/_menu_global.php");
 =======
+=======
+>>>>>>> Stashed changes
 // Conexión BD (está en /app)
 require_once(__DIR__ . "/../../app/db.php");
 
@@ -78,11 +81,15 @@ if($_POST){
 }
 
 $activos = mysqli_query($conn,"SELECT id_activo, marca, modelo FROM c_activos WHERE activo=1");
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 ?>
 
 <div class="container-fluid">
 
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
     <div class="card">
         <div class="card-header">
@@ -151,6 +158,8 @@ $activos = mysqli_query($conn,"SELECT id_activo, marca, modelo FROM c_activos WH
     </div>
 
 =======
+=======
+>>>>>>> Stashed changes
 <h4 class="mb-3">Nueva Instalación</h4>
 
 <div class="card">
@@ -197,6 +206,9 @@ $activos = mysqli_query($conn,"SELECT id_activo, marca, modelo FROM c_activos WH
 
 </div>
 </div>
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 </div>
 
