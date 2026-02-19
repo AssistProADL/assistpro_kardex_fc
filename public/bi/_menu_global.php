@@ -3,7 +3,8 @@
 require_once __DIR__ . '/../../app/auth_check.php';
 
 // NO cerrar PHP aquí para evitar output antes del DOCTYPE
-?><!DOCTYPE html>
+?>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -410,7 +411,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Georeferencia Rutas', 'url' => 'sfa/geo_distribucion_clientes.php', 'icono' => 'fa-location-dot'],
                 ['titulo' => 'Análisis Crédito', 'url' => 'dashboard/creditos.php', 'icono' => 'fa-location-dot'],
                 ['titulo' => 'Lead Time Analysis', 'url' => 'dashboard/dashboard_lta.php', 'icono' => 'fa-boxes-stacked'],
-               // ['titulo' => 'Inventario', 'url' => 'dashboard/inventario.php', 'icono' => 'fa-boxes-stacked'],
+                // ['titulo' => 'Inventario', 'url' => 'dashboard/inventario.php', 'icono' => 'fa-boxes-stacked'],
                 ['titulo' => 'Resumen Básico', 'url' => 'dashboard/resumen_basico.php', 'icono' => 'fa-chart-pie'],
                 ['titulo' => 'Dashboard Inventarios', 'url' => 'dashboard/adm_inventarios.php', 'icono' => 'fa-warehouse'],
                 ['titulo' => 'Ocupación Almacén', 'url' => 'dashboard/ocupacion_almacen.php', 'icono' => 'fa-chart-line'],
@@ -454,7 +455,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'QA | Cuarentena', 'url' => 'catalogos/qa_cuarentena.php', 'icono' => 'fa-triangle-exclamation'],
 
                 ['titulo' => 'Tipo de Pedidos', 'url' => 'catalogos/tipo_pedido.php', 'icono' => 'fa-layer-group'],
-              
+
                 ['titulo' => 'Tipo de Prioridad', 'url' => 'catalogos/tipos_prioridad.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Formas de Pago', 'url' => 'catalogos/formas_pago.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Configuracion de Tickets', 'url' => 'catalogos/ticket.php', 'icono' => 'fa-layer-group'],
@@ -504,7 +505,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Promociones',                   'url' => 'sfa/promociones/promo_design.php',   'icono' => 'fa-gift'],
                 ['titulo' => 'Admin Promociones',             'url' => 'sfa/promociones/promociones.php',    'icono' => 'fa-gift'],
                 ['titulo' => 'Simulador Promociones',         'url' => 'sfa/promociones/simulador.php',      'icono' => 'fa-gift'],
-                ['titulo' => 'Asignación de Activos', 	      'url' => 'sfa/activos_control.php',            'icono' => 'fa-tags'],
+                ['titulo' => 'Asignación de Activos',           'url' => 'sfa/activos_control.php',            'icono' => 'fa-tags'],
                 ['titulo' => 'Activos',                       'url' => 'sfa/activos.php',                    'icono' => 'fa-tags'],
                 ['titulo' => 'Tipos de Activos',              'url' => 'sfa/activo_tipos.php',               'icono' => 'fa-tags'],
                 ['titulo' => 'Propietario Activos',           'url' => 'sfa/activos_propiedad.php',          'icono' => 'fa-percent'],
@@ -529,6 +530,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
             // ADMINISTRACIÓN DE ALMACEN
             'Administración Almacen' => [
                 ['titulo' => 'Config. de Almacén',              'url' => 'config_almacen/configuracion_almacen.php',      'icono' => 'fa-gear'],
+                ['titulo' => 'Análisis de BL',              'url' => 'catalogos/dashboard_ubicaciones.php',      'icono' => 'fa-gear'],
                 ['titulo' => 'Pallets y Contenedores',          'url' => 'config_almacen/license_plate.php',              'icono' => 'fa-right-left'],
                 ['titulo' => 'Transacciones License Plate',     'url' => 'config_almacen/lp_pr_transaction.php',          'icono' => 'fa-right-left'],
                 ['titulo' => 'Wizard de Ubicaciones',     'url' => 'config_almacen/wizard_ubicaciones.php',          'icono' => 'fa-right-left'],
@@ -575,8 +577,8 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Planeacion OP',                 'url' => 'manufactura/orden_produccion.php',         'icono' => 'fa-flag'],
                 ['titulo' => 'Importador OPs',                'url' => 'manufactura/importador_op.php',              'icono' => 'fa-industry'],
                 ['titulo' => 'Monitor Producción',            'url' => 'manufactura/monitor_produccion.php',       'icono' => 'fa-flag'],
-                
-                             ],
+
+            ],
 
             // QA AUDITORIA
             'QA Auditoría' => [
@@ -605,7 +607,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Servicios', 'url' => 'vas/servicios_vas.php', 'icono' => 'fa-calendar-check'],
                 ['titulo' => 'Clientes', 'url' => 'vas/vas_cliente.php', 'icono' => 'fa-calendar-check'],
                 ['titulo' => 'Cobranza', 'url' => 'vas/vas_cobranza.php', 'icono' => 'fa-calendar-check'],
-	        ['titulo' => 'Pedidos', 'url' => 'vas/vas_pedido.php', 'icono' => 'fa-calendar-check'],
+                ['titulo' => 'Pedidos', 'url' => 'vas/vas_pedido.php', 'icono' => 'fa-calendar-check'],
 
             ],
 
@@ -647,24 +649,24 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // UTILERÍAS
             'Utilerías' => [
-                ['titulo' => 'Catálogo de Importadores',      'url' => 'utilerias/catalogo_importadores.php',    'icono' => 'fa-timeline'],              
+                ['titulo' => 'Catálogo de Importadores',      'url' => 'utilerias/catalogo_importadores.php',    'icono' => 'fa-timeline'],
                 ['titulo' => 'Conexión SAP B1',               'url' => 'conexion_ws/config_conexion_ws.php',     'icono' => 'fa-timeline'],
                 ['titulo' => 'Log de Operaciones',            'url' => 'utilerias/log_operaciones.php',          'icono' => 'fa-timeline'],
                 ['titulo' => 'Log WebServices',               'url' => 'utilerias/log_ws.php',                   'icono' => 'fa-arrow-right-arrow-left'],
                 ['titulo' => 'Browser ETL',                   'url' => 'etl/etl_browser.php',                    'icono' => 'fa-timeline'],
                 ['titulo' => 'Administrador Procesos ',       'url' => 'etl/administrador_procesos.php',         'icono' => 'fa-arrow-right-arrow-left'],
-                ['titulo' => 'Generador de Catálogos',        'url' => 'utilerias/generador.php', 		 'icono' => 'fa-clipboard-list'],
+                ['titulo' => 'Generador de Catálogos',        'url' => 'utilerias/generador.php',          'icono' => 'fa-clipboard-list'],
             ],
-	    // PQRS
-		'PQRS' => [
+            // PQRS
+            'PQRS' => [
                 ['titulo' => 'Control de incidencias', 'url' => 'pqrs/pqrs.php', 'icono' => 'fa-timeline'],
-                
+
             ],
-	    // Field Services
-		'Field Services' => [
+            // Field Services
+            'Field Services' => [
                 ['titulo' => 'Instalaciones', 'url' => 'instalaciones/index.php', 'icono' => 'fa-timeline'],
 
-                
+
             ],
 
         ];
@@ -673,7 +675,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
         <?php foreach ($menus as $menu => $submenus):
             $menuId = 'menu_' . preg_replace('/[^a-z0-9]+/i', '_', strtolower($menu));
             $collapsed = true; // todos colapsados por defecto
-            ?>
+        ?>
             <div class="menu-header menu-toggle <?= $collapsed ? 'collapsed' : '' ?>" data-target="#<?= $menuId ?>">
                 <div class="left">
                     <i class="fa fa-folder-open"></i> <?= htmlspecialchars($menu) ?>
@@ -683,7 +685,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
             <div class="submenu <?= $collapsed ? 'collapsed' : '' ?>" id="<?= $menuId ?>">
                 <?php foreach ($submenus as $item):
                     $icono = !empty($item['icono']) ? $item['icono'] : 'fa-circle';
-                    ?>
+                ?>
                     <a href="<?= $baseUrl . htmlspecialchars($item['url']) ?>">
                         <i class="fa <?= htmlspecialchars($icono) ?>"></i>
                         <?= htmlspecialchars($item['titulo']) ?>
@@ -702,9 +704,9 @@ require_once __DIR__ . '/../../app/auth_check.php';
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('.menu-toggle').forEach(function (header) {
-                header.addEventListener('click', function () {
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.menu-toggle').forEach(function(header) {
+                header.addEventListener('click', function() {
                     var targetSelector = this.getAttribute('data-target');
                     if (!targetSelector) return;
                     var target = document.querySelector(targetSelector);
