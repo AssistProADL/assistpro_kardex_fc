@@ -138,6 +138,33 @@ function init_filtros(PDO $pdo): void
         }
     }
 
+    // ===================== Zonas de Almacenaje (c_almacen) =====================
+    if ($useSection('zonas_almacenaje')) {
+        try {
+            $params = [];
+            $where = ["IFNULL(Activo,1) = 1"];
+
+            $sql = "
+                SELECT
+                    cve_almac,
+                    clave_almacen,
+                    des_almac,
+                    cve_almacenp,
+                    Cve_TipoZona,
+                    clasif_abc,
+                    ID_Proveedor
+                FROM c_almacen
+                " . (count($where) ? 'WHERE ' . implode(' AND ', $where) : '') . "
+                ORDER BY des_almac
+            ";
+
+            $data['zonas_almacenaje'] = db_all($sql, $params);
+        } catch (Throwable $e) {
+            $data['zonas_almacenaje_error'] = $e->getMessage();
+        }
+    }
+
+
     // ===================== RUTAS (t_ruta) =====================
     if ($useSection('rutas')) {
         try {
