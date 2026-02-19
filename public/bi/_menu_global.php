@@ -529,6 +529,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
             // ADMINISTRACIÓN DE ALMACEN
             'Administración Almacen' => [
                 ['titulo' => 'Config. de Almacén',              'url' => 'config_almacen/configuracion_almacen.php',      'icono' => 'fa-gear'],
+ 		['titulo' => 'Análisis de BL',              'url' => 'catalogos/dashboard_ubicaciones.php',      'icono' => 'fa-gear'],
                 ['titulo' => 'Pallets y Contenedores',          'url' => 'config_almacen/license_plate.php',              'icono' => 'fa-right-left'],
                 ['titulo' => 'Transacciones License Plate',     'url' => 'config_almacen/lp_pr_transaction.php',          'icono' => 'fa-right-left'],
                 ['titulo' => 'Wizard de Ubicaciones',     'url' => 'config_almacen/wizard_ubicaciones.php',          'icono' => 'fa-right-left'],
