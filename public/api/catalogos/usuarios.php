@@ -1,6 +1,8 @@
 <?php
 ob_clean();
-require_once __DIR__ . '/../../app/db.php';
+// require_once __DIR__ . '/../../app/db.php';
+require_once __DIR__ . '/../../../app/db.php';
+
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -160,7 +162,7 @@ try {
       exit;
 
 
-    /* ================= TIPOS DE USUARIO ================= */
+      /* ================= TIPOS DE USUARIO ================= */
     case 'tipos_usuario':
       $stmt = $pdo->prepare("SELECT id_tipo, des_tipo FROM c_tipousuario WHERE COALESCE(Activo, 1)=1 ORDER BY id_tipo");
       $stmt->execute();
@@ -188,7 +190,7 @@ try {
       exit;
 
 
-    /* ================= CREATE ================= */
+      /* ================= CREATE ================= */
     case 'create':
       $pwd = $_POST['pwd_usuario'] ?? '';
       $pwdConfirm = $_POST['pwd_confirm'] ?? '';
@@ -224,7 +226,7 @@ try {
       exit;
 
 
-    /* ================= UPDATE ================= */
+      /* ================= UPDATE ================= */
     case 'update':
       $pwd = $_POST['pwd_usuario'] ?? '';
       $pwdConfirm = $_POST['pwd_confirm'] ?? '';
@@ -269,7 +271,7 @@ try {
       exit;
 
 
-    /* ================= SOFT DELETE ================= */
+      /* ================= SOFT DELETE ================= */
     case 'delete':
       $stmt = $pdo->prepare("UPDATE c_usuario SET Activo=0 WHERE id_user=?");
       $stmt->execute([(int) ($_POST['id_user'] ?? 0)]);
@@ -277,7 +279,7 @@ try {
       exit;
 
 
-    /* ================= RECOVER ================= */
+      /* ================= RECOVER ================= */
     case 'recover':
       $stmt = $pdo->prepare("UPDATE c_usuario SET Activo=1 WHERE id_user=?");
       $stmt->execute([(int) ($_POST['id_user'] ?? 0)]);
@@ -285,7 +287,7 @@ try {
       exit;
 
 
-    /* ================= EXPORT CSV ================= */
+      /* ================= EXPORT CSV ================= */
     case 'export_csv':
       header('Content-Type: text/csv; charset=utf-8');
       header('Content-Disposition: attachment; filename=usuarios.csv');
@@ -314,7 +316,7 @@ try {
       exit;
 
 
-    /* ================= IMPORT CSV ================= */
+      /* ================= IMPORT CSV ================= */
     case 'import_csv':
       if (!isset($_FILES['file'])) {
         jexit(false, 'Archivo no recibido', []);
@@ -356,7 +358,6 @@ try {
       echo json_encode(['ok' => false, 'success' => false, 'message' => 'Acción no válida', 'action' => $action]);
       exit;
   }
-
 } catch (Throwable $e) {
   echo json_encode(['ok' => false, 'success' => false, 'message' => $e->getMessage()]);
   exit;
