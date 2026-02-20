@@ -1,1 +1,4 @@
-jkey=AIzaSyC5xF7JtKzw9cTRRXcDAqTThbYnMCiYOVM& 
+
+key=AIzaSyC5xF7JtKzw9cTRRXcDAqTThbYnMCiYOVM& 
+
+key=AIzaSyC5xF7JtKzw9cTRRXcDAqTThbYnMCiYOVM&libraries=drawing,geometry&callback=initMap"

@@ -25,6 +25,24 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     .tiny { font-size: 10px; }
     .badge-ok { background:#16a34a; }
     .badge-no { background:#6b7280; }
+
+    .row-dirty { background:#fef3c7 !important; }
+    #toastBox{
+      position:fixed;
+      bottom:20px;
+      right:20px;
+      min-width:320px;
+      max-width:460px;
+      padding:14px 16px;
+      border-radius:10px;
+      box-shadow:0 15px 35px rgba(0,0,0,.25);
+      display:none;
+      font-size:12px;
+      white-space:pre-line;
+      z-index:9999;
+      transition: all .25s ease;
+      color:#fff;
+    }
   </style>
 </head>
 
@@ -38,7 +56,8 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     </div>
     <div class="d-flex gap-2">
       <button class="btn btn-outline-secondary btn-sm" id="btnRefrescar">⟳ Refrescar</button>
-      <button class="btn btn-success btn-sm" id="btnGuardarTop">💾 Guardar planeación</button>
+      <button class="btn btn-success btn-sm" id="btnGuardarTop" disabled>💾 Guardar planeación</button>
+      <button class="btn btn-outline-danger btn-sm" id="btnUndoTop" disabled>↩ Deshacer</button>
     </div>
   </div>
 
@@ -102,7 +121,8 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         <div class="d-flex align-items-center gap-2">
           <button class="btn btn-outline-primary btn-sm" id="btnSelTodo">✓ Seleccionar todo</button>
           <button class="btn btn-outline-secondary btn-sm" id="btnClearSel">Limpiar selección</button>
-          <button class="btn btn-success btn-sm" id="btnGuardar">💾 Guardar</button>
+          <button class="btn btn-success btn-sm" id="btnGuardar" disabled>💾 Guardar</button>
+          <button class="btn btn-outline-danger btn-sm" id="btnUndo" disabled>↩ Deshacer</button>
         </div>
       </div>
 
@@ -149,9 +169,67 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
 </div>
 
+<div id="toastBox"></div>
+
 <script>
 (function(){
   const el = id => document.getElementById(id);
+
+  // ========= Enterprise UX (toast + dirty tracking) =========
+  let cambiosPendientes = new Set();
+
+  function showToast(msg, type="success", ms=4500){
+    const box = document.getElementById('toastBox');
+    if(!box){ alert(msg); return; }
+    const colors = {
+      success: "#065f46",
+      warning: "#92400e",
+      error:   "#7f1d1d",
+      info:    "#1e3a8a"
+    };
+    box.style.background = colors[type] || colors.success;
+    box.textContent = msg;
+    box.style.display = "block";
+    box.style.opacity = "1";
+    window.clearTimeout(box._t1); window.clearTimeout(box._t2);
+    box._t1 = window.setTimeout(()=>{
+      box.style.opacity = "0";
+      box._t2 = window.setTimeout(()=>{ box.style.display="none"; }, 250);
+    }, ms);
+  }
+
+  function updateSaveButtons(){
+    const dirty = cambiosPendientes.size > 0;
+    const b1 = el('btnGuardar');
+    const b2 = el('btnGuardarTop');
+    const u1 = el('btnUndo');
+    const u2 = el('btnUndoTop');
+    [b1,b2,u1,u2].forEach(x=>{ if(x) x.disabled = !dirty; });
+
+    if(b1){
+      b1.classList.toggle('btn-warning', dirty);
+      b1.classList.toggle('btn-success', !dirty);
+    }
+    if(b2){
+      b2.classList.toggle('btn-warning', dirty);
+      b2.classList.toggle('btn-success', !dirty);
+    }
+  }
+
+  function markDirty(tr){
+    if(!tr) return;
+    const id = tr.dataset.idDest;
+    if(!id) return;
+    cambiosPendientes.add(id);
+    tr.classList.add('row-dirty');
+    updateSaveButtons();
+  }
+
+  function clearDirtyState(){
+    cambiosPendientes.clear();
+    tbody.querySelectorAll('tr.row-dirty').forEach(tr=>tr.classList.remove('row-dirty'));
+    updateSaveButtons();
+  }
 
   const selAlmacen = el('selAlmacen');
   const selRuta    = el('selRuta');
@@ -191,7 +269,6 @@ require_once __DIR__ . '/../bi/_menu_global.php';
   }
 
   function parseDias(row){
-    // Soporta: Lu/Ma/Mi/Ju/Vi/Sa/Do directos o dias_bits (7 chars)
     const d = {Lu:0,Ma:0,Mi:0,Ju:0,Vi:0,Sa:0,Do:0};
 
     const hasDirect = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'].some(k => row[k] !== undefined);
@@ -280,8 +357,6 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     try{
       setEstado('Cargando...', true);
 
-      // ✅ FILTRO: solo almacenes con rutas (sin tocar APIs)
-      // 1) obtenemos ids de almacenes con rutas desde modo soportado
       let idsConRutas = new Set();
       try{
         const resR = await fetch('../api/sfa/catalogo_rutas.php?mode=almacenes', {cache:'no-store'});
@@ -292,9 +367,8 @@ require_once __DIR__ . '/../bi/_menu_global.php';
           const n  = parseInt(id||'0',10);
           if(n) idsConRutas.add(n);
         });
-      }catch(_e){ /* fallback silencioso: si no existe mode=almacenes, no rompemos */ }
+      }catch(_e){}
 
-      // 2) cargamos catálogo general y filtramos por idsConRutas
       const res = await fetch('../api/catalogo_almacenes.php', {cache:'no-store'});
       const js = await res.json();
 
@@ -339,6 +413,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     lblRutaCargada.textContent = '—';
 
     tbody.innerHTML = `<tr><td colspan="17" class="text-center tiny muted py-3">Seleccione un almacén y una ruta y luego Buscar/Refrescar.</td></tr>`;
+    clearDirtyState();
     updateKPIs();
 
     if(!almacenId){ return; }
@@ -380,6 +455,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
     if(!almacenId || !rutaId){
       tbody.innerHTML = `<tr><td colspan="17" class="text-center tiny muted py-3">Seleccione un almacén y una ruta y luego Buscar/Refrescar.</td></tr>`;
+      clearDirtyState();
       updateKPIs();
       return;
     }
@@ -389,7 +465,6 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
       const empresa = getEmpresaFromAlmacenOption();
 
-      // ✅ Compatibilidad: manda ambos nombres de parámetros (los que tú pides + los que algunos scripts usan)
       const url =
         `../api/sfa/clientes_asignacion_data.php?` +
         `almacen_id=${encodeURIComponent(almacenId)}` +
@@ -402,7 +477,6 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       const res = await fetch(url, {cache:'no-store'});
       const js = await res.json();
 
-      // Soporta formatos: {ok:1,data:[...]} o {success:true,data:[...]}
       const ok = (js.ok==1) || (js.success===true) || (js.ok===true);
       if(!ok){
         const msg = js.error || js.msg || 'Error consultando clientes';
@@ -418,12 +492,14 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       if(!Array.isArray(data) || data.length===0){
         tbody.innerHTML = `<tr><td colspan="17" class="text-center tiny muted py-3">Sin resultados.</td></tr>`;
         setEstado('OK', true);
+        clearDirtyState();
         updateKPIs();
         return;
       }
 
       tbody.innerHTML = data.map(rowTemplate).join('');
       setEstado('OK', true);
+      clearDirtyState();
       updateKPIs();
 
     }catch(e){
@@ -452,6 +528,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       tr.querySelector('.d-Vi').checked = !!g.Vi;
       tr.querySelector('.d-Sa').checked = !!g.Sa;
       tr.querySelector('.d-Do').checked = !!g.Do;
+      markDirty(tr);
     });
   }
 
@@ -459,11 +536,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     const almacenId = parseInt(selAlmacen.value||'0',10);
     const rutaId = parseInt(selRuta.value||'0',10);
     if(!almacenId || !rutaId){
-      alert('Seleccione almacén y ruta.');
+      showToast('Seleccione almacén y ruta.', 'warning');
       return;
     }
 
-    // Regla ejecutiva: guarda filas seleccionadas; si no hay seleccionadas, guarda las que tengan algún día marcado.
     const rows = Array.from(tbody.querySelectorAll('tr[data-id-dest]'));
     const selectedRows = rows.filter(tr => tr.querySelector('.rowSel')?.checked);
     const candidate = selectedRows.length ? selectedRows : rows.filter(tr=>{
@@ -471,11 +547,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     });
 
     if(candidate.length===0){
-      alert('No hay filas para guardar (seleccione filas o marque días).');
+      showToast('No hay filas para guardar (seleccione filas o marque días).', 'warning');
       return;
     }
 
-    // Si hay global days marcados y la fila seleccionada no tiene ninguno, aplica global
     candidate.forEach(tr=>{
       const any = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'].some(k => tr.querySelector('.d-'+k)?.checked);
       if(!any){
@@ -505,6 +580,17 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       };
     }).filter(x=>x.id_destinatario>0);
 
+    // Si hay filas seleccionadas que quedaron SIN días, ofrecer desasignar (API soporta unassign)
+    const sinDias = items.filter(it => !it.Lu && !it.Ma && !it.Mi && !it.Ju && !it.Vi && !it.Sa && !it.Do);
+    if(sinDias.length){
+      const ok = confirm(`Hay ${sinDias.length} destinatario(s) sin días marcados.\n¿Desea DESASIGNARLOS de la ruta?`);
+      if(!ok){
+        showToast('Operación cancelada.', 'info');
+        return;
+      }
+      sinDias.forEach(it => it.unassign = 1);
+    }
+
     try{
       setEstado('Guardando...', true);
 
@@ -518,21 +604,56 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
       if(!(js.ok==1 || js.ok===true)){
         setEstado('Error guardando', false);
-        alert((js.error||'Error guardando') + (js.detalle?('\n'+js.detalle):''));
+        showToast((js.error||'Error guardando') + (js.detalle?('\n'+js.detalle):''), 'error', 6500);
         return;
       }
 
       setEstado('OK', true);
-      // Estrategia: recargar para ver persistencia real (lo que manda el API)
-      await cargarDestinatarios();
-      alert(`Guardado correcto. Registros: ${js.saved||0}`);
+
+      const totalCambios = (js.total_cambios ?? ((js.reldaycli_guardados??0)+(js.reldaycli_borrados??0)+(js.relclirutas_agregados??0)+(js.relclirutas_borrados??0)));
+
+      if(totalCambios > 0){
+        await cargarDestinatarios();
+      } else {
+        clearDirtyState();
+      }
+
+      const titulo = totalCambios>0 ? 'Planeación guardada ✅' : 'Sin cambios para guardar';
+      const tipo   = totalCambios>0 ? 'success' : 'info';
+
+      const resumen =
+`${titulo}
+
+Items procesados: ${js.items_procesados ?? 0}
+
+Visitas (reldaycli):
+  • Guardados: ${js.reldaycli_guardados ?? 0}
+  • Eliminados: ${js.reldaycli_borrados ?? 0}
+
+Asignaciones (relclirutas):
+  • Nuevas: ${js.relclirutas_agregados ?? 0}
+  • Eliminadas: ${js.relclirutas_borrados ?? 0}`;
+
+      showToast(resumen, tipo, 6500);
 
     }catch(e){
       console.error(e);
       setEstado('Error guardando', false);
-      alert('Error guardando: ' + (e.message||e));
+      showToast('Error guardando: ' + (e.message||e), 'error', 6500);
     }
   }
+
+  // Marcar cambios cuando se tocan días / checkboxes
+  tbody.addEventListener('change', (e)=>{
+    const trg = e.target;
+    const tr = trg.closest('tr[data-id-dest]');
+    if(!tr) return;
+
+    if(trg.classList && trg.classList.contains('daybox')){
+      markDirty(tr);
+    }
+    updateKPIs();
+  });
 
   // Eventos
   selAlmacen.addEventListener('change', async ()=>{
@@ -557,14 +678,35 @@ require_once __DIR__ . '/../bi/_menu_global.php';
   el('btnClearSel').addEventListener('click', ()=>seleccionarTodo(false));
   el('chkAll').addEventListener('change', (e)=>seleccionarTodo(e.target.checked));
 
-  // Si cambias días globales, aplícalos a seleccionados como acción táctica
   ['gLu','gMa','gMi','gJu','gVi','gSa','gDo'].forEach(id=>{
     el(id).addEventListener('change', ()=>aplicarDiasGlobalASel());
+  });
+
+  // Undo (recarga lo último guardado desde API)
+  function doUndo(){
+    if(!cambiosPendientes.size) return;
+    const ok = confirm('¿Descartar cambios pendientes?');
+    if(!ok) return;
+    clearDirtyState();
+    cargarDestinatarios();
+    showToast('Cambios descartados.', 'info');
+  }
+
+  el('btnUndoTop')?.addEventListener('click', doUndo);
+  el('btnUndo')?.addEventListener('click', doUndo);
+
+  // Aviso al salir si hay cambios sin guardar
+  window.addEventListener('beforeunload', function (e) {
+    if (cambiosPendientes.size > 0) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
   });
 
   // Boot
   (async function init(){
     await cargarAlmacenes();
+    clearDirtyState();
     setEstado('OK', true);
   })();
 

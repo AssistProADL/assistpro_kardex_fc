@@ -1,161 +1,172 @@
-<?php include '../../bi/_menu_global.php'; ?>
 <?php
-$promo_id = $_GET['id'] ?? null;
+require_once '../../../app/db.php';
+
+$pdo = db_pdo();
+
+$promo_id = $_GET['promo_id'] ?? null;
+
 if (!$promo_id) {
-    echo '<div class="alert alert-danger">Error: Promoción no especificada. <a href="promociones.php">Volver</a></div>';
-    include '../../bi/_menu_global_end.php';
-    exit;
+    die("Promoción no válida");
 }
 
+/* =========================================================
+   1. Obtener promoción
+========================================================= */
+$stmt = $pdo->prepare("
+    SELECT id, Lista, Descripcion
+    FROM listapromo
+    WHERE id = ?
+");
+$stmt->execute([$promo_id]);
+$promo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$promo) {
+    die("Promoción no encontrada");
+}
+
+/* =========================================================
+   2. Obtener clientes
+========================================================= */
+$clientes = $pdo->query("
+    SELECT Id_Destinatario, Nombre
+    FROM c_destinatarios
+    WHERE Activo = 1
+    ORDER BY Nombre
+")->fetchAll(PDO::FETCH_ASSOC);
+
+/* =========================================================
+   3. Obtener clientes ya asignados
+========================================================= */
+$stmt = $pdo->prepare("
+    SELECT Id_Destinatario
+    FROM relclilis
+    WHERE ListaPromo = ?
+");
+$stmt->execute([$promo_id]);
+
+$asignados = $stmt->fetchAll(PDO::FETCH_COLUMN);
 ?>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Asignar Clientes</title>
 
-<div class="container-fluid">
-    <h4 id="tituloPage">Asignar Clientes</h4>
+<link rel="stylesheet" href="../../assets/bootstrap.min.css">
+<script src="../../assets/jquery.min.js"></script>
 
-    <table id="tblClientes" class="table table-striped">
-        <thead>
-            <tr>
-                <th></th>
-                <th>Cliente</th>
-                <th>Nombre</th>
-            </tr>
-        </thead>
-    </table>
+<style>
+body {
+    font-size: 12px;
+}
+.table-container {
+    max-height: 450px;
+    overflow-y: auto;
+}
+</style>
+</head>
+<body>
 
-    <button id="btnAsignar" class="btn btn-primary mt-2">
-        Asignar promoción
-    </button>
+<div class="container mt-3">
 
-    <!-- Modal Confirmación -->
-    <div class="modal fade" id="modalConfirm" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Confirmar Asignación</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Selecciona la promoción a asignar:</p>
-                    <select id="selPromo" class="form-select mb-3"></select>
-                    <p>Se asignará a <span id="lblCount" class="fw-bold"></span> clientes seleccionados.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="btnConfirmar">Aplicar</button>
-                </div>
-            </div>
-        </div>
+    <h5>
+        Asignar Clientes a Promoción:
+        <strong><?= htmlspecialchars($promo['Lista']) ?></strong>
+        - <?= htmlspecialchars($promo['Descripcion']) ?>
+    </h5>
+
+    <input type="hidden" id="promo_id" value="<?= $promo_id ?>">
+
+    <div class="mb-2">
+        <input type="text" id="buscarCliente" class="form-control form-control-sm" placeholder="Buscar cliente...">
+    </div>
+
+    <div class="table-container border">
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th width="40">
+                        <input type="checkbox" id="chkTodos">
+                    </th>
+                    <th>Cliente</th>
+                </tr>
+            </thead>
+            <tbody id="tablaClientes">
+                <?php foreach ($clientes as $c): ?>
+                    <tr>
+                        <td>
+                            <input type="checkbox"
+                                   class="chkCliente"
+                                   value="<?= $c['Id_Destinatario'] ?>"
+                                   <?= in_array($c['Id_Destinatario'], $asignados) ? 'checked' : '' ?>>
+                        </td>
+                        <td><?= htmlspecialchars($c['Nombre']) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-3">
+        <button class="btn btn-primary btn-sm" id="btnGuardarClientes">
+            Guardar Asignación
+        </button>
     </div>
 
 </div>
 
-<!-- Scripts necesarios -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-    let tabla = $('#tblClientes').DataTable({
-        ajax: {
-            url: '../api/clientes.php?action=list',
-            dataSrc: ''
-        },
-        columns: [
-            {
-                data: null,
-                render: function (data, type, row) {
-                    return `<input type="checkbox" value="${row.id_cliente}">`;
-                }
-            },
-            { data: 'Cve_Clte' },
-            { data: 'RazonSocial' }
-        ]
+/* =========================================================
+   Seleccionar todos
+========================================================= */
+$('#chkTodos').on('change', function(){
+    $('.chkCliente').prop('checked', this.checked);
+});
+
+/* =========================================================
+   Filtro búsqueda
+========================================================= */
+$('#buscarCliente').on('keyup', function(){
+    let value = $(this).val().toLowerCase();
+    $("#tablaClientes tr").filter(function() {
+        $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+    });
+});
+
+/* =========================================================
+   Guardar asignación
+========================================================= */
+$('#btnGuardarClientes').on('click', function(){
+
+    let promo_id = $('#promo_id').val();
+    let clientes = [];
+
+    $('.chkCliente:checked').each(function(){
+        clientes.push($(this).val());
     });
 
-    const currentPromoId = '<?= $promo_id ?>';
-    let promosCargadas = false;
-
-    // Cargar nombre en titulo init
-    if (currentPromoId) {
-        fetch(`../api/promociones/promociones.php?action=get&id=${currentPromoId}`)
-            .then(r => r.json())
-            .then(r => {
-                if (r.ok && r.data) {
-                    document.getElementById('tituloPage').innerHTML =
-                        `Asignar Clientes a: <span class="text-primary">${r.data.Lista}</span>`;
-                }
-            });
-    }
-
-    // Cargar lista de promociones para el modal
-    function cargarPromociones() {
-        if (promosCargadas) return;
-
-        fetch('../api/promociones/promociones.php?action=list')
-            .then(r => r.json())
-            .then(r => {
-                if (r.ok) {
-                    const sel = document.getElementById('selPromo');
-                    sel.innerHTML = '';
-                    r.data.forEach(p => {
-                        const opt = document.createElement('option');
-                        opt.value = p.id;
-                        opt.text = p.Lista;
-                        if (p.id == currentPromoId) opt.selected = true;
-                        sel.appendChild(opt);
-                    });
-                    promosCargadas = true;
-                }
-            });
-    }
-
-    let selectedIds = [];
-
-    $('#btnAsignar').click(function () {
-        selectedIds = [];
-        $('#tblClientes input:checked').each(function () {
-            selectedIds.push(this.value);
-        });
-
-        if (selectedIds.length === 0) {
-            alert('Selecciona al menos un cliente.');
+    if(clientes.length === 0){
+        if(!confirm('No hay clientes seleccionados. ¿Desea limpiar asignación?')){
             return;
         }
+    }
 
-        // Cargar promos antes de mostrar
-        cargarPromociones();
+    $.post('../../api/promociones/promociones_api.php', {
+        action: 'guardar_clientes',
+        promo_id: promo_id,
+        clientes: clientes
+    }, function(resp){
 
-        $('#lblCount').text(selectedIds.length);
-
-        const modal = new bootstrap.Modal(document.getElementById('modalConfirm'));
-        modal.show();
-    });
-
-    $('#btnConfirmar').click(function () {
-        const promoDestino = $('#selPromo').val();
-        if (!promoDestino) {
-            alert('Selecciona una promoción');
-            return;
+        if(resp.ok){
+            alert('Asignación guardada correctamente');
+        } else {
+            alert('Error al guardar');
         }
 
-        fetch('../api/promociones/index.php?action=scope_add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                promo_id: promoDestino,
-                scope_tipo: 'CLIENTE',
-                scope_ids: selectedIds
-            })
-        }).then(r => r.json()).then(r => {
-            // Cerrar modal
-            const modalEl = document.getElementById('modalConfirm');
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            modal.hide();
+    }, 'json');
 
-            alert('Asignación completa');
-        });
-    });
+});
 </script>
 
-<?php include '../../bi/_menu_global_end.php'; ?>
+</body>
+</html>

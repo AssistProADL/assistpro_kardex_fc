@@ -1,9 +1,4 @@
 <?php
-// public/api/sfa/clientes_asignacion_save.php
-// reldaycli: se mantiene el comportamiento probado (delete+insert por destinatario recibido)
-// relclirutas: NO se resetea; se mantiene histórico y solo se agrega lo nuevo.
-//             Solo se elimina si llega bandera explícita de desasignación (unassign=1 o asignado=0)
-
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
@@ -13,7 +8,7 @@ function jexit(array $arr): void {
 }
 
 /* =========================
-   CONEXIÓN PDO (estándar)
+   CONEXIÓN PDO
    ========================= */
 $pdo = null;
 $tryPaths = [
@@ -22,9 +17,11 @@ $tryPaths = [
   __DIR__ . '/../../../includes/db.php',
   __DIR__ . '/../../includes/db.php',
 ];
+
 foreach ($tryPaths as $p) {
   if (file_exists($p)) { require_once $p; break; }
 }
+
 if (isset($pdo) && $pdo instanceof PDO) {
   // ok
 } elseif (isset($db) && $db instanceof PDO) {
@@ -34,27 +31,23 @@ if (isset($pdo) && $pdo instanceof PDO) {
 } elseif (function_exists('db_conn')) {
   $pdo = db_conn();
 }
+
 if (!$pdo || !($pdo instanceof PDO)) {
   jexit(['ok'=>0,'error'=>'No se pudo inicializar PDO']);
 }
 
 /* =========================
-   LECTURA DE PAYLOAD
+   LECTURA PAYLOAD
    ========================= */
 $raw = file_get_contents('php://input');
-$payload = null;
+$payload = $raw ? json_decode($raw, true) : $_POST;
 
-if ($raw && strlen(trim($raw)) > 0) {
-  $payload = json_decode($raw, true);
-  if ($payload === null && json_last_error() !== JSON_ERROR_NONE) {
-    jexit(['ok'=>0,'error'=>'JSON inválido','detalle'=>json_last_error_msg()]);
-  }
-} else {
-  $payload = $_POST ?: [];
+if (!$payload) {
+  jexit(['ok'=>0,'error'=>'Payload vacío']);
 }
 
-$almacen = trim((string)($payload['almacen'] ?? $payload['almacen_id'] ?? ''));
-$ruta    = trim((string)($payload['ruta']    ?? $payload['ruta_id']    ?? ''));
+$almacen = trim((string)($payload['almacen'] ?? ''));
+$ruta    = trim((string)($payload['ruta'] ?? ''));
 $items   = $payload['items'] ?? [];
 
 if ($almacen === '' || $ruta === '' || !is_array($items)) {
@@ -79,18 +72,17 @@ function daysFromItem(array $it): array {
 function isTruthy($v): bool {
   if (is_bool($v)) return $v;
   if (is_numeric($v)) return ((int)$v) !== 0;
-  $s = strtolower(trim((string)$v));
-  return in_array($s, ['1','si','sí','true','t','x','on'], true);
+  return in_array(strtolower((string)$v), ['1','true','si','sí','on','x'], true);
 }
 
 /* =========================
    TRANSACCIÓN
    ========================= */
 try {
+
   $pdo->beginTransaction();
 
-  /* ---- reldaycli (MISMA LÓGICA QUE YA FUNCIONABA) ---- */
-  $delDayByDest = $pdo->prepare("
+  $delDay = $pdo->prepare("
     DELETE FROM reldaycli
      WHERE Cve_Almac = ?
        AND Cve_Ruta  = ?
@@ -101,16 +93,11 @@ try {
     INSERT INTO reldaycli
       (Cve_Almac, Cve_Ruta, Cve_Cliente, Id_Destinatario, Cve_Vendedor,
        Lu, Ma, Mi, Ju, Vi, Sa, Do)
-    VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ");
 
-  /* ---- relclirutas (MANTENER + AGREGAR; BORRAR SOLO EXPLÍCITO) ---- */
-  // Estructura confirmada:
-  // IdCliente (varchar), IdRuta (int), IdEmpresa (varchar), Fecha (date)
-  $selRelExists = $pdo->prepare("
-    SELECT 1
-      FROM relclirutas
+  $selRel = $pdo->prepare("
+    SELECT 1 FROM relclirutas
      WHERE IdEmpresa = ?
        AND IdRuta    = ?
        AND IdCliente = ?
@@ -120,73 +107,64 @@ try {
   $insRel = $pdo->prepare("
     INSERT INTO relclirutas
       (IdCliente, IdRuta, IdEmpresa, Fecha)
-    VALUES
-      (?, ?, ?, CURDATE())
+    VALUES (?, ?, ?, CURDATE())
   ");
 
-  $delRelOne = $pdo->prepare("
+  $delRel = $pdo->prepare("
     DELETE FROM relclirutas
      WHERE IdEmpresa = ?
        AND IdRuta    = ?
        AND IdCliente = ?
   ");
 
-  // Cuando se desasigna, también se eliminan sus visitas (si existen)
-  $delDayByDestOnly = $pdo->prepare("
-    DELETE FROM reldaycli
-     WHERE Cve_Almac = ?
-       AND Cve_Ruta  = ?
-       AND Id_Destinatario = ?
-  ");
-
-  $ok = 0;
-  $rel_added = 0;
-  $rel_deleted = 0;
-  $day_saved = 0;
-  $day_deleted = 0;
+  $items_procesados = 0;
+  $day_guardados = 0;
+  $day_borrados = 0;
+  $rel_agregados = 0;
+  $rel_borrados = 0;
 
   foreach ($items as $it) {
+
     if (!is_array($it)) continue;
 
-    $idDest = (int)($it['id_destinatario'] ?? $it['Id_Destinatario'] ?? 0);
+    $idDest = (int)($it['id_destinatario'] ?? 0);
     if ($idDest <= 0) continue;
 
-    $cveCliente  = trim((string)($it['cve_cliente'] ?? $it['Cve_Cliente'] ?? ''));
-    $cveVendedor = trim((string)($it['cve_vendedor'] ?? $it['Cve_Vendedor'] ?? ''));
+    $cveCliente  = trim((string)($it['cve_cliente'] ?? ''));
+    $cveVendedor = trim((string)($it['cve_vendedor'] ?? ''));
 
-    // Fallback estable para no perder asignación si cve_cliente viene vacío
-    $idClienteRel = ($cveCliente !== '') ? $cveCliente : ('DEST_' . (string)$idDest);
+    $idClienteRel = $cveCliente !== '' ? $cveCliente : ('DEST_' . $idDest);
 
-    // Bandera de desasignación (para cuando implementes click "Asignado")
     $unassign = false;
-    if (array_key_exists('unassign', $it)) $unassign = isTruthy($it['unassign']);
-    if (array_key_exists('asignado', $it)) $unassign = $unassign || (!isTruthy($it['asignado']));
+    if (array_key_exists('unassign', $it)) {
+      $unassign = isTruthy($it['unassign']);
+    }
 
     if ($unassign) {
-      // 1) Quitar asignación
-      $delRelOne->execute([$almacen, (int)$ruta, $idClienteRel]);
-      $rel_deleted += $delRelOne->rowCount() > 0 ? 1 : 0;
 
-      // 2) Quitar días (si existen)
-      $delDayByDestOnly->execute([$almacen, $ruta, $idDest]);
-      $day_deleted += $delDayByDestOnly->rowCount() > 0 ? 1 : 0;
+      $delRel->execute([$almacen, (int)$ruta, $idClienteRel]);
+      $rel_borrados += $delRel->rowCount();
 
-      $ok++;
+      $delDay->execute([$almacen, $ruta, $idDest]);
+      $day_borrados += $delDay->rowCount();
+
+      $items_procesados++;
       continue;
     }
 
-    // 1) Mantener/agregar asignación en relclirutas (SIN borrar lo existente)
-    $selRelExists->execute([$almacen, (int)$ruta, $idClienteRel]);
-    $exists = $selRelExists->fetchColumn();
-
-    if (!$exists) {
+    /* ---------- relclirutas ---------- */
+    $selRel->execute([$almacen, (int)$ruta, $idClienteRel]);
+    if (!$selRel->fetchColumn()) {
       $insRel->execute([$idClienteRel, (int)$ruta, $almacen]);
-      $rel_added++;
+      $rel_agregados++;
     }
 
-    // 2) Guardar días en reldaycli solo para este destinatario (mantiene comportamiento probado)
+    /* ---------- reldaycli ---------- */
     $days = daysFromItem($it);
-    $delDayByDest->execute([$almacen, $ruta, $idDest]);
+
+    $delDay->execute([$almacen, $ruta, $idDest]);
+    $day_borrados += $delDay->rowCount();
+
     $insDay->execute([
       $almacen,
       $ruta,
@@ -196,25 +174,37 @@ try {
       $days['Lu'], $days['Ma'], $days['Mi'],
       $days['Ju'], $days['Vi'], $days['Sa'], $days['Do']
     ]);
-    $day_saved++;
 
-    $ok++;
+    $day_guardados++;
+    $items_procesados++;
   }
 
   $pdo->commit();
 
+  $total_cambios =
+    $day_guardados +
+    $day_borrados +
+    $rel_agregados +
+    $rel_borrados;
+
   jexit([
-    'ok'=>1,
-    'almacen'=>$almacen,
-    'ruta'=>$ruta,
-    'items_procesados'=>$ok,
-    'reldaycli_guardados'=>$day_saved,
-    'reldaycli_borrados'=>$day_deleted,
-    'relclirutas_agregados'=>$rel_added,
-    'relclirutas_borrados'=>$rel_deleted
+    'ok' => 1,
+    'almacen' => $almacen,
+    'ruta' => $ruta,
+    'items_procesados' => $items_procesados,
+    'reldaycli_guardados' => $day_guardados,
+    'reldaycli_borrados' => $day_borrados,
+    'relclirutas_agregados' => $rel_agregados,
+    'relclirutas_borrados' => $rel_borrados,
+    'total_cambios' => $total_cambios,
+    'hubo_cambios' => $total_cambios > 0
   ]);
 
 } catch (Throwable $e) {
   if ($pdo->inTransaction()) $pdo->rollBack();
-  jexit(['ok'=>0,'error'=>'Error al guardar','detalle'=>$e->getMessage()]);
+  jexit([
+    'ok'=>0,
+    'error'=>'Error al guardar',
+    'detalle'=>$e->getMessage()
+  ]);
 }

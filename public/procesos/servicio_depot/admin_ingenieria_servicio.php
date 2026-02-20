@@ -131,11 +131,13 @@ $sqlCasos = "
     SELECT s.id, s.folio, s.fecha_alta, s.articulo, s.serie,
            s.motivo, s.es_garantia, s.status,
            s.created_by,
-           a.des_almac,
+           a.clave AS almacen_clave,
+           a.nombre AS almacen_nombre,
+
            c.RazonSocial AS cliente_nombre,
            c.Cve_Clte    AS cliente_clave
     FROM th_servicio_caso s
-    LEFT JOIN c_almacen a ON a.cve_almac = s.origen_almacen_id
+    LEFT JOIN c_almacenp a ON a.id = s.origen_almacen_id
     LEFT JOIN c_cliente c ON c.id_cliente = s.cliente_id
     $whereSql
     ORDER BY s.fecha_alta DESC
@@ -324,7 +326,12 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
                                 <tr>
                                     <td><?= htmlspecialchars($c['folio']) ?></td>
                                     <td><?= htmlspecialchars($c['fecha_alta']) ?></td>
-                                    <td><?= htmlspecialchars($c['des_almac'] ?? '') ?></td>
+                                    <td>
+                                        <?= htmlspecialchars(($c['almacen_clave'] ?? '') .
+                                                (isset($c['almacen_nombre']) ? ' - ' . $c['almacen_nombre'] : '')
+                                        ) ?>
+                                    </td>
+
                                     <td>
                                         <?= '[' . htmlspecialchars($c['cliente_clave'] ?? '') . '] ' .
                                             htmlspecialchars($c['cliente_nombre'] ?? '') ?>
@@ -366,11 +373,13 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
 
 <script>
     // Cargar catálogo de almacenes desde el mismo API de filtros
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', function() {
         const apiUrl = '../../api/filtros_assistpro.php?action=init';
         const valorActual = '<?= htmlspecialchars($f_almacen, ENT_QUOTES) ?>';
 
-        fetch(apiUrl, { method: 'GET' })
+        fetch(apiUrl, {
+                method: 'GET'
+            })
             .then(resp => resp.json())
             .then(data => {
                 if (!data || data.ok === false) {
@@ -385,15 +394,29 @@ $casos = $stCasos->fetchAll(PDO::FETCH_ASSOC);
 
                 if (Array.isArray(data.almacenes)) {
                     data.almacenes.forEach(a => {
+
                         const opt = document.createElement('option');
-                        opt.value = a.cve_almac;
-                        opt.textContent = a.des_almac || a.clave_almacen || a.cve_almac;
-                        if (valorActual !== '' && valorActual === opt.value) {
+
+                        // MISMO VALUE QUE RECEPCION
+                        opt.value = a.idp;
+
+                        // CLAVE - NOMBRE
+                        const clave = a.cve_almac || '';
+                        const nombre = a.nombre || '';
+
+                        opt.textContent = nombre ?
+                            clave + ' - ' + nombre :
+                            clave;
+
+                        if (valorActual !== '' && valorActual === String(opt.value)) {
                             opt.selected = true;
                         }
+
                         sel.appendChild(opt);
                     });
                 }
+
+
             })
             .catch(err => console.error('Error cargando almacenes:', err));
     });

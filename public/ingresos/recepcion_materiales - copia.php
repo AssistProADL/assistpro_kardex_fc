@@ -65,7 +65,7 @@ include __DIR__ . '/../bi/_menu_global.php';
 
       <hr class="my-2">
 
-      <!-- ✅ CAMBIO DE ORDEN: PRIMERO OC, LUEGO PROVEEDOR (AUTO) -->
+      <!-- OC primero, proveedor auto -->
       <div class="row g-2">
         <div class="col-md-6">
           <label class="form-label mb-0">Número de Orden de Compra</label>
@@ -115,41 +115,68 @@ include __DIR__ . '/../bi/_menu_global.php';
             <th>Usuario</th>
             <th>Artículo</th>
             <th>Descripción</th>
-            <th>UOM</th>
-            <th>Lote o Serie</th>
-            <th>Caducidad</th>
-            <th class="text-end">Cant. Solicitada</th>
-            <th class="text-end">Cant. Recibida</th>
-            <th class="text-end">Costo</th>
-            <th>Contenedor</th>
-            <th>LP Contenedor</th>
-            <th>Pallet</th>
-            <th>LP Pallet</th>
-            <th style="width:60px;">Acciones</th>
-          </tr>
+            <th>UM</th>
+            <th>UM Primaria</th>
+            <th>Pzas/Caja</th>
+            <th class="text-end">Cant. Sol.</th>
+            <th class="text-end">Cant. Rec.</th>
+            <th class="text-center">Acciones</th>
+</tr>
           </thead>
           <tbody>
-          <tr>
-            <td><input id="usuario" class="form-control form-control-sm" value="Usuario" /></td>
-            <td><input id="articulo" class="form-control form-control-sm" value="" /></td>
-            <td><input id="descripcion" class="form-control form-control-sm" value="" /></td>
-            <td><input id="uom" class="form-control form-control-sm" value="UM" /></td>
-            <td><input id="lote" class="form-control form-control-sm" value="" /></td>
-            <td><input id="caducidad" class="form-control form-control-sm" placeholder="dd/mm/aaaa" /></td>
-            <td><input id="cant_sol" class="form-control form-control-sm text-end" value="0" /></td>
-            <td><input id="cant_rec" class="form-control form-control-sm text-end" value="0" /></td>
-            <td><input id="costo" class="form-control form-control-sm text-end" value="0.00" /></td>
-            <td><input id="contenedor" class="form-control form-control-sm" value="" /></td>
-            <td><input id="lp_contenedor" class="form-control form-control-sm" value="" /></td>
-            <td><input id="pallet" class="form-control form-control-sm" value="Pallet" /></td>
-            <td><input id="lp_pallet" class="form-control form-control-sm" value="" /></td>
-            <td class="text-center"><button id="btnRecibir" class="btn btn-primary btn-sm">Recibir</button></td>
-          </tr>
-          </tbody>
+  <tr>
+    <td><input id="usuario" class="form-control form-control-sm" value="Usuario" /></td>
+    <td>
+      <input id="articulo" class="form-control form-control-sm" value="" list="dl_articulos" autocomplete="off" />
+      
+    </td>
+    <td><input id="descripcion" class="form-control form-control-sm" value="" readonly /></td>
+    <td><input id="uom" class="form-control form-control-sm" value="" readonly /></td>
+    <td><input id="um_primaria" class="form-control form-control-sm" value="" readonly /></td>
+    <td><input id="pzas_caja" class="form-control form-control-sm" value="" readonly /></td>
+    <td><input id="cant_sol" class="form-control form-control-sm text-end" value="0" /></td>
+    <td><input id="cant_rec" class="form-control form-control-sm text-end" value="0" /></td>
+    <td class="text-center"><button id="btnRecibir" class="btn btn-primary btn-sm">Recibir</button></td>
+  </tr>
+  <tr>
+    <td colspan="9">
+      <div class="row g-2">
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Lote / Serie</label>
+          <input id="lote" class="form-control form-control-sm" value="" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Caducidad</label>
+          <input id="caducidad" class="form-control form-control-sm" placeholder="dd/mm/aaaa" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Contenedor</label>
+          <input id="contenedor" class="form-control form-control-sm" value="" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">LP Contenedor</label>
+          <input id="lp_contenedor" class="form-control form-control-sm" value="" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Pallet</label>
+          <input id="pallet" class="form-control form-control-sm" value="Pallet" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">LP Pallet</label>
+          <input id="lp_pallet" class="form-control form-control-sm" value="" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Costo</label>
+          <input id="costo" class="form-control form-control-sm text-end" value="0.00" />
+        </div>
+      </div>
+    </td>
+  </tr>
+</tbody>
         </table>
       </div>
 
-      <!-- GRID INFERIOR: ESPERADOS OC -->
+      <!-- ✅ GRID INFERIOR: ESPERADOS OC -->
       <div id="wrapOCDetalle" style="display:none;">
         <hr class="my-3">
         <div class="d-flex justify-content-between align-items-center mb-1">
@@ -181,20 +208,16 @@ include __DIR__ . '/../bi/_menu_global.php';
         <table class="table table-sm table-bordered" id="tblRecibido" style="font-size:10px;">
           <thead class="table-light">
           <tr>
-            <th>Estatus</th>
             <th>Usuario</th>
             <th>Artículo</th>
-            <th>Lote</th>
-            <th>Caducidad</th>
-            <th class="text-end">Cant. Recibida</th>
-            <th>Contenedor</th>
-            <th>LP Contenedor</th>
-            <th>Pallet</th>
-            <th>LP Pallet</th>
-            <th>Zona Recepción</th>
-            <th>DateStamp</th>
-            <th style="width:60px;">Acc.</th>
-          </tr>
+            <th>Descripción</th>
+            <th>UM</th>
+            <th>UM Primaria</th>
+            <th>Pzas/Caja</th>
+            <th class="text-end">Cant. Sol.</th>
+            <th class="text-end">Cant. Rec.</th>
+            <th class="text-center">Acciones</th>
+</tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -209,28 +232,68 @@ include __DIR__ . '/../bi/_menu_global.php';
   </div>
 </div>
 
+<!-- ✅ Autocomplete nativo -->
+<datalist id="dl_articulos"></datalist>
+
 <script>
 // ============================
-// ✅ APIS
+// ENDPOINTS
 // ============================
 const API_EMPRESAS   = '../api/empresas_api.php';
-const API_FILTROS    = '../api/filtros_assistpro.php'; // ✅ aquí vive tubicacionesretencion -> zonas_recep
+const API_FILTROS    = '../api/filtros_assistpro.php';         // zonas_recep (tubicacionesretencion) + almacenes
 const API_OCS        = '../api/recepcion/recepcion_oc_api.php';
 const API_OC_DETALLE = '../api/recepcion/recepcion_oc_detalle_api.php';
-const API_RECEPCION  = '../api/recepcion/recepcion_api.php'; // BL destino (solo RL/CD)
+const API_RECEPCION  = '../api/recepcion/recepcion_api.php';  // BL destino, guardar
+const API_ARTICULOS  = '../api/articulos_api.php';            // B_Lote  B_Caducidad desde c_articulo
 
 function qs(id){ return document.getElementById(id); }
-function val(id){ return (qs(id).value||'').trim(); }
+  // Safe getter: evita crash cuando el input no existe
+  function val(id){
+    const el = qs(id);
+    if(!el) return '';
+    return (el.value||'').trim();
+  }
+
+  // Numeric helper: convierte a numero seguro
+  function num(v){
+    if(v===null||v===undefined) return 0;
+    const s = String(v).replace(/,/g,'').trim();
+    const n = parseFloat(s);
+    return isNaN(n)?0:n;
+  }
+  // Escape HTML para pintar en tablas (evita XSS y rompe layout)
+  function esc(v){
+    return String(v ?? '')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;')
+      .replace(/`/g,'&#96;');
+  }
+
+  // Formato numero amigable
+  function fmtN(v, dec=0){
+    const n = Number(v);
+    if(!isFinite(n)) return '0';
+    return n.toLocaleString('es-MX',{minimumFractionDigits:dec, maximumFractionDigits:dec});
+  }
+
 
 async function fetchJson(url, opt){
   const r = await fetch(url, opt || {cache:'no-store'});
   const t = await r.text();
   try { return JSON.parse(t); }
-  catch(e){ return { ok:0, error:'Respuesta no JSON', detail:t.slice(0,500) }; }
+  catch(e){ return { ok:0, error:'Respuesta no JSON', detail:t.slice(0,700) }; }
 }
 
 function getTipo(){
   return document.querySelector('input[name="tipo"]:checked')?.value || 'OC';
+}
+
+// Alias por compatibilidad: algunas rutinas llaman tipoRecepcion()
+function tipoRecepcion(){
+  return getTipo();
 }
 
 function fillSelect(sel, rows, cfg){
@@ -254,10 +317,51 @@ function fillSelect(sel, rows, cfg){
 }
 
 // ============================
-// Cache
+// CACHE
 // ============================
 let CACHE_FILTROS = null;
 let CACHE_OCS = [];
+let CACHE_OC_DET = []; // líneas OC esperadas (td_aduana)
+
+// ============================
+// STATE RECEPCION (tabla inferior)
+// ============================
+let RECIBIDOS = []; // fuente de verdad para tabla + guardado
+
+function renderRecibidos(){
+  const tb = qs('tblRecibido')?.querySelector('tbody');
+  if(!tb) return;
+  tb.innerHTML = '';
+
+  RECIBIDOS.forEach((L, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(L.usuario)}</td>
+      <td>${esc(L.articulo)}</td>
+      <td>${esc(L.descripcion)}</td>
+      <td>${esc(L.um)}</td>
+      <td>${esc(L.um_primaria)}</td>
+      <td class="text-end">${fmtN(L.pzas_caja)}</td>
+      <td class="text-end">${fmtN(L.cant_sol)}</td>
+      <td class="text-end">${fmtN(L.cant_rec)}</td>
+      <td>${esc(L.pallet || '')}</td>
+      <td>${esc(L.bl_destino || '')}</td>
+      <td>${esc(L.fec)}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-danger" type="button" data-act="del" data-idx="${idx}">
+          <i class="bi bi-trash"></i>
+        </button>
+      </td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+
+function removeLinea(idx){
+  if(idx < 0 || idx >= RECIBIDOS.length) return;
+  RECIBIDOS.splice(idx,1);
+  renderRecibidos();
+}
 
 async function loadFiltros(){
   if(CACHE_FILTROS) return CACHE_FILTROS;
@@ -265,14 +369,177 @@ async function loadFiltros(){
   return CACHE_FILTROS;
 }
 
+
+let CACHE_ART_LAST = [];          // últimos resultados de búsqueda (datalist)
+let CACHE_ART_LOOKUP = {};        // cache por cve_articulo -> data lookup
+let ART_SEARCH_TIMER = null;
+
+function buildDatalistArticulos(rows){
+  const dl = qs('dl_articulos');
+  if(!dl) return;
+  dl.innerHTML = '';
+  (rows || []).forEach(a=>{
+    const o = document.createElement('option');
+    o.value = String(a.cve_articulo ?? a.cve_articulo ?? '').trim();
+    // soporta variantes de campos
+    o.label = String(a.des_articulo ?? a.descripcion ?? a.des ?? '').trim();
+    dl.appendChild(o);
+  });
+  qs('articulo').setAttribute('list','dl_articulos');
+}
+
+async function searchArticulos(term){
+  const q = String(term||'').trim();
+  if(q.length < 2){
+    CACHE_ART_LAST = [];
+    buildDatalistArticulos([]);
+    return;
+  }
+  const u = new URL(API_ARTICULOS, window.location.href);
+  u.searchParams.set('q', q);
+  u.searchParams.set('limit', '20');
+  const j = await fetchJson(u.toString());
+  if(!j.ok){
+    console.warn('Busqueda articulos_api', j);
+    return;
+  }
+  CACHE_ART_LAST = j.data || [];
+  buildDatalistArticulos(CACHE_ART_LAST);
+}
+
+async function lookupArticulo(cveArticulo){
+  const k = String(cveArticulo||'').trim();
+  if(!k) return null;
+  if(CACHE_ART_LOOKUP[k]) return CACHE_ART_LOOKUP[k];
+
+  const idp = getIdAlmacenSeleccionado(); // id numerico de almacén (c_almacenp.id)
+  if(!idp){
+    console.warn('lookupArticulo: falta almacén seleccionado');
+  }
+
+  const u = new URL(API_ARTICULOS, window.location.href);
+  u.searchParams.set('cve_articulo', k);
+  if(idp) u.searchParams.set('cve_almac', idp);
+
+  const j = await fetchJson(u.toString());
+  if(!j.ok){
+    console.warn('lookupArticulo error', j);
+    return null;
+  }
+  CACHE_ART_LOOKUP[k] = j.data || null;
+  return CACHE_ART_LOOKUP[k];
+}
+
+function getExpectedForArticulo(cveArticulo){
+  const k = String(cveArticulo||'').trim();
+  if(!k || !Array.isArray(CACHE_OC_DET)) return null;
+
+  const lines = CACHE_OC_DET.filter(x => String(x.cve_articulo||'').trim() === k);
+  if(!lines.length) return null;
+
+  const tot = lines.reduce((a,x)=>a + Number(x.cantidad||0), 0);
+  const ing = lines.reduce((a,x)=>a + Number(x.ingresado||0), 0);
+  let pend;
+  // 'ingresado' en legacy a veces es FLAG (0/1) y no cantidad. Heurística:
+  if(tot > 1 && ing >= 0 && ing <= 1){
+    pend = tot; // tratar como no recibido aún
+  } else {
+    pend = Math.max(0, tot - ing);
+  }
+
+  // Si hay lote/caducidad, tomamos el primero no vacío (business rule simple)
+  const lote = (lines.find(x=>String(x.cve_lote||'').trim())||{}).cve_lote || '';
+  const cad  = (lines.find(x=>x.caducidad && !String(x.caducidad).startsWith('0000-00-00'))||{}).caducidad || '';
+
+  return { total: tot, ingresado: ing, pendiente: pend, lote, caducidad: cad, lines };
+}
+
 // ============================
-// Regla negocio: OC NO usa destino/BL
+// REGLAS LOTE / CADUCIDAD
+ // CADUCIDAD
+// ============================
+
+function applyArticuloRulesFromMeta(meta){
+  const inpLote = qs('lote');
+  const inpCad  = qs('caducidad');
+
+  if(!meta){
+    inpLote.disabled = false;
+    inpCad.disabled  = false;
+    if(!inpCad.placeholder) inpCad.placeholder = 'dd/mm/aaaa';
+    return;
+  }
+
+  // compatibilidad: legacy / nuevo
+  const pideLote = (Number(meta.B_Lote||0) === 1) || (Number(meta.B_Serie||0) === 1) ||
+                   (String(meta.control_lotes||'').toUpperCase() === 'S') ||
+                   (String(meta.control_numero_series||'').toUpperCase() === 'S');
+
+  const pideCad  = (Number(meta.B_Caducidad||0) === 1) ||
+                   (String(meta.Caduca||'').toUpperCase() === 'S') ||
+                   (String(meta.control_caducidad||'').toUpperCase() === 'S');
+
+  // Lote/Serie
+  inpLote.disabled = !pideLote;
+  if(inpLote.disabled) inpLote.value = '';
+
+  // Caducidad
+  inpCad.disabled = !pideCad;
+  if(inpCad.disabled){
+    inpCad.value = '';
+    inpCad.placeholder = '';
+  }else{
+    inpCad.placeholder = 'dd/mm/aaaa';
+  }
+
+  if(!pideLote && !pideCad){
+    inpLote.value = '';
+    inpCad.value = '';
+  }
+}
+
+async function applyArticuloToInputs(cveArticulo){
+  const k = String(cveArticulo||'').trim();
+  if(!k) return;
+
+  // 1) Esperado por OC (si aplica)
+  const exp = getExpectedForArticulo(k);
+  if(exp){
+    qs('cant_sol').value = String(exp.total);
+    // si el usuario aún no capturó recibida, precargamos pendiente
+    if(!val('cant_rec') || Number(val('cant_rec')) === 0){
+      // Por OC: por default recibida = solicitada (editable)
+      qs('cant_rec').value = String(exp.total);
+    }
+    // precarga lote/cad si la regla lo permite (se aplica luego con meta)
+    if(exp.lote && !qs('lote').disabled) qs('lote').value = exp.lote;
+    if(exp.caducidad && !qs('caducidad').disabled) qs('caducidad').value = exp.caducidad;
+  }
+
+  // 2) Lookup artículo (desc + UM + reglas)
+  const meta = await lookupArticulo(k);
+  if(meta){
+    qs('descripcion').value = meta.des_articulo || meta.descripcion || '';
+    qs('uom').value = meta.unidadMedida_nombre || meta.UM || qs('uom').value;
+    if(qs('um_primaria')) qs('um_primaria').value = meta.unidadMedida_nombre || '';
+    if(qs('pzas_caja'))   qs('pzas_caja').value   = (meta.num_multiplo!=null? String(meta.num_multiplo):'');
+  }
+
+  applyArticuloRulesFromMeta(meta || (CACHE_ART_LAST.find(x=>String(x.cve_articulo||'').trim()===k) || null));
+}
+
+// ============================
+// UI: tipo OC no usa destino/BL
 // ============================
 function applyTipoUI(){
   const tipo = getTipo();
   const isOC = (tipo === 'OC');
 
   qs('oc_folio').disabled = !isOC;
+
+  // Si es OC, deshabilitar folios manuales (RL/CD)
+  if(qs('folio_rl')) qs('folio_rl').disabled = isOC;
+  if(qs('folio_cd')) qs('folio_cd').disabled = isOC;
 
   qs('zona_destino').disabled = isOC;
   qs('bl_destino').disabled   = isOC;
@@ -285,7 +552,6 @@ function applyTipoUI(){
     qs('tblOCDetalle').querySelector('tbody').innerHTML = '';
     qs('lblOCInfo').textContent = '';
     qs('oc_folio').value = '';
-    // proveedor queda “auto”, pero para RL/CD no aplica; lo limpiamos
     fillSelect(qs('proveedor'), [], {value:'id', text:'text', placeholder:{value:'',text:'N/A'}});
   }
 }
@@ -311,16 +577,27 @@ async function loadEmpresas(){
 // ============================
 async function loadAlmacenes(){
   const f = await loadFiltros();
-  const almacenes = (f.almacenes || []).map(a=>({
-    cve_almac: a.cve_almac,
-    clave_almacen: a.clave_almacen,
-    des_almac: a.des_almac
-  }));
+
+  // estandar: value = id numerico (c_almacenp.id)
+  // display = clave (wh8) o descripcion
+  const almacenes = (f.almacenes || []).map(a=>{
+    // filtros_assistpro expone: idp (numerico) + clave (wh8)
+    // value debe ser idp para cruzar contra tubicacionesretencion.cve_almacp
+    const id = (a.idp ?? a.id ?? a.almacen_id ?? '');
+    const clave = (a.clave_almacen ?? a.cve_almac ?? a.clave ?? a.des_almac ?? '');
+    const nombre = (a.nombre ?? '');
+    const text  = (nombre ? (`${clave} - ${nombre}`) : String(clave));
+    return {
+      cve_almac: String(id),
+      clave_almacen: String(clave),
+      des_almac: String(text)
+    };
+  });
 
   fillSelect(qs('almacen'), almacenes, {
-    value:'clave_almacen', // ✅ clave usada por OC API (WH8, A42, etc.)
-    text:'des_almac',
-    dataset:{ cve:'cve_almac' }, // ✅ cve para filtrar zonas
+    value:'cve_almac',        // ej: 8
+    text:'des_almac',         // ej: WH8 o nombre visible
+    dataset:{ clave:'clave_almacen' }, // guarda clave (WH8)
     placeholder:{value:'',text:'[Seleccione un almacén]'}
   });
 
@@ -330,27 +607,45 @@ async function loadAlmacenes(){
   }
 }
 
-function getCveAlmacSeleccionado(){
+function getClaveAlmacenSeleccionado(){
+  // ahora el value es el id numerico, la clave va en dataset
   const sel = qs('almacen');
   const opt = sel.options[sel.selectedIndex];
-  return opt?.dataset?.cve ? String(opt.dataset.cve) : '';
+  return opt?.dataset?.clave ? String(opt.dataset.clave) : '';
 }
-function getClaveAlmacenSeleccionado(){
-  return val('almacen');
+function getCveAlmacSeleccionado(){
+  return val('almacen'); // id numerico como string
+}
+
+
+// Alias legacy/compat: algunas rutinas esperan este helper
+function getIdAlmacenSeleccionado(){
+  return getCveAlmacSeleccionado();
 }
 
 // ============================
-// ✅ ZONA RECEPCIÓN = tubicacionesretencion
-// filtros_assistpro.php -> data['zonas_recep']
-// campos: cve_almacp as cve_almac, cve_ubicacion, desc_ubicacion as descripcion
+// ✅ ZONAS RECEPCIÓN (tubicacionesretencion)
+// filtros_assistpro.php -> zonas_recep
+// FIX: match robusto para ligar con almacén seleccionado
 // ============================
 async function loadZonasPorAlmacen(){
-  const cve = getCveAlmacSeleccionado();
   const f = await loadFiltros();
 
-  // ✅ ESTA ES LA VALIDACIÓN QUE PEDISTE:
-  // La vista está usando filtros_assistpro.php y toma ZONA RECEPCIÓN de tubicacionesretencion vía llave zonas_recep.
-  const zonasRec = (f.zonas_recep || []).filter(z => String(z.cve_almac) === String(cve));
+  const almacen_id = parseInt(getCveAlmacSeleccionado() || '0', 10); // c_almacenp.id
+  if(!almacen_id){
+    fillSelect(qs('zona_recepcion'), [], {
+      value:'cve_ubicacion',
+      text:'descripcion',
+      placeholder:{value:'',text:'Seleccione una Zona de Recepción'}
+    });
+    return;
+  }
+
+  // soporta ambos nombres por compatibilidad: zonas_recep / zonas_recepcion
+  const zr = (f.zonas_recep || f.zonas_recepcion || []);
+
+  // normaliza: en filtros viene como cve_almac = tubicacionesretencion.cve_almacp (int)
+  const zonasRec = zr.filter(z => parseInt(z.cve_almac ?? z.cve_almacp ?? z.almacen_id ?? '0', 10) === almacen_id);
 
   fillSelect(qs('zona_recepcion'), zonasRec, {
     value:'cve_ubicacion',
@@ -358,9 +653,9 @@ async function loadZonasPorAlmacen(){
     placeholder:{value:'',text:'Seleccione una Zona de Recepción'}
   });
 
-  // Zonas destino (solo RL/CD) si existen en filtros
-  const zonasAlmBase = (f.zonas_almacenaje || []);
-  const zonasDest = zonasAlmBase.filter(z => String(z.cve_almac) === String(cve));
+  // zonas destino (rl/cd) - si existe el catalogo en filtros
+  const za = (f.zonas_almacenaje || []);
+  const zonasDest = za.filter(z => parseInt(z.cve_almac ?? z.cve_almacp ?? z.almacen_id ?? '0', 10) === almacen_id);
 
   fillSelect(qs('zona_destino'), zonasDest, {
     value:'cve_ubicacion',
@@ -368,13 +663,16 @@ async function loadZonasPorAlmacen(){
     placeholder:{value:'',text:'Seleccione Zona destino'}
   });
 
-  // reset BL
-  fillSelect(qs('bl_destino'), [], {value:'bl', text:'bl', placeholder:{value:'',text:'Seleccione BL destino'}});
+  // bl destino depende de zona destino
+  fillSelect(qs('bl_destino'), [], {
+    value:'bl',
+    text:'bl',
+    placeholder:{value:'',text:'Seleccione BL destino'}
+  });
 }
 
 // ============================
-// ✅ OCs: primero se elige OC, proveedor auto por OC
-// OC label: "NUM_OC · PROVEEDOR" (+ factura opcional)
+// OCs por almacén / proveedor auto
 // ============================
 async function loadOCsPorAlmacen(){
   const tipo = getTipo();
@@ -407,12 +705,16 @@ async function loadOCsPorAlmacen(){
 
   CACHE_OCS = j.data || [];
 
-  // OCs con dataset para autopoblar proveedor
   const rows = CACHE_OCS.map(x=>({
-    id_oc: String(x.id_oc),
-    label: `${x.num_oc ?? x.id_oc} · ${x.proveedor ?? ''}${x.factura ? (' · ' + x.factura) : ''}`.trim(),
-    id_proveedor: String(x.id_proveedor ?? ''),
-    proveedor: String(x.proveedor ?? '')
+    // ID técnico real del movimiento / OC
+    id_oc: String(x.ID_Aduana),
+
+    // Folio visible (estándar nuevo)
+    label: `${x.folio_mov ?? x.Pedimento ?? x.ID_Aduana}`,
+
+    // Proveedor
+    id_proveedor: String(x.ID_Provedor ?? ''),
+    proveedor: String(x.Nombre ?? '')
   }));
 
   fillSelect(qs('oc_folio'), rows, {
@@ -422,11 +724,9 @@ async function loadOCsPorAlmacen(){
     placeholder:{value:'',text:'Seleccione una OC'}
   });
 
-  // proveedor en blanco hasta que elijan OC
   fillSelect(qs('proveedor'), [], {value:'id', text:'text', placeholder:{value:'',text:'Seleccione una OC primero'}});
 }
 
-// Autollenado proveedor al elegir OC
 function syncProveedorFromOC(){
   const sel = qs('oc_folio');
   const opt = sel.options[sel.selectedIndex];
@@ -447,7 +747,7 @@ function syncProveedorFromOC(){
 }
 
 // ============================
-// Detalle OC
+// Detalle OC + CLICK para pasar a recepción (Opción 2)
 // ============================
 async function loadOCDetalleGrid(){
   const tipo = getTipo();
@@ -470,27 +770,83 @@ async function loadOCDetalleGrid(){
     return;
   }
 
+  CACHE_OC_DET = j.data || [];
+
   const tb = qs('tblOCDetalle').querySelector('tbody');
   tb.innerHTML = '';
 
-  (j.data || []).forEach(r=>{
+  (CACHE_OC_DET || []).forEach(r=>{
     const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.title = 'Click para pasar a recepción';
+
+    const cad = (r.caducidad && !String(r.caducidad).startsWith('0000-00-00')) ? String(r.caducidad) : '';
+
     tr.innerHTML = `
       <td>${r.id_det ?? ''}</td>
       <td>${r.cve_articulo ?? ''}</td>
       <td>${r.cve_lote ?? ''}</td>
-      <td>${r.caducidad ?? ''}</td>
+      <td>${cad}</td>
       <td class="text-end">${r.cantidad ?? 0}</td>
       <td class="text-end">${r.ingresado ?? 0}</td>
       <td>${r.num_orden ?? ''}</td>
       <td>${r.activo ?? ''}</td>
     `;
+
+    tr.addEventListener('click', ()=>{
+      const art = String(r.cve_articulo ?? '').trim();
+      if(!art) return;
+
+      // set articulo + desc/uom desde c_articulo
+      qs('articulo').value = art;
+      applyArticuloToInputs(art);
+
+      // pendiente = cantidad - ingresado
+      const cant = Number(r.cantidad ?? 0);
+      const ing  = Number(r.ingresado ?? 0);
+      const pend = Math.max(0, cant - ing);
+
+      qs('cant_sol').value = String(cant);
+      qs('cant_rec').value = String(pend);
+
+      // caducidad solo si aplica
+      if(cad && !qs('caducidad').disabled) qs('caducidad').value = cad;
+
+      // foco operativo
+      qs('cant_rec').focus();
+    });
+
     tb.appendChild(tr);
   });
 
   qs('lblOCInfo').textContent = `OC ID: ${id_oc} · Líneas: ${(j.total ?? (j.data||[]).length)}`;
   qs('wrapOCDetalle').style.display = 'block';
 }
+
+function renderOCDetalleFromCache(){
+    const tbody = qs('oc_tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    for(const r of (CACHE_OC_DET||[])){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${esc(r.id_det||'')}</td>
+          <td>${esc(r.cve_articulo||'')}</td>
+          <td>${esc(r.descripcion||'')}</td>
+          <td>${esc(r.um_base||'')}</td>
+          <td>${esc(r.um_empaque||'-')}</td>
+          <td class="text-end">${num(r.factor||0)}</td>
+          <td class="text-end">${num(r.cantidad||0)}</td>
+          <td class="text-end">${num(r.ingresado||0)}</td>
+          <td class="text-end">${num(r.pendiente||0)}</td>
+          <td>${esc(r.num_orden||'')}</td>
+          <td class="text-center">${(r.activo==1||r.activo==='1')?'1':'0'}</td>
+        `;
+        tr.addEventListener('click', ()=> preloadFromOCRow(r));
+        tbody.appendChild(tr);
+    }
+}
+
 
 // ============================
 // BL destino (solo RL/CD)
@@ -521,38 +877,57 @@ async function loadBLDestino(){
 }
 
 // ============================
-// Operación: recibir y guardar (sin cambio)
-/// ===========================
+// Operación: Recibir / Guardar
+// ============================
 function addLineaFromInputs(){
-  const tb = qs('tblRecibido').querySelector('tbody');
-  const tr = document.createElement('tr');
-  const now = new Date().toISOString().slice(0,19).replace('T',' ');
-  tr.innerHTML = `
-    <td><span class="badge bg-success">OK</span></td>
-    <td>${(val('usuario')||'')}</td>
-    <td>${(val('articulo')||'')}</td>
-    <td>${(val('lote')||'')}</td>
-    <td>${(val('caducidad')||'')}</td>
-    <td class="text-end">${(val('cant_rec')||'0')}</td>
-    <td>${(val('contenedor')||'')}</td>
-    <td>${(val('lp_contenedor')||'')}</td>
-    <td>${(val('pallet')||'')}</td>
-    <td>${(val('lp_pallet')||'')}</td>
-    <td>${(val('zona_recepcion')||'')}</td>
-    <td>${now}</td>
-    <td class="text-center"><button class="btn btn-danger btn-sm">🗑</button></td>
-  `;
-  tr.querySelector('button').addEventListener('click', ()=>tr.remove());
-  tb.appendChild(tr);
+  const L = {
+    usuario: (val('usuario')||'').trim(),
+    cve_articulo: (val('articulo')||'').trim(),
+    descripcion: (val('descripcion')||'').trim(),
+    // El input real en la UI es #uom (columna UM)
+    um: (val('uom')||'').trim(),
+    um_primaria: (val('um_primaria')||'').trim(),
+    pzas_caja: num(val('pzas_caja')),
+    cant_sol: num(val('cant_sol')),
+    cant_rec: num(val('cant_rec')),
+    cantidad: num(val('cant_rec')),
+    cve_lote: (val('lote')||'').trim(),
+    caducidad: (val('caducidad')||'').trim(),
+    contenedor: (val('contenedor')||'').trim(),
+    lp_contenedor: (val('lp_contenedor')||'').trim(),
+    pallet: (val('pallet')||'').trim(),
+    lp_pallet: (val('lp_pallet')||'').trim(),
+  };
+
+  // regla básica: no aceptar líneas sin artículo o sin cantidad
+  if(!L.cve_articulo){ alert('Captura un artículo'); return; }
+  if(L.cantidad<=0){ alert('Cantidad a recibir debe ser mayor a 0'); return; }
+
+  RECIBIDOS.push(L);
+    // Actualiza cache de OC detalle (solo UI) para reflejar Ingresado/Pendiente
+    if(tipoRecepcion()==='OC' && (CACHE_OC_DET||[]).length){
+        const keyArt=(L.cve_articulo||'').toUpperCase();
+        const keyLote=(L.cve_lote||'').toUpperCase();
+        for(const r of CACHE_OC_DET){
+            if(String(r.cve_articulo||'').toUpperCase()!==keyArt) continue;
+            if(keyLote && String(r.lote||'').toUpperCase() && String(r.lote||'').toUpperCase()!==keyLote) continue;
+            const ing=Number(r.ingresado||0)+Number(L.cant_rec||0);
+            const cant=Number(r.cantidad||0);
+            r.ingresado = (cant && ing>cant)?cant:ing;
+            r.pendiente = (cant? Math.max(0, cant-Number(r.ingresado||0)) : r.pendiente);
+            break;
+        }
+        renderOCDetalleFromCache();
+    }
+    renderRecibidos();
 }
 
+
 async function onGuardar(){
-  const tb = qs('tblRecibido').querySelector('tbody');
-  if(!tb.children.length){ alert('No hay líneas recibidas'); return; }
+  if(!RECIBIDOS.length){ alert('No hay líneas recibidas'); return; }
 
   const tipo = getTipo();
 
-  // proveedor_id viene del select (autollenado) o del dataset OC si hiciera falta
   let proveedor_id = val('proveedor');
   if(!proveedor_id){
     const opt = qs('oc_folio').options[qs('oc_folio').selectedIndex];
@@ -561,6 +936,9 @@ async function onGuardar(){
 
   const payload = {
     tipo,
+	  // Migración: num_pedimento/folio_oc -> folio_mov. Mantener contrato sin tocar UI.
+	  // Mandamos NULL por default para que el backend genere el folio de movimiento.
+	  folio_mov: null,
     empresa: val('empresa'),
     almacen: getClaveAlmacenSeleccionado(),
     zona_recepcion: val('zona_recepcion'),
@@ -572,22 +950,24 @@ async function onGuardar(){
     folio_cd: val('folio_cd'),
     factura: val('factura'),
     proyecto: val('proyecto'),
-    lineas: []
+    lineas: RECIBIDOS.map(L => ({
+      usuario: L.usuario,
+      cve_articulo: L.cve_articulo,
+      descripcion: L.descripcion,
+      um: L.um,
+      um_primaria: L.um_primaria,
+      pzas_caja: L.pzas_caja,
+      cant_sol: L.cant_sol,
+      cant_rec: (L.cant_rec ?? L.cantidad ?? 0),
+      cantidad: (L.cant_rec ?? L.cantidad ?? 0),
+      cve_lote: L.cve_lote,
+      caducidad: L.caducidad,
+      contenedor: L.contenedor,
+      lp_contenedor: L.lp_contenedor,
+      pallet: L.pallet,
+      lp_pallet: L.lp_pallet
+    }))
   };
-
-  [...tb.querySelectorAll('tr')].forEach(tr=>{
-    const tds = tr.querySelectorAll('td');
-    payload.lineas.push({
-      cve_articulo: tds[2].innerText.trim(),
-      cve_lote: tds[3].innerText.trim(),
-      caducidad: tds[4].innerText.trim(),
-      cantidad: parseFloat(tds[5].innerText.trim()||'0'),
-      contenedor: tds[6].innerText.trim(),
-      lp_contenedor: tds[7].innerText.trim(),
-      pallet: tds[8].innerText.trim(),
-      lp_pallet: tds[9].innerText.trim()
-    });
-  });
 
   const u = new URL(API_RECEPCION, window.location.href);
   u.searchParams.set('action','guardar_recepcion');
@@ -603,7 +983,8 @@ async function onGuardar(){
     return;
   }
   alert('Recepción guardada correctamente');
-  tb.innerHTML = '';
+  RECIBIDOS = [];
+  renderRecibidos();
 }
 
 // ============================
@@ -612,37 +993,73 @@ async function onGuardar(){
 async function onTipoChange(){
   applyTipoUI();
   await loadOCsPorAlmacen();
-  // zonas siempre se mantienen por almacén, pero destino/BL quedan bloqueados si OC
 }
 
 async function onAlmacenChange(){
+  qs('zona_recepcion').value = '';
+  qs('zona_destino').value = '';
+  fillSelect(qs('bl_destino'), [], {value:'bl', text:'bl', placeholder:{value:'',text:'Seleccione BL destino'}});
   await loadZonasPorAlmacen();
   await loadOCsPorAlmacen();
   applyTipoUI();
 }
 
 document.addEventListener('DOMContentLoaded', async ()=>{
+  // carga maestros
   await loadEmpresas();
+  await loadFiltros();
+  // Artículos: búsqueda incremental + lookup puntual
+
   await loadAlmacenes();
   await loadZonasPorAlmacen();
 
   applyTipoUI();
   await loadOCsPorAlmacen();
 
+  // listeners
   document.querySelectorAll('input[name="tipo"]').forEach(r=>r.addEventListener('change', onTipoChange));
   qs('almacen').addEventListener('change', onAlmacenChange);
 
-  // ✅ OC primero -> proveedor auto + detalle
   qs('oc_folio').addEventListener('change', async ()=>{
     syncProveedorFromOC();
     await loadOCDetalleGrid();
   });
 
+  // Artículo: búsqueda incremental (datalist) + autollenado
+  qs('articulo').addEventListener('input', (e)=>{
+    clearTimeout(ART_SEARCH_TIMER);
+    ART_SEARCH_TIMER = setTimeout(()=> searchArticulos(e.target.value), 180);
+  });
+  qs('articulo').addEventListener('change', ()=> applyArticuloToInputs(val('articulo')));
+  qs('articulo').addEventListener('blur',   ()=> applyArticuloToInputs(val('articulo')));
+  qs('articulo').addEventListener('keydown', (ev)=>{
+    if(ev.key === 'Enter'){
+      ev.preventDefault();
+      applyArticuloToInputs(val('articulo'));
+      qs('cant_rec').focus();
+    }
+  });
+
+
   qs('zona_destino').addEventListener('change', loadBLDestino);
+
+  // autocomplete / reglas de articulo
+  qs('articulo').addEventListener('change', ()=>{
+    const art = val('articulo');
+    applyArticuloToInputs(art);
+  });
 
   qs('btnAdd').addEventListener('click', (e)=>{ e.preventDefault(); });
   qs('btnRecibir').addEventListener('click', (e)=>{ e.preventDefault(); addLineaFromInputs(); });
   qs('btnGuardar').addEventListener('click', (e)=>{ e.preventDefault(); onGuardar(); });
+
+  // eliminar líneas en tabla inferior
+  qs('tblRecibido')?.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-act="del"]');
+    if(!btn) return;
+    const idx = parseInt(btn.dataset.idx || '-1', 10);
+    removeLinea(idx);
+  });
 });
 </script>
 

@@ -1,0 +1,99 @@
+- 
+
+--
+-- Estructura de tabla para la tabla `c_articulo`
+--
+
+CREATE TABLE `c_articulo` (
+  `id` int(11) NOT NULL,
+  `cve_articulo` varchar(55) DEFAULT NULL,
+  `cve_sap` varchar(50) DEFAULT NULL,
+  `cve_alt` varchar(100) DEFAULT NULL,
+  `barras2` varchar(20) DEFAULT NULL,
+  `barras3` varchar(20) DEFAULT NULL,
+  `des_articulo` varchar(100) DEFAULT NULL,
+  `des_detallada` text DEFAULT NULL,
+  `grupo` varchar(20) DEFAULT NULL,
+  `clasificacion` varchar(20) DEFAULT NULL,
+  `tipo` varchar(20) DEFAULT NULL,
+  `tipo_producto` varchar(30) DEFAULT NULL,
+  `cve_ssgpo` int(11) DEFAULT NULL,
+  `cve_umed` int(11) DEFAULT NULL,
+  `unidadMedida` int(11) DEFAULT NULL,
+  `umas` int(11) DEFAULT NULL,
+  `comp_cveumed` int(11) DEFAULT NULL,
+  `num_multiplo` double DEFAULT NULL,
+  `imp_costo` decimal(19,4) DEFAULT NULL,
+  `costo` decimal(10,2) DEFAULT NULL,
+  `costoPromedio` double(10,2) DEFAULT NULL,
+  `mav_pctiva` decimal(19,4) DEFAULT NULL,
+  `IEPS` decimal(19,4) DEFAULT NULL,
+  `PrecioVenta` decimal(19,4) DEFAULT NULL,
+  `cve_moneda` int(11) DEFAULT NULL,
+  `cve_almac` int(11) DEFAULT NULL,
+  `mav_almacenable` varchar(1) DEFAULT NULL,
+  `mav_delinea` varchar(1) DEFAULT NULL,
+  `mav_obsoleto` varchar(1) DEFAULT NULL,
+  `Activo` int(11) DEFAULT NULL,
+  `Caduca` char(1) DEFAULT NULL,
+  `Compuesto` char(1) DEFAULT NULL,
+  `control_lotes` char(1) DEFAULT NULL,
+  `control_numero_series` char(1) DEFAULT NULL,
+  `control_garantia` char(1) DEFAULT NULL,
+  `tipo_garantia` enum('MESES','ANIOS','HORAS_USO') DEFAULT NULL,
+  `req_refrigeracion` char(1) DEFAULT NULL,
+  `mat_peligroso` char(1) DEFAULT NULL,
+  `peso` double DEFAULT NULL,
+  `alto` decimal(10,2) DEFAULT NULL,
+  `ancho` decimal(10,2) DEFAULT NULL,
+  `fondo` decimal(10,2) DEFAULT NULL,
+  `num_volxpal` decimal(19,4) DEFAULT NULL,
+  `ID_Proveedor` int(11) DEFAULT NULL,
+  `ban_condic` tinyint(4) DEFAULT NULL,
+  `remplazo` varchar(20) DEFAULT NULL,
+  `fec_altaart` datetime DEFAULT NULL,
+  `des_tipo` varchar(20) DEFAULT NULL,
+  `empq_cveumed` int(11) DEFAULT NULL,
+  `des_observ` varchar(255) DEFAULT NULL,
+  `mav_cveubica` varchar(20) DEFAULT NULL,
+  `cve_tipcaja` int(11) DEFAULT NULL,
+  `cve_codprov` varchar(20) DEFAULT NULL,
+  `num_multiploch` int(11) DEFAULT NULL,
+  `Max_Cajas` int(11) DEFAULT NULL,
+  `cajas_palet` int(11) DEFAULT NULL,
+  `valor_garantia` int(11) DEFAULT NULL,
+  `control_peso` char(1) DEFAULT NULL,
+  `control_volumen` char(1) DEFAULT NULL,
+  `tipo_caja` int(11) DEFAULT NULL,
+  `Ban_Envase` char(1) DEFAULT NULL,
+  `Usa_Envase` char(1) DEFAULT NULL,
+  `Tipo_Envase` char(1) DEFAULT NULL,
+  `control_abc` char(1) DEFAULT NULL,
+  `ecommerce_activo` tinyint(1) DEFAULT 0,
+  `ecommerce_categoria` varchar(100) DEFAULT NULL,
+  `ecommerce_subcategoria` varchar(100) DEFAULT NULL,
+  `ecommerce_img_principal` varchar(255) DEFAULT NULL,
+  `ecommerce_img_galeria` text DEFAULT NULL,
+  `ecommerce_tags` varchar(255) DEFAULT NULL,
+  `ecommerce_destacado` tinyint(1) DEFAULT 0,
+  `obsolescencia_dias` int(11) DEFAULT NULL COMMENT 'Vida útil teórica del artículo en días'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Índices para tablas volcadas
+--
+
+--
+-- Indices de la tabla `c_articulo`
+--
+ALTER TABLE `c_articulo`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `ux_articulo_cve` (`cve_articulo`),
+  ADD KEY `ix_articulo_garantia` (`control_garantia`),
+  ADD KEY `ix_art_compuesto_cve` (`Compuesto`,`cve_articulo`),
+  ADD KEY `ix_art_compuesto_des` (`Compuesto`,`des_articulo`);
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

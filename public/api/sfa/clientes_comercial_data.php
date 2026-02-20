@@ -7,7 +7,7 @@
 //   limit (opcional)
 
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/../../app/db.php';
+require_once __DIR__ . '/../../../app/db.php';
 
 function read_json_body() {
   $raw = file_get_contents('php://input');

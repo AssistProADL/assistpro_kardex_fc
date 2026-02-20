@@ -4,92 +4,94 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
 <style>
   /* =========================================================
-   ASSISTPRO – RUTAS
-========================================================= */
+   ASSISTPRO STYLES - Rutas
+   ========================================================= */
   body {
-    font-family: system-ui, -apple-system, sans-serif;
-    background: #f4f6fb;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #e9ecef;
     margin: 0;
+    color: #212529;
   }
 
   .ap-container {
-    padding: 20px;
-    font-size: 13px;
-    max-width: 1600px;
+    padding: 15px;
+    font-size: 12px;
+    max-width: 100%;
     margin: 0 auto;
   }
 
+  /* TITLE */
   .ap-title {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 600;
-    color: #0b5ed7;
-    margin-bottom: 20px;
+    color: #212529;
+    margin-bottom: 15px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
-  /* CARDS (KPIs) */
+  /* CARDS */
   .ap-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 15px;
-    margin-bottom: 20px;
+    margin-bottom: 15px;
   }
 
   .ap-card {
     background: #fff;
-    border: 1px solid #e0e6ed;
-    border-radius: 12px;
-    padding: 15px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    padding: 12px 15px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     transition: all 0.2s;
   }
 
   .ap-card:hover {
-    border-color: #0b5ed7;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(11, 94, 215, 0.1);
+    border-color: #adb5bd;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
   }
 
   .ap-card .h {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     font-weight: 600;
-    color: #333;
+    color: #6c757d;
+    font-size: 12px;
   }
 
   .ap-card .k {
     font-size: 24px;
     font-weight: 700;
-    color: #0b5ed7;
+    color: #212529;
   }
 
   /* TOOLBAR */
   .ap-toolbar {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
     align-items: center;
     margin-bottom: 15px;
     background: #fff;
     padding: 10px;
-    border-radius: 10px;
-    border: 1px solid #e0e6ed;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
   }
 
   .ap-search {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex: 1;
-    min-width: 300px;
-    background: #f8f9fa;
-    padding: 6px 12px;
-    border-radius: 8px;
-    border: 1px solid #dee2e6;
+    min-width: 250px;
+    background: #fff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid #ced4da;
   }
 
   .ap-search i {
@@ -101,30 +103,40 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     background: transparent;
     outline: none;
     width: 100%;
-    font-size: 13px;
+    font-size: 12px;
+    color: #212529;
   }
 
   /* CHIPS */
   .ap-chip {
-    font-size: 12px;
-    background: #f1f3f5;
+    font-size: 11px;
+    background: #f8f9fa;
     color: #495057;
     border: 1px solid #dee2e6;
-    border-radius: 20px;
-    padding: 5px 12px;
+    border-radius: 4px;
+    padding: 6px 12px;
     display: inline-flex;
     gap: 6px;
     align-items: center;
     cursor: pointer;
     font-weight: 500;
     transition: all 0.2s;
-    text-decoration: none;
+    user-select: none;
   }
 
   .ap-chip:hover {
     background: #e9ecef;
-    color: #212529;
-    border-color: #ced4da;
+    border-color: #adb5bd;
+  }
+
+  .ap-chip.primary {
+    background: #0d6efd;
+    color: #fff;
+    border-color: #0d6efd;
+  }
+
+  .ap-chip.primary:hover {
+    background: #0b5ed7;
   }
 
   .ap-chip.ok {
@@ -139,10 +151,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     border-color: #ffecb5;
   }
 
-  .ap-chip i {
-    font-size: 12px;
-  }
-
+  /* BUTTONS */
   button.ap-chip {
     font-family: inherit;
   }
@@ -150,11 +159,14 @@ require_once __DIR__ . '/../bi/_menu_global.php';
   /* GRID */
   .ap-grid {
     background: #fff;
-    border: 1px solid #e0e6ed;
-    border-radius: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
     overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-    max-height: 600px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .ap-grid-wrapper {
+    max-height: calc(100vh - 280px);
     overflow-y: auto;
   }
 
@@ -165,22 +177,25 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
   .ap-grid th {
     background: #f8f9fa;
-    padding: 12px;
+    padding: 10px 12px;
     text-align: left;
     font-weight: 600;
     color: #495057;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 2px solid #dee2e6;
     white-space: nowrap;
     position: sticky;
     top: 0;
     z-index: 10;
+    font-size: 11px;
   }
 
   .ap-grid td {
-    padding: 10px 12px;
+    padding: 8px 12px;
     border-bottom: 1px solid #f1f3f5;
     color: #212529;
     vertical-align: middle;
+    white-space: nowrap;
+    font-size: 11px;
   }
 
   .ap-grid tr:hover td {
@@ -189,14 +204,14 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
   .ap-actions i {
     cursor: pointer;
-    margin-right: 12px;
+    margin-right: 8px;
     color: #6c757d;
     transition: color 0.2s;
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .ap-actions i:hover {
-    color: #0b5ed7;
+    color: #0d6efd;
   }
 
   /* PAGER */
@@ -204,35 +219,15 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 15px;
+    margin-top: 10px;
     padding: 0 5px;
+    font-size: 11px;
+    color: #6c757d;
   }
 
-  .ap-pager button {
-    background: #fff;
-    border: 1px solid #dee2e6;
-    padding: 6px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    color: #495057;
-  }
-
-  .ap-pager button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-
-  .ap-pager button:hover:not(:disabled) {
-    background: #f8f9fa;
-    border-color: #ced4da;
-  }
-
-  .ap-pager select {
-    padding: 6px;
-    border-radius: 6px;
-    border: 1px solid #dee2e6;
-    color: #495057;
-    margin-left: 5px;
+  .ap-pager-controls {
+    display: flex;
+    gap: 5px;
   }
 
   /* MODAL */
@@ -253,22 +248,61 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
   .ap-modal-content {
     background: #fff;
-    width: 980px;
+    width: 800px;
     max-width: 95%;
     max-height: 90vh;
-    border-radius: 12px;
+    border-radius: 8px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
     padding: 20px;
+  }
+
+  .ap-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e9ecef;
+  }
+
+  .ap-modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #212529;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ap-modal-header button {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #6c757d;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+
+  .ap-modal-header button:hover {
+    background: #f8f9fa;
+    color: #212529;
   }
 
   .ap-form {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 15px;
-    margin-top: 15px;
+    margin-top: 10px;
   }
 
   .ap-field {
@@ -279,28 +313,29 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
   .ap-label {
     font-weight: 500;
-    font-size: 13px;
+    font-size: 11px;
     color: #495057;
   }
 
   .ap-input {
     display: flex;
     align-items: center;
-    gap: 10px;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    padding: 8px 12px;
+    gap: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 6px 10px;
     background: #fff;
     transition: all 0.2s;
   }
 
   .ap-input:focus-within {
-    border-color: #0b5ed7;
-    box-shadow: 0 0 0 3px rgba(11, 94, 215, 0.1);
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
   }
 
   .ap-input i {
-    color: #adb5bd;
+    color: #6c757d;
+    font-size: 12px;
   }
 
   .ap-input input,
@@ -308,198 +343,172 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     border: none;
     outline: none;
     width: 100%;
-    font-size: 14px;
+    font-size: 12px;
     color: #212529;
     background: transparent;
+    font-family: inherit;
   }
 
-  .ap-error {
-    font-size: 12px;
-    color: #dc3545;
-    display: none;
-    margin-top: 4px;
+  /* MODAL FOOTER */
+  .ap-modal-footer {
+    text-align: right;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
   }
 
   button.primary {
-    background: #0b5ed7;
+    background: #0d6efd;
     color: #fff;
     border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
+    padding: 6px 14px;
+    border-radius: 4px;
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s;
+    font-size: 12px;
   }
 
   button.primary:hover {
-    background: #0a58ca;
+    background: #0b5ed7;
   }
 
   button.ghost {
     background: #fff;
     color: #495057;
     border: 1px solid #dee2e6;
-    padding: 8px 16px;
-    border-radius: 6px;
+    padding: 6px 14px;
+    border-radius: 4px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+    font-size: 12px;
   }
 
   button.ghost:hover {
-    background: #f1f3f5;
-    border-color: #ced4da;
+    background: #f8f9fa;
+    border-color: #adb5bd;
   }
 </style>
 
 <div class="ap-container">
   <div class="ap-title"><i class="fa fa-route"></i> Catálogo de Rutas</div>
 
-  <div class="ap-cards">
-    <div class="ap-card">
-      <div class="h"><span>Total</span><i class="fa fa-list"></i></div>
-      <div class="k" id="kpi_total">0</div>
-    </div>
-    <div class="ap-card">
-      <div class="h"><span>Activos</span><i class="fa fa-check-circle" style="color:#198754"></i></div>
-      <div class="k" id="kpi_activos">0</div>
-    </div>
-    <div class="ap-card">
-      <div class="h"><span>Preventa</span><i class="fa fa-truck-fast"></i></div>
-      <div class="k" id="kpi_preventa">0</div>
-    </div>
-    <div class="ap-card">
-      <div class="h"><span>Entrega</span><i class="fa fa-truck-ramp-box"></i></div>
-      <div class="k" id="kpi_entrega">0</div>
-    </div>
+  <div class="ap-cards" id="kpiCards">
+    <!-- KPIs loaded via JS -->
   </div>
 
   <div class="ap-toolbar">
     <div class="ap-search">
       <i class="fa fa-search"></i>
-      <input id="q" placeholder="Buscar clave, descripción, almacén…" onkeydown="if(event.key==='Enter')buscar()">
+      <input id="q" placeholder="Buscar clave, descripción..." onkeydown="if(event.key==='Enter')buscar()">
     </div>
     <button class="ap-chip" onclick="buscar()">Buscar</button>
     <button class="ap-chip" onclick="limpiar()">Limpiar</button>
 
+    <div style="border-left:1px solid #dee2e6; height:24px; margin:0 5px;"></div>
+
+    <button class="ap-chip" id="btnToggleInactive" onclick="toggleInactivos()">
+      <i class="fa fa-eye"></i> Ver Inactivos
+    </button>
+
     <div style="flex:1"></div>
 
-    <button class="ap-chip" onclick="nuevo()"><i class="fa fa-plus"></i> Agregar</button>
-    <button class="ap-chip" onclick="exportarDatos()"><i class="fa fa-download"></i> Exportar</button>
-    <button class="ap-chip" onclick="abrirImport()"><i class="fa fa-upload"></i> Importar</button>
-    <button class="ap-chip" onclick="toggleInactivos()"><i class="fa fa-eye"></i> Inactivos</button>
+    <button class="ap-chip primary" onclick="nuevo()"><i class="fa fa-plus"></i> Nuevo</button>
+    <button class="ap-chip" onclick="exportarCSV()"><i class="fa fa-download"></i> Exportar</button>
+    <button class="ap-chip" onclick="abrirImport()"><i class="fa fa-upload"></i> Importar CSV</button>
   </div>
 
+  <span class="ap-chip" id="msg" style="display:none; margin-bottom:10px;"></span>
+
+  <!-- GRID -->
   <div class="ap-grid">
-    <table>
-      <thead>
-        <tr>
-          <th>Acciones</th>
-          <th>ID</th>
-          <th>Clave</th>
-          <th>Descripción</th>
-          <th>Status</th>
-          <th>Almacén</th>
-          <th>Preventa</th>
-          <th>Entrega</th>
-          <th>Control Pallets</th>
-          <th>Consig Pallets</th>
-          <th>Consig Cont</th>
-          <th>Proveedor</th>
-          <th>Activo</th>
-        </tr>
-      </thead>
-      <tbody id="tb"></tbody>
-    </table>
-  </div>
-
-  <!-- Paginación -->
-  <div class="ap-pager">
-    <div class="left">
-      <button onclick="prevPage()" id="btnPrev"><i class="fa fa-chevron-left"></i> Anterior</button>
-      <button onclick="nextPage()" id="btnNext">Siguiente <i class="fa fa-chevron-right"></i></button>
-      <span class="ap-chip" id="lblRange" style="background:transparent; border:none; padding:0;">Mostrando 0–0</span>
-    </div>
-    <div class="right" style="display:flex; align-items:center;">
-      <span>Página:</span>
-      <select id="selPage" onchange="goPage(this.value)"></select>
-
-      <span style="margin-left:15px">Por página:</span>
-      <select id="selPerPage" onchange="setPerPage(this.value)">
-        <option value="25" selected>25</option>
-        <option value="50">50</option>
-        <option value="100">100</option>
-      </select>
+    <div class="ap-grid-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Acciones</th>
+            <th>ID</th>
+            <th>Clave</th>
+            <th>Descripción</th>
+            <th>Almacén</th>
+            <th>Status</th>
+            <th>Preventa</th>
+            <th>Entrega</th>
+            <th>Activo</th>
+          </tr>
+        </thead>
+        <tbody id="tb"></tbody>
+      </table>
     </div>
   </div>
+
+  <!-- PAGER -->
+  <div id="pager" class="ap-pager"></div>
 </div>
 
-<!-- MODAL -->
+<!-- MODAL EDIT/NEW -->
 <div class="ap-modal" id="mdl">
   <div class="ap-modal-content">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
-      <h3 style="margin:0"><i class="fa fa-route"></i> Ruta</h3>
-      <button onclick="cerrarModal('mdl')"
-        style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
-          class="fa fa-times"></i></button>
+    <div class="ap-modal-header">
+      <h3><i class="fa fa-route"></i> <span id="mdlTitle">Ruta</span></h3>
+      <button onclick="cerrarModal('mdl')"><i class="fa fa-times"></i></button>
     </div>
 
-    <div class="ap-chip" style="margin-bottom:10px"><span style="color:#dc3545;font-weight:700">*</span> Obligatorios:
-      <b>Clave</b>, <b>Descripción</b></div>
-
-    <input type="hidden" id="ID_Ruta">
+    <input type="hidden" id="ID_Ruta" value="0">
 
     <div class="ap-form">
       <div class="ap-field">
-        <div class="ap-label">Clave *</div>
-        <div class="ap-input"><i class="fa fa-key"></i><input id="cve_ruta" maxlength="20" placeholder="ENF-114"></div>
-        <div class="ap-error" id="err_cve">Clave obligatoria.</div>
+        <div class="ap-label">Clave Ruta</div>
+        <div class="ap-input"><i class="fa fa-key"></i><input id="cve_ruta" placeholder="Clave única"></div>
+      </div>
+      <div class="ap-field">
+        <div class="ap-label">Descripción</div>
+        <div class="ap-input"><i class="fa fa-align-left"></i><input id="descripcion"
+            placeholder="Descripción de la ruta"></div>
       </div>
 
       <div class="ap-field" style="grid-column: span 2">
-        <div class="ap-label">Descripción *</div>
-        <div class="ap-input"><i class="fa fa-align-left"></i><input id="descripcion" maxlength="50"
-            placeholder="Ruta Entrega 114"></div>
-        <div class="ap-error" id="err_desc">Descripción obligatoria.</div>
+        <div class="ap-label">Almacén (Base)</div>
+        <div class="ap-input"><i class="fa fa-warehouse"></i>
+          <select id="cve_almacenp">
+            <option value="0">Seleccione...</option>
+          </select>
+        </div>
       </div>
 
       <div class="ap-field">
         <div class="ap-label">Status</div>
         <div class="ap-input"><i class="fa fa-traffic-light"></i>
           <select id="status">
-            <option value="A">A</option>
-            <option value="B">B</option>
+            <option value="A">Activo (A)</option>
+            <option value="B">Baja (B)</option>
           </select>
         </div>
       </div>
-
       <div class="ap-field">
-        <div class="ap-label">Almacén</div>
-        <div class="ap-input"><i class="fa fa-warehouse"></i><input id="cve_almacenp" type="number" value="0"></div>
-      </div>
-
-      <div class="ap-field">
-        <div class="ap-label">Preventa</div>
-        <div class="ap-input"><i class="fa fa-truck-fast"></i>
+        <div class="ap-label">¿Es Preventa?</div>
+        <div class="ap-input"><i class="fa fa-user-clock"></i>
           <select id="venta_preventa">
             <option value="1">Sí</option>
             <option value="0">No</option>
           </select>
         </div>
       </div>
-
       <div class="ap-field">
-        <div class="ap-label">Entrega</div>
-        <div class="ap-input"><i class="fa fa-truck-ramp-box"></i>
+        <div class="ap-label">¿Es Entrega?</div>
+        <div class="ap-input"><i class="fa fa-truck"></i>
           <select id="es_entrega">
-            <option value="0">No</option>
             <option value="1">Sí</option>
+            <option value="0">No</option>
           </select>
         </div>
       </div>
-
       <div class="ap-field">
-        <div class="ap-label">Control Pallets</div>
+        <div class="ap-label">Control Pallets (Cont)</div>
         <div class="ap-input"><i class="fa fa-box-open"></i>
           <select id="control_pallets_cont">
             <option value="N">No</option>
@@ -509,32 +518,32 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       </div>
 
       <div class="ap-field">
-        <div class="ap-label">Consig Pallets</div>
-        <div class="ap-input"><i class="fa fa-pallet"></i><input id="consig_pallets" type="number" value="0"></div>
+        <div class="ap-label">Consig. Pallets</div>
+        <div class="ap-input"><i class="fa fa-pallet"></i><input id="consig_pallets" type="number" placeholder="0">
+        </div>
       </div>
-
       <div class="ap-field">
-        <div class="ap-label">Consig Contenedores</div>
-        <div class="ap-input"><i class="fa fa-box"></i><input id="consig_cont" type="number" value="0"></div>
+        <div class="ap-label">Consig. Contenedores</div>
+        <div class="ap-input"><i class="fa fa-box"></i><input id="consig_cont" type="number" placeholder="0"></div>
       </div>
-
       <div class="ap-field">
-        <div class="ap-label">Proveedor</div>
-        <div class="ap-input"><i class="fa fa-building"></i><input id="ID_Proveedor" type="number" value="0"></div>
+        <div class="ap-label">ID Proveedor</div>
+        <div class="ap-input"><i class="fa fa-truck-field"></i><input id="ID_Proveedor" type="number" placeholder="0">
+        </div>
       </div>
 
       <div class="ap-field">
         <div class="ap-label">Activo</div>
         <div class="ap-input"><i class="fa fa-toggle-on"></i>
           <select id="Activo">
-            <option value="1">Activo</option>
-            <option value="0">Inactivo</option>
+            <option value="1">Sí</option>
+            <option value="0">No</option>
           </select>
         </div>
       </div>
     </div>
 
-    <div style="text-align:right;margin-top:15px;display:flex;justify-content:flex-end;gap:10px">
+    <div class="ap-modal-footer">
       <button class="ghost" onclick="cerrarModal('mdl')">Cancelar</button>
       <button class="primary" onclick="guardar()">Guardar</button>
     </div>
@@ -543,307 +552,343 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
 <!-- MODAL IMPORT -->
 <div class="ap-modal" id="mdlImport">
-  <div class="ap-modal-content" style="width:700px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
-      <h3 style="margin:0"><i class="fa fa-upload"></i> Importar rutas</h3>
-      <button onclick="cerrarModal('mdlImport')"
-        style="background:transparent; border:none; font-size:18px; cursor:pointer;"><i
-          class="fa fa-times"></i></button>
+  <div class="ap-modal-content" style="width:600px">
+    <div class="ap-modal-header">
+      <h3><i class="fa fa-upload"></i> Importar CSV</h3>
+      <button onclick="cerrarModal('mdlImport')"><i class="fa fa-times"></i></button>
     </div>
 
-    <div class="ap-chip" style="margin-bottom:15px">Layout FULL con UPSERT por <b>cve_ruta</b>. Previsualiza antes de
-      importar.</div>
+    <div class="ap-chip" style="margin-bottom:15px; display:block; text-align:center;">
+      Layout: cve_ruta, descripcion, status, cve_almacenp, venta_preventa, es_entrega, ...
+    </div>
 
     <div class="ap-input">
       <i class="fa fa-file-csv"></i>
-      <input type="file" id="fileCsv" accept=".csv">
+      <input type="file" id="csvFile" accept=".csv">
     </div>
 
-    <div style="margin-top:15px;display:flex;gap:10px">
-      <button class="ghost" onclick="descargarLayout()"><i class="fa fa-download"></i> Descargar layout</button>
-      <button class="primary" onclick="previsualizarCsv()"><i class="fa fa-eye"></i> Previsualizar</button>
-    </div>
+    <div id="importResult" style="margin-top:15px;"></div>
 
-    <div id="csvPreviewWrap" style="display:none;margin-top:15px">
-      <h4 style="margin:0 0 10px; font-size:14px; color:#555;">Previsualización</h4>
-      <div class="ap-grid" style="height:200px">
-        <table style="font-size:12px;">
-          <thead id="csvHead"></thead>
-          <tbody id="csvBody"></tbody>
-        </table>
-      </div>
-
-      <div class="ap-chip" id="importMsg" style="margin-top:15px; width:100%; display:none; justify-content:center;">
-      </div>
-    </div>
-
-    <div style="text-align:right;margin-top:15px;display:flex;justify-content:flex-end;gap:10px">
-      <button class="ghost" onclick="cerrarModal('mdlImport')">Cerrar</button>
-      <button class="primary" onclick="importarCsv()" id="btnImportarFinal" style="display:none;">Importar</button>
+    <div class="ap-modal-footer">
+      <button class="primary" onclick="importarCSV()"><i class="fa fa-cloud-arrow-up"></i> Importar</button>
     </div>
   </div>
 </div>
 
 <script>
   const API = '../api/rutas_api.php';
+  let curPage = 1;
+  let viewInactive = false;
 
-  let verInactivos = false;
-  let qLast = '';
-  let page = 1;
-  let perPage = 25;
-  let total = 0;
-  let lastRows = [];
+  // Render Helpers
+  function esc(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
+  }
 
-  // KPIs se cargan junto con la lista
+  function showMsg(txt, cls = '') {
+    const m = document.getElementById('msg');
+    m.style.display = 'inline-flex';
+    m.className = 'ap-chip ' + cls;
+    m.innerHTML = txt;
+    setTimeout(() => { m.style.display = 'none' }, 3500);
+  }
 
-  /* ===== Paginación ===== */
-  function setPager() {
-    const start = total > 0 ? ((page - 1) * perPage + (lastRows.length ? 1 : 0)) : 0;
-    let end = total > 0 ? Math.min(page * perPage, total) : 0;
-    if (total === 0) { end = 0; }
+  function abrirModal(id) { document.getElementById(id).style.display = 'block'; }
+  function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
 
-    lblRange.innerText = `Mostrando ${start}–${end}` + (total > 0 ? ` de ${total}` : '');
-
-    const maxPages = total > 0 ? Math.max(1, Math.ceil(total / perPage)) : 1;
-    selPage.innerHTML = '';
-    for (let i = 1; i <= maxPages; i++) {
-      const o = document.createElement('option');
-      o.value = i; o.textContent = i;
-      if (i === page) o.selected = true;
-      selPage.appendChild(o);
+  function toggleInactivos() {
+    viewInactive = !viewInactive;
+    const btn = document.getElementById('btnToggleInactive');
+    if (viewInactive) {
+      btn.classList.add('warn');
+      btn.innerHTML = '<i class="fa fa-eye-slash"></i> Ocultar Inactivos';
+    } else {
+      btn.classList.remove('warn');
+      btn.innerHTML = '<i class="fa fa-eye"></i> Ver Inactivos';
     }
-    btnPrev.disabled = (page <= 1);
-    btnNext.disabled = total > 0 ? (page >= maxPages) : (lastRows.length < perPage);
+    refrescar(1);
   }
-  function prevPage() { if (page > 1) { page--; cargar(); } }
-  function nextPage() {
-    const maxPages = total > 0 ? Math.ceil(total / perPage) : 1;
-    if (page < maxPages) { page++; cargar(); }
-    else if (total === 0 && lastRows.length === perPage) { page++; cargar(); }
+
+  // Cargar lista
+  function refrescar(p = 1) {
+    curPage = p;
+    const q = document.getElementById('q').value;
+
+    const params = new URLSearchParams();
+    params.append('action', 'list');
+    params.append('page', curPage);
+    params.append('pageSize', 25);
+    params.append('q', q);
+    params.append('show_inactivos', viewInactive ? 1 : 0);
+
+    fetch(API + '?' + params.toString())
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          const kpis = d.kpis || {};
+          const inactivosCount = parseInt(kpis.inactivos || 0);
+
+          // Lógica botón
+          const btn = document.getElementById('btnToggleInactive');
+          if (inactivosCount > 0) {
+            btn.style.display = 'inline-flex';
+          } else {
+            btn.style.display = 'none';
+            // Si estábamos viendo inactives y ya no hay (se reactivaron todos),
+            // volvemos a la vista normal automáticamente
+            if (viewInactive) {
+              viewInactive = false;
+              btn.classList.remove('warn');
+              btn.innerHTML = '<i class="fa fa-eye"></i> Ver Inactivos';
+              refrescar(1); // Recarga recursiva una vez para volver a actives
+              return;
+            }
+          }
+
+          renderGrid(d.data || []);
+          renderPager(d.total, d.pageSize);
+          renderKPIs(kpis);
+        } else {
+          showMsg('Error cargando lista', 'warn');
+        }
+      })
+      .catch(e => console.error(e));
   }
-  function goPage(p) { page = Math.max(1, parseInt(p, 10) || 1); cargar(); }
-  function setPerPage(v) { perPage = parseInt(v, 10) || 25; page = 1; cargar(); }
 
-  function cargar() {
-    const pageNum = page;
-    const url = API + '?action=list'
-      + '&show_inactivos=' + (verInactivos ? 1 : 0)
-      + '&q=' + encodeURIComponent(qLast || '')
-      + '&page=' + pageNum
-      + '&pageSize=' + perPage;
+  function renderGrid(rows) {
+    const tb = document.getElementById('tb');
+    if (!rows.length) {
+      tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:#777">Sin resultados</td></tr>';
+      return;
+    }
 
-    fetch(url).then(r => r.json()).then(resp => {
-      const rows = resp.data || [];
-      total = Number(resp.total || 0) || 0;
-      lastRows = rows;
+    tb.innerHTML = rows.map(r => {
+      const activo = parseInt(r.Activo ?? 1);
+      const isOk = activo === 1;
+      const statusCls = isOk ? 'ok' : 'warn';
+      const statusTxt = isOk ? 'Activo' : 'Inactivo';
+      const rowStyle = !isOk ? 'background:#f8f9fa;color:#adb5bd' : '';
 
-      // Update KPIs
-      const k = resp.kpis || {};
-      kpi_total.textContent = k.total || 0;
-      kpi_activos.textContent = k.activos || 0;
-      kpi_preventa.textContent = k.preventa || 0;
-      kpi_entrega.textContent = k.entrega || 0;
-
-      let h = '';
-      rows.forEach(r => {
-        h += `
-      <tr>
+      return `<tr style="${rowStyle}">
         <td class="ap-actions">
-          ${verInactivos
-            ? `<i class="fa fa-undo" title="Recuperar" onclick="recuperar(${r.ID_Ruta})"></i>`
-            : `<i class="fa fa-edit" title="Editar" onclick="editar(${r.ID_Ruta})"></i>
-               <i class="fa fa-trash" title="Eliminar" onclick="eliminar(${r.ID_Ruta})"></i>`}
+           <i class="fa fa-pen" title="Editar" onclick="editar(${r.ID_Ruta})"></i>
+           ${isOk ? `<i class="fa fa-ban" title="Baja" onclick="eliminar(${r.ID_Ruta})"></i>`
+          : `<i class="fa fa-rotate-left" title="Recuperar" onclick="recuperar(${r.ID_Ruta})"></i>`}
         </td>
-        <td>${r.ID_Ruta || ''}</td>
-        <td><b>${r.cve_ruta || ''}</b></td>
-        <td>${r.descripcion || ''}</td>
-        <td>${r.status || ''}</td>
-        <td>${r.cve_almacenp || ''}</td>
-        <td>${Number(r.venta_preventa || 0) === 1 ? '<span class="ap-chip ok">Sí</span>' : '<span class="ap-chip warn">No</span>'}</td>
-        <td>${Number(r.es_entrega || 0) === 1 ? '<span class="ap-chip ok">Sí</span>' : '<span class="ap-chip warn">No</span>'}</td>
-        <td>${(r.control_pallets_cont || 'N') === 'S' ? '<span class="ap-chip ok">Sí</span>' : '<span class="ap-chip warn">No</span>'}</td>
-        <td>${r.consig_pallets || 0}</td>
-        <td>${r.consig_cont || 0}</td>
-        <td>${r.ID_Proveedor || 0}</td>
-        <td>${Number(r.Activo || 1) === 1 ? '1' : '0'}</td>
+        <td>${esc(r.ID_Ruta)}</td>
+        <td><b>${esc(r.cve_ruta)}</b></td>
+        <td>${esc(r.descripcion)}</td>
+        <td>${esc(r.cve_almacenp)}</td>
+        <td>${esc(r.status)}</td>
+        <td>${r.venta_preventa == 1 ? '<i class="fa fa-check text-success"></i>' : '-'}</td>
+        <td>${r.es_entrega == 1 ? '<i class="fa fa-check text-success"></i>' : '-'}</td>
+        <td><span class="ap-chip ${statusCls}" style="padding:2px 8px;font-size:10px">${statusTxt}</span></td>
       </tr>`;
-      });
-      tb.innerHTML = h || `<tr><td colspan="13" style="text-align:center;color:#6c757d;padding:20px">Sin resultados</td></tr>`;
-      setPager();
-    });
+    }).join('');
   }
 
-  function buscar() { qLast = q.value.trim(); page = 1; cargar(); }
-  function limpiar() { q.value = ''; qLast = ''; page = 1; cargar(); }
-  function toggleInactivos() { verInactivos = !verInactivos; page = 1; cargar(); }
+  function renderPager(total, pageSize) {
+    const p = document.getElementById('pager');
+    const totalPages = Math.ceil(total / pageSize);
+    const start = total > 0 ? (curPage - 1) * pageSize + 1 : 0;
+    const end = Math.min(curPage * pageSize, total);
 
-  function hideErrors() { err_cve.style.display = 'none'; err_desc.style.display = 'none'; }
-  function validar() {
-    hideErrors();
-    let ok = true;
-    if (!cve_ruta.value.trim()) { err_cve.style.display = 'block'; ok = false; }
-    if (!descripcion.value.trim()) { err_desc.style.display = 'block'; ok = false; }
-    return ok;
+    const prev = curPage > 1 ? `<button class="ap-chip" onclick="refrescar(${curPage - 1})"><i class="fa fa-chevron-left"></i></button>` : '';
+    const next = curPage < totalPages ? `<button class="ap-chip" onclick="refrescar(${curPage + 1})"><i class="fa fa-chevron-right"></i></button>` : '';
+
+    p.innerHTML = `
+      <div class="ap-pager-info">Mostrando ${start}-${end} de ${total} registros</div>
+      <div class="ap-pager-controls">
+        ${prev}
+        <span class="ap-chip" style="cursor:default">Página ${curPage}</span>
+        ${next}
+      </div>
+    `;
+  }
+
+  function renderKPIs(k) {
+    const c = document.getElementById('kpiCards');
+    c.innerHTML = `
+      <div class="ap-card" onclick="refrescar(1)">
+        <div class="h">Total Rutas <i class="fa fa-list"></i></div>
+        <div class="k">${k.total || 0}</div>
+      </div>
+      <div class="ap-card">
+        <div class="h">Activas <i class="fa fa-check-circle" style="color:#198754"></i></div>
+        <div class="k">${k.activos || 0}</div>
+      </div>
+      <div class="ap-card">
+        <div class="h">Preventa <i class="fa fa-user-clock"></i></div>
+        <div class="k">${k.preventa || 0}</div>
+      </div>
+      <div class="ap-card">
+        <div class="h">Entrega <i class="fa fa-truck"></i></div>
+        <div class="k">${k.entrega || 0}</div>
+      </div>
+    `;
+  }
+
+  // --- CRUD Operations ---
+
+  function cargarAlmacenes() {
+    fetch(API + '?action=almacenes')
+      .then(r => r.json())
+      .then(j => {
+        if (j.success && j.data) {
+          const sel = document.getElementById('cve_almacenp');
+          const current = sel.value;
+          sel.innerHTML = '<option value="0">Seleccione...</option>' +
+            j.data.map(a => `<option value="${a.id}">${a.nombre}</option>`).join('');
+          if (current) sel.value = current;
+        }
+      });
   }
 
   function nuevo() {
-    document.querySelectorAll('#mdl input').forEach(i => i.value = '');
-    document.querySelectorAll('#mdl select').forEach(s => {
-      if (s.id === 'status') s.value = 'A';
-      else if (s.id === 'Activo') s.value = '1';
-      else if (s.id === 'venta_preventa') s.value = '1';
-      else if (s.id === 'es_entrega') s.value = '0';
-      else if (s.id === 'control_pallets_cont') s.value = 'N';
-    });
-    cve_almacenp.value = '0';
-    consig_pallets.value = '0';
-    consig_cont.value = '0';
-    ID_Proveedor.value = '0';
-    ID_Ruta.value = '';
-    hideErrors();
-    mdl.style.display = 'block';
+    document.getElementById('mdlTitle').innerText = 'Nueva Ruta';
+    ['ID_Ruta', 'cve_ruta', 'descripcion', 'consig_pallets', 'consig_cont', 'ID_Proveedor'].forEach(id => document.getElementById(id).value = '');
+
+    document.getElementById('ID_Ruta').value = 0;
+    // Defaults
+    document.getElementById('cve_almacenp').value = 0;
+    document.getElementById('status').value = 'A';
+    document.getElementById('venta_preventa').value = 1;
+    document.getElementById('es_entrega').value = 0;
+    document.getElementById('control_pallets_cont').value = 'N';
+    document.getElementById('Activo').value = 1;
+
+    abrirModal('mdl');
   }
 
   function editar(id) {
-    fetch(API + '?action=get&id=' + id).then(r => r.json()).then(resp => {
-      const r = resp.data;
-      ID_Ruta.value = r.ID_Ruta || '';
-      cve_ruta.value = r.cve_ruta || '';
-      descripcion.value = r.descripcion || '';
-      status.value = r.status || 'A';
-      cve_almacenp.value = r.cve_almacenp || 0;
-      venta_preventa.value = String(r.venta_preventa || 1);
-      es_entrega.value = String(r.es_entrega || 0);
-      control_pallets_cont.value = r.control_pallets_cont || 'N';
-      consig_pallets.value = r.consig_pallets || 0;
-      consig_cont.value = r.consig_cont || 0;
-      ID_Proveedor.value = r.ID_Proveedor || 0;
-      Activo.value = String(r.Activo || 1);
-      hideErrors();
-      mdl.style.display = 'block';
-    });
+    fetch(API + '?action=get&id=' + id)
+      .then(r => r.json())
+      .then(j => {
+        if (j.success) {
+          const d = j.data;
+          document.getElementById('mdlTitle').innerText = 'Editar Ruta ' + d.cve_ruta;
+
+          document.getElementById('ID_Ruta').value = d.ID_Ruta;
+          document.getElementById('cve_ruta').value = d.cve_ruta;
+          document.getElementById('descripcion').value = d.descripcion;
+
+          // Select Almacen
+          document.getElementById('cve_almacenp').value = d.cve_almacenp || 0;
+
+          document.getElementById('status').value = d.status;
+          document.getElementById('venta_preventa').value = d.venta_preventa;
+          document.getElementById('es_entrega').value = d.es_entrega;
+          document.getElementById('control_pallets_cont').value = d.control_pallets_cont;
+
+          document.getElementById('consig_pallets').value = d.consig_pallets;
+          document.getElementById('consig_cont').value = d.consig_cont;
+          document.getElementById('ID_Proveedor').value = d.ID_Proveedor || '';
+          document.getElementById('Activo').value = d.Activo;
+
+          abrirModal('mdl');
+        } else {
+          showMsg('No encontrado', 'warn');
+        }
+      });
   }
 
   function guardar() {
-    if (!validar()) return;
+    const id = document.getElementById('ID_Ruta').value;
+    const cve = document.getElementById('cve_ruta').value.trim();
+    const des = document.getElementById('descripcion').value.trim();
+    const alm = document.getElementById('cve_almacenp').value;
+
+    if (!cve || !des) { showMsg('Clave y Descripción requeridos', 'warn'); return; }
+    if (alm == 0) { showMsg('Seleccione un Almacén', 'warn'); return; }
 
     const data = {
-      ID_Ruta: ID_Ruta.value ? parseInt(ID_Ruta.value, 10) : null,
-      cve_ruta: cve_ruta.value.trim(),
-      descripcion: descripcion.value.trim(),
-      status: status.value,
-      cve_almacenp: parseInt(cve_almacenp.value || '0', 10),
-      venta_preventa: parseInt(venta_preventa.value || '1', 10),
-      es_entrega: parseInt(es_entrega.value || '0', 10),
-      control_pallets_cont: control_pallets_cont.value,
-      consig_pallets: parseInt(consig_pallets.value || '0', 10),
-      consig_cont: parseInt(consig_cont.value || '0', 10),
-      ID_Proveedor: parseInt(ID_Proveedor.value || '0', 10),
-      Activo: parseInt(Activo.value || '1', 10)
+      ID_Ruta: id,
+      cve_ruta: cve,
+      descripcion: des,
+      cve_almacenp: alm,
+      status: document.getElementById('status').value,
+      venta_preventa: document.getElementById('venta_preventa').value,
+      es_entrega: document.getElementById('es_entrega').value,
+      control_pallets_cont: document.getElementById('control_pallets_cont').value,
+      consig_pallets: document.getElementById('consig_pallets').value,
+      consig_cont: document.getElementById('consig_cont').value,
+      ID_Proveedor: document.getElementById('ID_Proveedor').value,
+      Activo: document.getElementById('Activo').value
     };
 
     fetch(API + '?action=save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     })
       .then(r => r.json())
-      .then(resp => {
-        if (resp && resp.error) {
-          alert(resp.error);
-          return;
+      .then(j => {
+        if (j.success) {
+          showMsg('Guardado correctamente', 'ok');
+          cerrarModal('mdl');
+          refrescar(curPage);
+        } else {
+          showMsg(j.message || 'Error al guardar', 'warn');
         }
-        cerrarModal('mdl');
-        cargar();
       });
   }
 
   function eliminar(id) {
-    if (!confirm('¿Eliminar ruta?')) return;
-    fetch(API + '?action=delete&id=' + id, { method: 'POST' }).then(() => cargar());
+    if (!confirm('¿Inactivar ruta?')) return;
+    fetch(API + '?action=delete&id=' + id)
+      .then(r => r.json())
+      .then(j => {
+        if (j.success) { showMsg('Ruta inactivada', 'ok'); refrescar(curPage); }
+        else showMsg('Error al eliminar', 'warn');
+      });
   }
+
   function recuperar(id) {
-    // Restore = set Activo=1
-    fetch(API + '?action=save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ID_Ruta: id, Activo: 1 })
-    }).then(() => cargar());
-  }
-
-  function exportarDatos() {
-    // Export all data as CSV
-    fetch(API + '?action=list&pageSize=10000&show_inactivos=1')
+    fetch(API + '?action=recover&id=' + id, { method: 'POST' })
       .then(r => r.json())
-      .then(resp => {
-        const rows = resp.data || [];
-        let csv = 'ID,Clave,Descripción,Status,Almacén,Preventa,Entrega,Control Pallets,Consig Pallets,Consig Cont,Proveedor,Activo\n';
-        rows.forEach(r => {
-          csv += `${r.ID_Ruta || ''},${r.cve_ruta || ''},"${(r.descripcion || '').replace(/"/g, '""')}",${r.status || ''},${r.cve_almacenp || ''},${r.venta_preventa || 0},${r.es_entrega || 0},${r.control_pallets_cont || 'N'},${r.consig_pallets || 0},${r.consig_cont || 0},${r.ID_Proveedor || ''},${r.Activo || 1}\n`;
-        });
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'rutas_export.csv';
-        a.click();
-        URL.revokeObjectURL(a.href);
+      .then(j => {
+        if (j.success) { showMsg('Recuperado', 'ok'); refrescar(curPage); }
+        else showMsg(j.message || 'Error al recuperar', 'warn');
       });
   }
-  function descargarLayout() {
-    const header = 'Clave,Descripción,Status,Almacén,Preventa,Entrega,Control Pallets,Consig Pallets,Consig Cont,Proveedor,Activo\n';
-    const blob = new Blob([header], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'rutas_layout.csv';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
 
+  function buscar() { refrescar(1); }
+  function limpiar() { document.getElementById('q').value = ''; refrescar(1); }
+  function exportarCSV() { window.open(API + '?action=layout_csv', '_blank'); } // Usar layout o crear uno nuevo de export
+
+  // Imports
   function abrirImport() {
-    fileCsv.value = '';
-    csvPreviewWrap.style.display = 'none';
-    importMsg.style.display = 'none';
-    document.getElementById('btnImportarFinal').style.display = 'none';
-    mdlImport.style.display = 'block';
+    document.getElementById('csvFile').value = '';
+    document.getElementById('importResult').innerHTML = '';
+    abrirModal('mdlImport');
   }
-  function previsualizarCsv() {
-    const f = fileCsv.files[0];
-    if (!f) { alert('Selecciona un CSV'); return; }
-    const r = new FileReader();
-    r.onload = e => {
-      const rows = e.target.result.split('\n').filter(x => x.trim() !== '');
-      csvHead.innerHTML = '<tr>' + rows[0].split(',').map(h => `<th>${h}</th>`).join('') + '</tr>';
-      csvBody.innerHTML = rows.slice(1, 6).map(r => '<tr>' + r.split(',').map(c => `<td>${c}</td>`).join('') + '</tr>').join('');
-      csvPreviewWrap.style.display = 'block';
-      importMsg.style.display = 'none';
-      document.getElementById('btnImportarFinal').style.display = 'block';
-    };
-    r.readAsText(f);
-  }
-  function importarCsv() {
-    const fd = new FormData();
-    fd.append('file', fileCsv.files[0]);
 
-    fetch(API + '?action=import_csv', { method: 'POST', body: fd })
+  function importarCSV() {
+    const f = document.getElementById('csvFile').files[0];
+    if (!f) { alert('Selecciona archivo'); return; }
+    const fd = new FormData();
+    fd.append('action', 'import_csv');
+    fd.append('file', f);
+
+    document.getElementById('importResult').innerHTML = 'Calculando...';
+
+    fetch(API, { method: 'POST', body: fd })
       .then(r => r.json())
-      .then(resp => {
-        importMsg.style.display = 'flex';
-        if (!resp.success) {
-          importMsg.className = 'ap-chip warn';
-          importMsg.innerHTML = `<b>Error:</b> ${resp.message || 'Error desconocido'}`;
-          return;
+      .then(j => {
+        const d = document.getElementById('importResult');
+        if (j.success) {
+          d.innerHTML = `<div class="ap-chip ok">Importados: ${j.total_ok} <br> Errores: ${j.total_err}</div>`;
+          setTimeout(() => { cerrarModal('mdlImport'); refrescar(1); }, 3000);
+        } else {
+          d.innerHTML = `<div style="color:red">${j.message}</div>`;
         }
-        importMsg.className = 'ap-chip ok';
-        importMsg.innerHTML = `<b>Importación:</b> OK ${resp.total_ok || 0} | Err ${resp.total_err || 0}`;
-        setTimeout(() => { cerrarModal('mdlImport'); cargar(); }, 2000);
       });
   }
 
-  function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
-
+  // Init
   document.addEventListener('DOMContentLoaded', () => {
-    selPerPage.value = '25';
-    cargar();
+    cargarAlmacenes();
+    refrescar(1);
   });
 </script>
 

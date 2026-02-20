@@ -38,7 +38,7 @@ try {
         if ($id > 0) {
             // UPDATE
             dbq("
-                UPDATE assistpro_etl_fc.c_ws_conexion
+                UPDATE assistpro_etl_fc_dev.c_ws_conexion
                    SET sistema         = :sistema,
                        nombre_conexion = :nombre_conexion,
                        url_base        = :url_base,
@@ -72,7 +72,7 @@ try {
         } else {
             // INSERT
             dbq("
-                INSERT INTO assistpro_etl_fc.c_ws_conexion
+                INSERT INTO assistpro_etl_fc_dev.c_ws_conexion
                     (sistema, nombre_conexion, url_base, tipo_auth,
                      company_db, usuario_ws, password_ws, token_ws,
                      observaciones, activo, fecha_crea, usuario_crea)
@@ -100,7 +100,7 @@ try {
     } elseif ($accion === 'borrar' && $id > 0) {
         // Soft delete
         dbq("
-            UPDATE assistpro_etl_fc.c_ws_conexion
+            UPDATE assistpro_etl_fc_dev.c_ws_conexion
                SET activo = 0,
                    fecha_mod = NOW(),
                    usuario_mod = :usuario
@@ -122,7 +122,7 @@ $editar = null;
 if ($id > 0) {
     $editar = db_one("
         SELECT *
-          FROM assistpro_etl_fc.c_ws_conexion
+          FROM assistpro_etl_fc_dev.c_ws_conexion
          WHERE id = :id
     ", [':id' => $id]);
 }
@@ -130,7 +130,7 @@ if ($id > 0) {
 // Listado
 $lista = db_all("
     SELECT *
-      FROM assistpro_etl_fc.c_ws_conexion
+      FROM assistpro_etl_fc_dev.c_ws_conexion
      ORDER BY activo DESC, nombre_conexion
 ", []);
 ?>

@@ -122,7 +122,7 @@ try {
     ";
 
     $st = $pdo->prepare($sql);
-    $st->execute([$q, $qLike, $qLike, $qLike, $qLike, $qLike, $q]);
+    $st->execute([$q, $qLike, $qLike, $qLike, $qLike, $q]);
 
     jexit(['ok'=>1,'rows'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
   }

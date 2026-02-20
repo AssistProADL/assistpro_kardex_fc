@@ -1,0 +1,53 @@
+Tablas involucradas
+
+  Las tablas involucradas son th_pedido y td_pedido , th_aduana y td_aduana, c_ubicacion para almacén origen , tubucacionesretencion para zona de recepción destino, ts_existenciapiezas, ts_existenciacajas, ts_existenciatarima, para contenedores y pallets, t_movcharolas, t_cardex, t_tipomovimiento, no vamos a inventar columnas, te paso el esquema y me dices si ves todas las tablas enumeradas.  Las 5 columnas del importador estan en el excel anexo. vamos por partes primero veamos la vista del importador y al final impactamos todas las tablas. 
+
+API api_imp_tras_entre_almacenes.php
+
+Instrucciones globales para corregir UI y API
+
+Menú global y end indican que todos los elementos de estilo están en estos archivos, sin ellos cualquier página se va a tamaño completo o con estilos diferentes
+_menu_global.php y _menu_global_end.php en /public/bi/
+
+
+require_once __DIR__ . '/../bi/_menu_global.php';
+require_once __DIR__ . '/../bi/_menu_global_end.php';
+
+Toda vista y APIs utilizan 
+utiliza db_pdo();  global $pdo;
+
+Acceso a BD
+db.php esta en /app/db.php al nivel de public 
+require_once __DIR__ . '/../../../app/db.php';
+db_pdo();
+global $pdo;
+
+Estructura jerárquica de cualquier vista
+Empresa
+Usuario
+Almacèn
+Zona de almacenaje
+BL = Bin location = CodigoCSD
+
+
+c_importadores
+api/importadores/api_import_run_get.php
+
+Path de archivos
+/public
+  /importadores
+    import_run_detalle.php
+    import_runs.php          
+  /api
+    /importadores
+      api_import_run_get.php
+/app
+  db.php
+/public/bi
+  _menu_global.php
+  _menu_global_end.php
+
+Referebcia Base
+
+href="/public/importadores/import_run_detalle.php?run_id=123"
+   

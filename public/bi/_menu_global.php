@@ -3,7 +3,8 @@
 require_once __DIR__ . '/../../app/auth_check.php';
 
 // NO cerrar PHP aquí para evitar output antes del DOCTYPE
-?><!DOCTYPE html>
+?>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -409,7 +410,8 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Análisis Global', 'url' => 'dashboard/index.php', 'icono' => 'fa-location-dot'],
                 ['titulo' => 'Georeferencia Rutas', 'url' => 'sfa/geo_distribucion_clientes.php', 'icono' => 'fa-location-dot'],
                 ['titulo' => 'Análisis Crédito', 'url' => 'dashboard/creditos.php', 'icono' => 'fa-location-dot'],
-                ['titulo' => 'Inventario', 'url' => 'dashboard/inventario.php', 'icono' => 'fa-boxes-stacked'],
+                ['titulo' => 'Lead Time Analysis', 'url' => 'dashboard/dashboard_lta.php', 'icono' => 'fa-boxes-stacked'],
+                // ['titulo' => 'Inventario', 'url' => 'dashboard/inventario.php', 'icono' => 'fa-boxes-stacked'],
                 ['titulo' => 'Resumen Básico', 'url' => 'dashboard/resumen_basico.php', 'icono' => 'fa-chart-pie'],
                 ['titulo' => 'Dashboard Inventarios', 'url' => 'dashboard/adm_inventarios.php', 'icono' => 'fa-warehouse'],
                 ['titulo' => 'Ocupación Almacén', 'url' => 'dashboard/ocupacion_almacen.php', 'icono' => 'fa-chart-line'],
@@ -437,19 +439,22 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'BL Ubicaciones', 'url' => 'catalogos/ubicaciones.php', 'icono' => 'fa-box-open'],
 
 
+
                 ['titulo' => 'Rutas', 'url' => 'catalogos/rutas.php', 'icono' => 'fa-route'],
                 ['titulo' => 'Clientes', 'url' => 'catalogos/clientes.php', 'icono' => 'fa-road'],
                 ['titulo' => 'Grupo de clientes', 'url' => 'catalogos/clientes_grupo.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Destinatarios', 'url' => 'catalogos/destinatarios.php', 'icono' => 'fa-road'],
                 ['titulo' => 'Proveedores', 'url' => 'catalogos/proveedores.php', 'icono' => 'fa-truck-field'],
                 ['titulo' => 'Contactos', 'url' => 'catalogos/contactos.php', 'icono' => 'fa-layer-group'],
+                ['titulo' => 'Agentes de ventas', 'url' => 'catalogos/vendedores.php', 'icono' => 'fa-circle'],
 
 
-                ['titulo' => 'Protocolos de Entrada', 'url' => 'catalogos/protocolos_entrada.php', 'icono' => 'fa-clipboard-check'],
+                ['titulo' => 'Tipos de Movimientos', 'url' => 'catalogos/tipos_movimiento_doc.php', 'icono' => 'fa-clipboard-check'],
                 ['titulo' => 'Proyectos | CC', 'url' => 'catalogos/proyecto.php', 'icono' => 'fa-diagram-project'],
                 ['titulo' => 'Ajustes | Incidencias', 'url' => 'catalogos/ajustes_incidencias.php', 'icono' => 'fa-triangle-exclamation'],
                 ['titulo' => 'QA | Cuarentena', 'url' => 'catalogos/qa_cuarentena.php', 'icono' => 'fa-triangle-exclamation'],
 
+                ['titulo' => 'Tipo de Pedidos', 'url' => 'catalogos/tipo_pedido.php', 'icono' => 'fa-layer-group'],
 
                 ['titulo' => 'Tipo de Prioridad', 'url' => 'catalogos/tipos_prioridad.php', 'icono' => 'fa-layer-group'],
                 ['titulo' => 'Formas de Pago', 'url' => 'catalogos/formas_pago.php', 'icono' => 'fa-layer-group'],
@@ -491,22 +496,23 @@ require_once __DIR__ . '/../../app/auth_check.php';
             // SFA
             'SFA' => [
                 ['titulo' => 'Dashboard Activos',             'url' => 'sfa/dashboard_activos.php',          'icono' => 'fa-tags'],
-                ['titulo' => 'Geolocalización Activos',       'url' => 'sfa/activos_geocercas.php',          'icono' => 'fa-tags'],
                 ['titulo' => 'Resumen Ejecutivo',             'url' => 'sfa/resumen_rutas.php',              'icono' => 'fa-tags'],
-                ['titulo' => 'Planeación de Rutas',           'url' => 'sfa/planeacion_rutas_destinatarios.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Configuración Rutas',           'url' => 'sfa/rutas_planning.php',             'icono' => 'fa-tags'],
+                ['titulo' => 'Planeación de Rutas',           'url' => 'sfa/planeacion_rutas_destinatarios.php', 'icono' => 'fa-tags'],
                 ['titulo' => 'Administración Comercial',      'url' => 'sfa/destinatarios_config.php',       'icono' => 'fa-tags'],
                 ['titulo' => 'Lista de Precios',              'url' => 'sfa/lista_precios.php',              'icono' => 'fa-tags'],
                 ['titulo' => 'Lista de Descuentos',           'url' => 'sfa/lista_descuentos.php',           'icono' => 'fa-percent'],
-                ['titulo' => 'Promociones',                   'url' => 'sfa/promociones/promociones.php',        'icono' => 'fa-gift'],
-                ['titulo' => 'Simulador Promociones',         'url' => 'sfa/promociones/simulador.php',        'icono' => 'fa-gift'],
-                 ['titulo' => 'Asignación de Activos', 'url' => 'sfa/activos_control.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Activos', 'url' => 'sfa/activos.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Tipos de Activos', 'url' => 'sfa/activo_tipos.php', 'icono' => 'fa-tags'],
-                ['titulo' => 'Propietario Activos', 'url' => 'sfa/activos_propiedad.php', 'icono' => 'fa-percent'],
-                ['titulo' => 'Status Activos', 'url' => 'sfa/activo_estados.php', 'icono' => 'fa-gift'],
-                ['titulo' => 'Condicion Activos', 'url' => 'sfa/activo_condicion.php', 'icono' => 'fa-layer-group'],
-                ['titulo' => 'Encuestas', 'url' => 'sfa/encuestas.php', 'icono' => 'fa-layer-group'],
+                ['titulo' => 'Promociones',                   'url' => 'sfa/promociones/promo_design.php',   'icono' => 'fa-gift'],
+                ['titulo' => 'Admin Promociones',             'url' => 'sfa/promociones/promociones.php',    'icono' => 'fa-gift'],
+                ['titulo' => 'Simulador Promociones',         'url' => 'sfa/promociones/simulador.php',      'icono' => 'fa-gift'],
+                ['titulo' => 'Asignación de Activos',           'url' => 'sfa/activos_control.php',            'icono' => 'fa-tags'],
+                ['titulo' => 'Activos',                       'url' => 'sfa/activos.php',                    'icono' => 'fa-tags'],
+                ['titulo' => 'Tipos de Activos',              'url' => 'sfa/activo_tipos.php',               'icono' => 'fa-tags'],
+                ['titulo' => 'Propietario Activos',           'url' => 'sfa/activos_propiedad.php',          'icono' => 'fa-percent'],
+                ['titulo' => 'Status Activos',                'url' => 'sfa/activo_estados.php',             'icono' => 'fa-gift'],
+                ['titulo' => 'Condicion Activos',             'url' => 'sfa/activo_condicion.php',           'icono' => 'fa-layer-group'],
+                ['titulo' => 'Encuestas',                     'url' => 'sfa/encuestas.php',                  'icono' => 'fa-layer-group'],
+                ['titulo' => 'AssistPro ER Mobile', 'url' => 'sfa/mobile/index.html', 'icono' => 'fa-file-lines'],
             ],
 
             // TMS
@@ -524,8 +530,10 @@ require_once __DIR__ . '/../../app/auth_check.php';
             // ADMINISTRACIÓN DE ALMACEN
             'Administración Almacen' => [
                 ['titulo' => 'Config. de Almacén',              'url' => 'config_almacen/configuracion_almacen.php',      'icono' => 'fa-gear'],
+                ['titulo' => 'Análisis de BL',              'url' => 'catalogos/dashboard_ubicaciones.php',      'icono' => 'fa-gear'],
                 ['titulo' => 'Pallets y Contenedores',          'url' => 'config_almacen/license_plate.php',              'icono' => 'fa-right-left'],
                 ['titulo' => 'Transacciones License Plate',     'url' => 'config_almacen/lp_pr_transaction.php',          'icono' => 'fa-right-left'],
+                ['titulo' => 'Wizard de Ubicaciones',     'url' => 'config_almacen/wizard_ubicaciones.php',          'icono' => 'fa-right-left'],
 
             ],
 
@@ -551,6 +559,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'PutAway (Acomodo)',            'url' => 'putaway/putaway_acomodo.php',             'icono' => 'fa-right-left'],
                 ['titulo' => 'Traslado',                     'url' => 'putaway/traslado.php',                    'icono' => 'fa-box-archive'],
                 ['titulo' => 'Traslado entre Almacenes',     'url' => 'putaway/traslado_entre_almacenes.php',    'icono' => 'fa-box-archive'],
+                ['titulo' => 'Importador traslado entre almacenes', 'url' => 'importadores/importador_traslado_almacenes.php', 'icono' => 'fa-box-archive'],
             ],
 
             // PICKING
@@ -568,13 +577,14 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Planeacion OP',                 'url' => 'manufactura/orden_produccion.php',         'icono' => 'fa-flag'],
                 ['titulo' => 'Importador OPs',                'url' => 'manufactura/importador_op.php',              'icono' => 'fa-industry'],
                 ['titulo' => 'Monitor Producción',            'url' => 'manufactura/monitor_produccion.php',       'icono' => 'fa-flag'],
-                
-                             ],
+
+            ],
 
             // QA AUDITORIA
             'QA Auditoría' => [
                 ['titulo' => 'Auditoria y Empaque', 'url' => 'qa_auditoria/auditoriayempaque.php', 'icono' => 'fa-industry'],
                 ['titulo' => 'Admin', 'url' => 'qa_auditoria/admin.php', 'icono' => 'fa-flag'],
+                ['titulo' => 'Control de calidad', 'url' => 'qa_auditoria/movimientos.php', 'icono' => 'fa-flag'],
                 ['titulo' => 'Admin QA', 'url' => 'qa_auditoria/listas_adminqa.php', 'icono' => 'fa-screwdriver-wrench'],
                 ['titulo' => 'Listas QA Cuarentena', 'url' => 'qa_auditoria/listas_qacuarentena.php', 'icono' => 'fa-screwdriver-wrench'],
             ],
@@ -597,7 +607,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Servicios', 'url' => 'vas/servicios_vas.php', 'icono' => 'fa-calendar-check'],
                 ['titulo' => 'Clientes', 'url' => 'vas/vas_cliente.php', 'icono' => 'fa-calendar-check'],
                 ['titulo' => 'Cobranza', 'url' => 'vas/vas_cobranza.php', 'icono' => 'fa-calendar-check'],
-	        ['titulo' => 'Pedidos', 'url' => 'vas/vas_pedido.php', 'icono' => 'fa-calendar-check'],
+                ['titulo' => 'Pedidos', 'url' => 'vas/vas_pedido.php', 'icono' => 'fa-calendar-check'],
 
             ],
 
@@ -639,20 +649,33 @@ require_once __DIR__ . '/../../app/auth_check.php';
 
             // UTILERÍAS
             'Utilerías' => [
-                ['titulo' => 'Conexión SAP B1', 'url' => 'conexion_ws/config_conexion_ws.php', 'icono' => 'fa-timeline'],
-                ['titulo' => 'Log de Operaciones', 'url' => 'utilerias/log_operaciones.php', 'icono' => 'fa-timeline'],
-                ['titulo' => 'Log WebServices', 'url' => 'utilerias/log_ws.php', 'icono' => 'fa-arrow-right-arrow-left'],
-                ['titulo' => 'Browser ETL', 'url' => 'etl/etl_browser.php', 'icono' => 'fa-timeline'],
-                ['titulo' => 'Administrador Procesos ', 'url' => 'etl/administrador_procesos.php', 'icono' => 'fa-arrow-right-arrow-left'],
-                ['titulo' => 'Generador de Catálogos', 'url' => 'utilerias/generador.php', 'icono' => 'fa-clipboard-list'],
+                ['titulo' => 'Catálogo de Importadores',      'url' => 'utilerias/catalogo_importadores.php',    'icono' => 'fa-timeline'],
+                ['titulo' => 'Conexión SAP B1',               'url' => 'conexion_ws/config_conexion_ws.php',     'icono' => 'fa-timeline'],
+                ['titulo' => 'Log de Operaciones',            'url' => 'utilerias/log_operaciones.php',          'icono' => 'fa-timeline'],
+                ['titulo' => 'Log WebServices',               'url' => 'utilerias/log_ws.php',                   'icono' => 'fa-arrow-right-arrow-left'],
+                ['titulo' => 'Browser ETL',                   'url' => 'etl/etl_browser.php',                    'icono' => 'fa-timeline'],
+                ['titulo' => 'Administrador Procesos ',       'url' => 'etl/administrador_procesos.php',         'icono' => 'fa-arrow-right-arrow-left'],
+                ['titulo' => 'Generador de Catálogos',        'url' => 'utilerias/generador.php',          'icono' => 'fa-clipboard-list'],
             ],
+            // PQRS
+            'PQRS' => [
+                ['titulo' => 'Control de incidencias', 'url' => 'pqrs/pqrs.php', 'icono' => 'fa-timeline'],
+
+            ],
+            // Field Services
+            'Field Services' => [
+                ['titulo' => 'Instalaciones', 'url' => 'instalaciones/index.php', 'icono' => 'fa-timeline'],
+
+
+            ],
+
         ];
         ?>
 
         <?php foreach ($menus as $menu => $submenus):
             $menuId = 'menu_' . preg_replace('/[^a-z0-9]+/i', '_', strtolower($menu));
             $collapsed = true; // todos colapsados por defecto
-            ?>
+        ?>
             <div class="menu-header menu-toggle <?= $collapsed ? 'collapsed' : '' ?>" data-target="#<?= $menuId ?>">
                 <div class="left">
                     <i class="fa fa-folder-open"></i> <?= htmlspecialchars($menu) ?>
@@ -662,7 +685,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
             <div class="submenu <?= $collapsed ? 'collapsed' : '' ?>" id="<?= $menuId ?>">
                 <?php foreach ($submenus as $item):
                     $icono = !empty($item['icono']) ? $item['icono'] : 'fa-circle';
-                    ?>
+                ?>
                     <a href="<?= $baseUrl . htmlspecialchars($item['url']) ?>">
                         <i class="fa <?= htmlspecialchars($icono) ?>"></i>
                         <?= htmlspecialchars($item['titulo']) ?>
@@ -681,9 +704,9 @@ require_once __DIR__ . '/../../app/auth_check.php';
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('.menu-toggle').forEach(function (header) {
-                header.addEventListener('click', function () {
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.menu-toggle').forEach(function(header) {
+                header.addEventListener('click', function() {
                     var targetSelector = this.getAttribute('data-target');
                     if (!targetSelector) return;
                     var target = document.querySelector(targetSelector);
