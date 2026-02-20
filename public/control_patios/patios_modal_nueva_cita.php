@@ -1,161 +1,148 @@
 <?php
-// Modal: Nueva Cita (Planeación)
+require_once __DIR__ . '/../../app/db.php';
+require_once __DIR__ . '/../bi/_menu_global.php';
+
+$fecha     = $_GET['fecha'] ?? date('Y-m-d');
+$cve_almac = $_GET['cve_almac'] ?? '';
+$hora_ini  = $_GET['hora_inicio'] ?? '';
+$rampa     = $_GET['rampa'] ?? '';
 ?>
-<div class="modal fade" id="mdlNuevaCita" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content">
 
-      <div class="modal-header">
-        <h5 class="modal-title">📅 Nueva cita</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<style>
+.ap-wrap *{ font-size:11px !important; }
+.ap-card{
+  background:#fff;
+  border:1px solid #e9ecef;
+  padding:15px;
+  border-radius:6px;
+  max-width:800px;
+}
+.ap-title{
+  font-size:16px;
+  font-weight:700;
+  color:#0b3a82;
+  margin-bottom:15px;
+}
+.form-row{
+  display:flex;
+  gap:10px;
+  margin-bottom:10px;
+}
+.form-row > div{
+  flex:1;
+}
+</style>
+
+<div class="ap-wrap">
+  <div class="ap-card">
+    <div class="ap-title">Nueva Cita</div>
+
+    <div class="form-row">
+      <div>
+        <label>Empresa</label>
+        <select id="empresa" class="form-control form-control-sm">
+          <option value="">Seleccione</option>
+        </select>
       </div>
-
-      <div class="modal-body">
-        <form id="frmNuevaCita">
-
-          <div class="row g-3">
-
-            <div class="col-md-6">
-              <label class="form-label">Empresa</label>
-              <select class="form-select" name="empresa_id" required>
-                <option value="">Seleccione</option>
-                <?php
-                $empresas = db_all("SELECT id, nombre FROM c_compania ORDER BY nombre");
-                foreach ($empresas as $e) {
-                  echo "<option value='{$e['id']}'>{$e['nombre']}</option>";
-                }
-                ?>
-              </select>
-            </div>
-
-            <div class="col-md-6">
-              <label class="form-label">Almacén / Patio</label>
-              <select class="form-select" name="almacenp_id" required>
-                <option value="">Seleccione</option>
-                <?php
-                $alm = db_all("SELECT id, nombre FROM c_almacenp ORDER BY nombre");
-                foreach ($alm as $a) {
-                  echo "<option value='{$a['id']}'>{$a['nombre']}</option>";
-                }
-                ?>
-              </select>
-            </div>
-
-            <div class="col-md-4">
-              <label class="form-label">Tipo de operación</label>
-              <select class="form-select" name="tipo_operacion">
-                <option value="RECEPCION">Recepción</option>
-                <option value="EMBARQUE">Embarque</option>
-                <option value="MIXTA">Mixta</option>
-              </select>
-            </div>
-
-            <div class="col-md-4">
-              <label class="form-label">Ventana inicio</label>
-              <input type="datetime-local" class="form-control"
-                     name="ventana_inicio" required>
-            </div>
-
-            <div class="col-md-4">
-              <label class="form-label">Ventana fin</label>
-              <input type="datetime-local" class="form-control"
-                     name="ventana_fin" required>
-            </div>
-
-            <div class="col-md-4">
-              <label class="form-label">Prioridad</label>
-              <select class="form-select" name="prioridad">
-                <option value="1">Alta</option>
-                <option value="2">Media</option>
-                <option value="3" selected>Baja</option>
-              </select>
-            </div>
-
-            <div class="col-md-4">
-              <label class="form-label">Proveedor</label>
-              <input type="number" class="form-control"
-                     name="id_proveedor"
-                     placeholder="ID proveedor (opcional)">
-            </div>
-
-            <div class="col-md-4">
-              <label class="form-label">Cliente</label>
-              <input type="number" class="form-control"
-                     name="id_cliente"
-                     placeholder="ID cliente (opcional)">
-            </div>
-
-            <div class="col-md-6">
-              <label class="form-label">Transporte</label>
-              <select class="form-select" name="id_transporte">
-                <option value="">(Opcional)</option>
-                <?php
-                $trs = db_all("
-                  SELECT id, Nombre, Placas
-                  FROM t_transporte
-                  WHERE Activo = 1
-                  ORDER BY Nombre
-                ");
-                foreach ($trs as $t) {
-                  $lbl = trim($t['Nombre'].' '.$t['Placas']);
-                  echo "<option value='{$t['id']}'>{$lbl}</option>";
-                }
-                ?>
-              </select>
-            </div>
-
-            <div class="col-md-6">
-              <label class="form-label">Referencia documento</label>
-              <input type="text" class="form-control"
-                     name="referencia_doc"
-                     placeholder="OC / ASN / Folio">
-            </div>
-
-            <div class="col-12">
-              <label class="form-label">Comentarios</label>
-              <textarea class="form-control"
-                        name="comentarios"
-                        rows="3"></textarea>
-            </div>
-
-          </div>
-
-        </form>
+      <div>
+        <label>Almacén</label>
+        <input type="number" id="cve_almac" class="form-control form-control-sm"
+               value="<?=htmlspecialchars($cve_almac)?>">
       </div>
-
-      <div class="modal-footer">
-        <button class="btn btn-secondary"
-                data-bs-dismiss="modal">Cancelar</button>
-        <button class="btn btn-primary"
-                onclick="guardarNuevaCita()">Guardar</button>
-      </div>
-
     </div>
+
+    <div class="form-row">
+      <div>
+        <label>Flujo</label>
+        <select id="tipo_flujo" class="form-control form-control-sm">
+          <option value="IN">IN</option>
+          <option value="OUT">OUT</option>
+        </select>
+      </div>
+      <div>
+        <label>Fecha</label>
+        <input type="date" id="fecha" class="form-control form-control-sm"
+               value="<?=htmlspecialchars($fecha)?>">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label>Hora inicio</label>
+        <input type="time" id="hora_inicio" class="form-control form-control-sm"
+               value="<?=htmlspecialchars($hora_ini)?>">
+      </div>
+      <div>
+        <label>Hora fin</label>
+        <input type="time" id="hora_fin" class="form-control form-control-sm">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label>Rampa</label>
+        <input type="number" id="rampa" class="form-control form-control-sm"
+               value="<?=htmlspecialchars($rampa)?>">
+      </div>
+      <div>
+        <label>Referencia</label>
+        <input type="text" id="referencia" class="form-control form-control-sm">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label>Placa</label>
+        <input type="text" id="placa" class="form-control form-control-sm">
+      </div>
+      <div>
+        <label>Operador</label>
+        <input type="text" id="operador" class="form-control form-control-sm">
+      </div>
+    </div>
+
+    <div style="margin-top:15px;">
+      <button class="btn btn-sm btn-success" onclick="guardar()">Guardar</button>
+      <button class="btn btn-sm btn-secondary" onclick="window.history.back()">Cancelar</button>
+    </div>
+
   </div>
 </div>
 
 <script>
-async function guardarNuevaCita(){
-  const form = document.getElementById('frmNuevaCita');
-  const fd = new FormData(form);
+const API = '../../api/control_patios/patios_planeador_api.php';
 
-  const res = await fetch(
-    'api/control_patios/api_patios_nueva_cita.php',
-    { method:'POST', body: fd }
-  );
+async function guardar(){
+
+  const data = new URLSearchParams();
+  data.append('action','create');
+  data.append('empresa_id', document.getElementById('empresa').value || 1);
+  data.append('cve_almac', document.getElementById('cve_almac').value);
+  data.append('tipo_flujo', document.getElementById('tipo_flujo').value);
+  data.append('fecha', document.getElementById('fecha').value);
+  data.append('hora_inicio', document.getElementById('hora_inicio').value);
+  data.append('hora_fin', document.getElementById('hora_fin').value);
+  data.append('rampa_posicion_id', document.getElementById('rampa').value);
+  data.append('referencia', document.getElementById('referencia').value);
+  data.append('placa', document.getElementById('placa').value);
+  data.append('operador', document.getElementById('operador').value);
+  data.append('canal','INTERNO');
+
+  const res = await fetch(API,{
+    method:'POST',
+    body:data
+  });
 
   const json = await res.json();
 
   if(!json.ok){
-    alert(json.error || 'Error al guardar cita');
+    alert(json.msg);
     return;
   }
 
-  bootstrap.Modal.getInstance(
-    document.getElementById('mdlNuevaCita')
-  ).hide();
-
-  form.reset();
-  cargarCitas();
+  alert('Cita creada correctamente');
+  window.location.href='patios_planeador.php';
 }
 </script>
+
+<?php require_once __DIR__ . '/../bi/_menu_global_end.php'; ?>

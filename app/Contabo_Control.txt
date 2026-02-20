@@ -1,0 +1,37 @@
+$Alex2026#@    Servidor Assets 212.56.46.7
+
+contabo 
+
+Advl·$··Wizard45!@    Nuevo
+
+contabo actual  fxh5W3PmUkcJ  Anterior
+
+VPS212
+vps212*@#advl
+ip 212.56.46.7
+
+
+
+Servidor BD Dev
+VPS8927
+vps89@#Advl
+
+VPS207166
+vps207_166@Advl
+
+VPS85193
+vps85_193@Advl
+
+VPS147200
+vps147_200@Advly
+
+
+PhPMyAdmin
+ALTER USER 'root2'@'%' IDENTIFIED BY '$&&(/AlexAdvl(/&$%';
+FLUSH PRIVILEGES;
+
+
+ALTER USER 'advlsystem'@'%' IDENTIFIED BY '&(/56AssistPro&/5635$';
+FLUSH PRIVILEGES;
+
+ssh root@ip_server Acceso A VPS 
