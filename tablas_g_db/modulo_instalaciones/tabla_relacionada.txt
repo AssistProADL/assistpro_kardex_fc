@@ -1,0 +1,286 @@
+-- --------------------------------------------------------
+-- Host:                         89.117.146.27
+-- Versión del servidor:         10.11.13-MariaDB-0ubuntu0.24.04.1-log - Ubuntu 24.04
+-- SO del servidor:              debian-linux-gnu
+-- HeidiSQL Versión:             12.14.0.7165
+-- --------------------------------------------------------
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+
+-- Volcando estructura de base de datos para assistpro_etl_fc_dev
+CREATE DATABASE IF NOT EXISTS `assistpro_etl_fc_dev` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */;
+USE `assistpro_etl_fc_dev`;
+
+-- Volcando estructura para tabla assistpro_etl_fc_dev.th_pedido
+CREATE TABLE IF NOT EXISTS `th_pedido` (
+  `Fol_folio` varchar(20) DEFAULT NULL,
+  `Fec_Pedido` date DEFAULT NULL,
+  `Cve_clte` varchar(20) DEFAULT NULL,
+  `status` char(1) DEFAULT NULL,
+  `Fec_Entrega` date DEFAULT NULL,
+  `cve_Vendedor` varchar(255) DEFAULT NULL,
+  `Num_Meses` int(11) DEFAULT NULL,
+  `fuente_id` int(11) DEFAULT NULL,
+  `fuente_detalle` varchar(100) DEFAULT NULL,
+  `Observaciones` text DEFAULT NULL,
+  `statusaurora` int(11) DEFAULT NULL,
+  `ID_Tipoprioridad` int(11) DEFAULT NULL,
+  `Fec_Entrada` datetime DEFAULT NULL,
+  `TipoPedido` varchar(50) DEFAULT NULL,
+  `ruta` varchar(50) DEFAULT NULL,
+  `bloqueado` tinyint(4) DEFAULT NULL,
+  `DiaO` int(11) DEFAULT NULL,
+  `TipoDoc` varchar(50) DEFAULT NULL,
+  `rango_hora` varchar(25) DEFAULT NULL,
+  `cve_almac` varchar(20) DEFAULT NULL,
+  `destinatario` varchar(20) DEFAULT NULL,
+  `Id_Proveedor` int(11) DEFAULT NULL,
+  `cve_ubicacion` varchar(20) DEFAULT NULL,
+  `Pick_Num` varchar(20) DEFAULT NULL,
+  `Cve_Usuario` varchar(10) DEFAULT NULL,
+  `Ship_Num` varchar(20) DEFAULT NULL,
+  `BanEmpaque` char(1) DEFAULT NULL,
+  `Cve_CteProv` varchar(20) DEFAULT NULL,
+  `id_pedido` int(11) NOT NULL AUTO_INCREMENT,
+  `Activo` int(11) DEFAULT NULL,
+  `foto1` varchar(150) DEFAULT NULL,
+  `foto2` varchar(150) DEFAULT NULL,
+  `foto3` varchar(150) DEFAULT NULL,
+  `foto4` varchar(150) DEFAULT NULL,
+  `Forma_Pago` int(11) DEFAULT NULL,
+  `tipo_venta` varchar(20) DEFAULT NULL,
+  `tipo_negociacion` varchar(20) DEFAULT NULL,
+  `Almac_Ori` varchar(59) DEFAULT NULL,
+  `Docto_Ref` varchar(59) DEFAULT NULL,
+  `Enviado` tinyint(1) DEFAULT NULL,
+  `Ref_Wel` varchar(50) DEFAULT NULL,
+  `Ref_Imp` varchar(50) DEFAULT NULL,
+  `Pedimento` varchar(50) DEFAULT NULL,
+  `Factura_Vta` varchar(50) DEFAULT NULL,
+  `Ped_Imp` varchar(100) DEFAULT NULL,
+  `Fec_Aprobado` datetime DEFAULT NULL,
+  `Tot_Factura` decimal(18,2) DEFAULT NULL,
+  `orden_etapa` int(11) DEFAULT NULL,
+  `contacto_id` int(11) DEFAULT NULL,
+  `tipo_asignacion` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id_pedido`),
+  UNIQUE KEY `uk_th_pedido_folio` (`Fol_folio`),
+  KEY `idx_th_pedido_cliente_fecha` (`Cve_clte`,`Fec_Pedido`)
+) ENGINE=InnoDB AUTO_INCREMENT=1569426 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+/*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
+/*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
+/*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
+
+
+/*tddpedido*/
+-- --------------------------------------------------------
+-- Host:                         89.117.146.27
+-- Versión del servidor:         10.11.13-MariaDB-0ubuntu0.24.04.1-log - Ubuntu 24.04
+-- SO del servidor:              debian-linux-gnu
+-- HeidiSQL Versión:             12.14.0.7165
+-- --------------------------------------------------------
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+
+-- Volcando estructura de base de datos para assistpro_etl_fc_dev
+CREATE DATABASE IF NOT EXISTS `assistpro_etl_fc_dev` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */;
+USE `assistpro_etl_fc_dev`;
+
+-- Volcando estructura para tabla assistpro_etl_fc_dev.td_pedido
+CREATE TABLE IF NOT EXISTS `td_pedido` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `Fol_folio` varchar(20) NOT NULL,
+  `Cve_articulo` varchar(50) NOT NULL,
+  `Num_cantidad` double DEFAULT NULL,
+  `id_unimed` int(11) DEFAULT NULL,
+  `Num_Meses` int(11) DEFAULT NULL,
+  `SurtidoXCajas` int(11) DEFAULT NULL,
+  `SurtidoXPiezas` int(11) DEFAULT NULL,
+  `status` char(1) DEFAULT NULL,
+  `Cve_Cot` varchar(50) DEFAULT NULL,
+  `factor` double DEFAULT NULL,
+  `itemPos` int(11) DEFAULT NULL,
+  `cve_lote` varchar(50) DEFAULT NULL,
+  `Num_revisadas` double unsigned NOT NULL,
+  `Num_Empacados` float DEFAULT NULL,
+  `Activo` int(11) DEFAULT NULL,
+  `Auditado` varchar(1) DEFAULT NULL,
+  `Precio_unitario` double(18,3) DEFAULT NULL,
+  `Desc_Importe` double(18,3) DEFAULT NULL,
+  `IVA` double(18,3) DEFAULT NULL,
+  `id_ot` int(11) DEFAULT NULL,
+  `Cve_Almac_Ori` varchar(50) DEFAULT NULL,
+  `Fec_Entrega` date DEFAULT NULL,
+  `Valor_Expo` decimal(18,3) DEFAULT NULL,
+  `Valor_Comercial_MN` decimal(18,3) DEFAULT NULL,
+  `Valor_Aduana` decimal(18,3) DEFAULT NULL,
+  `Valor_Comercial_DLL` decimal(18,3) DEFAULT NULL,
+  `Proyecto` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_td_pedido_folio` (`Fol_folio`),
+  KEY `idx_td_pedido_articulo` (`Cve_articulo`)
+) ENGINE=InnoDB AUTO_INCREMENT=508691 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+/*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
+/*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
+/*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
+
+-- --------------------------------------------------------
+-- Host:                         89.117.146.27
+-- Versión del servidor:         10.11.13-MariaDB-0ubuntu0.24.04.1-log - Ubuntu 24.04
+-- SO del servidor:              debian-linux-gnu
+-- HeidiSQL Versión:             12.14.0.7165
+-- --------------------------------------------------------
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+
+-- Volcando estructura de base de datos para assistpro_etl_fc_dev
+CREATE DATABASE IF NOT EXISTS `assistpro_etl_fc_dev` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */;
+USE `assistpro_etl_fc_dev`;
+
+-- Volcando estructura para tabla assistpro_etl_fc_dev.c_cliente
+CREATE TABLE IF NOT EXISTS `c_cliente` (
+  `id_cliente` int(11) NOT NULL AUTO_INCREMENT COMMENT 'PK cliente interno',
+  `IdEmpresa` varchar(50) NOT NULL COMMENT 'Empresa propietaria del cliente',
+  `Cve_Almacenp` int(11) NOT NULL COMMENT 'Sucursal / Almacén propietario',
+  `cve_ruta` varchar(20) DEFAULT NULL COMMENT 'Ruta asignada',
+  `Id_Vendedor` int(11) DEFAULT NULL,
+  `ID_Proveedor` int(11) DEFAULT NULL,
+  `Cve_CteProv` varchar(20) DEFAULT NULL,
+  `Cve_Clte` varchar(20) DEFAULT NULL,
+  `clave_erp` varchar(50) DEFAULT NULL COMMENT 'Clave del cliente en ERP externo',
+  `RazonSocial` varchar(150) DEFAULT NULL COMMENT 'Razón social fiscal',
+  `RFC` varchar(20) DEFAULT NULL COMMENT 'RFC cliente',
+  `Id_RegFis` int(11) DEFAULT NULL COMMENT 'Régimen fiscal SAT',
+  `Id_CFDI` int(11) DEFAULT NULL COMMENT 'Uso CFDI por defecto',
+  `RazonComercial` varchar(150) DEFAULT NULL COMMENT 'Nombre comercial',
+  `ClienteTipo` varchar(50) DEFAULT NULL COMMENT 'Tipo comercial principal',
+  `ClienteTipo2` varchar(50) DEFAULT NULL COMMENT 'Subtipo comercial',
+  `ClienteGrupo` varchar(50) DEFAULT NULL COMMENT 'Grupo comercial',
+  `ClienteFamilia` varchar(50) DEFAULT NULL COMMENT 'Familia cliente',
+  `ZonaVenta` varchar(50) DEFAULT NULL COMMENT 'Zona de ventas',
+  `CondicionPago` varchar(50) DEFAULT NULL COMMENT 'Condición de pago comercial',
+  `MedioEmbarque` varchar(50) DEFAULT NULL COMMENT 'Medio embarque preferido',
+  `ViaEmbarque` varchar(50) DEFAULT NULL COMMENT 'Vía embarque',
+  `CondicionEmbarque` varchar(50) DEFAULT NULL COMMENT 'Condición logística',
+  `cliente_general` tinyint(1) DEFAULT NULL COMMENT '1=Cliente general',
+  `permite_extra_vendedor` tinyint(1) DEFAULT NULL COMMENT 'Permite pedidos fuera de ruta',
+  `CalleNumero` varchar(150) DEFAULT NULL COMMENT 'Calle y número',
+  `Colonia` varchar(100) DEFAULT NULL COMMENT 'Colonia / barrio',
+  `Ciudad` varchar(100) DEFAULT NULL COMMENT 'Ciudad / municipio',
+  `Estado` varchar(100) DEFAULT NULL COMMENT 'Estado / provincia',
+  `Pais` varchar(100) DEFAULT NULL COMMENT 'País ISO',
+  `CodigoPostal` varchar(10) DEFAULT NULL COMMENT 'Código postal',
+  `direccion_formateada` varchar(255) DEFAULT NULL COMMENT 'Dirección formateada Google',
+  `latitud` decimal(10,8) DEFAULT NULL COMMENT 'Latitud WGS84',
+  `longitud` decimal(11,8) DEFAULT NULL COMMENT 'Longitud WGS84',
+  `gps_precision` decimal(8,2) DEFAULT NULL COMMENT 'Precisión en metros GPS',
+  `google_place_id` varchar(120) DEFAULT NULL COMMENT 'Google Place ID',
+  `Contacto` varchar(150) DEFAULT NULL COMMENT 'Nombre contacto principal',
+  `Encargado` varchar(150) DEFAULT NULL COMMENT 'Responsable en sitio',
+  `Telefono1` varchar(30) DEFAULT NULL COMMENT 'Teléfono principal',
+  `Telefono2` varchar(30) DEFAULT NULL COMMENT 'Teléfono alterno',
+  `Telefono3` varchar(30) DEFAULT NULL COMMENT 'Teléfono adicional',
+  `email_cliente` varchar(150) DEFAULT NULL COMMENT 'Correo principal',
+  `Referencia` varchar(200) DEFAULT NULL,
+  `credito` tinyint(1) NOT NULL DEFAULT 0 COMMENT '0=Contado, 1=Crédito',
+  `limite_credito` float(18,2) DEFAULT NULL,
+  `dias_credito` int(11) DEFAULT NULL,
+  `credito_actual` float(18,2) DEFAULT NULL,
+  `saldo_inicial` float(18,2) DEFAULT NULL,
+  `saldo_actual` float(18,2) DEFAULT NULL,
+  `saldo_deudor_inicial` decimal(18,2) DEFAULT NULL,
+  `Fol_Serie` int(11) DEFAULT NULL,
+  `validar_gps` tinyint(1) DEFAULT NULL COMMENT '1=GPS validado en campo',
+  `Activo` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id_cliente`),
+  KEY `idx_cliente_vendedor` (`Id_Vendedor`),
+  KEY `idx_empresa` (`IdEmpresa`),
+  KEY `idx_almacen` (`Cve_Almacenp`),
+  KEY `idx_cliente_ruta` (`cve_ruta`),
+  KEY `idx_cliente_zona` (`ZonaVenta`),
+  KEY `idx_cliente_empresa` (`IdEmpresa`),
+  KEY `idx_cliente_gps` (`latitud`,`longitud`)
+) ENGINE=InnoDB AUTO_INCREMENT=424 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+/*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
+/*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
+/*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
+
+-- --------------------------------------------------------
+-- Host:                         89.117.146.27
+-- Versión del servidor:         10.11.13-MariaDB-0ubuntu0.24.04.1-log - Ubuntu 24.04
+-- SO del servidor:              debian-linux-gnu
+-- HeidiSQL Versión:             12.14.0.7165
+-- --------------------------------------------------------
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+
+-- Volcando estructura de base de datos para assistpro_etl_fc_dev
+CREATE DATABASE IF NOT EXISTS `assistpro_etl_fc_dev` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */;
+USE `assistpro_etl_fc_dev`;
+
+-- Volcando estructura para tabla assistpro_etl_fc_dev.c_lotes
+CREATE TABLE IF NOT EXISTS `c_lotes` (
+  `id` int(10) unsigned NOT NULL,
+  `cve_articulo` varchar(50) DEFAULT NULL,
+  `Lote` varchar(50) DEFAULT NULL,
+  `Caducidad` date NOT NULL,
+  `Activo` int(11) DEFAULT NULL,
+  `Fec_Prod` date DEFAULT NULL,
+  `Lote_Alterno` varchar(50) DEFAULT NULL,
+  KEY `ix_lotes_art_lote` (`cve_articulo`,`Lote`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+/*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
+/*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
+/*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
