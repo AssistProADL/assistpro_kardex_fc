@@ -2,192 +2,390 @@
 require_once __DIR__ . '/../../app/db.php';
 header('Content-Type: application/json; charset=utf-8');
 
-function jerr($msg,$det=null){ echo json_encode(['error'=>$msg,'detalles'=>$det],JSON_UNESCAPED_UNICODE); exit; }
-function clean($v){ return trim((string)$v); }
-function norm01($v,$def='1'){ $v=clean($v); if($v==='') return $def; return ($v==='1')?'1':'0'; }
+function jerr($msg, $det = null)
+{
+  echo json_encode(['error' => $msg, 'detalles' => $det], JSON_UNESCAPED_UNICODE);
+  exit;
+}
+function clean($v)
+{
+  return trim((string)$v);
+}
+function norm01($v, $def = '1')
+{
+  $v = clean($v);
+  if ($v === '') return $def;
+  return ($v === '1') ? '1' : '0';
+}
+
+function fecha_mysql($f)
+{
+  $f = trim($f);
+  if ($f === '') return null;
+
+  # Si viene en formato dd/mm/yyyy
+  if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $f, $m)) {
+    return $m[3] . '-' . $m[2] . '-' . $m[1];
+  }
+
+  # Si ya viene yyyy-mm-dd lo dejamos igual
+  return $f;
+}
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
-try{
-  if($action==='list'){
+try {
+
+  # =========================================================
+  # LIST
+  # =========================================================
+  if ($action === 'list') {
+
     $q = clean($_GET['q'] ?? '');
     $inactivos = (int)($_GET['inactivos'] ?? 0);
-    $where=[]; $p=[];
-    if(!$inactivos) $where[]="IFNULL(Activo,'1')='1'";
-    if($q!==''){
-      $where[]="(empresa_id LIKE :q OR ID_PERFIL LIKE :q OR PER_NOMBRE LIKE :q OR cve_cia LIKE :q)";
-      $p[':q']="%$q%";
+
+    $where = [];
+    $p = [];
+
+    if (!$inactivos) {
+      $where[] = "p.activo = 1";
     }
-    $sql="SELECT empresa_id, ID_PERFIL, PER_NOMBRE, cve_cia, Activo FROM t_perfilesusuarios";
-    if($where) $sql.=" WHERE ".implode(" AND ",$where);
-    $sql.=" ORDER BY IFNULL(Activo,'1') DESC, PER_NOMBRE ASC LIMIT 3000";
-    echo json_encode(['rows'=>db_all($sql,$p)],JSON_UNESCAPED_UNICODE);
+
+    if ($q !== '') {
+      $where[] = "(
+            p.clave_perfil LIKE :q
+            OR p.nombre_perfil LIKE :q
+            OR c.clave_empresa LIKE :q
+            OR c.des_cia LIKE :q
+        )";
+      $p[':q'] = "%$q%";
+    }
+
+    $sql = "
+        SELECT 
+            p.id_perfil,
+            p.clave_perfil,
+            p.nombre_perfil,
+            p.id_compania,
+            p.activo,
+            p.inicio_perfil,
+            p.fin_perfil,
+            c.clave_empresa,
+            c.des_cia
+        FROM t_perfilesusuarios p
+        LEFT JOIN c_compania c
+            ON c.cve_cia = p.id_compania
+    ";
+
+    if ($where) {
+      $sql .= " WHERE " . implode(" AND ", $where);
+    }
+
+    $sql .= " ORDER BY p.activo DESC, p.nombre_perfil ASC LIMIT 3000";
+
+    echo json_encode(['rows' => db_all($sql, $p)], JSON_UNESCAPED_UNICODE);
     exit;
   }
 
-  if($action==='get'){
-    $emp=clean($_GET['empresa_id'] ?? '');
-    $pid=clean($_GET['ID_PERFIL'] ?? '');
-    if($emp===''||$pid==='') jerr('Llave inválida (empresa_id + ID_PERFIL)');
-    $row=db_one("SELECT * FROM t_perfilesusuarios WHERE empresa_id=:e AND ID_PERFIL=:p LIMIT 1", [':e'=>$emp,':p'=>$pid]);
-    if(!$row) jerr('No existe el registro');
-    echo json_encode($row,JSON_UNESCAPED_UNICODE);
+  # =========================================================
+  # GET
+  # =========================================================
+  if ($action === 'get') {
+
+    $id = (int)($_GET['id_perfil'] ?? 0);
+    if (!$id) jerr('Llave inválida (id_perfil)');
+
+    $row = db_one("
+        SELECT *
+        FROM t_perfilesusuarios
+        WHERE id_perfil = :id
+        LIMIT 1
+    ", [':id' => $id]);
+
+    if (!$row) jerr('No existe el registro');
+
+    echo json_encode($row, JSON_UNESCAPED_UNICODE);
     exit;
   }
 
-  if($action==='create' || $action==='update'){
-    $k_emp=clean($_POST['k_empresa_id'] ?? '');
-    $k_pid=clean($_POST['k_ID_PERFIL'] ?? '');
+  # =========================================================
+  # CREATE / UPDATE
+  # =========================================================
+  if ($action === 'create' || $action === 'update') {
 
-    $empresa_id=clean($_POST['empresa_id'] ?? '');
-    $ID_PERFIL=clean($_POST['ID_PERFIL'] ?? '');
-    $PER_NOMBRE=clean($_POST['PER_NOMBRE'] ?? '');
-    $cve_cia=clean($_POST['cve_cia'] ?? '');
-    $Activo=norm01($_POST['Activo'] ?? '1','1');
+    $id_perfil = (int)($_POST['id_perfil'] ?? 0);
 
-    $det=[];
-    if($empresa_id==='') $det[]='empresa_id obligatorio.';
-    if($ID_PERFIL==='') $det[]='ID_PERFIL obligatorio.';
-    if($PER_NOMBRE==='') $det[]='PER_NOMBRE obligatorio.';
-    if($det) jerr('Validación',$det);
+    $clave_perfil   = clean($_POST['clave_perfil'] ?? '');
+    $nombre_perfil  = clean($_POST['nombre_perfil'] ?? '');
+    $id_compania    = (int)($_POST['id_compania'] ?? 0);
+    $activo         = norm01($_POST['activo'] ?? '1', '1');
+    $inicio_perfil  = clean($_POST['inicio_perfil'] ?? '');
+    $fin_perfil     = clean($_POST['fin_perfil'] ?? '');
 
-    db_tx(function() use($action,$k_emp,$k_pid,$empresa_id,$ID_PERFIL,$PER_NOMBRE,$cve_cia,$Activo){
-      if($action==='create'){
-        $ex=db_val("SELECT 1 FROM t_perfilesusuarios WHERE empresa_id=:e AND ID_PERFIL=:p LIMIT 1", [':e'=>$empresa_id,':p'=>$ID_PERFIL]);
-        if($ex) throw new Exception("Ya existe (empresa_id=$empresa_id, ID_PERFIL=$ID_PERFIL).");
-        dbq("INSERT INTO t_perfilesusuarios (empresa_id, ID_PERFIL, PER_NOMBRE, cve_cia, Activo)
-             VALUES (:e,:p,:n,:c,:a)", [':e'=>$empresa_id,':p'=>$ID_PERFIL,':n'=>$PER_NOMBRE,':c'=>$cve_cia,':a'=>$Activo]);
-      }else{
-        if($k_emp===''||$k_pid==='') throw new Exception("Llave original inválida (k_empresa_id+k_ID_PERFIL).");
-        dbq("UPDATE t_perfilesusuarios
-             SET empresa_id=:e, ID_PERFIL=:p, PER_NOMBRE=:n, cve_cia=:c, Activo=:a
-             WHERE empresa_id=:ke AND ID_PERFIL=:kp",
-             [':e'=>$empresa_id,':p'=>$ID_PERFIL,':n'=>$PER_NOMBRE,':c'=>$cve_cia,':a'=>$Activo,':ke'=>$k_emp,':kp'=>$k_pid]);
+    $det = [];
+    if ($clave_perfil === '')  $det[] = 'clave_perfil obligatorio.';
+    if ($nombre_perfil === '') $det[] = 'nombre_perfil obligatorio.';
+    if (!$id_compania)       $det[] = 'id_compania obligatorio.';
+    if ($det) jerr('Validación', $det);
+
+    db_tx(function () use (
+      $action,
+      $id_perfil,
+      $clave_perfil,
+      $nombre_perfil,
+      $id_compania,
+      $activo,
+      $inicio_perfil,
+      $fin_perfil
+    ) {
+
+      if ($action === 'create') {
+
+        $ex = db_val("
+                SELECT 1 
+                FROM t_perfilesusuarios 
+                WHERE id_compania=:c 
+                  AND clave_perfil=:k 
+                LIMIT 1
+            ", [':c' => $id_compania, ':k' => $clave_perfil]);
+
+        if ($ex) throw new Exception("Ya existe esa clave para la compañía.");
+
+        dbq("
+                INSERT INTO t_perfilesusuarios
+                (clave_perfil,nombre_perfil,id_compania,activo,inicio_perfil,fin_perfil)
+                VALUES
+                (:k,:n,:c,:a,:i,:f)
+            ", [
+          ':k' => $clave_perfil,
+          ':n' => $nombre_perfil,
+          ':c' => $id_compania,
+          ':a' => $activo,
+          ':i' => ($inicio_perfil ?: null),
+          ':f' => ($fin_perfil ?: null)
+        ]);
+      } else {
+
+        if (!$id_perfil) throw new Exception("id_perfil inválido.");
+
+        dbq("
+                UPDATE t_perfilesusuarios
+                SET clave_perfil=:k,
+                    nombre_perfil=:n,
+                    id_compania=:c,
+                    activo=:a,
+                    inicio_perfil=:i,
+                    fin_perfil=:f
+                WHERE id_perfil=:id
+            ", [
+          ':k' => $clave_perfil,
+          ':n' => $nombre_perfil,
+          ':c' => $id_compania,
+          ':a' => $activo,
+          ':i' => ($inicio_perfil ?: null),
+          ':f' => ($fin_perfil ?: null),
+          ':id' => $id_perfil
+        ]);
       }
     });
 
-    echo json_encode(['ok'=>1],JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => 1], JSON_UNESCAPED_UNICODE);
     exit;
   }
 
-  if($action==='delete' || $action==='restore'){
-    $emp=clean($_POST['empresa_id'] ?? '');
-    $pid=clean($_POST['ID_PERFIL'] ?? '');
-    if($emp===''||$pid==='') jerr('Llave inválida (empresa_id + ID_PERFIL)');
-    $val=($action==='delete')?'0':'1';
-    dbq("UPDATE t_perfilesusuarios SET Activo=:v WHERE empresa_id=:e AND ID_PERFIL=:p", [':v'=>$val,':e'=>$emp,':p'=>$pid]);
-    echo json_encode(['ok'=>1],JSON_UNESCAPED_UNICODE);
+  # =========================================================
+  # DELETE / RESTORE (lógico)
+  # =========================================================
+  if ($action === 'delete' || $action === 'restore') {
+
+    $id = (int)($_POST['id_perfil'] ?? 0);
+    if (!$id) jerr('Llave inválida (id_perfil)');
+
+    $val = ($action === 'delete') ? 0 : 1;
+
+    dbq("
+        UPDATE t_perfilesusuarios
+        SET activo = :v
+        WHERE id_perfil = :id
+    ", [':v' => $val, ':id' => $id]);
+
+    echo json_encode(['ok' => 1], JSON_UNESCAPED_UNICODE);
     exit;
   }
 
-  if($action==='export'){
+  # =========================================================
+  # EXPORT
+  # =========================================================
+  if ($action === 'export') {
+
     header_remove('Content-Type');
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename=perfiles_export.csv');
 
-    $q=clean($_GET['q'] ?? '');
-    $inactivos=(int)($_GET['inactivos'] ?? 0);
-    $where=[]; $p=[];
-    if(!$inactivos) $where[]="IFNULL(Activo,'1')='1'";
-    if($q!==''){
-      $where[]="(empresa_id LIKE :q OR ID_PERFIL LIKE :q OR PER_NOMBRE LIKE :q OR cve_cia LIKE :q)";
-      $p[':q']="%$q%";
-    }
-    $sql="SELECT empresa_id, ID_PERFIL, PER_NOMBRE, cve_cia, Activo FROM t_perfilesusuarios";
-    if($where) $sql.=" WHERE ".implode(" AND ",$where);
-    $rows=db_all($sql,$p);
+    $rows = db_all("
+        SELECT 
+            p.clave_perfil,
+            p.nombre_perfil,
+            c.clave_empresa,
+            c.des_cia,
+            p.activo,
+            p.inicio_perfil,
+            p.fin_perfil
+        FROM t_perfilesusuarios p
+        LEFT JOIN c_compania c
+            ON c.cve_cia = p.id_compania
+        ORDER BY p.nombre_perfil
+    ");
 
-    $out=fopen('php://output','w');
-    fputcsv($out, array_keys($rows ? $rows[0] : ['empresa_id'=>'','ID_PERFIL'=>'','PER_NOMBRE'=>'','cve_cia'=>'','Activo'=>'1']));
-    foreach($rows as $r) fputcsv($out,$r);
-    fclose($out); exit;
+    $out = fopen('php://output', 'w');
+    fputcsv($out, array_keys($rows ? $rows[0] : [
+      'clave_perfil' => '',
+      'nombre_perfil' => '',
+      'clave_empresa' => '',
+      'des_cia' => '',
+      'activo' => '',
+      'inicio_perfil' => '',
+      'fin_perfil' => ''
+    ]));
+    foreach ($rows as $r) fputcsv($out, $r);
+    fclose($out);
+    exit;
   }
 
-  if($action==='layout'){
-    header_remove('Content-Type');
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename=perfiles_layout.csv');
-    $out=fopen('php://output','w');
-    fputcsv($out, ['empresa_id','ID_PERFIL','PER_NOMBRE','cve_cia','Activo']);
-    fputcsv($out, ['1','ADMIN','ADMINISTRADOR','1','1']);
-    fclose($out); exit;
-  }
+  # =========================================================
+  # IMPORT PREVIEW / IMPORT
+  # =========================================================
+  if ($action === 'import_preview' || $action === 'import') {
 
-  if($action==='import_preview' || $action==='import'){
-    if(!isset($_FILES['csv'])) jerr('No se recibió CSV');
-    $tmp=$_FILES['csv']['tmp_name'];
-    if(!is_uploaded_file($tmp)) jerr('Archivo inválido');
+    if (!isset($_FILES['csv'])) jerr('No se recibió CSV');
 
-    $fh=fopen($tmp,'r'); if(!$fh) jerr('No se pudo leer');
-    $header=fgetcsv($fh); if(!$header) jerr('CSV vacío');
-    $header=array_map('trim',$header);
+    $tmp = $_FILES['csv']['tmp_name'];
+    if (!is_uploaded_file($tmp)) jerr('Archivo inválido');
 
-    $expected=['empresa_id','ID_PERFIL','PER_NOMBRE','cve_cia','Activo'];
-    $diff=array_diff($expected,$header);
-    if($diff) jerr('Layout incorrecto. Faltan columnas: '.implode(', ',$diff));
+    $fh = fopen($tmp, 'r');
+    if (!$fh) jerr('No se pudo leer');
 
-    if($action==='import_preview'){
-      $rows=[]; $line=1; $warn=[];
-      while(($r=fgetcsv($fh))!==false && count($rows)<50){
-        $line++;
-        $row=array_combine($header,$r);
-        $rows[]=$row;
-        if(trim($row['empresa_id']??'')==='' || trim($row['ID_PERFIL']??'')==='' || trim($row['PER_NOMBRE']??'')===''){
-          $warn[]="Línea $line: empresa_id, ID_PERFIL, PER_NOMBRE obligatorios.";
-        }
-      }
+    $header = fgetcsv($fh);
+    if (!$header) jerr('CSV vacío');
+
+    $header = array_map('trim', $header);
+
+    $expected = [
+      'clave_perfil',
+      'nombre_perfil',
+      'clave_empresa',
+      'des_cia',
+      'activo',
+      'inicio_perfil',
+      'fin_perfil'
+    ];
+
+    $diff = array_diff($expected, $header);
+    if ($diff) jerr('Layout incorrecto. Faltan columnas: ' . implode(', ', $diff));
+
+    # PREVIEW
+    if ($action === 'import_preview') {
       fclose($fh);
-      $txt="Preview (máx 50 filas)\n".implode(',',$header)."\n";
-      foreach($rows as $rw){
-        $ln=[]; foreach($header as $h) $ln[]=$rw[$h]??'';
-        $txt.=implode(',',$ln)."\n";
-      }
-      echo json_encode(['ok'=>1,'preview_text'=>$txt,'warnings'=>$warn],JSON_UNESCAPED_UNICODE);
+      echo json_encode(['ok' => 1]);
       exit;
     }
 
     rewind($fh);
     fgetcsv($fh);
 
-    $inserted=0; $updated=0; $errors=0; $errList=[]; $line=1;
+    $inserted = 0;
+    $updated = 0;
 
-    db_tx(function() use($fh,$header,&$inserted,&$updated,&$errors,&$errList,&$line){
-      while(($r=fgetcsv($fh))!==false){
-        $line++;
-        $row=array_combine($header,$r);
+    db_tx(function () use ($fh, $header, &$inserted, &$updated) {
 
-        $empresa_id=trim($row['empresa_id']??'');
-        $ID_PERFIL=trim($row['ID_PERFIL']??'');
-        $PER_NOMBRE=trim($row['PER_NOMBRE']??'');
-        $cve_cia=trim($row['cve_cia']??'');
-        $Activo=(trim($row['Activo']??'1')==='1'?'1':'0');
+      while (($r = fgetcsv($fh)) !== false) {
 
-        if($empresa_id===''||$ID_PERFIL===''||$PER_NOMBRE===''){
-          $errors++; $errList[]="Línea $line: empresa_id, ID_PERFIL, PER_NOMBRE obligatorios.";
+        $row = array_combine($header, $r);
+
+        $clave_perfil  = trim($row['clave_perfil'] ?? '');
+        $nombre_perfil = trim($row['nombre_perfil'] ?? '');
+        $clave_empresa = trim($row['clave_empresa'] ?? '');
+        $activo        = ((int)($row['activo'] ?? 1) === 1 ? 1 : 0);
+        $inicio = fecha_mysql($row['inicio_perfil'] ?? '');
+        $fin    = fecha_mysql($row['fin_perfil'] ?? '');
+
+        if ($clave_perfil === '' || $nombre_perfil === '' || $clave_empresa === '') {
           continue;
         }
 
-        $ex=db_val("SELECT 1 FROM t_perfilesusuarios WHERE empresa_id=:e AND ID_PERFIL=:p LIMIT 1", [':e'=>$empresa_id,':p'=>$ID_PERFIL]);
-        if($ex){
-          dbq("UPDATE t_perfilesusuarios SET PER_NOMBRE=:n, cve_cia=:c, Activo=:a WHERE empresa_id=:e AND ID_PERFIL=:p",
-              [':n'=>$PER_NOMBRE,':c'=>$cve_cia,':a'=>$Activo,':e'=>$empresa_id,':p'=>$ID_PERFIL]);
+        # Obtener id_compania por clave_empresa
+        $id_compania = db_val("
+            SELECT cve_cia 
+            FROM c_compania 
+            WHERE clave_empresa = :c 
+            LIMIT 1
+        ", [':c' => $clave_empresa]);
+
+        if (!$id_compania) continue;
+
+        # Verificar si ya existe
+        $ex = db_val("
+            SELECT id_perfil
+            FROM t_perfilesusuarios
+            WHERE id_compania = :c
+              AND clave_perfil = :k
+            LIMIT 1
+        ", [
+          ':c' => $id_compania,
+          ':k' => $clave_perfil
+        ]);
+
+        if ($ex) {
+
+          dbq("
+              UPDATE t_perfilesusuarios
+              SET nombre_perfil=:n,
+                  activo=:a,
+                  inicio_perfil=:i,
+                  fin_perfil=:f
+              WHERE id_perfil=:id
+          ", [
+            ':n' => $nombre_perfil,
+            ':a' => $activo,
+            ':i' => ($inicio ?: null),
+            ':f' => ($fin ?: null),
+            ':id' => $ex
+          ]);
+
           $updated++;
-        }else{
-          dbq("INSERT INTO t_perfilesusuarios (empresa_id, ID_PERFIL, PER_NOMBRE, cve_cia, Activo)
-               VALUES (:e,:p,:n,:c,:a)",
-              [':e'=>$empresa_id,':p'=>$ID_PERFIL,':n'=>$PER_NOMBRE,':c'=>$cve_cia,':a'=>$Activo]);
+        } else {
+
+          dbq("
+              INSERT INTO t_perfilesusuarios
+              (clave_perfil,nombre_perfil,id_compania,activo,inicio_perfil,fin_perfil)
+              VALUES
+              (:k,:n,:c,:a,:i,:f)
+          ", [
+            ':k' => $clave_perfil,
+            ':n' => $nombre_perfil,
+            ':c' => $id_compania,
+            ':a' => $activo,
+            ':i' => ($inicio ?: null),
+            ':f' => ($fin ?: null)
+          ]);
+
           $inserted++;
         }
       }
     });
 
     fclose($fh);
-    echo json_encode(['ok'=>1,'inserted'=>$inserted,'updated'=>$updated,'errors'=>$errors,'detalles'=>$errList],JSON_UNESCAPED_UNICODE);
+
+    echo json_encode([
+      'ok' => 1,
+      'inserted' => $inserted,
+      'updated' => $updated
+    ], JSON_UNESCAPED_UNICODE);
+
     exit;
   }
 
-  jerr('Acción no soportada: '.$action);
-
-}catch(Throwable $e){
-  jerr('Error: '.$e->getMessage());
+  jerr('Acción no soportada: ' . $action);
+} catch (Throwable $e) {
+  jerr('Error: ' . $e->getMessage());
 }

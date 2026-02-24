@@ -559,34 +559,59 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         selPage.innerHTML = '';
         for (let i = 1; i <= maxPages; i++) {
             const o = document.createElement('option');
-            o.value = i; o.textContent = i;
+            o.value = i;
+            o.textContent = i;
             if (i === page) o.selected = true;
             selPage.appendChild(o);
         }
         btnPrev.disabled = (page <= 1);
         btnNext.disabled = total > 0 ? (page >= maxPages) : (lastRows.length < perPage);
     }
-    function prevPage() { if (page > 1) { page--; cargar(); } }
+
+    function prevPage() {
+        if (page > 1) {
+            page--;
+            cargar();
+        }
+    }
+
     function nextPage() {
         const maxPages = total > 0 ? Math.ceil(total / perPage) : 1;
-        if (page < maxPages) { page++; cargar(); }
-        else if (total === 0 && lastRows.length === perPage) { page++; cargar(); }
+        if (page < maxPages) {
+            page++;
+            cargar();
+        } else if (total === 0 && lastRows.length === perPage) {
+            page++;
+            cargar();
+        }
     }
-    function goPage(p) { page = Math.max(1, parseInt(p, 10) || 1); cargar(); }
-    function setPerPage(v) { perPage = parseInt(v, 10) || 25; page = 1; cargar(); }
+
+    function goPage(p) {
+        page = Math.max(1, parseInt(p, 10) || 1);
+        cargar();
+    }
+
+    function setPerPage(v) {
+        perPage = parseInt(v, 10) || 25;
+        page = 1;
+        cargar();
+    }
 
     /* ===== Listado ===== */
     function cargar() {
         const offset = (page - 1) * perPage;
-        const url = API + '?action=list'
-            + '&inactivos=' + (verInactivos ? 1 : 0)
-            + '&q=' + encodeURIComponent(qLast || '')
-            + '&limit=' + encodeURIComponent(perPage)
-            + '&offset=' + encodeURIComponent(offset)
-            + '&page=' + encodeURIComponent(page); // Some APIs use page, some offset
+        const url = API + '?action=list' +
+            '&inactivos=' + (verInactivos ? 1 : 0) +
+            '&q=' + encodeURIComponent(qLast || '') +
+            '&limit=' + encodeURIComponent(perPage) +
+            '&offset=' + encodeURIComponent(offset) +
+            '&page=' + encodeURIComponent(page); // Some APIs use page, some offset
 
         fetch(url).then(r => r.json()).then(resp => {
-            if (resp.error) { alert(resp.error); return; }
+            if (resp.error) {
+                alert(resp.error);
+                return;
+            }
 
             const rows = resp.rows || [];
             total = Number(resp.total || 0) || 0;
@@ -601,19 +626,19 @@ require_once __DIR__ . '/../bi/_menu_global.php';
                 if (verInactivos && !st) {
                     btns = '<i class="fa fa-undo" title="Restaurar" onclick="restaurar(' + vid + ')"></i>';
                 } else {
-                    btns = '<i class="fa fa-edit" title="Editar" onclick="editar(' + vid + ')"></i>'
-                        + '<i class="fa fa-trash" title="Desactivar" onclick="eliminar(' + vid + ')"></i>';
+                    btns = '<i class="fa fa-edit" title="Editar" onclick="editar(' + vid + ')"></i>' +
+                        '<i class="fa fa-trash" title="Desactivar" onclick="eliminar(' + vid + ')"></i>';
                 }
 
-                h += '<tr>'
-                    + '<td class="ap-actions">' + btns + '</td>'
-                    + '<td>' + reqDot(r) + '</td>'
-                    + '<td>' + escapeHtml(String(r.cve_ssgpoart || '')) + '</td>'
-                    + '<td>' + escapeHtml(String(r.des_ssgpoart || '')) + '</td>'
-                    + '<td>' + escapeHtml(String(r.cve_sgpoart || '')) + '</td>'
-                    + '<td>' + escapeHtml(String(r.id_almacen || '')) + '</td>'
-                    + '<td>' + (st ? '<span class="ap-chip ok">Activo</span>' : '<span class="ap-chip warn">Inactivo</span>') + '</td>'
-                    + '</tr>';
+                h += '<tr>' +
+                    '<td class="ap-actions">' + btns + '</td>' +
+                    '<td>' + reqDot(r) + '</td>' +
+                    '<td>' + escapeHtml(String(r.cve_ssgpoart || '')) + '</td>' +
+                    '<td>' + escapeHtml(String(r.des_ssgpoart || '')) + '</td>' +
+                    '<td>' + escapeHtml(String(r.cve_sgpoart || '')) + '</td>' +
+                    '<td>' + escapeHtml(String(r.id_almacen || '')) + '</td>' +
+                    '<td>' + (st ? '<span class="ap-chip ok">Activo</span>' : '<span class="ap-chip warn">Inactivo</span>') + '</td>' +
+                    '</tr>';
             });
 
             tb.innerHTML = h || '<tr><td colspan="7" style="text-align:center;padding:20px;color:#777">Sin datos</td></tr>';
@@ -622,22 +647,45 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         });
     }
 
-    function buscar() { qLast = document.getElementById('q').value.trim(); page = 1; cargar(); }
-    function limpiar() { document.getElementById('q').value = ''; qLast = ''; page = 1; cargar(); }
-    function toggleInactivos() { verInactivos = !verInactivos; page = 1; cargar(); }
+    function buscar() {
+        qLast = document.getElementById('q').value.trim();
+        page = 1;
+        cargar();
+    }
+
+    function limpiar() {
+        document.getElementById('q').value = '';
+        qLast = '';
+        page = 1;
+        cargar();
+    }
+
+    function toggleInactivos() {
+        verInactivos = !verInactivos;
+        page = 1;
+        cargar();
+    }
 
     /* ===== CRUD ===== */
     function hideErrors() {
         err_cve.style.display = 'none';
         err_des.style.display = 'none';
     }
+
     function validar() {
         hideErrors();
         let ok = true;
-        if (!cve_ssgpoart.value.trim()) { err_cve.style.display = 'block'; ok = false; }
-        if (!des_ssgpoart.value.trim()) { err_des.style.display = 'block'; ok = false; }
+        if (!cve_ssgpoart.value.trim()) {
+            err_cve.style.display = 'block';
+            ok = false;
+        }
+        if (!des_ssgpoart.value.trim()) {
+            err_des.style.display = 'block';
+            ok = false;
+        }
         return ok;
     }
+
     function nuevo() {
         id.value = '';
         cve_ssgpoart.value = '';
@@ -647,6 +695,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         hideErrors();
         mdl.style.display = 'block';
     }
+
     function editar(rid) {
         // Use local cache if possible or fetch
         const row = lastRows.find(r => r.id == rid);
@@ -660,6 +709,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             mdl.style.display = 'block';
         }
     }
+
     function guardar() {
         if (!validar()) return;
 
@@ -674,10 +724,12 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         if (id.value) payload.id = id.value;
 
         fetch(API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        })
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
             .then(r => r.json())
             .then(resp => {
                 if (resp.error || resp.success === false) {
@@ -690,29 +742,45 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             })
             .catch(err => alert('Error de red: ' + err.message));
     }
+
     function eliminar(rid) {
         if (!confirm('¿Desactivar?')) return;
         fetch(API, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'delete', id: rid })
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'delete',
+                id: rid
+            })
         }).then(() => cargar());
     }
+
     function restaurar(rid) {
         fetch(API, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'restore', id: rid })
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'restore',
+                id: rid
+            })
         }).then(() => cargar());
     }
 
     /* ===== CSV ===== */
-    function exportar() { window.open(API + '?action=export', '_blank'); } // Uses API's export
+    function exportar() {
+        window.open(API + '?action=export', '_blank');
+    } // Uses API's export
     function descargarLayout() {
         // Create a client-side CSV or verify if API has a layout action.
         // The previous implementation used client-side. Let's stick to client-side strictly conforming to human headers.
         const csvContent = "\uFEFFClave,Descripción,Grupo,Almacén\n";
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob([csvContent], {
+            type: 'text/csv;charset=utf-8;'
+        });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.setAttribute("href", url);
@@ -723,16 +791,26 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     }
 
     function abrirImportar() {
-        fileCsv.value = '';
-        csvPreviewWrap.style.display = 'none';
-        importMsg.style.display = 'none';
-        document.getElementById('btnImportarFinal').style.display = 'none';
-        mdlImport.style.display = 'block';
+        const fileInput = document.getElementById('fileCsv');
+        const previewWrap = document.getElementById('csvPreviewWrap');
+        const msg = document.getElementById('importMsg');
+        const btn = document.getElementById('btnImportarFinal');
+        const modal = document.getElementById('mdlImport');
+
+        fileInput.value = '';
+        previewWrap.style.display = 'none';
+        msg.style.display = 'none';
+        btn.style.display = 'none';
+        modal.style.display = 'block';
     }
 
     function previsualizarCsv() {
-        const f = fileCsv.files[0];
-        if (!f) { alert('Selecciona un CSV'); return; }
+        const fileInput = document.getElementById('fileCsv');
+        const f = fileInput.files[0];
+        if (!f) {
+            alert('Selecciona un CSV');
+            return;
+        }
         const r = new FileReader();
         r.onload = e => {
             const rows = e.target.result.split('\n').filter(x => x.trim() !== '');
@@ -752,55 +830,99 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         r.readAsText(f);
     }
 
+    function parseCSV(text) {
+        const rows = [];
+        const lines = text.split(/\r?\n/);
+
+        for (let line of lines) {
+            if (!line.trim()) continue;
+
+            const result = [];
+            let current = '';
+            let insideQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+
+                if (char === '"') {
+                    insideQuotes = !insideQuotes;
+                } else if (char === ',' && !insideQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+
+            result.push(current.trim());
+            rows.push(result.map(v => v.replace(/^"|"$/g, '')));
+        }
+
+        return rows;
+    }
+
     function importarCsv() {
-        // Use API import_csv if available, or build specific logic.
-        // The current API `articulos.php` does NOT have `import_csv`.
-        // The previous file had client-side generic import logic sending `create` one by one.
-        // We will preserve that logic for now as it is safest without modifying API drastically yet.
 
-        const f = fileCsv.files[0];
+        const fileInput = document.getElementById('fileCsv');
+        const f = fileInput.files[0];
         if (!f) return;
+
         const r = new FileReader();
+
         r.onload = async e => {
-            const lines = e.target.result.split('\n').filter(l => l.trim());
-            if (lines.length < 2) return;
-            const rows = lines.slice(1);
 
-            let ok = 0, err = 0;
+            const data = parseCSV(e.target.result);
+            if (data.length < 2) return;
 
-            for (const row of rows) {
-                const c = row.split(',');
-                // Map Client-Side by position (Clave, Desc, Grupo, Almacen)
-                if (c.length < 2) continue;
+            const rows = data.slice(1); // quitar encabezado
+
+            let ok = 0,
+                err = 0;
+
+            for (const c of rows) {
 
                 const payload = {
                     action: 'create',
-                    cve_ssgpoart: c[0].trim(), // Clave
-                    des_ssgpoart: c[1] ? c[1].trim() : '', // Descripcion
-                    cve_sgpoart: c[2] ? c[2].trim() : '', // Grupo
-                    id_almacen: c[3] ? c[3].trim() : '' // Almacen
+                    cve_ssgpoart: (c[0] || '').trim(),
+                    des_ssgpoart: (c[1] || '').trim(),
+                    cve_sgpoart: (c[2] || '').trim(),
+                    id_almacen: (c[3] || '').trim()
                 };
 
                 try {
                     const res = await fetch(API, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify(payload)
                     });
+
                     const j = await res.json();
-                    if (j.success) ok++; else err++;
-                } catch (e) { err++; }
+                    if (j.success) ok++;
+                    else err++;
+
+                } catch (e) {
+                    err++;
+                }
             }
 
             importMsg.style.display = 'flex';
             importMsg.className = 'ap-chip ok';
             importMsg.innerText = 'Importado: ' + ok + ' OK, ' + err + ' Errores';
-            setTimeout(() => { cerrarModal('mdlImport'); cargar(); }, 2000);
+
+            setTimeout(() => {
+                cerrarModal('mdlImport');
+                cargar();
+            }, 2000);
         };
+
         r.readAsText(f);
     }
 
-    function cerrarModal(mid) { document.getElementById(mid).style.display = 'none'; }
+    function cerrarModal(mid) {
+        document.getElementById(mid).style.display = 'none';
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
         console.log('Tipos Articulos v2 loaded');

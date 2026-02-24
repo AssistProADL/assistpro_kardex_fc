@@ -2,7 +2,8 @@
 require_once __DIR__ . '/../../app/db.php';
 header('Content-Type: application/json; charset=utf-8');
 
-function jexit($arr){
+function jexit($arr)
+{
     echo json_encode($arr, JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -188,8 +189,126 @@ try {
         jexit(['ok' => true]);
     }
 
-    jexit(['error' => 'Acción no válida']);
+    /* =========================================================
+   EXPORT
+========================================================= */
+    if ($action === 'export') {
 
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename=almacenes.csv');
+
+        $output = fopen('php://output', 'w');
+
+        // Encabezados del CSV
+        fputcsv($output, [
+            'clave',
+            'nombre',
+            'cve_cia',
+            'direccion',
+            'contacto',
+            'telefono',
+            'correo',
+            'es_3pl',
+            'Activo'
+        ]);
+
+        $rows = db_all("
+        SELECT 
+            ap.clave,
+            ap.nombre,
+            ap.cve_cia,
+            ap.direccion,
+            ap.contacto,
+            ap.telefono,
+            ap.correo,
+            ap.interno,
+            ap.Activo
+        FROM c_almacenp ap
+        ORDER BY ap.nombre ASC
+    ");
+
+        foreach ($rows as $r) {
+
+            $es_3pl = ((int)$r['interno'] === 0) ? 'Si' : 'No';
+
+            fputcsv($output, [
+                $r['clave'],
+                $r['nombre'],
+                $r['cve_cia'],
+                $r['direccion'],
+                $r['contacto'],
+                $r['telefono'],
+                $r['correo'],
+                $es_3pl,
+                $r['Activo']
+            ]);
+        }
+
+        fclose($output);
+        exit;
+    }
+
+    /* =========================================================
+   IMPORT
+========================================================= */
+    if ($action === 'import') {
+
+        if (!isset($_FILES['file']) || $_FILES['file']['error'] !== 0) {
+            jexit(['error' => 'Archivo inválido']);
+        }
+
+        $file = $_FILES['file']['tmp_name'];
+
+        $handle = fopen($file, "r");
+        stream_filter_append($handle, 'convert.iconv.ISO-8859-1/UTF-8');
+        if (!$handle) {
+            jexit(['error' => 'No se pudo leer el archivo']);
+        }
+
+        $header = fgetcsv($handle, 1000, ","); // primera fila
+
+        $count = 0;
+
+        while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
+
+            $clave      = strtoupper(trim($data[0] ?? ''));
+            $nombre     = trim($data[1] ?? '');
+            $cve_cia    = (int)($data[2] ?? 0);
+            $direccion  = $data[3] ?? null;
+            $contacto   = $data[4] ?? null;
+            $telefono   = $data[5] ?? null;
+            $correo     = $data[6] ?? null;
+            $interno    = ($data[7] ?? 'No') === 'Si' ? 0 : 1;
+
+            if (!$clave || !$nombre || !$cve_cia) {
+                continue;
+            }
+
+            dbq("
+            INSERT INTO c_almacenp
+            (clave, nombre, cve_cia, direccion, contacto, telefono, correo, Activo, interno)
+            VALUES
+            (:clave, :nombre, :cve_cia, :direccion, :contacto, :telefono, :correo, 1, :interno)
+        ", [
+                'clave' => $clave,
+                'nombre' => $nombre,
+                'cve_cia' => $cve_cia,
+                'direccion' => $direccion,
+                'contacto' => $contacto,
+                'telefono' => $telefono,
+                'correo' => $correo,
+                'interno' => $interno
+            ]);
+
+            $count++;
+        }
+
+        fclose($handle);
+
+        jexit(['ok' => true, 'importados' => $count]);
+    }
+
+    jexit(['error' => 'Acción no válida']);
 } catch (Exception $e) {
     jexit(['error' => $e->getMessage()]);
 }

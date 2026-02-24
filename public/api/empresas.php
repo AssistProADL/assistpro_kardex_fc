@@ -185,21 +185,24 @@ try {
       $params = array_merge($params, [$qp, $qp, $qp, $qp]);
     }
 
-    $sql = "SELECT cve_cia, clave_empresa, des_cia, distrito, des_rfc, des_direcc, des_cp, des_telef, des_contacto, des_email, des_observ, es_transportista, Activo
+    $sql = "SELECT cve_cia, clave_empresa, des_cia, cve_tipcia, distrito, des_rfc, des_direcc, des_cp, des_telef, des_contacto, des_email, des_observ, es_transportista, Activo
           FROM c_compania";
     if ($where)
       $sql .= " WHERE " . implode(" AND ", $where);
     $sql .= " ORDER BY cve_cia ASC";
 
     $rows = db_all($sql, $params);
-
     $out = fopen('php://output', 'w');
+
+    // 🔥 Forzar Excel a reconocer UTF-8
+    fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
     // Human-readable headers
     $headers = [
       'ID',
       'Clave Empresa',
       'Nombre Empresa',
+      'Tipo Empresa',
       'Distrito',
       'RFC',
       'Dirección',
@@ -230,6 +233,7 @@ try {
       'ID',
       'Clave Empresa',
       'Nombre Empresa',
+      'Tipo Empresa',
       'Distrito',
       'RFC',
       'Dirección',
@@ -242,14 +246,16 @@ try {
       'Activo'
     ];
     fputcsv($out, $headers);
-    fputcsv($out, ['', 'EMP01', 'EMPRESA DEMO', 'NORTE', 'XAXX010101000', 'CALLE 1', '64000', '8180000000', 'CONTACTO', 'correo@dominio.com', 'OBS', '0', '1']);
+    fputcsv($out, ['', 'EMP01', 'EMPRESA DEMO', 'Matriz', 'NORTE', 'XAXX010101000', 'CALLE 1', '64000', '8180000000', 'CONTACTO', 'correo@dominio.com', 'OBS', '0', '1']);
     fclose($out);
     exit;
   }
 
   if ($action === 'import_preview' || $action === 'import') {
+
     if (!isset($_FILES['csv']))
       jerr('No se recibió archivo CSV');
+
     $tmp = $_FILES['csv']['tmp_name'];
     if (!is_uploaded_file($tmp))
       jerr('Archivo inválido');
@@ -259,15 +265,19 @@ try {
       jerr('No se pudo leer el CSV');
 
     $header = fgetcsv($fh);
+    // 🔥 Quitar BOM si existe
+    $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
     if (!$header)
       jerr('CSV vacío');
+
     $header = array_map('trim', $header);
 
-    // Mapping: Spanish headers -> Technical column names
+    // 🔥 Mapear encabezados legibles → columnas reales
     $headerMap = [
       'ID' => 'cve_cia',
       'Clave Empresa' => 'clave_empresa',
       'Nombre Empresa' => 'des_cia',
+      'Tipo Empresa' => 'cve_tipcia',
       'Distrito' => 'distrito',
       'RFC' => 'des_rfc',
       'Dirección' => 'des_direcc',
@@ -280,52 +290,41 @@ try {
       'Activo' => 'Activo'
     ];
 
-    // Convert Spanish headers to technical names if needed
     $normalizedHeader = [];
     foreach ($header as $h) {
       $normalizedHeader[] = $headerMap[$h] ?? $h;
     }
     $header = $normalizedHeader;
 
-    $expected = ['cve_cia', 'clave_empresa', 'des_cia', 'distrito', 'des_rfc', 'des_direcc', 'des_cp', 'des_telef', 'des_contacto', 'des_email', 'des_observ', 'es_transportista', 'Activo'];
-    // Validación layout
+    $expected = [
+      'cve_cia',
+      'clave_empresa',
+      'des_cia',
+      'cve_tipcia',
+      'distrito',
+      'des_rfc',
+      'des_direcc',
+      'des_cp',
+      'des_telef',
+      'des_contacto',
+      'des_email',
+      'des_observ',
+      'es_transportista',
+      'Activo'
+    ];
+
     $diff = array_diff($expected, $header);
     if ($diff)
       jerr('Layout incorrecto. Faltan columnas: ' . implode(', ', $diff));
 
-    $rows = [];
-    $line = 1;
-    $detalles = [];
-    while (($r = fgetcsv($fh)) !== false && count($rows) < 50) {
-      $line++;
-      $row = array_combine($header, $r);
-      $rows[] = $row;
-      // Validación mínima en preview
-      $k = strtoupper(trim($row['clave_empresa'] ?? ''));
-      $n = trim($row['des_cia'] ?? '');
-      if ($k === '' || $n === '')
-        $detalles[] = "Línea $line: clave_empresa y des_cia son obligatorias.";
-    }
-    fclose($fh);
-
+    // Preview
     if ($action === 'import_preview') {
-      $txt = "Preview (máx 50 filas)\n";
-      $txt .= implode(',', $header) . "\n";
-      foreach ($rows as $r) {
-        $line = [];
-        foreach ($header as $h)
-          $line[] = $r[$h] ?? '';
-        $txt .= implode(',', $line) . "\n";
-      }
-      echo json_encode(['ok' => 1, 'preview_text' => $txt, 'warnings' => $detalles], JSON_UNESCAPED_UNICODE);
+      fclose($fh);
+      echo json_encode(['ok' => 1]);
       exit;
     }
 
-    // Import real (UPSERT)
-    $fh = fopen($tmp, 'r');
-    $header = fgetcsv($fh);
-    $header = array_map('trim', $header);
-
+    // 🔥 IMPORT REAL
     $inserted = 0;
     $updated = 0;
     $errors = 0;
@@ -333,9 +332,18 @@ try {
     $line = 1;
 
     db_tx(function () use ($fh, $header, &$inserted, &$updated, &$errors, &$errList, &$line) {
+
       while (($r = fgetcsv($fh)) !== false) {
+
         $line++;
         $row = array_combine($header, $r);
+
+        // 🔥 FORZAR UTF-8 en cada campo
+        foreach ($row as $k => $v) {
+          if ($v !== null) {
+            $row[$k] = mb_convert_encoding($v, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
+          }
+        }
 
         $cve_cia = (int) trim($row['cve_cia'] ?? '0');
         $clave = strtoupper(trim($row['clave_empresa'] ?? ''));
@@ -347,9 +355,46 @@ try {
           continue;
         }
 
+        // 🔥 Convertir Tipo Empresa (acepta número o texto)
+        $tipoRaw = trim($row['cve_tipcia'] ?? '');
+        $idTipo = 0;
+
+        if ($tipoRaw !== '') {
+
+          // Si viene número (ej: 1)
+          if (is_numeric($tipoRaw)) {
+            $idTipo = (int)$tipoRaw;
+
+            // Validar que exista en catálogo
+            $exists = (int) db_val(
+              "SELECT id FROM c_tipo_empresa WHERE id = :id LIMIT 1",
+              [':id' => $idTipo]
+            );
+
+            if (!$exists) {
+              $idTipo = 0;
+            }
+          } else {
+            // Si viene texto (ej: Matriz)
+            $idTipo = (int) db_val(
+              "SELECT id FROM c_tipo_empresa 
+       WHERE LOWER(descripcion) = LOWER(:d) 
+       LIMIT 1",
+              [':d' => $tipoRaw]
+            );
+          }
+        }
+
+        if ($idTipo <= 0) {
+          $errors++;
+          $errList[] = "Línea $line: Tipo Empresa inválido ($tipoRaw).";
+          continue;
+        }
+
         $data = [
           'clave_empresa' => $clave,
           'des_cia' => $nombre,
+          'cve_tipcia' => $idTipo,
           'distrito' => trim($row['distrito'] ?? ''),
           'des_rfc' => trim($row['des_rfc'] ?? ''),
           'des_direcc' => trim($row['des_direcc'] ?? ''),
@@ -358,34 +403,46 @@ try {
           'des_contacto' => trim($row['des_contacto'] ?? ''),
           'des_email' => trim($row['des_email'] ?? ''),
           'des_observ' => trim($row['des_observ'] ?? ''),
-          'es_transportista' => (trim($row['es_transportista'] ?? '') === '' ? null : (int) $row['es_transportista']),
+          'es_transportista' => (trim($row['es_transportista'] ?? '') === '' ? null : (int)$row['es_transportista']),
           'Activo' => ((int) trim($row['Activo'] ?? '1') === 1 ? 1 : 0),
         ];
 
-        // UPSERT: primero por cve_cia si viene; si no, por clave_empresa
+        // 🔥 UPSERT
         $existsId = 0;
+
         if ($cve_cia > 0) {
-          $existsId = (int) db_val("SELECT cve_cia FROM c_compania WHERE cve_cia=:id LIMIT 1", [':id' => $cve_cia]);
+          $existsId = (int) db_val(
+            "SELECT cve_cia FROM c_compania WHERE cve_cia=:id LIMIT 1",
+            [':id' => $cve_cia]
+          );
         }
+
         if (!$existsId) {
-          $existsId = (int) db_val("SELECT cve_cia FROM c_compania WHERE clave_empresa=:c LIMIT 1", [':c' => $clave]);
+          $existsId = (int) db_val(
+            "SELECT cve_cia FROM c_compania WHERE clave_empresa=:c LIMIT 1",
+            [':c' => $clave]
+          );
         }
 
         if ($existsId) {
           $set = [];
           $params = [':id' => $existsId];
+
           foreach ($data as $k => $v) {
             $set[] = "$k=:$k";
             $params[":$k"] = $v;
           }
+
           dbq("UPDATE c_compania SET " . implode(',', $set) . " WHERE cve_cia=:id", $params);
           $updated++;
         } else {
           $cols = array_keys($data);
           $ins = "INSERT INTO c_compania (" . implode(',', $cols) . ") VALUES (:" . implode(',:', $cols) . ")";
+
           $params = [];
           foreach ($data as $k => $v)
             $params[":$k"] = $v;
+
           dbq($ins, $params);
           $inserted++;
         }
@@ -393,12 +450,19 @@ try {
     });
 
     fclose($fh);
-    echo json_encode(['ok' => 1, 'inserted' => $inserted, 'updated' => $updated, 'errors' => $errors, 'detalles' => $errList], JSON_UNESCAPED_UNICODE);
+
+    echo json_encode([
+      'ok' => 1,
+      'inserted' => $inserted,
+      'updated' => $updated,
+      'errors' => $errors,
+      'detalles' => $errList
+    ], JSON_UNESCAPED_UNICODE);
+
     exit;
   }
 
   jerr('Acción no soportada: ' . $action);
-
 } catch (Throwable $e) {
   jerr('Error: ' . $e->getMessage());
 }

@@ -409,6 +409,9 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
     <button class="ap-chip primary" onclick="nuevo()"><i class="fa fa-plus"></i> Nuevo</button>
     <button class="ap-chip" onclick="exportar()"><i class="fa fa-download"></i> Exportar</button>
+    <button class="ap-chip" onclick="abrirImport()">
+      <i class="fa fa-upload"></i> Importar
+    </button>
   </div>
 
 
@@ -442,48 +445,71 @@ require_once __DIR__ . '/../bi/_menu_global.php';
   </div>
 </div>
 
-<!-- MODAL -->
+<!-- =========================================================
+     MODAL PRINCIPAL - ALMACÉN
+========================================================= -->
 <div class="ap-modal" id="mdl">
   <div class="ap-modal-content">
+
     <div class="ap-modal-header">
-      <h3><i class="fa fa-warehouse"></i> <span id="mdlTitle">Almacén</span></h3>
-      <button onclick="cerrarModal()"><i class="fa fa-times"></i></button>
+      <h3>
+        <i class="fa fa-warehouse"></i>
+        <span id="mdlTitle">Almacén</span>
+      </h3>
+      <button onclick="cerrarModal()">
+        <i class="fa fa-times"></i>
+      </button>
     </div>
 
     <input type="hidden" id="k_clave_empresa">
     <input type="hidden" id="k_id">
 
-    <div class="ap-chip warn" id="mdlErr" style="display:none; width:100%; margin-bottom:15px;"></div>
+    <div class="ap-chip warn" id="mdlErr"
+      style="display:none; width:100%; margin-bottom:15px;">
+    </div>
 
     <div class="ap-form">
+
       <!-- Row 1 -->
       <div class="ap-field">
         <div class="ap-label">Clave Empresa *</div>
-        <div class="ap-input"><i class="fa fa-building"></i>
+        <div class="ap-input">
+          <i class="fa fa-building"></i>
           <select id="clave_empresa">
             <option value="">Seleccione...</option>
           </select>
         </div>
       </div>
+
       <div class="ap-field span-2">
         <div class="ap-label">Nombre *</div>
-        <div class="ap-input"><i class="fa fa-font"></i><input id="nombre" placeholder="Nombre completo"></div>
+        <div class="ap-input">
+          <i class="fa fa-font"></i>
+          <input id="nombre" placeholder="Nombre completo">
+        </div>
       </div>
 
       <!-- Row 2 -->
       <div class="ap-field">
         <div class="ap-label">ID / Clave *</div>
-        <div class="ap-input"><i class="fa fa-key"></i><input id="clave" placeholder="Clave Alfanumérica">
+        <div class="ap-input">
+          <i class="fa fa-key"></i>
+          <input id="clave" placeholder="Clave Alfanumérica">
         </div>
       </div>
+
       <div class="ap-field">
         <div class="ap-label">Tipo</div>
-        <div class="ap-input"><i class="fa fa-sitemap"></i><input id="tipo" type="number" placeholder="ID Numérico">
+        <div class="ap-input">
+          <i class="fa fa-sitemap"></i>
+          <input id="tipo" type="number" placeholder="ID Numérico">
         </div>
       </div>
+
       <div class="ap-field">
         <div class="ap-label">Es 3PL</div>
-        <div class="ap-input"><i class="fa fa-truck"></i>
+        <div class="ap-input">
+          <i class="fa fa-truck"></i>
           <select id="es_3pl">
             <option value="No">No (Propio)</option>
             <option value="Si">Si (3PL)</option>
@@ -494,34 +520,51 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       <!-- Row 3 -->
       <div class="ap-field full">
         <div class="ap-label">Dirección</div>
-        <div class="ap-input"><i class="fa fa-map-marker-alt"></i><input id="direccion"
-            placeholder="Calle, Número, Colonia..."></div>
+        <div class="ap-input">
+          <i class="fa fa-map-marker-alt"></i>
+          <input id="direccion" placeholder="Calle, Número, Colonia...">
+        </div>
       </div>
 
       <!-- Row 4 -->
       <div class="ap-field">
         <div class="ap-label">Responsable</div>
-        <div class="ap-input"><i class="fa fa-user"></i><input id="responsable" placeholder="Nombre contacto"></div>
+        <div class="ap-input">
+          <i class="fa fa-user"></i>
+          <input id="responsable" placeholder="Nombre contacto">
+        </div>
       </div>
+
       <div class="ap-field">
         <div class="ap-label">Teléfono</div>
-        <div class="ap-input"><i class="fa fa-phone"></i><input id="telefono" placeholder="Teléfono"></div>
+        <div class="ap-input">
+          <i class="fa fa-phone"></i>
+          <input id="telefono" placeholder="Teléfono">
+        </div>
       </div>
+
       <div class="ap-field">
         <div class="ap-label">Email</div>
-        <div class="ap-input"><i class="fa fa-envelope"></i><input id="email" placeholder="correo@ejemplo.com"></div>
+        <div class="ap-input">
+          <i class="fa fa-envelope"></i>
+          <input id="email" placeholder="correo@ejemplo.com">
+        </div>
       </div>
 
       <!-- Row 5 -->
       <div class="ap-field full">
         <div class="ap-label">Comentarios</div>
-        <div class="ap-input"><i class="fa fa-sticky-note"></i><input id="comentarios"></div>
+        <div class="ap-input">
+          <i class="fa fa-sticky-note"></i>
+          <input id="comentarios">
+        </div>
       </div>
 
       <!-- Row 6 -->
       <div class="ap-field">
         <div class="ap-label">Estatus</div>
-        <div class="ap-input"><i class="fa fa-toggle-on"></i>
+        <div class="ap-input">
+          <i class="fa fa-toggle-on"></i>
           <select id="Activo">
             <option value="1">Activo</option>
             <option value="0">Inactivo</option>
@@ -535,11 +578,52 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       <button class="ghost" onclick="cerrarModal()">Cerrar</button>
       <button class="primary" onclick="guardar()">Guardar</button>
     </div>
+
+  </div>
+</div>
+
+
+<!-- =========================================================
+     MODAL IMPORTAR ALMACENES
+========================================================= -->
+<div class="ap-modal" id="mdlImport">
+  <div class="ap-modal-content" style="max-width:500px;">
+
+    <div class="ap-modal-header">
+      <h3>
+        <i class="fa fa-upload"></i>
+        Importar Almacenes
+      </h3>
+      <button onclick="cerrarImport()">
+        <i class="fa fa-times"></i>
+      </button>
+    </div>
+
+    <div class="ap-field full">
+      <div class="ap-label">Archivo CSV *</div>
+      <div class="ap-input">
+        <i class="fa fa-file-csv"></i>
+        <input type="file" id="fileImport" accept=".csv">
+      </div>
+      <small style="color:#6c757d;font-size:11px;margin-top:5px;">
+        Formato esperado:<br>
+        clave,nombre,cve_cia,direccion,contacto,telefono,correo,es_3pl
+      </small>
+    </div>
+
+    <div class="ap-modal-footer">
+      <button class="ghost" onclick="cerrarImport()">Cancelar</button>
+      <button class="primary" onclick="importar()">Importar</button>
+    </div>
+
   </div>
 </div>
 
 <script>
-  // Apuntamos a la API local que acabamos de corregir
+  // =========================================================
+  // CONFIG
+  // =========================================================
+
   const API = '../api/almacenes_api.php';
   const KPI = '../api/almacenes_kpi.php';
   const EMPRESAS_API = API;
@@ -551,87 +635,84 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     loadKPI();
   });
 
-  function loadEmpresas() {
-    console.log('🔍 Iniciando carga de empresas...');
-    // action=get_companies DEBE traer 3 filas segun conteo de DB
-    fetch(EMPRESAS_API + '?action=get_companies')
-      .then(r => {
-        console.log('📡 Respuesta recibida:', r.status);
-        return r.json();
-      })
-      .then(resp => {
-        console.log('📦 JSON parseado:', resp);
-        // almacenes_api devuelve { rows: [...] }
-        const rows = (resp.rows) ? resp.rows : [];
-        console.log('✅ Filas extraídas:', rows.length, rows);
+  // =========================================================
+  // EMPRESAS
+  // =========================================================
 
+  function loadEmpresas() {
+    fetch(EMPRESAS_API + '?action=get_companies')
+      .then(r => r.json())
+      .then(resp => {
+
+        const rows = resp.rows || [];
         const sel = document.getElementById('filtro_empresa');
         const selMdl = document.getElementById('clave_empresa');
-
-        console.log('🎯 Elementos DOM encontrados:', {
-          filtro: !!sel,
-          modal: !!selMdl
-        });
 
         sel.innerHTML = '<option value="0">Todas las Empresas</option>';
         selMdl.innerHTML = '<option value="">Seleccione...</option>';
 
-        if (rows.length > 0) {
-          rows.forEach((c, idx) => {
-            const txt = (c.clave_empresa ? c.clave_empresa.trim() : 'N/A') + ' - ' + (c.des_cia ? c.des_cia.trim() : '');
-            console.log(`  ➡️ Empresa ${idx + 1}:`, txt, 'cve_cia:', c.cve_cia);
+        rows.forEach(c => {
+          const txt = (c.clave_empresa || '') + ' - ' + (c.des_cia || '');
 
-            const opt = document.createElement('option');
-            opt.value = c.cve_cia;
-            opt.text = txt;
-            sel.appendChild(opt);
+          const opt = document.createElement('option');
+          opt.value = c.cve_cia;
+          opt.text = txt;
+          sel.appendChild(opt);
 
-            const optM = document.createElement('option');
-            optM.value = c.cve_cia;
-            optM.text = txt;
-            selMdl.appendChild(optM);
-          });
-          console.log('✅ Opciones agregadas. Total en filtro:', sel.options.length, 'Total en modal:', selMdl.options.length);
-        } else {
-          console.warn('⚠️ No hay filas para procesar');
-        }
+          const optM = document.createElement('option');
+          optM.value = c.cve_cia;
+          optM.text = txt;
+          selMdl.appendChild(optM);
+        });
+
         cargar();
       })
-      .catch(e => {
-        console.error('❌ Error cargando empresas:', e);
-        cargar();
-      });
+      .catch(() => cargar());
   }
+
+  // =========================================================
+  // KPI
+  // =========================================================
 
   function loadKPI() {
     fetch(KPI + '?action=kpi')
       .then(r => r.json())
       .then(d => {
         document.getElementById('kpiCards').innerHTML = `
-            <div class="ap-card" onclick="cargar()">
-                <div class="h">Total Almacenes <i class="fa fa-warehouse"></i></div>
-                <div class="k">${d.total || 0}</div>
-            </div>
-            <div class="ap-card">
-                <div class="h">Activos <i class="fa fa-check-circle" style="color:#198754"></i></div>
-                <div class="k">${d.activos || 0}</div>
-            </div>
-            <div class="ap-card">
-                <div class="h">Inactivos <i class="fa fa-ban" style="color:#dc3545"></i></div>
-                <div class="k">${d.inactivos || 0}</div>
-            </div>
+          <div class="ap-card" onclick="cargar()">
+              <div class="h">Total Almacenes <i class="fa fa-warehouse"></i></div>
+              <div class="k">${d.total || 0}</div>
+          </div>
+          <div class="ap-card">
+              <div class="h">Activos <i class="fa fa-check-circle" style="color:#198754"></i></div>
+              <div class="k">${d.activos || 0}</div>
+          </div>
+          <div class="ap-card">
+              <div class="h">Inactivos <i class="fa fa-ban" style="color:#dc3545"></i></div>
+              <div class="k">${d.inactivos || 0}</div>
+          </div>
         `;
       });
   }
 
+  // =========================================================
+  // LISTADO
+  // =========================================================
+
   function cargar() {
+
     const q = document.getElementById('q').value;
     const cve_cia = document.getElementById('filtro_empresa').value;
-    const url = API + '?action=list&q=' + encodeURIComponent(q) + '&inactivos=' + (verInactivos ? 1 : 0) + '&cve_cia=' + cve_cia;
+
+    const url = API + '?action=list' +
+      '&q=' + encodeURIComponent(q) +
+      '&inactivos=' + (verInactivos ? 1 : 0) +
+      '&cve_cia=' + cve_cia;
 
     fetch(url)
       .then(r => r.json())
       .then(resp => {
+
         if (resp.error) {
           showMsg(resp.error, 'warn');
           return;
@@ -640,42 +721,44 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         const rows = resp.rows || [];
         const tb = document.getElementById('tb');
 
-        if (rows.length === 0) {
+        if (!rows.length) {
           tb.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#777">Sin registros</td></tr>';
           return;
         }
 
         tb.innerHTML = rows.map(r => {
+
           const isOk = (r.Activo == '1');
+
           const statusBadge = isOk ?
             '<span class="ap-chip ok" style="padding:2px 8px;font-size:10px">Activo</span>' :
             '<span class="ap-chip warn" style="padding:2px 8px;font-size:10px">Inactivo</span>';
-          const rowStyle = !isOk ? 'background:#f8f9fa;color:#adb5bd' : '';
 
           const actions = `
-                <div class="ap-actions">
-                    <i class="fa fa-pen" title="Editar" onclick="editar('${r.clave_empresa}', '${r.id}')"></i>
-                    ${isOk
-              ? `<i class="fa fa-ban" title="Inactivar" onclick="cambiarEstado('${r.clave_empresa}','${r.id}','delete')"></i>`
-              : `<i class="fa fa-rotate-left" title="Reactivar" onclick="cambiarEstado('${r.clave_empresa}','${r.id}','restore')"></i>`
-            }
-                </div>
-            `;
+            <div class="ap-actions">
+              <i class="fa fa-pen" onclick="editar('${r.clave_empresa}', '${r.id}')"></i>
+              ${
+                isOk
+                ? `<i class="fa fa-ban" onclick="cambiarEstado('${r.clave_empresa}','${r.id}','delete')"></i>`
+                : `<i class="fa fa-rotate-left" onclick="cambiarEstado('${r.clave_empresa}','${r.id}','restore')"></i>`
+              }
+            </div>
+          `;
 
           return `
-                <tr style="${rowStyle}">
-                    <td>${actions}</td>
-                    <td>${esc(r.clave_empresa)}</td>
-                    <td><b>${esc(r.nombre)}</b></td>
-                    <td>${esc(r.tipo)}</td>
-                    <td>${esc(r.direccion)}</td>
-                    <td>${esc(r.responsable)}</td>
-                    <td>${esc(r.telefono)}</td>
-                    <td>${esc(r.email)}</td>
-                    <td>${esc(r.es_3pl)}</td>
-                    <td>${statusBadge}</td>
-                </tr>
-            `;
+            <tr>
+              <td>${actions}</td>
+              <td>${esc(r.clave_empresa)}</td>
+              <td><b>${esc(r.nombre)}</b></td>
+              <td>${esc(r.tipo)}</td>
+              <td>${esc(r.direccion)}</td>
+              <td>${esc(r.responsable)}</td>
+              <td>${esc(r.telefono)}</td>
+              <td>${esc(r.email)}</td>
+              <td>${esc(r.es_3pl)}</td>
+              <td>${statusBadge}</td>
+            </tr>
+          `;
         }).join('');
       });
   }
@@ -687,30 +770,23 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
   function toggleInactivos() {
     verInactivos = !verInactivos;
-    const btn = document.getElementById('btnToggleInactive');
-    if (verInactivos) {
-      btn.classList.add('warn');
-      btn.innerHTML = '<i class="fa fa-eye-slash"></i> Ocultar Inactivos';
-    } else {
-      btn.classList.remove('warn');
-      btn.innerHTML = '<i class="fa fa-eye"></i> Ver Inactivos';
-    }
     cargar();
   }
 
-  // GUI Utils
+  // =========================================================
+  // UTILIDADES
+  // =========================================================
+
   function showMsg(txt, cls) {
     const m = document.getElementById('msg');
     m.style.display = 'inline-flex';
     m.className = 'ap-chip ' + cls;
     m.innerHTML = txt;
-    setTimeout(() => {
-      m.style.display = 'none';
-    }, 3500);
+    setTimeout(() => m.style.display = 'none', 3500);
   }
 
   function esc(s) {
-    if (s == null) return '';
+    if (!s) return '';
     return String(s).replace(/[&<>"']/g, m => ({
       "&": "&amp;",
       "<": "&lt;",
@@ -728,82 +804,31 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     document.getElementById('mdl').style.display = 'none';
   }
 
-  // CRUD
-  function nuevo() {
-    document.getElementById('mdlTitle').innerText = 'Nuevo Almacén';
-    document.getElementById('mdlErr').style.display = 'none';
+  // =========================================================
+  // IMPORTAR
+  // =========================================================
 
-    document.getElementById('k_clave_empresa').value = '';
-    document.getElementById('k_id').value = '';
-
-    // Reset inputs
-    document.getElementById('clave_empresa').value = '';
-    document.getElementById('clave').value = '';
-    document.getElementById('clave').disabled = false;
-
-    document.getElementById('nombre').value = '';
-    document.getElementById('tipo').value = '';
-    document.getElementById('es_3pl').value = 'No';
-    document.getElementById('direccion').value = '';
-    document.getElementById('responsable').value = '';
-    document.getElementById('telefono').value = '';
-    document.getElementById('email').value = '';
-    document.getElementById('Activo').value = '1';
-    document.getElementById('comentarios').value = '';
-
-    abrirModal();
+  function abrirImport() {
+    document.getElementById('fileImport').value = '';
+    document.getElementById('mdlImport').style.display = 'flex';
   }
 
-  function editar(emp, id) {
-    document.getElementById('mdlErr').style.display = 'none';
-
-    fetch(API + '?action=get&clave_empresa=' + encodeURIComponent(emp) + '&id=' + encodeURIComponent(id))
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) {
-          showMsg(d.error, 'warn');
-          return;
-        }
-
-        document.getElementById('mdlTitle').innerText = 'Editar Almacén';
-        document.getElementById('k_clave_empresa').value = d.clave_empresa;
-        document.getElementById('k_id').value = d.id;
-
-        // CORREGIDO: usar cve_cia (int) en lugar de clave_empresa (string) para el select
-        document.getElementById('clave_empresa').value = d.cve_cia;
-        document.getElementById('clave').value = d.clave;
-        document.getElementById('clave').disabled = true;
-
-        document.getElementById('nombre').value = d.nombre;
-        document.getElementById('tipo').value = d.cve_talmacen;
-        document.getElementById('es_3pl').value = (d.interno == '0' ? 'Si' : 'No');
-        document.getElementById('direccion').value = d.direccion;
-        document.getElementById('responsable').value = d.contacto;
-        document.getElementById('telefono').value = d.telefono;
-        document.getElementById('email').value = d.correo;
-        document.getElementById('Activo').value = d.Activo;
-        document.getElementById('comentarios').value = d.comentarios;
-
-        abrirModal();
-      });
+  function cerrarImport() {
+    document.getElementById('mdlImport').style.display = 'none';
   }
 
-  function guardar() {
+  function importar() {
+
+    const file = document.getElementById('fileImport').files[0];
+
+    if (!file) {
+      showMsg('Seleccione un archivo CSV', 'warn');
+      return;
+    }
+
     const fd = new FormData();
-    const isNew = !document.getElementById('k_id').value;
-    fd.append('action', isNew ? 'create' : 'update');
-
-    fd.append('k_clave_empresa', document.getElementById('k_clave_empresa').value);
-    fd.append('k_id', document.getElementById('k_id').value);
-
-    // CORREGIDO: enviar cve_cia (el value del select) como clave_empresa
-    const cveCompaniaSeleccionada = document.getElementById('clave_empresa').value;
-    fd.append('clave_empresa', cveCompaniaSeleccionada);
-
-    // Inputs restantes
-    ['clave', 'nombre', 'tipo', 'es_3pl', 'direccion', 'responsable', 'telefono', 'email', 'Activo', 'comentarios'].forEach(k => {
-      fd.append(k, document.getElementById(k).value);
-    });
+    fd.append('action', 'import');
+    fd.append('file', file);
 
     fetch(API, {
         method: 'POST',
@@ -812,42 +837,22 @@ require_once __DIR__ . '/../bi/_menu_global.php';
       .then(r => r.json())
       .then(resp => {
         if (resp.error) {
-          let msg = resp.error;
-          if (resp.detalles) msg += '<br>• ' + resp.detalles.join('<br>• ');
-          const errBox = document.getElementById('mdlErr');
-          errBox.innerHTML = msg;
-          errBox.style.display = 'block';
+          showMsg(resp.error, 'warn');
         } else {
-          cerrarModal();
+          cerrarImport();
           loadKPI();
           cargar();
-          showMsg('Guardado correctamente', 'ok');
+          showMsg('Importados: ' + (resp.importados || 0), 'ok');
         }
-      });
-  }
-
-  function cambiarEstado(emp, id, action) {
-    if (!confirm(action === 'delete' ? '¿Inactivar almacén?' : '¿Reactivar almacén?')) return;
-
-    const fd = new FormData();
-    fd.append('action', action);
-    fd.append('clave_empresa', emp);
-    fd.append('id', id);
-
-    fetch(API, {
-        method: 'POST',
-        body: fd
       })
-      .then(r => r.json())
-      .then(resp => {
-        if (resp.error) showMsg(resp.error, 'warn');
-        else {
-          loadKPI();
-          cargar();
-          showMsg('Estatus actualizado', 'ok');
-        }
+      .catch(() => {
+        showMsg('Error al importar', 'warn');
       });
   }
+
+  // =========================================================
+  // EXPORTAR
+  // =========================================================
 
   function exportar() {
     window.open(API + '?action=export', '_blank');
