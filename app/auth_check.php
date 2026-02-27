@@ -5,7 +5,7 @@
  * Incluir al inicio de cualquier script protegido.
  */
 
-// Cargar autoloader si no está cargado
+// Cargar autoloader si no está cargado AO
 if (!class_exists('\AssistPro\Helpers\SessionManager')) {
     require_once __DIR__ . '/../vendor/autoload.php';
 }
