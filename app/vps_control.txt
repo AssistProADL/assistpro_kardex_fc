@@ -1,0 +1,130 @@
+VPS_OVH
+
+
+Detalles de acceso:
+•	Nombre del VPS: vps-5bbf8df7.vps.ovh.net
+•	Dirección IPv4: 92.222.243.41
+•	Dirección IPv6: 2001:41d0:20a:900::754
+•	Nombre de usuario: ubuntu
+
+
+wmsmaster
+2PNX-CQ0G-ZLT1-K5YE
+
+
+CREATE USER 'wmsmaster'@'92.222.243.41' IDENTIFIED BY '2PNX-CQ0G-ZLT1-K5YE';
+GRANT ALL PRIVILEGES ON *.* TO 'wmsmaster'@'92.222.243.41';
+FLUSH PRIVILEGES;
+
+
+
+
+Contraseña
+
+Servidor de Aplicaciones
+tAegj4F6Vadvl@ Pass Nuevo
+
+ssh ubuntu@92.222.243.41
+
+
+vps2 
+
+ 
+
+ssh ubuntu@92.222.243.40 
+
+heD32uD4SAdvl@  Pass Nuevo
+
+MariaDB Pass 
+Alex@#vpsAP26/
+
+Configurar acceso remoto
+sudo nano /etc/mysql/mariadb.conf.d/50-server.cnf
+bind-address = 0.0.0.0
+
+Conexion a servidor de aplicaciones
+sudo ufw allow from 92.222.243.41 to any port 3306
+sudo ufw enable
+
+sudo ufw status
+3306 ALLOW 92.222.243.41
+
+sudo mariadb
+
+CREATE DATABASE bd_001 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE bd_002 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE bd_003 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE bd_004 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE DATABASE bd_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE bd_saas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+usuarios
+
+CREATE USER 'usr_001'@'92.222.243.41' IDENTIFIED BY 'Pass001!';
+CREATE USER 'usr_002'@'92.222.243.41' IDENTIFIED BY 'Pass002!';
+CREATE USER 'usr_003'@'92.222.243.41' IDENTIFIED BY 'Pass003!';
+CREATE USER 'usr_004'@'92.222.243.41' IDENTIFIED BY 'Pass004!';
+
+CREATE USER 'usr_dev'@'92.222.243.41' IDENTIFIED BY 'PassDev!';
+CREATE USER 'usr_saas'@'92.222.243.41' IDENTIFIED BY 'PassSaas!';
+
+permisos
+
+GRANT ALL PRIVILEGES ON bd_001.* TO 'usr_001'@'92.222.243.41';
+GRANT ALL PRIVILEGES ON bd_002.* TO 'usr_002'@'92.222.243.41';
+GRANT ALL PRIVILEGES ON bd_003.* TO 'usr_003'@'92.222.243.41';
+GRANT ALL PRIVILEGES ON bd_004.* TO 'usr_004'@'92.222.243.41';
+
+GRANT ALL PRIVILEGES ON bd_dev.* TO 'usr_dev'@'92.222.243.41';
+GRANT ALL PRIVILEGES ON bd_saas.* TO 'usr_saas'@'92.222.243.41';
+
+FLUSH PRIVILEGES;
+EXIT;
+
+
+Objetivo correcto
+
+VPS Apps (OVH)
+
+VPS BDS (OVH)
+
+Backup automático diario
+
+Copia sincronizada hacia tu local
+
+Opcional: snapshot externo (S3 / Backblaze / otro VPS)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+paso 2 Actualizar servidor
+
+sudo apt update && sudo apt upgrade -y
+
+paso 3 configurar firewall básico sudo ufw allow OpenSSH
+
+
+sudo ufw allow 80
+sudo ufw allow 443
+sudo ufw enable
+
+punto 4 instalar nginx
+
+sudo apt install nginx -y
+
+procedimiento completo
+
+en cd /var/www
+
+git clone -b main https://github.com/AssistProADL/assistpro_kardex_fc.git assistpro_er

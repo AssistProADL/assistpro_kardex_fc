@@ -7,10 +7,12 @@ declare(strict_types=1);
  */
 
 const DB_DEFAULT = [
-    'host' => '89.117.146.27',
+
+
+     'host' => '92.222.243.40',
     'name' => 'assistpro_etl_fc_dev',
-    'user' => 'root2',
-    'pass' => 'AdvLogMysql21#',
+    'user' => 'wmsmaster',
+    'pass' => '2PNX-CQ0G-ZLT1-K5YE',
     'port' => 3306,
     'charset' => 'utf8mb4',
     'timezone' => '-06:00', // CDMX

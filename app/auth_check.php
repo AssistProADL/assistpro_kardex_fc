@@ -13,20 +13,42 @@ if (!class_exists('\AssistPro\Helpers\SessionManager')) {
 // Iniciar sesión unificada (maneja timeout automáticamente)
 \AssistPro\Helpers\SessionManager::init();
 
+// Obtener URI actual
+$uri = $_SERVER['REQUEST_URI'] ?? '';
+
+// 🔓 EXCEPCIONES: rutas que NO requieren sesión
+$publicRoutes = [
+    '/api/login',
+    '/api/test', // opcional (para pruebas)
+    '/login.php'
+];
+
+foreach ($publicRoutes as $route) {
+    if (strpos($uri, $route) !== false) {
+        return; // permitir acceso sin autenticación
+    }
+}
+
 // Verificar si el usuario está autenticado
 if (!\AssistPro\Helpers\SessionManager::isAuthenticated()) {
-    // Si es una petición AJAX, devolver 401
-    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+
+    // Si es una petición AJAX, devolver 401 JSON
+    if (
+        !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest'
+    ) {
         header('HTTP/1.1 401 Unauthorized');
         header('Content-Type: application/json');
-        echo json_encode(['error' => 'No autenticado', 'message' => 'Debes iniciar sesión.']);
+        echo json_encode([
+            'error' => 'No autenticado',
+            'message' => 'Debes iniciar sesión.'
+        ]);
         exit;
     }
 
-    // Redirigir al login
+    // Si es petición normal, redirigir al login
     header("Location: /assistpro_kardex_fc/public/login.php?err=" . urlencode("Debes iniciar sesión."));
     exit;
 }
 
-// Verificar si la sesión expiró por timeout (SessionManager lo maneja automáticamente)
 // Si llegamos aquí, la sesión es válida
