@@ -537,7 +537,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
                 ['titulo' => 'Análisis de BL',                  'url' => 'catalogos/dashboard_ubicaciones.php',           'icono' => 'fa-gear'],
                 ['titulo' => 'Pallets y Contenedores',          'url' => 'config_almacen/license_plate.php',              'icono' => 'fa-right-left'],
                 ['titulo' => 'Transacciones License Plate',     'url' => 'config_almacen/lp_pr_transaction.php',          'icono' => 'fa-right-left'],
-            
+
 
             ],
 
@@ -669,6 +669,7 @@ require_once __DIR__ . '/../../app/auth_check.php';
             // Field Services
             'Field Services' => [
                 ['titulo' => 'Instalaciones', 'url' => 'instalaciones/index.php', 'icono' => 'fa-timeline'],
+                ['titulo' => 'Dashboard Instalaciones', 'url' => 'instalaciones/dashboard.php', 'icono' => 'fa-timeline'],
 
 
             ],

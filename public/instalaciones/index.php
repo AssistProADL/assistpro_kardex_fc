@@ -4,8 +4,6 @@ require_once(__DIR__ . "/../bi/_menu_global.php");
 ?>
 
 <style>
-    /* ===== AssistPro v2.0 ===== */
-
     .ap-title {
         font-size: 20px;
         font-weight: 600;
@@ -24,10 +22,8 @@ require_once(__DIR__ . "/../bi/_menu_global.php");
     }
 
     .ap-grid-wrapper {
-        max-height: 260px;
-        /* 5 filas aprox */
+        max-height: 420px;
         overflow-y: auto;
-        overflow-x: auto;
         padding: 10px;
     }
 
@@ -45,6 +41,7 @@ require_once(__DIR__ . "/../bi/_menu_global.php");
         padding: 4px 10px;
         border-radius: 12px;
         font-size: 12px;
+        font-weight: 600;
     }
 
     .badge-borrador {
@@ -66,7 +63,6 @@ require_once(__DIR__ . "/../bi/_menu_global.php");
 <div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-3">
-
         <div class="ap-title">
             <i class="fa fa-screwdriver-wrench"></i>
             <span>Instalaciones</span>
@@ -78,21 +74,18 @@ require_once(__DIR__ . "/../bi/_menu_global.php");
     </div>
 
     <div class="ap-card">
-
         <div class="ap-grid-wrapper ap-grid">
-
             <table class="table table-hover">
                 <thead>
                     <tr>
-                        <th width="200">Acciones</th>
+                        <th width="220">Acciones</th>
                         <th>Folio</th>
-                        <th>Activo</th>
+                        <th>Pedido</th>
                         <th>Técnico</th>
-                        <th>Fecha</th>
+                        <th>Fecha Compromiso</th>
                         <th>Estado</th>
                     </tr>
                 </thead>
-
                 <tbody id="tablaInstalaciones">
                     <tr>
                         <td colspan="6" class="text-center text-muted">
@@ -101,7 +94,6 @@ require_once(__DIR__ . "/../bi/_menu_global.php");
                     </tr>
                 </tbody>
             </table>
-
         </div>
     </div>
 
@@ -109,6 +101,8 @@ require_once(__DIR__ . "/../bi/_menu_global.php");
 
 <script>
     function badgeEstado(estado) {
+
+        if (!estado) return '';
 
         switch (estado) {
             case 'COMPLETADO':
@@ -125,17 +119,35 @@ require_once(__DIR__ . "/../bi/_menu_global.php");
         }
     }
 
+    function formatearFecha(fecha) {
+
+        if (!fecha) return '';
+
+        const f = new Date(fecha);
+        return f.toLocaleDateString('es-MX');
+    }
+
     function cargarInstalaciones() {
 
-        fetch('../api/api_instalaciones.php?action=list')
+        fetch('../api/instalaciones/api_instalaciones.php?action=list')
             .then(response => response.json())
             .then(data => {
 
                 const tbody = document.getElementById('tablaInstalaciones');
                 tbody.innerHTML = '';
 
-                if (!data.data || data.data.length === 0) {
+                if (!data.success) {
+                    tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center text-danger">
+                            Error cargando datos
+                        </td>
+                    </tr>
+                `;
+                    return;
+                }
 
+                if (!data.data || data.data.length === 0) {
                     tbody.innerHTML = `
                     <tr>
                         <td colspan="6" class="text-center text-muted">
@@ -149,30 +161,39 @@ require_once(__DIR__ . "/../bi/_menu_global.php");
                 data.data.forEach(row => {
 
                     tbody.innerHTML += `
-                    <tr>
-                        <td>
-                            <a href="edit.php?id=${row.id_instalacion}" 
-                               class="btn btn-sm btn-outline-primary me-1">Editar</a>
+                <tr>
+                    <td>
+                        <a href="edit.php?id=${row.id_instalacion}" 
+                           class="btn btn-sm btn-outline-primary me-1">Editar</a>
 
-                            <a href="checklist.php?id=${row.id_instalacion}" 
-                               class="btn btn-sm btn-outline-success me-1">Checklist</a>
+                        <a href="checklist.php?id=${row.id_instalacion}" 
+                           class="btn btn-sm btn-outline-success me-1">Checklist</a>
 
-                            <a href="print.php?id=${row.id_instalacion}" 
-                               class="btn btn-sm btn-outline-dark" 
-                               target="_blank">PDF</a>
-                        </td>
-                        <td>${row.folio}</td>
-                        <td>${row.activo}</td>
-                        <td>${row.tecnico}</td>
-                        <td>${row.fecha}</td>
-                        <td>${badgeEstado(row.estado)}</td>
-                    </tr>
+                        <a href="print.php?id=${row.id_instalacion}" 
+                           class="btn btn-sm btn-outline-dark" 
+                           target="_blank">PDF</a>
+                    </td>
+                    <td><strong>${row.folio}</strong></td>
+                    <td>${row.pedido ?? ''}</td>
+                    <td>${row.tecnico ?? ''}</td>
+                    <td>${formatearFecha(row.fecha_compromiso)}</td>
+                    <td>${badgeEstado(row.estado)}</td>
+                </tr>
                 `;
                 });
 
             })
             .catch(error => {
+
                 console.error(error);
+
+                document.getElementById('tablaInstalaciones').innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-danger">
+                        Error de conexión
+                    </td>
+                </tr>
+            `;
             });
     }
 

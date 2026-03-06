@@ -3,25 +3,29 @@
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
-if (session_status() === PHP_SESSION_NONE) { @session_start(); }
+if (session_status() === PHP_SESSION_NONE) {
+  @session_start();
+}
 
 // ROOT del proyecto (pedidos -> api -> public -> raíz)
 $root = realpath(__DIR__ . '/../../../');
 if (!$root) {
   http_response_code(500);
-  echo json_encode(['ok'=>0,'error'=>'No se pudo resolver ROOT del proyecto'], JSON_UNESCAPED_UNICODE);
+  echo json_encode(['ok' => 0, 'error' => 'No se pudo resolver ROOT del proyecto'], JSON_UNESCAPED_UNICODE);
   exit;
 }
 
 require_once $root . '/app/db.php';
 
 // ---------- helpers ----------
-function jexit(array $arr, int $code=200): void {
+function jexit(array $arr, int $code = 200): void
+{
   http_response_code($code);
   echo json_encode($arr, JSON_UNESCAPED_UNICODE);
   exit;
 }
-function get_json_body(): array {
+function get_json_body(): array
+{
   $raw = file_get_contents('php://input');
   $data = json_decode($raw ?: '[]', true);
   return is_array($data) ? $data : [];
@@ -40,7 +44,7 @@ try {
   $pdo = db(); // si tu db.php no expone db(), dime y lo ajusto al patrón $pdo global
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (Throwable $e) {
-  jexit(['ok'=>0,'error'=>'No hay conexión a BD','detalle'=>$e->getMessage()], 500);
+  jexit(['ok' => 0, 'error' => 'No hay conexión a BD', 'detalle' => $e->getMessage()], 500);
 }
 
 try {
@@ -52,11 +56,11 @@ try {
     try {
       $st = $pdo->query("SELECT id_compania AS id, nombre AS nombre FROM c_compania WHERE COALESCE(activo,1)=1 ORDER BY nombre");
       $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-      jexit(['ok'=>1,'rows'=>$rows]);
+      jexit(['ok' => 1, 'rows' => $rows]);
     } catch (Throwable $e) {
-      jexit(['ok'=>1,'rows'=>[
-        ['id'=>1,'nombre'=>'FOAM CREATIONS MEXICO SA DE CV']
-      ],'nota'=>'c_compania no disponible; usando demo']);
+      jexit(['ok' => 1, 'rows' => [
+        ['id' => 1, 'nombre' => 'FOAM CREATIONS MEXICO SA DE CV']
+      ], 'nota' => 'c_compania no disponible; usando demo']);
     }
   }
 
@@ -83,7 +87,7 @@ try {
 
     $st = $pdo->prepare($sql);
     $st->execute($params);
-    jexit(['ok'=>1,'rows'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
+    jexit(['ok' => 1, 'rows' => $st->fetchAll(PDO::FETCH_ASSOC)]);
   }
 
   // ==========================
@@ -124,7 +128,7 @@ try {
     $st = $pdo->prepare($sql);
     $st->execute([$q, $qLike, $qLike, $qLike, $qLike, $q]);
 
-    jexit(['ok'=>1,'rows'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
+    jexit(['ok' => 1, 'rows' => $st->fetchAll(PDO::FETCH_ASSOC)]);
   }
 
   // ==========================
@@ -168,7 +172,7 @@ try {
     $st = $pdo->prepare($sql);
     $st->execute([$q, $qLike, $qLike, $qLike, $qLike, $q]);
 
-    jexit(['ok'=>1,'rows'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
+    jexit(['ok' => 1, 'rows' => $st->fetchAll(PDO::FETCH_ASSOC)]);
   }
 
   // ==========================
@@ -176,7 +180,7 @@ try {
   // ==========================
   if ($action === 'articulo_info') {
     $cve = trim((string)($_GET['cve'] ?? ''));
-    if ($cve === '') jexit(['ok'=>0,'error'=>'Falta cve'], 400);
+    if ($cve === '') jexit(['ok' => 0, 'error' => 'Falta cve'], 400);
 
     $sql = "
       SELECT
@@ -198,8 +202,8 @@ try {
     $st = $pdo->prepare($sql);
     $st->execute([$cve]);
     $row = $st->fetch(PDO::FETCH_ASSOC);
-    if (!$row) jexit(['ok'=>0,'error'=>'Artículo no encontrado/inactivo'], 404);
-    jexit(['ok'=>1,'row'=>$row]);
+    if (!$row) jexit(['ok' => 0, 'error' => 'Artículo no encontrado/inactivo'], 404);
+    jexit(['ok' => 1, 'row' => $row]);
   }
 
   // ==========================
@@ -223,13 +227,13 @@ try {
     $partidas    = $p['partidas'] ?? [];
 
     if ($cliente === '' || !is_array($partidas) || count($partidas) === 0) {
-      jexit(['ok'=>0,'error'=>'Datos incompletos: Cliente/Partidas'], 400);
+      jexit(['ok' => 0, 'error' => 'Datos incompletos: Cliente/Partidas'], 400);
     }
 
     // validar cliente activo
     $st = $pdo->prepare("SELECT 1 FROM c_cliente WHERE Cve_Clte=? AND COALESCE(Activo,1)=1 LIMIT 1");
     $st->execute([$cliente]);
-    if (!$st->fetchColumn()) jexit(['ok'=>0,'error'=>'Cliente inválido/inactivo'], 400);
+    if (!$st->fetchColumn()) jexit(['ok' => 0, 'error' => 'Cliente inválido/inactivo'], 400);
 
     $pdo->beginTransaction();
 
@@ -240,7 +244,7 @@ try {
       $ex = $st->fetch(PDO::FETCH_ASSOC);
       if ($ex) {
         $pdo->commit();
-        jexit(['ok'=>1,'id_pedido'=>(int)$ex['id_pedido'],'Fol_folio'=>$ex['Fol_folio'],'idempotente'=>1]);
+        jexit(['ok' => 1, 'id_pedido' => (int)$ex['id_pedido'], 'Fol_folio' => $ex['Fol_folio'], 'idempotente' => 1]);
       }
     }
 
@@ -296,9 +300,9 @@ try {
       $qty  = (float)($r['Num_cantidad'] ?? 0);
       $uom  = isset($r['id_unimed']) ? (int)$r['id_unimed'] : null;
       $lote = trim((string)($r['cve_lote'] ?? ''));
-      $precio = array_key_exists('Precio_unitario',$r) ? (float)$r['Precio_unitario'] : null;
-      $desc   = array_key_exists('Desc_Importe',$r) ? (float)$r['Desc_Importe'] : 0.0;
-      $iva    = array_key_exists('IVA',$r) ? (float)$r['IVA'] : null;
+      $precio = array_key_exists('Precio_unitario', $r) ? (float)$r['Precio_unitario'] : null;
+      $desc   = array_key_exists('Desc_Importe', $r) ? (float)$r['Desc_Importe'] : 0.0;
+      $iva    = array_key_exists('IVA', $r) ? (float)$r['IVA'] : null;
       $proy   = trim((string)($r['Proyecto'] ?? ''));
 
       if ($art === '' || $qty <= 0) throw new RuntimeException("Partida inválida (artículo/cantidad)");
@@ -336,7 +340,7 @@ try {
     }
 
     $pdo->commit();
-    jexit(['ok'=>1,'id_pedido'=>$idPedido,'Fol_folio'=>$folio]);
+    jexit(['ok' => 1, 'id_pedido' => $idPedido, 'Fol_folio' => $folio]);
   }
 
   // ==========================
@@ -346,7 +350,7 @@ try {
     $id = (int)($_GET['id_pedido'] ?? 0);
     $folio = trim((string)($_GET['Fol_folio'] ?? ''));
 
-    if ($id <= 0 && $folio === '') jexit(['ok'=>0,'error'=>'Falta id_pedido o Fol_folio'], 400);
+    if ($id <= 0 && $folio === '') jexit(['ok' => 0, 'error' => 'Falta id_pedido o Fol_folio'], 400);
 
     if ($id > 0) {
       $st = $pdo->prepare("SELECT * FROM th_pedido WHERE id_pedido=? LIMIT 1");
@@ -356,13 +360,49 @@ try {
       $st->execute([$folio]);
     }
     $h = $st->fetch(PDO::FETCH_ASSOC);
-    if (!$h) jexit(['ok'=>0,'error'=>'Pedido no encontrado'], 404);
+    if (!$h) jexit(['ok' => 0, 'error' => 'Pedido no encontrado'], 404);
 
     $st = $pdo->prepare("SELECT * FROM td_pedido WHERE Fol_folio=? ORDER BY itemPos ASC, id ASC");
     $st->execute([$h['Fol_folio']]);
     $d = $st->fetchAll(PDO::FETCH_ASSOC);
 
-    jexit(['ok'=>1,'header'=>$h,'detail'=>$d]);
+    jexit(['ok' => 1, 'header' => $h, 'detail' => $d]);
+  }
+
+  // ==========================
+  // BUSCAR PEDIDOS (autocomplete)
+  // ==========================
+  if ($action === 'buscar') {
+
+    $q = trim((string)($_GET['q'] ?? ''));
+    $limit = (int)($_GET['limit'] ?? 15);
+    if ($limit <= 0 || $limit > 50) $limit = 15;
+
+    if (strlen($q) < 2) {
+      jexit(['ok' => 1, 'rows' => []]);
+    }
+
+    $qLike = '%' . $q . '%';
+
+    $sql = "
+    SELECT
+      h.id_pedido,
+      h.Fol_folio,
+      h.Cve_clte,
+      c.RazonSocial,
+      h.cve_ubicacion
+    FROM th_pedido h
+    LEFT JOIN c_cliente c ON c.Cve_Clte = h.Cve_clte
+    WHERE h.Fol_folio LIKE ?
+      AND COALESCE(h.Activo,1)=1
+    ORDER BY h.Fol_folio DESC
+    LIMIT $limit
+  ";
+
+    $st = $pdo->prepare($sql);
+    $st->execute([$qLike]);
+
+    jexit(['ok' => 1, 'rows' => $st->fetchAll(PDO::FETCH_ASSOC)]);
   }
 
   // ==========================
@@ -384,20 +424,25 @@ try {
     ";
     $p = [$desde, $hasta];
 
-    if ($status !== '') { $sql .= " AND h.status=? "; $p[] = $status; }
-    if ($clte !== '') { $sql .= " AND h.Cve_clte=? "; $p[] = $clte; }
+    if ($status !== '') {
+      $sql .= " AND h.status=? ";
+      $p[] = $status;
+    }
+    if ($clte !== '') {
+      $sql .= " AND h.Cve_clte=? ";
+      $p[] = $clte;
+    }
 
     $sql .= " ORDER BY h.Fec_Pedido DESC, h.id_pedido DESC LIMIT 500 ";
 
     $st = $pdo->prepare($sql);
     $st->execute($p);
 
-    jexit(['ok'=>1,'rows'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
+    jexit(['ok' => 1, 'rows' => $st->fetchAll(PDO::FETCH_ASSOC)]);
   }
 
-  jexit(['ok'=>0,'error'=>'Acción no soportada','debug'=>['action'=>$action,'get'=>$_GET]], 400);
-
+  jexit(['ok' => 0, 'error' => 'Acción no soportada', 'debug' => ['action' => $action, 'get' => $_GET]], 400);
 } catch (Throwable $e) {
   if ($pdo instanceof PDO && $pdo->inTransaction()) $pdo->rollBack();
-  jexit(['ok'=>0,'error'=>'Error servidor','detalle'=>$e->getMessage(),'debug'=>['action'=>$action,'get'=>$_GET]], 500);
+  jexit(['ok' => 0, 'error' => 'Error servidor', 'detalle' => $e->getMessage(), 'debug' => ['action' => $action, 'get' => $_GET]], 500);
 }

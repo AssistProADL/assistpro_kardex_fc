@@ -318,47 +318,96 @@ try {
 
       /* ================= IMPORT CSV ================= */
     case 'import_csv':
-      if (!isset($_FILES['file'])) {
-        jexit(false, 'Archivo no recibido', []);
+
+      if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+        jexit(false, 'Archivo no recibido o con error', []);
       }
 
       $fh = fopen($_FILES['file']['tmp_name'], 'r');
-      if (!$fh)
+      if (!$fh) {
         jexit(false, 'No se pudo leer el archivo', []);
+      }
 
-      fgetcsv($fh); // header
+      // Saltar encabezado
+      fgetcsv($fh, 0, ",");
 
       $sql = $pdo->prepare("
-        INSERT INTO c_usuario
-        (cve_usuario,nombre_completo,email,perfil,
-         des_usuario,status,Activo,fec_ingreso)
-        VALUES (?,?,?,?,?,?,?,NOW())
-        ON DUPLICATE KEY UPDATE
-          nombre_completo=VALUES(nombre_completo),
-          email=VALUES(email),
-          perfil=VALUES(perfil),
-          des_usuario=VALUES(des_usuario),
-          status=VALUES(status),
-          Activo=VALUES(Activo)
-      ");
+    INSERT INTO c_usuario
+    (cve_usuario,nombre_completo,email,perfil,
+     des_usuario,status,Activo,pwd_usuario,fec_ingreso)
+    VALUES (?,?,?,?,?,?,?,?,NOW())
+    ON DUPLICATE KEY UPDATE
+      nombre_completo = ?,
+      email           = ?,
+      perfil          = ?,
+      des_usuario     = ?,
+      status          = ?,
+      Activo          = ?,
+      pwd_usuario     = ?
+  ");
 
-      while (($row = fgetcsv($fh)) !== false) {
-        // Si el CSV no trae las 7 columnas esperadas, evitamos reventar silenciosamente
-        if (count($row) < 7)
-          continue;
-        $sql->execute($row);
+      $importados = 0;
+
+      // 🔥 ESTE ES EL WHILE QUE VA AQUÍ
+      while (($row = fgetcsv($fh, 0, ",")) !== false) {
+
+        $row = array_pad($row, 8, null);
+        $row = array_slice($row, 0, 8);
+
+        // 🔥 CONVERTIR A UTF-8 (SOLUCIÓN AL ERROR \x85)
+        $row = array_map(function ($v) {
+          return mb_convert_encoding($v, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
+        }, $row);
+
+        $row[0] = preg_replace('/^\xEF\xBB\xBF/', '', $row[0]);
+
+        $cve_usuario = trim($row[0]);
+        if ($cve_usuario === '') continue;
+
+        $nombre = trim($row[1] ?? '');
+        $email  = trim($row[2] ?? '');
+        $perfil = trim($row[3] ?? '');
+        $des    = trim($row[4] ?? '');
+        $status = trim($row[5] ?? 'A');
+        $activo = (int)($row[6] ?? 1);
+        $passwordPlano = trim($row[7] ?? '');
+
+        $sql->execute([
+          $cve_usuario,
+          $nombre,
+          $email,
+          $perfil,
+          $des,
+          $status,
+          $activo,
+          $passwordPlano,
+          $nombre,
+          $email,
+          $perfil,
+          $des,
+          $status,
+          $activo,
+          $passwordPlano
+        ]);
+
+        $importados++;
       }
+
       fclose($fh);
 
-      jexit(true, 'Importado', []);
+      jexit(true, "Importación completada. Registros procesados: $importados", []);
       break;
-
 
     default:
       echo json_encode(['ok' => false, 'success' => false, 'message' => 'Acción no válida', 'action' => $action]);
       exit;
   }
 } catch (Throwable $e) {
-  echo json_encode(['ok' => false, 'success' => false, 'message' => $e->getMessage()]);
+  echo json_encode([
+    'ok' => false,
+    'success' => false,
+    'message' => $e->getMessage(),
+    'trace' => $e->getTraceAsString()
+  ]);
   exit;
 }

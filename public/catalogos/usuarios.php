@@ -583,7 +583,7 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 </div>
 
 <script>
-    const API = '../api/usuarios.php';
+    const API = '../api/catalogos/usuarios.php';
     let curPage = 1;
     let viewInactive = false;
 
@@ -592,14 +592,27 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         m.style.display = 'inline-flex';
         m.className = 'ap-chip ' + cls;
         m.innerHTML = txt;
-        setTimeout(() => { m.style.display = 'none' }, 3500);
+        setTimeout(() => {
+            m.style.display = 'none'
+        }, 3500);
     }
 
-    function abrirModal(id) { document.getElementById(id).style.display = 'block'; }
-    function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
+    function abrirModal(id) {
+        document.getElementById(id).style.display = 'block';
+    }
+
+    function cerrarModal(id) {
+        document.getElementById(id).style.display = 'none';
+    }
 
     function esc(s) {
-        return (s ?? '').toString().replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
+        return (s ?? '').toString().replace(/[&<>"']/g, m => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#039;"
+        } [m]));
     }
 
     function toggleInactivos() {
@@ -725,14 +738,20 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         const fd = new FormData();
         fd.append('action', act);
         fd.append('id_user', id);
-        fetch(API, { method: 'POST', body: fd })
+        fetch(API, {
+                method: 'POST',
+                body: fd
+            })
             .then(r => r.json())
             .then(j => {
-                if (j.success) { showMsg(j.message, 'ok'); refrescar(); }
-                else showMsg(j.message, 'warn');
+                if (j.success) {
+                    showMsg(j.message, 'ok');
+                    refrescar();
+                } else showMsg(j.message, 'warn');
             })
             .catch(e => console.error(e));
     }
+
     function cargarEmpresas() {
         fetch(API + '?action=empresas')
             .then(r => r.json())
@@ -782,7 +801,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
             .catch(e => console.error('Error cargando perfiles:', e));
     }
 
-    function buscar() { refrescar(1); }
+    function buscar() {
+        refrescar(1);
+    }
+
     function limpiar() {
         document.getElementById('q').value = '';
         refrescar(1);
@@ -810,7 +832,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         fetch(API + '?action=get&id_user=' + id)
             .then(r => r.json())
             .then(j => {
-                if (!j.success && !j.id_user) { showMsg(j.message || 'Error al cargar', 'warn'); return; }
+                if (!j.success && !j.id_user) {
+                    showMsg(j.message || 'Error al cargar', 'warn');
+                    return;
+                }
                 const u = j.row || j;
 
                 // Cargar catálogos
@@ -867,11 +892,17 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         const cve = document.getElementById('cve_usuario').value.trim();
         const nom = document.getElementById('nombre_completo').value.trim();
 
-        if (!cve || !nom) { showMsg('Clave y Nombre son obligatorios', 'warn'); return; }
+        if (!cve || !nom) {
+            showMsg('Clave y Nombre son obligatorios', 'warn');
+            return;
+        }
 
         // Validar Tipo de Usuario
         const selectedTipo = document.querySelector('input[name="id_tipo_usuario"]:checked');
-        if (!selectedTipo) { showMsg('Debe seleccionar un Tipo de Usuario', 'warn'); return; }
+        if (!selectedTipo) {
+            showMsg('Debe seleccionar un Tipo de Usuario', 'warn');
+            return;
+        }
 
         fd.append('cve_usuario', cve);
         fd.append('nombre_completo', nom);
@@ -888,7 +919,10 @@ require_once __DIR__ . '/../bi/_menu_global.php';
 
         fd.append('id_tipo_usuario', selectedTipo.value);
 
-        fetch(API, { method: 'POST', body: fd })
+        fetch(API, {
+                method: 'POST',
+                body: fd
+            })
             .then(r => r.json())
             .then(j => {
                 if (j.success) {
@@ -906,11 +940,16 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         const fd = new FormData();
         fd.append('action', 'delete');
         fd.append('id_user', id);
-        fetch(API, { method: 'POST', body: fd })
+        fetch(API, {
+                method: 'POST',
+                body: fd
+            })
             .then(r => r.json())
             .then(j => {
-                if (j.success) { showMsg(j.message || 'Usuario inactivado', 'ok'); refrescar(curPage); }
-                else showMsg(j.message || 'Error', 'warn');
+                if (j.success) {
+                    showMsg(j.message || 'Usuario inactivado', 'ok');
+                    refrescar(curPage);
+                } else showMsg(j.message || 'Error', 'warn');
             });
     }
 
@@ -918,11 +957,16 @@ require_once __DIR__ . '/../bi/_menu_global.php';
         const fd = new FormData();
         fd.append('action', 'recover');
         fd.append('id_user', id);
-        fetch(API, { method: 'POST', body: fd })
+        fetch(API, {
+                method: 'POST',
+                body: fd
+            })
             .then(r => r.json())
             .then(j => {
-                if (j.success) { showMsg(j.message || 'Usuario recuperado', 'ok'); refrescar(curPage); }
-                else showMsg(j.message || 'Error', 'warn');
+                if (j.success) {
+                    showMsg(j.message || 'Usuario recuperado', 'ok');
+                    refrescar(curPage);
+                } else showMsg(j.message || 'Error', 'warn');
             });
     }
 
@@ -938,30 +982,66 @@ require_once __DIR__ . '/../bi/_menu_global.php';
     }
 
     function importarCSV() {
-        const f = document.getElementById('csvFile').files[0];
-        if (!f) { alert('Selecciona un archivo'); return; }
+
+        const fileInput = document.getElementById('csvFile');
+        const div = document.getElementById('importResult');
+
+        if (!fileInput.files.length) {
+            alert('Selecciona un archivo');
+            return;
+        }
+
+        const f = fileInput.files[0];
+
         const fd = new FormData();
         fd.append('action', 'import_csv');
         fd.append('file', f);
 
-        document.getElementById('importResult').innerHTML = '<div class="ap-chip">Importando...</div>';
+        div.innerHTML = '<div class="ap-chip">Importando...</div>';
 
-        fetch(API, { method: 'POST', body: fd })
-            .then(r => r.json())
-            .then(j => {
-                const div = document.getElementById('importResult');
-                if (j.success) {
-                    div.innerHTML = `<div class="ap-chip ok">Importados: ${j.total_ok || 'OK'} <br> Errores: ${j.total_err || 0}</div>`;
-                    setTimeout(() => { cerrarModal('mdlImport'); refrescar(1); }, 3000);
-                } else {
-                    let html = `<div style="color:red;font-size:12px;margin-bottom:5px;">${j.message}</div>`;
-                    if (j.errors && j.errors.length) {
-                        html += `<div style="max-height:100px;overflow:auto;font-size:11px;background:#fff3cd;padding:5px;">${j.errors.join('<br>')}</div>`;
-                    }
-                    div.innerHTML = html;
-                }
+        fetch(API, {
+                method: 'POST',
+                body: fd
             })
-            .catch(e => document.getElementById('importResult').innerHTML = 'Error de red');
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error HTTP ' + response.status);
+                }
+                return response.json();
+            })
+            .then(j => {
+
+                if (j.success) {
+
+                    div.innerHTML = `
+                <div class="ap-chip ok">
+                    ${j.msg || 'Importación completada correctamente'}
+                </div>
+            `;
+
+                    setTimeout(() => {
+                        cerrarModal('mdlImport');
+                        refrescar(1);
+                    }, 2000);
+
+                } else {
+
+                    div.innerHTML = `
+                <div class="ap-chip warn">
+                    ${j.message || j.msg || 'Error durante la importación'}
+                </div>
+            `;
+                }
+
+            })
+            .catch(err => {
+                console.error(err);
+                div.innerHTML = `
+            <div class="ap-chip warn">
+                Error de red o servidor
+            </div>
+        `;
+            });
     }
 
     // Init
